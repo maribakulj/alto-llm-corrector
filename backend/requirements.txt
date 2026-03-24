@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+pydantic>=2.0
+httpx
+lxml
+python-multipart
+aiofiles
+sse-starlette
+pytest
+pytest-asyncio
