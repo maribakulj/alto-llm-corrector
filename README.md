@@ -1,2 +1,88 @@
-# alto-llm-corrector
-ALTO LLM Corrector is a text-only post-OCR correction application for ALTO XML files.
+# ALTO LLM Corrector
+
+Post-OCR text correction of ALTO XML files using LLM providers (OpenAI, Anthropic, Mistral, Google Gemini).
+
+Upload one or more ALTO XML files, choose a provider and model, and get corrected ALTO XML back — with hyphenation pairs preserved intact across line boundaries.
+
+**What it does:** corrects OCR errors in ALTO `<String CONTENT="..."/>` elements.  
+**What it does not:** OCR, resegmentation, line merging/splitting, translation, or text modernisation.
+
+---
+
+## Prerequisites
+
+- [Docker](https://docs.docker.com/get-docker/) 24+
+- [Docker Compose](https://docs.docker.com/compose/) v2+
+
+---
+
+## Local installation
+
+```bash
+git clone https://github.com/maribakulj/alto-llm-corrector.git
+cd alto-llm-corrector
+
+# Copy the example env file (edit if needed)
+cp .env.example .env
+
+# Build and start both services
+docker compose up --build
+```
+
+The app is then available at **http://localhost:5173**.  
+The backend API is exposed at **http://localhost:8000**.
+
+To stop:
+
+```bash
+docker compose down
+```
+
+---
+
+## Deployment on Hugging Face Spaces
+
+1. Create a new Space on [huggingface.co/spaces](https://huggingface.co/spaces) with **Docker** as the SDK.
+2. Push this repository to the Space:
+
+```bash
+git remote add space https://huggingface.co/spaces/<your-username>/<space-name>
+git push space main
+```
+
+The root `Dockerfile` is detected automatically. It builds the React frontend and embeds it as static files served by FastAPI on **port 7860** (required by HF Spaces).
+
+No separate nginx is needed — FastAPI serves `/` from `./static/` and the SPA catch-all returns `index.html`.
+
+---
+
+## Environment variables
+
+| Variable | Default | Description |
+|---|---|---|
+| `JOB_STORAGE_DIR` | `/tmp/app-jobs` | Base directory for job files (input + output) |
+| `CORS_ORIGINS` | `*` | Comma-separated list of allowed CORS origins, or `*` |
+
+---
+
+## Hyphenation Reconciler
+
+ALTO files often encode inter-line hyphenation via `SUBS_TYPE="HypPart1/HypPart2"` and `SUBS_CONTENT` attributes, or via a trailing dash heuristic. The **Hyphenation Reconciler** (`backend/app/alto/hyphenation.py`) treats such pairs as atomic units:
+
+- Both lines are always sent in the **same LLM chunk** — never split across requests.
+- The LLM is instructed to correct each line individually without moving text between them.
+- After the LLM response, the reconciler redistributes the corrected fragments back onto the original physical lines and reconstructs the `HYP`/`SUBS_*` attributes.
+- On ambiguity or repeated failure the original OCR text is kept as fallback.
+
+---
+
+## Tech stack
+
+| Layer | Technology |
+|---|---|
+| Backend | Python 3.11, FastAPI, Pydantic v2, httpx, lxml, sse-starlette |
+| Frontend | React 18, TypeScript, Vite, Tailwind CSS |
+| LLM providers | OpenAI, Anthropic, Mistral, Google Gemini |
+| Dev stack | docker-compose (backend :8000 + nginx :5173) |
+| HF Spaces | Single multi-stage Dockerfile, port 7860 |
+| Storage | `/tmp/app-jobs/{job_id}/` — no database |
