@@ -1,0 +1,204 @@
+"""Jobs API router."""
+from __future__ import annotations
+
+import asyncio
+import io
+import json
+import zipfile
+from pathlib import Path
+from typing import AsyncGenerator, List
+
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi.responses import Response, StreamingResponse
+from sse_starlette.sse import EventSourceResponse
+
+from app.alto.parser import build_document_manifest
+from app.jobs.orchestrator import run_job
+from app.jobs.store import job_store
+from app.schemas import (
+    CreateJobResponse,
+    JobStatus,
+    JobStatusResponse,
+    Provider,
+)
+from app.storage import (
+    get_output_files,
+    init_job_dirs,
+    output_dir,
+    save_uploaded_files,
+)
+
+router = APIRouter()
+
+_ALLOWED_UPLOAD_EXTENSIONS = {".xml", ".alto", ".zip"}
+
+
+# ---------------------------------------------------------------------------
+# POST /api/jobs
+# ---------------------------------------------------------------------------
+
+@router.post("", response_model=CreateJobResponse)
+async def create_job(
+    files: List[UploadFile] = File(...),
+    provider: str = Form(...),
+    api_key: str = Form(...),
+    model: str = Form(...),
+) -> CreateJobResponse:
+    """Upload ALTO files and start a correction job."""
+    # Validate upload extensions
+    for f in files:
+        suffix = Path(f.filename or "").suffix.lower()
+        if suffix not in _ALLOWED_UPLOAD_EXTENSIONS:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unsupported file type: {f.filename!r}. "
+                       f"Allowed: {sorted(_ALLOWED_UPLOAD_EXTENSIONS)}",
+            )
+
+    # Validate provider
+    try:
+        provider_enum = Provider(provider)
+    except ValueError:
+        raise HTTPException(status_code=400, detail=f"Unknown provider: {provider!r}")
+
+    # Read all file bytes
+    file_tuples: list[tuple[str, bytes]] = []
+    for f in files:
+        content = await f.read()
+        file_tuples.append((f.filename or "upload.xml", content))
+
+    # Create job and dirs
+    job_id = job_store.create_job(provider_enum, model)
+    init_job_dirs(job_id)
+
+    # Save and extract files
+    saved = save_uploaded_files(job_id, file_tuples)
+
+    if not saved:
+        raise HTTPException(
+            status_code=400,
+            detail="No ALTO/XML files found after extraction.",
+        )
+
+    # Build document manifest
+    file_pairs = [(path, name) for name, path in saved.items()]
+    try:
+        doc_manifest = build_document_manifest(file_pairs)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Failed to parse files: {exc}")
+
+    if doc_manifest.total_lines == 0:
+        raise HTTPException(
+            status_code=400,
+            detail="No text lines found in the uploaded ALTO files.",
+        )
+
+    job_store.update_job(job_id, document_manifest=doc_manifest)
+
+    # Resolve provider instance
+    from app.providers import get_provider as _get_provider
+    provider_instance = _get_provider(provider_enum)
+
+    out_dir = output_dir(job_id)
+
+    # Launch correction in background
+    asyncio.create_task(
+        run_job(
+            job_id=job_id,
+            document_manifest=doc_manifest,
+            provider_name=provider,
+            api_key=api_key,
+            model=model,
+            output_dir=out_dir,
+            source_files={name: path for name, path in saved.items()},
+            provider=provider_instance,
+        )
+    )
+
+    return CreateJobResponse(job_id=job_id)
+
+
+# ---------------------------------------------------------------------------
+# GET /api/jobs/{job_id}
+# ---------------------------------------------------------------------------
+
+@router.get("/{job_id}", response_model=JobStatusResponse)
+async def get_job(job_id: str) -> JobStatusResponse:
+    """Poll the status of a correction job."""
+    job = job_store.get_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail=f"Job not found: {job_id!r}")
+
+    return JobStatusResponse(
+        job_id=job.job_id,
+        status=job.status,
+        total_lines=job.total_lines,
+        lines_modified=job.lines_modified,
+        chunks_total=job.chunks_total,
+        retries=job.retries,
+        fallbacks=job.fallbacks,
+        duration_seconds=job.duration_seconds,
+        error=job.error,
+    )
+
+
+# ---------------------------------------------------------------------------
+# GET /api/jobs/{job_id}/events
+# ---------------------------------------------------------------------------
+
+@router.get("/{job_id}/events")
+async def job_events(job_id: str) -> EventSourceResponse:
+    """SSE stream of correction job events."""
+    if job_store.get_job(job_id) is None:
+        raise HTTPException(status_code=404, detail=f"Job not found: {job_id!r}")
+
+    async def generator() -> AsyncGenerator[dict, None]:
+        async for sse_event in job_store.stream_events(job_id):
+            yield {
+                "event": sse_event.event,
+                "data": json.dumps(sse_event.data),
+            }
+
+    return EventSourceResponse(generator())
+
+
+# ---------------------------------------------------------------------------
+# GET /api/jobs/{job_id}/download
+# ---------------------------------------------------------------------------
+
+@router.get("/{job_id}/download")
+async def download_job(job_id: str) -> Response:
+    """Download corrected XML file(s)."""
+    if job_store.get_job(job_id) is None:
+        raise HTTPException(status_code=404, detail=f"Job not found: {job_id!r}")
+
+    out_files = get_output_files(job_id)
+    if not out_files:
+        raise HTTPException(
+            status_code=404,
+            detail="Output not ready yet. Wait for job to complete.",
+        )
+
+    if len(out_files) == 1:
+        xml_path = out_files[0]
+        return Response(
+            content=xml_path.read_bytes(),
+            media_type="application/xml",
+            headers={
+                "Content-Disposition": f'attachment; filename="{xml_path.name}"'
+            },
+        )
+
+    # Multiple files → ZIP in memory
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+        for p in out_files:
+            zf.write(p, arcname=p.name)
+    buf.seek(0)
+
+    zip_name = f"job_{job_id}_corrected.zip"
+    return Response(
+        content=buf.getvalue(),
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{zip_name}"'},
+    )

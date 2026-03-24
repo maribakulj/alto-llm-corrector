@@ -66,9 +66,17 @@ class JobStore:
         """
         Yield SSEEvents for job_id.
 
-        Sends a keepalive ping every 30 s.
-        Exits when a 'completed' or 'failed' event is received.
+        If the job is already in a terminal state (completed/failed) when
+        this generator starts, yield a synthetic terminal event immediately.
+        Otherwise sends a keepalive ping every 30 s and exits on
+        'completed' or 'failed' event.
         """
+        # Fast-path: job already in terminal state
+        job = self._jobs.get(job_id)
+        if job is not None and job.status in (JobStatus.COMPLETED, JobStatus.FAILED):
+            yield SSEEvent(event=job.status.value, data={"job_id": job_id})
+            return
+
         queue = self.subscribe(job_id)
         try:
             while True:
