@@ -179,8 +179,8 @@ alto-llm-corrector/
 ├── docker-compose.yml            ← dev local (backend:8000 + frontend:5173)
 ├── .env.example
 ├── README.md
-├── SPECS.md                      ← ce fichier
-├── CLAUDE.md                     ← généré par /init
+├── SPECS.md                      ← ce fichier (index)
+├── CLAUDE.md
 ├── examples/
 │   └── sample.xml                ← ALTO v3 minimal avec césures pour tests
 ├── backend/
@@ -216,7 +216,7 @@ alto-llm-corrector/
 │   │       └── __init__.py       ← gestion fichiers disque
 │   └── tests/
 │       ├── test_parser.py
-│       ├── test_hyphenation.py   ← tests du reconciler
+│       ├── test_hyphenation.py
 │       ├── test_rewriter.py
 │       ├── test_chunk_planner.py
 │       ├── test_validator.py
