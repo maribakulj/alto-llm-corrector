@@ -1,0 +1,294 @@
+"""Tests for FastAPI routes."""
+from __future__ import annotations
+
+import asyncio
+import io
+import json
+import time
+import zipfile
+from pathlib import Path
+from typing import Any
+from unittest.mock import AsyncMock, patch
+
+import pytest
+from fastapi.testclient import TestClient
+
+from app.schemas import ModelInfo, Provider
+
+# ---------------------------------------------------------------------------
+# Sample file path
+# ---------------------------------------------------------------------------
+
+SAMPLE_XML = Path(__file__).parent.parent.parent / "examples" / "sample.xml"
+
+
+# ---------------------------------------------------------------------------
+# MockProvider (same as test_orchestrator, local copy)
+# ---------------------------------------------------------------------------
+
+class MockProvider:
+    async def list_models(self, api_key: str) -> list[ModelInfo]:
+        return [ModelInfo(id="mock-model", label="Mock Model")]
+
+    async def complete_structured(
+        self,
+        api_key: str,
+        model: str,
+        system_prompt: str,
+        user_payload: dict[str, Any],
+        json_schema: dict[str, Any],
+        temperature: float = 0.0,
+    ) -> dict[str, Any]:
+        lines_out = []
+        for line_in in user_payload.get("lines", []):
+            lines_out.append({
+                "line_id": line_in["line_id"],
+                "corrected_text": line_in["ocr_text"],
+            })
+        return {"lines": lines_out}
+
+
+class BadKeyProvider:
+    """Always raises on list_models."""
+    async def list_models(self, api_key: str) -> list[ModelInfo]:
+        raise ValueError("Invalid API key")
+
+    async def complete_structured(self, *args, **kwargs) -> dict[str, Any]:
+        raise ValueError("Invalid API key")
+
+
+# ---------------------------------------------------------------------------
+# App fixture with patched provider registry
+# ---------------------------------------------------------------------------
+
+@pytest.fixture()
+def client():
+    """TestClient with MockProvider injected into the provider registry."""
+    from app.main import create_app
+    from app import providers as prov_module
+
+    mock = MockProvider()
+    orig_registry = prov_module._REGISTRY.copy()
+    # Patch all providers to MockProvider so no real API calls happen
+    for k in list(prov_module._REGISTRY.keys()):
+        prov_module._REGISTRY[k] = mock
+
+    app = create_app()
+    with TestClient(app, raise_server_exceptions=False) as c:
+        yield c
+
+    prov_module._REGISTRY.update(orig_registry)
+
+
+@pytest.fixture()
+def bad_key_client():
+    """TestClient with BadKeyProvider."""
+    from app.main import create_app
+    from app import providers as prov_module
+
+    bad = BadKeyProvider()
+    orig_registry = prov_module._REGISTRY.copy()
+    for k in list(prov_module._REGISTRY.keys()):
+        prov_module._REGISTRY[k] = bad
+
+    app = create_app()
+    with TestClient(app, raise_server_exceptions=False) as c:
+        yield c
+
+    prov_module._REGISTRY.update(orig_registry)
+
+
+# ---------------------------------------------------------------------------
+# Helper
+# ---------------------------------------------------------------------------
+
+def _sample_xml_upload(filename: str = "sample.xml"):
+    return ("files", (filename, SAMPLE_XML.read_bytes(), "application/xml"))
+
+
+def _form_fields(provider: str = "openai") -> dict:
+    return {
+        "provider": provider,
+        "api_key": "fake-key",
+        "model": "mock-model",
+    }
+
+
+# ---------------------------------------------------------------------------
+# test_list_models_invalid_provider
+# ---------------------------------------------------------------------------
+
+def test_list_models_invalid_provider(client: TestClient):
+    resp = client.post(
+        "/api/providers/models",
+        json={"provider": "nonexistent_llm", "api_key": "x"},
+    )
+    assert resp.status_code == 422  # Pydantic validation error (invalid enum)
+
+
+# ---------------------------------------------------------------------------
+# test_list_models_bad_api_key
+# ---------------------------------------------------------------------------
+
+def test_list_models_bad_api_key(bad_key_client: TestClient):
+    resp = bad_key_client.post(
+        "/api/providers/models",
+        json={"provider": "openai", "api_key": "bad-key"},
+    )
+    assert resp.status_code == 400
+    assert "Provider error" in resp.json()["detail"]
+
+
+# ---------------------------------------------------------------------------
+# test_create_job_no_files
+# ---------------------------------------------------------------------------
+
+def test_create_job_no_files(client: TestClient):
+    resp = client.post(
+        "/api/jobs",
+        data=_form_fields(),
+        files=[],
+    )
+    # 422 (no files provided) or 400 (no ALTO found)
+    assert resp.status_code in (400, 422)
+
+
+# ---------------------------------------------------------------------------
+# test_create_job_invalid_extension
+# ---------------------------------------------------------------------------
+
+def test_create_job_invalid_extension(client: TestClient):
+    resp = client.post(
+        "/api/jobs",
+        data=_form_fields(),
+        files=[("files", ("doc.pdf", b"%PDF-1.4", "application/pdf"))],
+    )
+    assert resp.status_code == 400
+    assert "Unsupported" in resp.json()["detail"]
+
+
+# ---------------------------------------------------------------------------
+# test_create_job_valid_xml
+# ---------------------------------------------------------------------------
+
+def test_create_job_valid_xml(client: TestClient):
+    resp = client.post(
+        "/api/jobs",
+        data=_form_fields(),
+        files=[_sample_xml_upload()],
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert "job_id" in body
+    assert len(body["job_id"]) == 36  # UUID
+
+
+# ---------------------------------------------------------------------------
+# test_get_job_unknown
+# ---------------------------------------------------------------------------
+
+def test_get_job_unknown(client: TestClient):
+    resp = client.get("/api/jobs/nonexistent-id-xyz")
+    assert resp.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# test_get_job_known
+# ---------------------------------------------------------------------------
+
+def test_get_job_known(client: TestClient):
+    # Create a job first
+    create_resp = client.post(
+        "/api/jobs",
+        data=_form_fields(),
+        files=[_sample_xml_upload()],
+    )
+    assert create_resp.status_code == 200
+    job_id = create_resp.json()["job_id"]
+
+    # Poll status
+    resp = client.get(f"/api/jobs/{job_id}")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["job_id"] == job_id
+    assert "status" in body
+
+
+# ---------------------------------------------------------------------------
+# test_download_not_ready
+# ---------------------------------------------------------------------------
+
+def test_download_not_ready(client: TestClient):
+    # Create job but do NOT wait for completion
+    from app.jobs.store import job_store
+    from app.schemas import Provider
+
+    job_id = job_store.create_job(Provider.OPENAI, "mock")
+    resp = client.get(f"/api/jobs/{job_id}/download")
+    assert resp.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# test_download_single_xml
+# ---------------------------------------------------------------------------
+
+def test_download_single_xml(client: TestClient):
+    """Complete a job synchronously then download the output XML."""
+    import asyncio
+    from app.jobs.store import job_store
+    from app.jobs.orchestrator import run_job
+    from app.alto.parser import build_document_manifest
+    from app.storage import init_job_dirs, output_dir, save_uploaded_files
+    from app import providers as prov_module
+
+    provider_enum = Provider.OPENAI
+    job_id = job_store.create_job(provider_enum, "mock")
+    init_job_dirs(job_id)
+
+    saved = save_uploaded_files(job_id, [(SAMPLE_XML.name, SAMPLE_XML.read_bytes())])
+    doc = build_document_manifest([(p, n) for n, p in saved.items()])
+    job_store.update_job(job_id, document_manifest=doc)
+
+    out_dir = output_dir(job_id)
+
+    # Run synchronously
+    asyncio.get_event_loop().run_until_complete(
+        run_job(
+            job_id=job_id,
+            document_manifest=doc,
+            provider_name="openai",
+            api_key="fake-key",
+            model="mock",
+            output_dir=out_dir,
+            source_files={n: p for n, p in saved.items()},
+            provider=MockProvider(),
+        )
+    )
+
+    resp = client.get(f"/api/jobs/{job_id}/download")
+    assert resp.status_code == 200
+    assert resp.headers["content-type"].startswith("application/xml")
+    # Must be valid XML
+    from lxml import etree
+    etree.fromstring(resp.content)
+
+
+# ---------------------------------------------------------------------------
+# test_sse_endpoint_exists
+# ---------------------------------------------------------------------------
+
+def test_sse_endpoint_exists(client: TestClient):
+    """SSE endpoint returns 200 and streams events; terminates if job is done."""
+    from app.jobs.store import job_store
+    from app.schemas import JobStatus
+
+    job_id = job_store.create_job(Provider.OPENAI, "mock")
+
+    # Mark job as already completed so stream_events exits immediately
+    job_store.update_job(job_id, status=JobStatus.COMPLETED)
+
+    resp = client.get(f"/api/jobs/{job_id}/events")
+    assert resp.status_code == 200
+    assert "text/event-stream" in resp.headers.get("content-type", "")
+    # The terminal event should appear in the body
+    assert "completed" in resp.text
