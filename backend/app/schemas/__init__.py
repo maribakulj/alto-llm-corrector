@@ -1,0 +1,243 @@
+from __future__ import annotations
+
+import uuid
+from enum import Enum
+from typing import Any, Optional
+
+from pydantic import BaseModel, Field
+
+
+# ---------------------------------------------------------------------------
+# Enums
+# ---------------------------------------------------------------------------
+
+class JobStatus(str, Enum):
+    QUEUED = "queued"
+    STARTED = "started"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
+class LineStatus(str, Enum):
+    PENDING = "pending"
+    CORRECTED = "corrected"
+    FALLBACK = "fallback"
+    FAILED = "failed"
+
+
+class ChunkGranularity(str, Enum):
+    PAGE = "page"
+    BLOCK = "block"
+    WINDOW = "window"
+    LINE = "line"
+
+
+class Provider(str, Enum):
+    OPENAI = "openai"
+    ANTHROPIC = "anthropic"
+    MISTRAL = "mistral"
+    GOOGLE = "google"
+
+
+class HyphenRole(str, Enum):
+    NONE = "none"
+    PART1 = "HypPart1"   # last line of pair: carries left fragment + hyphen
+    PART2 = "HypPart2"   # first line of pair: carries right fragment
+
+
+# ---------------------------------------------------------------------------
+# Geometry
+# ---------------------------------------------------------------------------
+
+class Coords(BaseModel):
+    hpos: int
+    vpos: int
+    width: int
+    height: int
+
+
+# ---------------------------------------------------------------------------
+# Core line / block / page / document models
+# ---------------------------------------------------------------------------
+
+class LineManifest(BaseModel):
+    line_id: str
+    page_id: str
+    block_id: str
+    line_order_global: int
+    line_order_in_block: int
+    coords: Coords
+    ocr_text: str
+    prev_line_id: Optional[str] = None
+    next_line_id: Optional[str] = None
+    expected: bool = True
+    received: bool = False
+    corrected_text: Optional[str] = None
+    status: LineStatus = LineStatus.PENDING
+
+    # Hyphenation fields
+    hyphen_role: HyphenRole = HyphenRole.NONE
+    hyphen_pair_line_id: Optional[str] = None
+    hyphen_subs_content: Optional[str] = None
+    hyphen_source_explicit: bool = False
+
+
+class BlockManifest(BaseModel):
+    block_id: str
+    page_id: str
+    block_order: int
+    coords: Coords
+    line_ids: list[str]
+
+
+class PageManifest(BaseModel):
+    page_id: str
+    source_file: str
+    page_index: int
+    page_width: int
+    page_height: int
+    blocks: list[BlockManifest]
+    lines: list[LineManifest]
+    status: JobStatus = JobStatus.QUEUED
+
+
+class DocumentManifest(BaseModel):
+    document_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    source_files: list[str]
+    pages: list[PageManifest]
+    total_pages: int
+    total_blocks: int
+    total_lines: int
+    status: JobStatus = JobStatus.QUEUED
+
+
+# ---------------------------------------------------------------------------
+# Chunk planning
+# ---------------------------------------------------------------------------
+
+class ChunkPlannerConfig(BaseModel):
+    max_input_chars_per_request: int = 12000
+    max_lines_per_request: int = 80
+    line_window_size: int = 12
+    line_window_overlap: int = 1
+
+
+class ChunkRequest(BaseModel):
+    chunk_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    document_id: str
+    page_id: str
+    block_id: Optional[str] = None
+    granularity: ChunkGranularity
+    line_ids: list[str]
+    attempt: int = 0
+
+
+class ChunkPlan(BaseModel):
+    page_id: str
+    chunks: list[ChunkRequest]
+    granularity: ChunkGranularity
+
+
+# ---------------------------------------------------------------------------
+# Job
+# ---------------------------------------------------------------------------
+
+class JobManifest(BaseModel):
+    job_id: str
+    provider: Provider
+    model: str
+    status: JobStatus = JobStatus.QUEUED
+    document_manifest: Optional[DocumentManifest] = None
+    total_lines: int = 0
+    lines_modified: int = 0
+    chunks_total: int = 0
+    retries: int = 0
+    fallbacks: int = 0
+    duration_seconds: Optional[float] = None
+    error: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# LLM payload models
+# ---------------------------------------------------------------------------
+
+class LLMLineInput(BaseModel):
+    line_id: str
+    prev_text: Optional[str] = None
+    ocr_text: str
+    next_text: Optional[str] = None
+    # Hyphenation fields — absent when hyphen_role == NONE
+    hyphenation_role: Optional[str] = None
+    hyphen_candidate: Optional[bool] = None
+    hyphen_join_with_next: Optional[bool] = None
+    hyphen_join_with_prev: Optional[bool] = None
+    logical_join_candidate: Optional[str] = None
+
+
+class LLMUserPayload(BaseModel):
+    task: str = "correct_ocr_lines"
+    granularity: ChunkGranularity
+    document_id: str
+    page_id: str
+    block_id: Optional[str] = None
+    lines: list[LLMLineInput]
+
+
+class LLMLineOutput(BaseModel):
+    line_id: str
+    corrected_text: str
+
+
+class LLMResponse(BaseModel):
+    lines: list[LLMLineOutput]
+
+
+# ---------------------------------------------------------------------------
+# Provider / model info
+# ---------------------------------------------------------------------------
+
+class ModelInfo(BaseModel):
+    id: str
+    label: str
+    supports_structured_output: bool = True
+    context_window: Optional[int] = None
+
+
+class ListModelsRequest(BaseModel):
+    provider: Provider
+    api_key: str
+
+
+class ListModelsResponse(BaseModel):
+    provider: Provider
+    models: list[ModelInfo]
+
+
+# ---------------------------------------------------------------------------
+# API response models
+# ---------------------------------------------------------------------------
+
+class CreateJobResponse(BaseModel):
+    job_id: str
+
+
+class JobStatusResponse(BaseModel):
+    job_id: str
+    status: JobStatus
+    total_lines: int = 0
+    lines_modified: int = 0
+    chunks_total: int = 0
+    retries: int = 0
+    fallbacks: int = 0
+    duration_seconds: Optional[float] = None
+    error: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# SSE
+# ---------------------------------------------------------------------------
+
+class SSEEvent(BaseModel):
+    event: str
+    data: dict[str, Any] = Field(default_factory=dict)
