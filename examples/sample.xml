@@ -1,0 +1,176 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<alto xmlns="http://www.loc.gov/standards/alto/ns-v3#"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://www.loc.gov/standards/alto/ns-v3# http://www.loc.gov/standards/alto/v3/alto-3-1.xsd">
+  <Description>
+    <MeasurementUnit>pixel</MeasurementUnit>
+    <sourceImageInformation>
+      <fileName>sample_document.tif</fileName>
+    </sourceImageInformation>
+    <OCRProcessing ID="OCR_1">
+      <ocrProcessingStep>
+        <processingDateTime>2024-01-15</processingDateTime>
+        <processingSoftware>
+          <softwareName>Tesseract</softwareName>
+          <softwareVersion>5.3.0</softwareVersion>
+        </processingSoftware>
+      </ocrProcessingStep>
+    </OCRProcessing>
+  </Description>
+
+  <Layout>
+    <!-- PAGE 1 -->
+    <Page ID="P1" PHYSICAL_IMG_NR="1" WIDTH="2480" HEIGHT="3508">
+      <PrintSpace HPOS="0" VPOS="0" WIDTH="2480" HEIGHT="3508">
+
+        <!-- Bloc 1 : Titre et introduction -->
+        <TextBlock ID="TB1" HPOS="200" VPOS="100" WIDTH="2000" HEIGHT="400">
+          <TextLine ID="TL1" HPOS="200" VPOS="100" WIDTH="2000" HEIGHT="60">
+            <String ID="S1" CONTENT="HISTOIRE" HPOS="200" VPOS="100" WIDTH="400" HEIGHT="50" WC="0.95"/>
+            <SP WIDTH="30"/>
+            <String ID="S2" CONTENT="DE" HPOS="640" VPOS="100" WIDTH="100" HEIGHT="50" WC="0.98"/>
+            <SP WIDTH="30"/>
+            <String ID="S3" CONTENT="LA" HPOS="780" VPOS="100" WIDTH="80" HEIGHT="50" WC="0.97"/>
+            <SP WIDTH="30"/>
+            <String ID="S4" CONTENT="RÉVOLUTIOM" HPOS="900" VPOS="100" WIDTH="500" HEIGHT="50" WC="0.72"/>
+          </TextLine>
+          <TextLine ID="TL2" HPOS="200" VPOS="180" WIDTH="2000" HEIGHT="60">
+            <String ID="S5" CONTENT="La" HPOS="200" VPOS="180" WIDTH="60" HEIGHT="50" WC="0.99"/>
+            <SP WIDTH="20"/>
+            <String ID="S6" CONTENT="Frauce" HPOS="290" VPOS="180" WIDTH="200" HEIGHT="50" WC="0.68"/>
+            <SP WIDTH="20"/>
+            <String ID="S7" CONTENT="traversa" HPOS="520" VPOS="180" WIDTH="250" HEIGHT="50" WC="0.91"/>
+            <SP WIDTH="20"/>
+            <String ID="S8" CONTENT="uue" HPOS="800" VPOS="180" WIDTH="100" HEIGHT="50" WC="0.55"/>
+            <SP WIDTH="20"/>
+            <String ID="S9" CONTENT="période" HPOS="930" VPOS="180" WIDTH="200" HEIGHT="50" WC="0.93"/>
+            <SP WIDTH="20"/>
+            <String ID="S10" CONTENT="tronblée." HPOS="1160" VPOS="180" WIDTH="280" HEIGHT="50" WC="0.61"/>
+          </TextLine>
+          <TextLine ID="TL3" HPOS="200" VPOS="260" WIDTH="2000" HEIGHT="60">
+            <String ID="S11" CONTENT="Les" HPOS="200" VPOS="260" WIDTH="90" HEIGHT="50" WC="0.97"/>
+            <SP WIDTH="20"/>
+            <String ID="S12" CONTENT="citoyeus" HPOS="320" VPOS="260" WIDTH="240" HEIGHT="50" WC="0.65"/>
+            <SP WIDTH="20"/>
+            <String ID="S13" CONTENT="se" HPOS="590" VPOS="260" WIDTH="50" HEIGHT="50" WC="0.98"/>
+            <SP WIDTH="20"/>
+            <String ID="S14" CONTENT="soulevèreut" HPOS="670" VPOS="260" WIDTH="340" HEIGHT="50" WC="0.58"/>
+            <SP WIDTH="20"/>
+            <String ID="S15" CONTENT="contre" HPOS="1040" VPOS="260" WIDTH="180" HEIGHT="50" WC="0.94"/>
+            <SP WIDTH="20"/>
+            <String ID="S16" CONTENT="l'oppressiou." HPOS="1250" VPOS="260" WIDTH="380" HEIGHT="50" WC="0.60"/>
+          </TextLine>
+        </TextBlock>
+
+        <!-- Bloc 2 : Corps du texte avec césure explicite (SUBS_TYPE + SUBS_CONTENT) -->
+        <TextBlock ID="TB2" HPOS="200" VPOS="600" WIDTH="2000" HEIGHT="500">
+          <TextLine ID="TL4" HPOS="200" VPOS="600" WIDTH="2000" HEIGHT="60">
+            <String ID="S17" CONTENT="Le" HPOS="200" VPOS="600" WIDTH="60" HEIGHT="50" WC="0.99"/>
+            <SP WIDTH="20"/>
+            <String ID="S18" CONTENT="peuple" HPOS="290" VPOS="600" WIDTH="180" HEIGHT="50" WC="0.96"/>
+            <SP WIDTH="20"/>
+            <String ID="S19" CONTENT="réclamait" HPOS="500" VPOS="600" WIDTH="270" HEIGHT="50" WC="0.88"/>
+            <SP WIDTH="20"/>
+            <String ID="S20" CONTENT="la" HPOS="800" VPOS="600" WIDTH="50" HEIGHT="50" WC="0.99"/>
+            <SP WIDTH="20"/>
+            <String ID="S21" CONTENT="liberté" HPOS="880" VPOS="600" WIDTH="200" HEIGHT="50" WC="0.94"/>
+            <SP WIDTH="20"/>
+            <String ID="S22" CONTENT="et" HPOS="1110" VPOS="600" WIDTH="50" HEIGHT="50" WC="0.99"/>
+            <SP WIDTH="20"/>
+            <String ID="S23" CONTENT="dénon-" HPOS="1190" VPOS="600" WIDTH="190" HEIGHT="50" WC="0.85"
+                    SUBS_TYPE="HypPart1" SUBS_CONTENT="dénonçait"/>
+            <HYP CONTENT="-"/>
+          </TextLine>
+          <TextLine ID="TL5" HPOS="200" VPOS="680" WIDTH="2000" HEIGHT="60">
+            <String ID="S24" CONTENT="çait" HPOS="200" VPOS="680" WIDTH="110" HEIGHT="50" WC="0.82"
+                    SUBS_TYPE="HypPart2" SUBS_CONTENT="dénonçait"/>
+            <SP WIDTH="20"/>
+            <String ID="S25" CONTENT="les" HPOS="340" VPOS="680" WIDTH="80" HEIGHT="50" WC="0.98"/>
+            <SP WIDTH="20"/>
+            <String ID="S26" CONTENT="abus" HPOS="450" VPOS="680" WIDTH="120" HEIGHT="50" WC="0.95"/>
+            <SP WIDTH="20"/>
+            <String ID="S27" CONTENT="du" HPOS="600" VPOS="680" WIDTH="60" HEIGHT="50" WC="0.98"/>
+            <SP WIDTH="20"/>
+            <String ID="S28" CONTENT="pouvolr" HPOS="690" VPOS="680" WIDTH="210" HEIGHT="50" WC="0.62"/>
+            <SP WIDTH="20"/>
+            <String ID="S29" CONTENT="absolu." HPOS="930" VPOS="680" WIDTH="190" HEIGHT="50" WC="0.91"/>
+          </TextLine>
+          <TextLine ID="TL6" HPOS="200" VPOS="760" WIDTH="2000" HEIGHT="60">
+            <String ID="S30" CONTENT="Chaque" HPOS="200" VPOS="760" WIDTH="200" HEIGHT="50" WC="0.93"/>
+            <SP WIDTH="20"/>
+            <String ID="S31" CONTENT="jouruée" HPOS="430" VPOS="760" WIDTH="210" HEIGHT="50" WC="0.59"/>
+            <SP WIDTH="20"/>
+            <String ID="S32" CONTENT="apportait" HPOS="670" VPOS="760" WIDTH="260" HEIGHT="50" WC="0.90"/>
+            <SP WIDTH="20"/>
+            <String ID="S33" CONTENT="sou" HPOS="960" VPOS="760" WIDTH="90" HEIGHT="50" WC="0.70"/>
+            <SP WIDTH="20"/>
+            <String ID="S34" CONTENT="lot" HPOS="1080" VPOS="760" WIDTH="80" HEIGHT="50" WC="0.92"/>
+            <SP WIDTH="20"/>
+            <String ID="S35" CONTENT="de" HPOS="1190" VPOS="760" WIDTH="50" HEIGHT="50" WC="0.99"/>
+            <SP WIDTH="20"/>
+            <String ID="S36" CONTENT="bouleYerse-" HPOS="1270" VPOS="760" WIDTH="320" HEIGHT="50" WC="0.55"/>
+          </TextLine>
+          <TextLine ID="TL7" HPOS="200" VPOS="840" WIDTH="2000" HEIGHT="60">
+            <String ID="S37" CONTENT="ments." HPOS="200" VPOS="840" WIDTH="170" HEIGHT="50" WC="0.88"/>
+          </TextLine>
+        </TextBlock>
+
+      </PrintSpace>
+    </Page>
+
+    <!-- PAGE 2 -->
+    <Page ID="P2" PHYSICAL_IMG_NR="2" WIDTH="2480" HEIGHT="3508">
+      <PrintSpace HPOS="0" VPOS="0" WIDTH="2480" HEIGHT="3508">
+
+        <!-- Bloc 3 : Suite du texte avec césure explicite -->
+        <TextBlock ID="TB3" HPOS="200" VPOS="100" WIDTH="2000" HEIGHT="400">
+          <TextLine ID="TL8" HPOS="200" VPOS="100" WIDTH="2000" HEIGHT="60">
+            <String ID="S38" CONTENT="L'assemblée" HPOS="200" VPOS="100" WIDTH="320" HEIGHT="50" WC="0.87"/>
+            <SP WIDTH="20"/>
+            <String ID="S39" CONTENT="uationale" HPOS="550" VPOS="100" WIDTH="260" HEIGHT="50" WC="0.52"/>
+            <SP WIDTH="20"/>
+            <String ID="S40" CONTENT="proclama" HPOS="840" VPOS="100" WIDTH="250" HEIGHT="50" WC="0.91"/>
+            <SP WIDTH="20"/>
+            <String ID="S41" CONTENT="les" HPOS="1120" VPOS="100" WIDTH="80" HEIGHT="50" WC="0.98"/>
+            <SP WIDTH="20"/>
+            <String ID="S42" CONTENT="droits" HPOS="1230" VPOS="100" WIDTH="170" HEIGHT="50" WC="0.94"/>
+            <SP WIDTH="20"/>
+            <String ID="S43" CONTENT="fonda-" HPOS="1430" VPOS="100" WIDTH="170" HEIGHT="50" WC="0.89"
+                    SUBS_TYPE="HypPart1" SUBS_CONTENT="fondamentaux"/>
+            <HYP CONTENT="-"/>
+          </TextLine>
+          <TextLine ID="TL9" HPOS="200" VPOS="180" WIDTH="2000" HEIGHT="60">
+            <String ID="S44" CONTENT="mentaux" HPOS="200" VPOS="180" WIDTH="220" HEIGHT="50" WC="0.93"
+                    SUBS_TYPE="HypPart2" SUBS_CONTENT="fondamentaux"/>
+            <SP WIDTH="20"/>
+            <String ID="S45" CONTENT="de" HPOS="450" VPOS="180" WIDTH="50" HEIGHT="50" WC="0.99"/>
+            <SP WIDTH="20"/>
+            <String ID="S46" CONTENT="l'hoinme" HPOS="530" VPOS="180" WIDTH="240" HEIGHT="50" WC="0.57"/>
+            <SP WIDTH="20"/>
+            <String ID="S47" CONTENT="et" HPOS="800" VPOS="180" WIDTH="50" HEIGHT="50" WC="0.99"/>
+            <SP WIDTH="20"/>
+            <String ID="S48" CONTENT="du" HPOS="880" VPOS="180" WIDTH="60" HEIGHT="50" WC="0.98"/>
+            <SP WIDTH="20"/>
+            <String ID="S49" CONTENT="citoyeu." HPOS="970" VPOS="180" WIDTH="230" HEIGHT="50" WC="0.60"/>
+          </TextLine>
+          <TextLine ID="TL10" HPOS="200" VPOS="260" WIDTH="2000" HEIGHT="60">
+            <String ID="S50" CONTENT="Ces" HPOS="200" VPOS="260" WIDTH="90" HEIGHT="50" WC="0.96"/>
+            <SP WIDTH="20"/>
+            <String ID="S51" CONTENT="priucipes" HPOS="320" VPOS="260" WIDTH="250" HEIGHT="50" WC="0.58"/>
+            <SP WIDTH="20"/>
+            <String ID="S52" CONTENT="allaient" HPOS="600" VPOS="260" WIDTH="210" HEIGHT="50" WC="0.92"/>
+            <SP WIDTH="20"/>
+            <String ID="S53" CONTENT="trausformer" HPOS="840" VPOS="260" WIDTH="320" HEIGHT="50" WC="0.56"/>
+            <SP WIDTH="20"/>
+            <String ID="S54" CONTENT="le" HPOS="1190" VPOS="260" WIDTH="50" HEIGHT="50" WC="0.99"/>
+            <SP WIDTH="20"/>
+            <String ID="S55" CONTENT="moude" HPOS="1270" VPOS="260" WIDTH="170" HEIGHT="50" WC="0.63"/>
+            <SP WIDTH="20"/>
+            <String ID="S56" CONTENT="eutier." HPOS="1470" VPOS="260" WIDTH="190" HEIGHT="50" WC="0.54"/>
+          </TextLine>
+        </TextBlock>
+
+      </PrintSpace>
+    </Page>
+  </Layout>
+</alto>
