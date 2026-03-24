@@ -1,7 +1,140 @@
-# SPECS 
+# Guide complet — alto-llm-corrector avec Claude Code
+
 ---
 
-## Vue d'ensemble
+## PARTIE 1 — MÉTHODOLOGIE CLAUDE CODE
+
+### Qu'est-ce que Claude Code ?
+
+Claude Code est un agent de développement en ligne de commande. Il opère directement dans ton terminal, lit et écrit des fichiers, exécute des commandes shell, lance des tests, installe des dépendances. Ce n'est pas un assistant qui te suggère du code — c'est un pair-programmeur qui **agit**.
+
+La différence fondamentale avec un chat classique : Claude Code peut enchaîner des dizaines d'actions autonomes (lire un fichier → écrire une fonction → lancer les tests → corriger le bug → relancer les tests) sans te demander validation à chaque étape.
+
+---
+
+### Principes de travail avec Claude Code
+
+#### 1. Donne du contexte, pas des micro-instructions
+
+**Mauvais usage :**
+```
+Écris une fonction Python qui parse un fichier XML
+```
+
+**Bon usage :**
+```
+Implémente le parser ALTO décrit dans SPECS.md section "Parser ALTO".
+Il doit supporter les namespaces v2/v3/v4, reconstruire le texte
+OCR via String/SP/HYP, détecter les césures interlignes,
+et retourner des PageManifest Pydantic. Lance les tests après.
+```
+
+Claude Code excelle quand il comprend **le pourquoi** et **la structure globale**, pas juste la tâche immédiate.
+
+#### 2. Ancre-le avec des fichiers de référence
+
+Avant chaque session, mets tes fichiers de contexte dans le repo :
+- `SPECS.md` — les specs (ce document)
+- `ARCHITECTURE.md` — arborescence et rôle de chaque fichier
+- `TODO.md` — ce qui reste à faire dans le sprint en cours
+
+Claude Code les lira automatiquement s'ils sont à la racine.
+
+#### 3. Travaille sprint par sprint, pas feature par feature
+
+Ne demande jamais "fais toute l'application". Travaille par sprint défini (voir Partie 3). Chaque sprint a un périmètre clair, des critères d'acceptation, et des tests.
+
+#### 4. Laisse-le explorer avant de construire
+
+Au début d'un sprint, commence par :
+```
+Lis SPECS.md et l'arborescence existante. 
+Explique-moi comment tu vas implémenter le Sprint X 
+avant d'écrire du code.
+```
+Cette étape de planification explicite évite 80% des refactors.
+
+#### 5. Les tests d'abord
+
+Demande toujours à Claude Code d'écrire les tests **en même temps** que le code, pas après.
+
+```
+Implémente le hyphenation_reconciler.py avec ses tests unitaires.
+Les tests doivent couvrir : détection SUBS_TYPE, paire candidate
+heuristique, pas de fusion de ligne, reconstruction SUBS_CONTENT.
+```
+
+#### 6. Commits atomiques
+
+Claude Code peut faire des commits Git. Configure-le pour committer après chaque tâche complète et testée :
+```
+Implémente X, lance les tests, corrige si nécessaire, 
+puis committe avec le message "feat: X"
+```
+
+#### 7. Gère le contexte long
+
+Pour un projet de cette taille (35+ fichiers), le contexte de Claude Code peut se saturer. Stratégie :
+- **Démarre chaque sprint** avec `/clear` pour vider le contexte
+- **Utilise des fichiers TODO.md** plutôt que de tout réexpliquer en chat
+- **Référence les fichiers par chemin** plutôt que de coller du code dans le chat
+
+#### 8. La commande `/init`
+
+En début de projet, lance `/init` — Claude Code va explorer l'arborescence et créer un fichier `CLAUDE.md` qui sert de mémoire persistante du projet (conventions, stack, décisions). C'est crucial pour la cohérence entre sessions.
+
+#### 9. Mode headless et sous-agents
+
+Pour les tâches longues et répétitives, utilise `--print` pour le mode non-interactif ou orchestre des sous-agents via l'API.
+
+#### 10. Commandes utiles à connaître
+
+| Commande | Usage |
+|----------|-------|
+| `/clear` | Vide le contexte (début de sprint) |
+| `/init` | Analyse le projet et crée CLAUDE.md |
+| `/compact` | Résume le contexte sans le vider |
+| `Shift+Tab` | Active le mode auto (Claude enchaîne sans confirmer) |
+| `Escape` | Interrompt une action en cours |
+
+---
+
+### Workflow par session
+
+```
+1. cd alto-llm-corrector
+2. claude                          ← lance Claude Code
+3. /clear                          ← contexte propre
+4. "Lis SPECS.md et TODO.md"       ← ancrage
+5. "Voici le sprint X, commence"   ← lancement
+6. Laisse tourner                  ← Claude agit
+7. Valide les tests                ← acceptation
+8. Committe                        ← snapshot
+9. Met à jour TODO.md              ← prochaine session
+```
+
+---
+
+### Pièges à éviter
+
+**Ne pas trop interrompre.** Si Claude Code fait quelque chose de légèrement différent de ce que tu attendais mais que ça reste correct — laisse-le finir. Interrompre casse le fil de raisonnement.
+
+**Ne pas donner de code à réécrire entier.** Si tu veux modifier une logique, dis "dans `chunk_planner.py`, change le comportement de `plan_blocks` pour X" plutôt que de recoller tout le fichier modifié.
+
+**Ne pas mélanger les sprints.** Si tu vois un bug dans le Sprint 1 pendant le Sprint 3, note-le dans un fichier `BUGS.md` et finis le sprint en cours. La dispersion tue la productivité.
+
+**Ne pas oublier `.env`.** Toutes les clés et configs doivent passer par des variables d'environnement. Ne laisse jamais Claude Code hardcoder une clé même en test.
+
+---
+
+## PARTIE 2 — SPECS RÉÉCRITES POUR CLAUDE CODE
+
+> Ces specs sont rédigées pour être données directement en contexte à Claude Code.
+> Chaque section est autonome et actionnable. Sauvegarde ce fichier sous `SPECS.md` à la racine du repo.
+
+---
+
+### Vue d'ensemble
 
 Construire `alto-llm-corrector` : une application web de post-correction OCR text-only pour fichiers ALTO XML.
 
@@ -25,7 +158,7 @@ Construire `alto-llm-corrector` : une application web de post-correction OCR tex
 
 ---
 
-## Stack technique
+### Stack technique
 
 ```
 Backend    : Python 3.11+, FastAPI, Pydantic v2, httpx, lxml, uvicorn, sse-starlette
@@ -38,7 +171,7 @@ DB         : aucune
 
 ---
 
-## Arborescence cible
+### Arborescence cible
 
 ```
 alto-llm-corrector/
@@ -115,9 +248,9 @@ alto-llm-corrector/
 
 ---
 
-## Modèles Pydantic (schemas/__init__.py)
+### Modèles Pydantic (schemas/__init__.py)
 
-### Enums
+#### Enums
 
 ```python
 class JobStatus(str, Enum): QUEUED / STARTED / RUNNING / COMPLETED / FAILED
@@ -130,14 +263,14 @@ class HyphenRole(str, Enum):
     PART2 = "HypPart2"    # première ligne de la paire : porte le fragment droit
 ```
 
-### Coords
+#### Coords
 
 ```python
 class Coords(BaseModel):
     hpos: int; vpos: int; width: int; height: int
 ```
 
-### LineManifest — champs de césure ajoutés
+#### LineManifest — champs de césure ajoutés
 
 ```python
 class LineManifest(BaseModel):
@@ -172,7 +305,7 @@ class LineManifest(BaseModel):
     # False si elle a été détectée heuristiquement (dernier token finissant par -)
 ```
 
-### Autres modèles (inchangés)
+#### Autres modèles (inchangés)
 
 ```python
 class BlockManifest(BaseModel):
@@ -214,7 +347,7 @@ class JobManifest(BaseModel):
     duration_seconds: Optional[float] = None; error: Optional[str] = None
 ```
 
-### Payload LLM enrichi
+#### Payload LLM enrichi
 
 ```python
 class LLMLineInput(BaseModel):
@@ -239,11 +372,11 @@ class LLMUserPayload(BaseModel):
 
 ---
 
-## Parser ALTO (alto/parser.py)
+### Parser ALTO (alto/parser.py)
 
 **Responsabilité :** lire un fichier ALTO XML, extraire pages/blocs/lignes, retourner des PageManifest. Détecter et annoter les césures interlignes.
 
-### Règles générales
+#### Règles générales
 
 - Détecter automatiquement le namespace depuis le tag racine
 - Supporter ALTO v2, v3, v4, et sans namespace
@@ -255,7 +388,7 @@ class LLMUserPayload(BaseModel):
 - Normaliser en Unicode NFC, supprimer `\r`, strip bords
 - Lier `prev_line_id` / `next_line_id` entre lignes consécutives
 
-### Détection des césures — règles de priorité
+#### Détection des césures — règles de priorité
 
 **Cas 1 — Césure explicite (source_explicit = True) :**
 
@@ -288,7 +421,7 @@ def _detect_hyphenation(lines: list[LineManifest]) -> None
 
 ---
 
-## Hyphenation Reconciler (alto/hyphenation.py)
+### Hyphenation Reconciler (alto/hyphenation.py)
 
 C'est le module central ajouté par rapport à la V1. Son rôle est d'orchestrer la gestion des mots cassés entre deux lignes : **l'application décide, le LLM informe**.
 
@@ -296,13 +429,13 @@ C'est le module central ajouté par rapport à la V1. Son rôle est d'orchestrer
 
 > Les césures interlignes ne doivent pas être laissées à la seule initiative du LLM. L'application détecte les paires de lignes liées par césure, transmet cette information au modèle, puis réinscrit la sortie sur les deux lignes physiques. En cas d'ambiguïté, la forme source est préservée.
 
-### Responsabilités du module
+#### Responsabilités du module
 
 1. **`enrich_chunk_lines()`** — préparer les `LLMLineInput` enrichis avec métadonnées de césure
 2. **`reconcile_hyphen_pair()`** — après réponse LLM, réinscrire la correction sur la paire physique
 3. **`should_stay_in_same_chunk()`** — prédicat pour le chunk planner
 
-### Fonction `enrich_chunk_lines()`
+#### Fonction `enrich_chunk_lines()`
 
 ```python
 def enrich_chunk_lines(
@@ -319,7 +452,7 @@ Pour chaque ligne, construire le `LLMLineInput` avec :
   - Sur PART2 : `hyphen_join_with_prev = True`
   - Si `hyphen_subs_content` connu : `logical_join_candidate = hyphen_subs_content`
 
-### Fonction `reconcile_hyphen_pair()`
+#### Fonction `reconcile_hyphen_pair()`
 
 ```python
 def reconcile_hyphen_pair(
@@ -361,7 +494,7 @@ def reconcile_hyphen_pair(
 - Déplacer "porte" sur la ligne 1 et vider la ligne 2
 - Inventer un SUBS_CONTENT sans base dans la source
 
-### Fonction `should_stay_in_same_chunk()`
+#### Fonction `should_stay_in_same_chunk()`
 
 ```python
 def should_stay_in_same_chunk(
@@ -383,17 +516,17 @@ def should_stay_in_same_chunk(
 
 ---
 
-## Rewriter ALTO (alto/rewriter.py)
+### Rewriter ALTO (alto/rewriter.py)
 
 **Responsabilité :** réécrire un fichier ALTO en remplaçant les enfants textuels des TextLine, en reconstituant HYP et SUBS_* pour les paires de césure.
 
-### Invariants absolus à respecter
+#### Invariants absolus à respecter
 
 - Ne jamais modifier `TextLine/@ID`, `/@HPOS`, `/@VPOS`, `/@WIDTH`, `/@HEIGHT`
 - Ne jamais changer l'ordre XML des `TextLine`
 - Ne jamais fusionner deux TextLine
 
-### Algorithme par TextLine — cas sans césure
+#### Algorithme par TextLine — cas sans césure
 
 1. Supprimer tous les enfants `String`, `SP`, `HYP` existants
 2. Supprimer attributs `WC`, `CC` de la TextLine
@@ -409,7 +542,7 @@ def should_stay_in_same_chunk(
 - `unit = TextLine.WIDTH / total_poids`
 - Corriger l'arrondi sur le dernier token pour que la somme = `TextLine.WIDTH` exact
 
-### Algorithme par TextLine — cas PART1 (ligne terminée par césure)
+#### Algorithme par TextLine — cas PART1 (ligne terminée par césure)
 
 Condition : `line_manifest.hyphen_role == HyphenRole.PART1`
 
@@ -421,7 +554,7 @@ Condition : `line_manifest.hyphen_role == HyphenRole.PART1`
 4. Créer un élément `HYP` après ce dernier `String` :
    - `CONTENT="-"`, `HPOS/VPOS/WIDTH/HEIGHT` heuristiques en fin de ligne
 
-### Algorithme par TextLine — cas PART2 (ligne commençant par suite de césure)
+#### Algorithme par TextLine — cas PART2 (ligne commençant par suite de césure)
 
 Condition : `line_manifest.hyphen_role == HyphenRole.PART2`
 
@@ -431,7 +564,7 @@ Condition : `line_manifest.hyphen_role == HyphenRole.PART2`
    - Si `hyphen_subs_content` est connu : ajouter `SUBS_TYPE="HypPart2"` et `SUBS_CONTENT=hyphen_subs_content`
 3. Construire les `String` + `SP` pour les tokens suivants normalement
 
-### Politique de confiance pour SUBS_CONTENT
+#### Politique de confiance pour SUBS_CONTENT
 
 | Condition | Action |
 |-----------|--------|
@@ -444,13 +577,13 @@ Ajouter une entrée de processing dans `Description/Processing` si la section ex
 
 ---
 
-## Chunk Planner (jobs/chunk_planner.py)
+### Chunk Planner (jobs/chunk_planner.py)
 
 **Règle additionnelle : les paires de césure ne peuvent pas être séparées.**
 
 Le planner doit intégrer la contrainte `should_stay_in_same_chunk()` du Hyphenation Reconciler à chaque niveau de découpage.
 
-### Hiérarchie de décision
+#### Hiérarchie de décision
 
 ```
 1. PAGE ENTIÈRE
@@ -481,7 +614,7 @@ Le planner doit intégrer la contrainte `should_stay_in_same_chunk()` du Hyphena
 
 ---
 
-## Prompt système (providers/base.py)
+### Prompt système (providers/base.py)
 
 Le prompt système est enrichi avec une règle explicite sur les césures :
 
@@ -507,7 +640,7 @@ Règles absolues :
     à titre indicatif uniquement pour le contexte.
 ```
 
-### Payload user enrichi — exemple avec césure
+#### Payload user enrichi — exemple avec césure
 
 ```json
 {
@@ -542,7 +675,7 @@ Règles absolues :
 
 Le LLM corrige chaque ligne pour ses erreurs OCR éventuelles, mais ne déplace aucun fragment d'une ligne à l'autre. C'est le Hyphenation Reconciler qui gère ensuite la reconstruction ALTO.
 
-### Schéma JSON de sortie (inchangé)
+#### Schéma JSON de sortie (inchangé)
 
 ```json
 {
@@ -568,7 +701,7 @@ Le LLM corrige chaque ligne pour ses erreurs OCR éventuelles, mais ne déplace 
 
 ---
 
-## Validateur (jobs/validator.py)
+### Validateur (jobs/validator.py)
 
 Après chaque réponse LLM, valider :
 1. Présence de la clé `"lines"`
@@ -587,11 +720,11 @@ En cas de violation sur une paire de césure : lever `ValueError` avec motif `"h
 
 ---
 
-## Orchestrateur (jobs/orchestrator.py)
+### Orchestrateur (jobs/orchestrator.py)
 
 L'orchestrateur intègre le Hyphenation Reconciler **avant** et **après** chaque appel LLM.
 
-### Pipeline par chunk
+#### Pipeline par chunk
 
 ```
 AVANT l'appel LLM :
@@ -611,14 +744,14 @@ APRÈS l'appel LLM :
   6. Appliquer les corrections finales aux LineManifest
 ```
 
-### Politique de retry — cas spécifique aux paires de césure
+#### Politique de retry — cas spécifique aux paires de césure
 
 Si la validation échoue avec `"hyphen_integrity_violation"` :
 - Ne pas downgrader la granularité
 - Retry immédiat avec temperature=0 et prompt plus explicite sur la règle 13
 - Si second échec : conserver les textes OCR source pour les deux lignes de la paire
 
-### Politique générale de retry (inchangée)
+#### Politique générale de retry (inchangée)
 
 | Tentative | Action |
 |-----------|--------|
@@ -630,7 +763,7 @@ Si la validation échoue avec `"hyphen_integrity_violation"` :
 
 ---
 
-## Fournisseurs LLM (providers/)
+### Fournisseurs LLM (providers/)
 
 **Protocole commun :**
 ```python
@@ -684,7 +817,7 @@ GET /api/jobs/{job_id}/download
   Response: XML (1 fichier) ou ZIP (plusieurs fichiers)
 ```
 
-### SSE Events
+#### SSE Events
 
 | Événement | Données clés |
 |-----------|-------------|
@@ -704,7 +837,7 @@ GET /api/jobs/{job_id}/download
 
 ---
 
-## Stockage (storage/__init__.py)
+### Stockage (storage/__init__.py)
 
 ```
 /tmp/app-jobs/{job_id}/
@@ -718,7 +851,7 @@ GET /api/jobs/{job_id}/download
 
 ---
 
-## Interface utilisateur
+### Interface utilisateur
 
 **Écran unique :**
 
@@ -736,7 +869,7 @@ GET /api/jobs/{job_id}/download
 
 ---
 
-## Déploiement Hugging Face Spaces
+### Déploiement Hugging Face Spaces
 
 **Dockerfile racine :**
 - Base : `python:3.11-slim`
@@ -751,7 +884,7 @@ GET /api/jobs/{job_id}/download
 
 ---
 
-## Sécurité
+### Sécurité
 
 - Ne jamais logger la clé API
 - Ne jamais écrire la clé API sur disque
@@ -761,7 +894,7 @@ GET /api/jobs/{job_id}/download
 
 ---
 
-## Tests obligatoires
+### Tests obligatoires
 
 **Unit tests :**
 
@@ -807,3 +940,706 @@ GET /api/jobs/{job_id}/download
 - Upload ZIP → extraction → job
 - Document avec paires de césure → ALTO de sortie avec HYP/SUBS_* corrects
 - Fallback JSON invalide → retry → downgrade
+
+---
+
+## PARTIE 3 — SPRINTS DE DÉVELOPPEMENT
+
+### Vue d'ensemble des sprints
+
+| Sprint | Nom | Durée est. | Dépend de |
+|--------|-----|-----------|-----------|
+| 0 | Bootstrap & infrastructure | 1-2h | — |
+| 1 | Schemas + Parser ALTO (avec détection césures) | 2-3h | Sprint 0 |
+| 2 | Hyphenation Reconciler | 2-3h | Sprint 1 |
+| 3 | Rewriter ALTO (avec HYP/SUBS_* ) | 2h | Sprint 1, 2 |
+| 4 | Providers LLM | 2-3h | Sprint 1 |
+| 5 | Chunk Planner + Validateur (hyphen-aware) | 2h | Sprint 1, 2 |
+| 6 | Orchestrateur + Job Store | 2-3h | Sprint 2, 3, 4, 5 |
+| 7 | Routes API FastAPI | 2h | Sprint 6 |
+| 8 | Frontend React | 3-4h | Sprint 7 |
+| 9 | Docker + HF Spaces | 1-2h | Sprint 8 |
+| 10 | Tests d'intégration + polish | 2h | Sprint 9 |
+
+---
+
+### SPRINT 0 — Bootstrap & infrastructure
+
+**Objectif :** structure de repo opérationnelle, environnements configurés.
+
+**Tâches pour Claude Code :**
+```
+1. Crée l'arborescence complète selon SPECS.md section "Arborescence cible"
+
+2. Crée backend/requirements.txt :
+   fastapi, uvicorn[standard], pydantic[v2], httpx, lxml,
+   python-multipart, aiofiles, sse-starlette, pytest, pytest-asyncio
+
+3. Crée frontend/package.json :
+   react, typescript, vite, tailwindcss, @types/react, autoprefixer
+
+4. Crée .env.example :
+   JOB_STORAGE_DIR=/tmp/app-jobs
+   CORS_ORIGINS=*
+
+5. Crée examples/sample.xml : ALTO v3 minimal avec :
+   - 2 pages
+   - 3 blocs, 10 lignes au total
+   - Texte français avec quelques erreurs OCR manifestes
+   - AU MOINS une paire de lignes avec césure explicite (SUBS_TYPE + SUBS_CONTENT)
+   - AU MOINS une ligne finissant par un tiret sans SUBS_TYPE (cas heuristique)
+
+6. Initialise git, crée .gitignore
+7. Lance /init → CLAUDE.md
+```
+
+**Critères d'acceptation :**
+- `pip install -r requirements.txt` passe
+- `npm install` passe
+- `examples/sample.xml` est un ALTO v3 valide parseable par lxml
+- Il contient une paire avec SUBS_TYPE="HypPart1" et une avec tiret heuristique
+- CLAUDE.md généré
+
+---
+
+### SPRINT 1 — Schemas + Parser ALTO
+
+**Objectif :** modèles Pydantic complets incluant les champs de césure, parser détectant les paires.
+
+**Prompt de lancement :**
+```
+Lis SPECS.md sections "Modèles Pydantic" et "Parser ALTO".
+Implémente dans l'ordre :
+1. app/schemas/__init__.py — tous les modèles dont HyphenRole et les champs de césure de LineManifest
+2. app/alto/parser.py — parsing complet avec _detect_hyphenation()
+3. backend/tests/test_parser.py — tests incluant les cas de césure
+Lance pytest, corrige, committe "feat: schemas + alto parser with hyphenation detection"
+```
+
+**Tâches :**
+```
+1. Implémente app/schemas/__init__.py avec :
+   - HyphenRole enum : NONE / PART1 / PART2
+   - LineManifest avec les 4 champs de césure :
+     hyphen_role, hyphen_pair_line_id, hyphen_subs_content, hyphen_source_explicit
+   - LLMLineInput avec les champs hyphenation_role, hyphen_candidate,
+     hyphen_join_with_next, hyphen_join_with_prev, logical_join_candidate
+   - Tous les autres modèles (BlockManifest, PageManifest, DocumentManifest,
+     ChunkPlannerConfig, ChunkRequest, ChunkPlan, JobManifest, etc.)
+
+2. Implémente app/alto/parser.py :
+   - Détection namespace automatique
+   - Reconstruction ocr_text via String/SP/HYP
+   - Normalisation NFC + strip
+   - Liens prev_line_id / next_line_id
+   - _detect_hyphenation(lines) qui détecte :
+     a. SUBS_TYPE="HypPart1" sur dernier String d'une ligne → PART1, source_explicit=True
+     b. SUBS_TYPE="HypPart2" sur premier String d'une ligne → PART2, source_explicit=True
+     c. HYP élément présent en fin de ligne → PART1, source_explicit=True
+     d. dernier token finissant par "-" sans marquage SUBS → PART1, source_explicit=False
+     e. Propagation SUBS_CONTENT sur les deux lignes de la paire
+     f. Liaison bidirectionnelle hyphen_pair_line_id
+   - build_document_manifest(files) -> DocumentManifest
+
+3. Écris tests/test_parser.py :
+   - test_namespace_v2_v3_v4_none
+   - test_ocr_text_string_sp_hyp
+   - test_page_manifest_counts
+   - test_prev_next_links
+   - test_hyphen_explicit_subs_type : détecter PART1/PART2 + SUBS_CONTENT depuis sample.xml
+   - test_hyphen_explicit_hyp_element : détecter PART1 depuis un élément HYP
+   - test_hyphen_heuristic : détecter candidat heuristique (tiret sans SUBS_TYPE)
+   - test_hyphen_pair_bidirectional : vérifier que PART1.pair_id == PART2.line_id et vice-versa
+   - test_hyphen_subs_content_propagated : même valeur sur les deux lignes de la paire
+   - test_multi_file : build_document_manifest avec 2 fichiers
+
+4. pytest -v tests/test_parser.py → 100% vert
+5. Committe : "feat: schemas + alto parser with hyphenation detection"
+```
+
+**Critères d'acceptation :**
+- 100% vert
+- Sur sample.xml : paire explicite détectée avec `source_explicit=True`
+- Sur sample.xml : candidat heuristique détecté avec `source_explicit=False`
+- Aucun import circulaire
+
+---
+
+### SPRINT 2 — Hyphenation Reconciler
+
+**Objectif :** le module central de gestion des paires de césure est opérationnel et testable indépendamment.
+
+**Prompt de lancement :**
+```
+Lis SPECS.md section "Hyphenation Reconciler".
+Implémente app/alto/hyphenation.py avec ses 3 fonctions.
+Principe : l'app orchestre, le LLM informe seulement.
+Les frontières physiques ne bougent jamais.
+Lance les tests, committe "feat: hyphenation reconciler"
+```
+
+**Tâches :**
+```
+1. Implémente app/alto/hyphenation.py :
+
+   def enrich_chunk_lines(
+       line_manifests: list[LineManifest],
+       all_lines_by_id: dict[str, LineManifest],
+   ) -> list[LLMLineInput]:
+   # Construit les payloads enrichis avec métadonnées de césure
+   # Les champs hyphenation_role, hyphen_candidate, etc. sont absents
+   # (None) si hyphen_role == NONE — pas de bruit inutile pour le LLM
+
+   def reconcile_hyphen_pair(
+       part1: LineManifest,
+       part2: LineManifest,
+       corrected_part1: str,
+       corrected_part2: str,
+   ) -> tuple[str, str, Optional[str]]:
+   # Retourne (final_text_part1, final_text_part2, resolved_subs_content)
+   # Algorithme décrit dans SPECS.md
+   # NE JAMAIS fusionner les deux lignes
+   # En cas de doute → retourner les textes OCR source
+
+   def should_stay_in_same_chunk(
+       line_a: LineManifest,
+       line_b: LineManifest,
+   ) -> bool:
+   # True si la paire est liée par hyphen_pair_line_id
+
+2. Écris tests/test_hyphenation.py :
+   - test_enrich_part1_has_join_with_next
+   - test_enrich_part2_has_join_with_prev
+   - test_enrich_logical_candidate_present_when_known
+   - test_enrich_no_hyphen_fields_on_normal_line
+   - test_reconcile_explicit_preserves_boundaries :
+       part1="Il s'approcha de la por-", part2="te du palais"
+       → résultat : part1 inchangé, part2 inchangé, subs_content="porte"
+   - test_reconcile_heuristic_conservative :
+       source_explicit=False → subs_content=None, textes inchangés
+   - test_reconcile_ambiguous_returns_source :
+       LLM retourne quelque chose d'incohérent → retour OCR source
+   - test_reconcile_no_line_fusion :
+       vérifier que len(part1) + len(part2) > 0 et les deux lignes existent toujours
+   - test_should_stay_linked_pair : retourne True
+   - test_should_stay_unrelated_lines : retourne False
+
+3. pytest -v tests/test_hyphenation.py → 100% vert
+4. Committe : "feat: hyphenation reconciler"
+```
+
+**Critères d'acceptation :**
+- `reconcile_hyphen_pair` ne fusionne jamais deux lignes en une
+- Le mode conservateur (source_explicit=False) ne produit jamais de SUBS_CONTENT
+- 100% vert
+
+---
+
+### SPRINT 3 — Rewriter ALTO
+
+**Objectif :** l'ALTO rewriter reconstruit des TextLine correctes, gère HYP et SUBS_* pour les paires.
+
+**Prompt de lancement :**
+```
+Lis SPECS.md section "Rewriter ALTO".
+Implémente app/alto/rewriter.py.
+Il doit gérer 3 cas : ligne normale, PART1 (avec HYP), PART2 (avec SUBS_TYPE).
+Lance les tests, committe "feat: alto rewriter with hyphenation"
+```
+
+**Tâches :**
+```
+1. Implémente app/alto/rewriter.py :
+   - _tokenize(text) -> list[str]
+   - _compute_geometry(hpos, width, tokens) -> list[tuple[str, int, int]]
+     Algorithme proportionnel, correction arrondi sur dernier token
+   - _rebuild_normal_line(line_el, corrected_text, manifest, ns)
+     Supprime String/SP/HYP, reconstruit String + SP
+   - _rebuild_hyp_part1(line_el, corrected_text, manifest, ns)
+     Reconstruit les mots normaux, puis dernier mot avec SUBS_TYPE="HypPart1"
+     si source_explicit et subs_content connu, puis élément HYP
+   - _rebuild_hyp_part2(line_el, corrected_text, manifest, ns)
+     Premier mot avec SUBS_TYPE="HypPart2" et SUBS_CONTENT si connu,
+     puis mots suivants normalement
+   - rewrite_alto_file(xml_path, page_manifests, provider, model) -> bytes
+     Dispatcher vers la bonne fonction selon hyphen_role
+     Ajouter entrée Processing si Description existe
+   - Politique SUBS_CONTENT : écrire uniquement si source_explicit=True
+     et hyphen_subs_content non None
+
+2. Écris tests/test_rewriter.py :
+   - test_normal_line_tokenize
+   - test_geometry_sum_equals_width (invariant critique)
+   - test_line_id_preserved
+   - test_coords_preserved (HPOS/VPOS/WIDTH/HEIGHT de TextLine)
+   - test_string_ids_pattern ({line_id}_STR_{n:04d})
+   - test_no_newline_in_content
+   - test_part1_has_hyp_element : la ligne PART1 se termine par un élément HYP
+   - test_part1_subs_type : String final de PART1 porte SUBS_TYPE="HypPart1"
+     quand source_explicit=True et subs_content connu
+   - test_part2_subs_type : String initial de PART2 porte SUBS_TYPE="HypPart2"
+   - test_subs_content_written_explicit : SUBS_CONTENT écrit si source_explicit
+   - test_subs_content_absent_heuristic : pas de SUBS_CONTENT si source_explicit=False
+   - test_round_trip_normal : parse → rewrite sans correction → re-parse → mêmes IDs
+   - test_round_trip_with_hyphen : idem sur paire de césure → HYP reconstruit
+
+3. pytest -v tests/test_rewriter.py → 100% vert
+4. Committe : "feat: alto rewriter with hyphenation"
+```
+
+**Critères d'acceptation :**
+- Round-trip conserve exactement les mêmes line_ids
+- Les paires de césure produisent un ALTO valide avec HYP et SUBS_* corrects
+- SUBS_CONTENT absent sur les cas heuristiques
+
+---
+
+### SPRINT 4 — Providers LLM
+
+**Objectif :** les 4 adaptateurs fournisseurs fonctionnent et listent réellement les modèles.
+
+**Prompt de lancement :**
+```
+Lis SPECS.md section "Fournisseurs LLM".
+Implémente les 4 providers avec leur protocole commun.
+Le prompt système doit inclure la règle 13 sur les césures.
+Tests avec mocks httpx, committe "feat: llm providers"
+```
+
+**Tâches :**
+```
+1. Implémente app/providers/base.py :
+   - BaseProvider Protocol
+   - OUTPUT_JSON_SCHEMA
+   - SYSTEM_PROMPT avec la règle 13 (césures)
+
+2. Implémente les 4 providers (openai, anthropic, mistral, google)
+   selon les specs section "Fournisseurs LLM"
+   Chaque provider : list_models() + complete_structured() + gestion fallback
+
+3. Implémente app/providers/__init__.py : registry + get_provider()
+
+4. Tests avec mocks httpx :
+   - test_openai_model_filter
+   - test_mistral_capability_filter
+   - test_google_generate_content_filter
+   - test_anthropic_parse_response
+   - test_system_prompt_contains_hyphen_rule
+
+5. pytest -v tests/test_providers.py → 100% vert
+6. Committe : "feat: llm providers"
+```
+
+**Critères d'acceptation :**
+- Le SYSTEM_PROMPT contient bien la règle 13
+- get_provider() retourne le bon provider pour chaque enum
+- 100% vert avec mocks
+
+---
+
+### SPRINT 5 — Chunk Planner + Validateur (hyphen-aware)
+
+**Objectif :** le planificateur ne sépare jamais une paire de césure ; le validateur détecte les violations d'intégrité.
+
+**Prompt de lancement :**
+```
+Lis SPECS.md sections "Chunk Planner" et "Validateur".
+Point critique : les paires PART1/PART2 ne peuvent jamais être
+séparées en deux chunks. Intègre should_stay_in_same_chunk()
+dans la logique de fenêtrage.
+Lance les tests, committe "feat: chunk planner + validator hyphen-aware"
+```
+
+**Tâches :**
+```
+1. Implémente app/jobs/chunk_planner.py :
+   - plan_page(page, document_id, config, force_granularity=None) -> ChunkPlan
+   - _plan_blocks() : regrouper blocs si paire à cheval sur deux blocs
+   - _plan_windows() : ajuster les frontières pour ne pas couper une paire
+     Règle : si ligne[i] est PART1 et ligne[i+1] est sa PART2,
+             et que i est le dernier index d'une fenêtre → étendre d'une ligne
+   - _plan_line_by_line() : traiter les paires comme unité atomique (2 lignes)
+   - downgrade_granularity(current) -> ChunkGranularity | None
+
+2. Implémente app/jobs/validator.py :
+   - validate_llm_response(raw, expected_line_ids, hyphen_pairs=None) -> LLMResponse
+   - hyphen_pairs : dict[str, str] = {part1_id: part2_id}
+   - Validation de base (présence, count, IDs, no newline)
+   - Validation additionelle si hyphen_pairs fourni :
+     a. corrected_text de PART2 non vide
+     b. corrected_text de PART1 ne contient pas le mot logique entier
+        (détection heuristique : si le mot logique == corrected_part1.rstrip('-') → violation)
+
+3. Écris tests/test_chunk_planner.py :
+   - test_small_page_single_chunk
+   - test_large_page_block_granularity
+   - test_block_too_large_window_fallback
+   - test_window_coverage_complete (toutes lignes couvertes)
+   - test_hyphen_pair_not_split_by_window :
+     créer une page avec paire en position i / i+1 là où une fenêtre couperait
+     → vérifier qu'aucun chunk n'a seulement PART1 ou seulement PART2
+   - test_hyphen_pair_atomic_in_line_mode
+   - test_downgrade_sequence
+
+4. Écris tests/test_validator.py :
+   - test_valid_response
+   - test_missing_lines_key / missing_line_id / duplicate / unknown / newline / empty
+   - test_hyphen_part2_empty_violation
+   - test_hyphen_part1_fusion_violation
+
+5. pytest -v tests/test_chunk_planner.py tests/test_validator.py → 100% vert
+6. Committe : "feat: chunk planner + validator hyphen-aware"
+```
+
+**Critères d'acceptation :**
+- Aucune paire de césure n'est jamais séparée par une frontière de chunk
+- Violation d'intégrité hyphen correctement détectée par le validateur
+
+---
+
+### SPRINT 6 — Orchestrateur + Job Store
+
+**Objectif :** le moteur principal traite un document complet avec retry, fallback, et réconciliation des paires de césure.
+
+**Prompt de lancement :**
+```
+Lis SPECS.md sections "Orchestrateur" et "Stockage".
+L'orchestrateur doit intégrer enrich_chunk_lines() avant chaque appel LLM
+et reconcile_hyphen_pair() après. Implémente aussi le job store
+et le storage. Test avec mock provider sur sample.xml.
+Committe "feat: orchestrator + job store"
+```
+
+**Tâches :**
+```
+1. Implémente app/jobs/store.py :
+   - JobStore avec _jobs: dict et _subscribers: dict[str, list[asyncio.Queue]]
+   - create_job(), get_job(), update_job()
+   - emit(job_id, event, data) → distribue aux abonnés
+   - subscribe/unsubscribe, stream_events() avec keepalive 30s
+   - Singleton job_store = JobStore()
+
+2. Implémente app/storage/__init__.py :
+   - job_dir/input_dir/output_dir/init_job_dirs
+   - save_uploaded_files : gère ZIP (zipfile), flatten paths
+   - get_output_files, cleanup_job
+
+3. Implémente app/jobs/orchestrator.py :
+   Pipeline par chunk (voir SPECS.md section "Orchestrateur") :
+   a. enrich_chunk_lines() → LLMLineInput enrichis
+   b. Appel LLM
+   c. Validation (avec hyphen_pairs si paire présente dans chunk)
+   d. reconcile_hyphen_pair() pour chaque paire dans le chunk
+   e. Stocker resolved_subs_content sur les LineManifest
+   f. Politique retry spécifique si hyphen_integrity_violation
+   g. Fallback général (downgrade granularité)
+   h. rewrite_alto_file() avec les manifests enrichis
+   i. Émettre tous les événements SSE (dont hyphen_pairs_reconciled)
+
+4. Test avec MockProvider :
+   - Créer un MockProvider qui retourne des corrections fixes
+   - test_orchestrator_full_run_with_hyphens :
+     charger sample.xml, run_job avec mock
+     → vérifier output_dir contient *_corrected.xml avec HYP/SUBS_* corrects
+     → vérifier invariants TextLine (IDs, coords)
+     → vérifier que les paires de césure sont réconciliées
+
+5. pytest → 100% vert
+6. Committe : "feat: orchestrator + job store"
+```
+
+**Critères d'acceptation :**
+- reconcile_hyphen_pair est appelé pour chaque paire dans chaque chunk
+- resolved_subs_content stocké sur les LineManifest avant rewrite
+- Le fichier de sortie est un XML valide avec HYP/SUBS_* corrects sur les paires
+
+---
+
+### SPRINT 7 — Routes API FastAPI
+
+**Objectif :** l'API backend est complète et testable.
+
+**Tâches :**
+```
+1. Implémente app/api/providers.py :
+   POST /api/providers/models → ListModelsResponse
+   HTTPException 400 si erreur provider
+
+2. Implémente app/api/jobs.py :
+   POST /api/jobs (multipart) :
+   - Accepter files[], provider, api_key, model
+   - Valider extensions
+   - init_job_dirs + save_uploaded_files
+   - build_document_manifest
+   - Lancer run_job en background (asyncio.create_task)
+   - Retourner {job_id}
+
+   GET /api/jobs/{job_id} → JobStatusResponse
+   GET /api/jobs/{job_id}/events → SSE (sse-starlette)
+   GET /api/jobs/{job_id}/download → XML ou ZIP
+
+3. Implémente app/main.py :
+   - FastAPI avec lifespan
+   - CORS depuis env CORS_ORIGINS
+   - Inclure les deux routers
+   - Si ./static existe → StaticFiles sur "/" pour HF Spaces
+   - Catch-all → index.html pour le SPA
+
+4. Test manuel :
+   uvicorn app.main:app --reload
+   curl -X POST http://localhost:8000/api/providers/models \
+     -H "Content-Type: application/json" \
+     -d '{"provider":"anthropic","api_key":"test"}'
+   → doit retourner 400 clair (pas de crash)
+
+5. Committe : "feat: fastapi routes"
+```
+
+**Critères d'acceptation :**
+- Tous les endpoints répondent
+- SSE envoie des keepalives toutes les 30s
+- L'événement `document_parsed` inclut `hyphen_pairs` (nb de paires détectées)
+
+---
+
+### SPRINT 8 — Frontend React
+
+**Objectif :** interface complète fonctionnelle connectée au backend.
+
+**Design :** aesthetic archival/industriel — fond ardoise sombre (`slate-900`), accents ambre (`amber-500`), typographie monospace pour les données, serif pour les titres. Écran unique.
+
+**Tâches :**
+```
+1. Configure Vite + Tailwind :
+   vite.config.ts : proxy /api → http://localhost:8000
+   Thème custom ambre/ardoise
+
+2. Implémente src/types/index.ts :
+   Provider, ModelInfo, JobStatus, HyphenRole (optionnel, pour les stats)
+   SSEEvent (union discriminée par event)
+   LogEntry : {id, type: 'info'|'warning'|'error'|'success', message, timestamp}
+
+3. Implémente src/api/client.ts :
+   listModels, createJob, getJob, downloadJob
+
+4. Implémente src/hooks/useJobStream.ts :
+   - EventSource sur /api/jobs/{jobId}/events
+   - Accumuler LogEntry
+   - Extraire progress : pages, lignes, hyphen_pairs_reconciled
+   - Retourner {logs, progress, status, cleanup}
+
+5. Implémente src/hooks/useModels.ts
+
+6. Implémente les composants :
+   - FileUpload.tsx : drag & drop, liste ordonnée
+   - ProviderSelector.tsx : dropdown fixe 4 fournisseurs
+   - ModelSelector.tsx : dropdown dynamique + bouton "Charger les modèles"
+   - ApiKeyInput.tsx : password + toggle afficher/masquer
+   - JobProgress.tsx : barre + compteur lignes + compteur "paires réconciliées : N"
+   - LogPanel.tsx : scrollable auto, couleur par type
+   - DownloadButton.tsx : déclenche téléchargement
+
+7. Implémente src/App.tsx :
+   - Orchestrer tous les composants
+   - Play disabled si config incomplète
+   - Une fois completed : afficher stats (lignes modifiées, paires réconciliées, durée)
+   - Bouton "Nouvelle correction" pour reset l'état
+
+8. Vérifie :
+   - Upload → liste affichée
+   - "Charger les modèles" → dropdown se remplit
+   - Play enabled/disabled correct
+   - Logs SSE en temps réel
+   - Stats de paires césure visibles dans les résultats
+
+9. Committe : "feat: frontend react"
+```
+
+**Critères d'acceptation :**
+- Interface utilisable sans erreur console
+- Stats de réconciliation visibles dans les résultats
+- Clé API ne fuite pas
+
+---
+
+### SPRINT 9 — Docker + HF Spaces
+
+**Objectif :** l'application tourne en local via docker-compose ET sur HF Spaces.
+
+**Tâches :**
+```
+1. Crée backend/Dockerfile :
+   FROM python:3.11-slim
+   WORKDIR /app
+   COPY requirements.txt .
+   RUN pip install --no-cache-dir -r requirements.txt
+   COPY app/ ./app/
+   EXPOSE 8000
+   CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+
+2. Crée frontend/Dockerfile :
+   FROM node:20-alpine AS builder / npm ci / npm run build
+   FROM nginx:alpine + dist + nginx.conf (proxy /api → backend:8000)
+   EXPOSE 5173
+
+3. Crée docker-compose.yml :
+   backend: build ./backend, port 8000, env_file .env
+   frontend: build ./frontend, port 5173:80, depends_on backend
+
+4. Crée Dockerfile RACINE pour HF Spaces :
+   Stage 1 : node:20-alpine → npm ci + npm run build → /frontend/dist
+   Stage 2 : python:3.11-slim → pip install + COPY app/ + COPY dist → ./static/
+   ENV JOB_STORAGE_DIR=/tmp/app-jobs
+   EXPOSE 7860
+   CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "7860"]
+
+5. Crée .env.example avec toutes les variables
+
+6. Test local : docker compose up --build → http://localhost:5173
+
+7. Crée README.md :
+   - Description du projet
+   - Installation locale (docker-compose)
+   - Déploiement HF Spaces
+   - Variables d'environnement
+   - Note sur la gestion des césures (Hyphenation Reconciler)
+
+8. Committe : "feat: docker + hf spaces"
+```
+
+**Critères d'acceptation :**
+- `docker compose up --build` → app sur localhost:5173
+- Dockerfile racine build sans erreur
+- Port 7860 pour HF Spaces
+
+---
+
+### SPRINT 10 — Tests d'intégration + polish
+
+**Objectif :** couverture complète, fichier exemple vérifié avec césures, polish UI.
+
+**Tâches :**
+```
+1. Complète tests/test_integration.py :
+   - test_upload_single_xml (mock provider)
+   - test_upload_zip
+   - test_sse_events_order
+   - test_download_single_xml_valid
+   - test_download_multi_zip
+   - test_fallback_invalid_json → retry → downgrade
+   - test_output_preserves_textline_invariants :
+     mêmes IDs, mêmes HPOS/VPOS/WIDTH/HEIGHT
+   - test_hyphen_pairs_reconciled_in_output :
+     sur sample.xml, vérifier que la paire explicite produit
+     un HYP + SUBS_TYPE="HypPart1"/"HypPart2" + SUBS_CONTENT dans l'ALTO de sortie
+   - test_hyphen_heuristic_no_subs_content :
+     sur le candidat heuristique, vérifier que SUBS_CONTENT absent
+
+2. Vérifie examples/sample.xml :
+   - ALTO v3 valide
+   - ≥ 2 pages, ≥ 10 lignes
+   - Erreurs OCR manifestes corrigeables
+   - 1 paire avec SUBS_TYPE explicite (source_explicit=True)
+   - 1 ligne avec tiret heuristique sans SUBS_TYPE (source_explicit=False)
+
+3. Lance la suite complète :
+   pytest -v tests/ --tb=short → 100% vert
+
+4. Polish frontend :
+   - Stats résultats : lignes modifiées / paires réconciliées / durée
+   - Bouton "Nouvelle correction"
+   - Badge discret sur chaque fichier de la liste : "N paires césure détectées"
+
+5. Committe final : "chore: integration tests + polish"
+6. Tag : git tag v1.0.0
+```
+
+**Critères d'acceptation finaux (checklist complète) :**
+
+- [ ] Upload XML unique → correction → download ALTO valide
+- [ ] Upload plusieurs XML → traitement comme multi-pages
+- [ ] Upload ZIP → extraction → correction
+- [ ] Chaque fournisseur liste ses modèles réels
+- [ ] Play activé uniquement si config complète
+- [ ] SSE logs en temps réel
+- [ ] L'ALTO de sortie conserve : même nb TextLine, mêmes IDs, mêmes coords
+- [ ] Aucune ligne de sortie ne contient de saut de ligne
+- [ ] Les paires de césure explicites produisent HYP + SUBS_TYPE + SUBS_CONTENT
+- [ ] Les césures heuristiques ne produisent pas de SUBS_CONTENT inventé
+- [ ] Aucune paire de césure n'est jamais séparée en deux chunks
+- [ ] `reconcile_hyphen_pair` ne fusionne jamais deux lignes physiques
+- [ ] Si partie échoue → job continue avec fallback
+- [ ] Résultat toujours un ALTO valide
+- [ ] docker-compose up fonctionne
+- [ ] Dockerfile racine HF Spaces fonctionne (port 7860)
+- [ ] Clé API jamais loguée
+- [ ] pytest 100% vert
+
+---
+
+## ANNEXE — Commandes de référence pour Claude Code
+
+### Lancer une session type
+
+```bash
+cd alto-llm-corrector
+claude
+/clear
+"Lis SPECS.md et TODO.md. On travaille sur le Sprint X aujourd'hui."
+```
+
+### Vérifier l'état entre sessions
+
+```bash
+git log --oneline -10
+pytest tests/ -v
+uvicorn app.main:app --reload
+```
+
+### Fichier TODO.md à maintenir
+
+```markdown
+# TODO
+
+## En cours : Sprint X — Nom
+
+### Fait
+- [x] Tâche complète
+
+### À faire
+- [ ] Prochaine tâche
+
+## Bugs connus
+- Description → à traiter en Sprint Y
+```
+
+### Prompt de démarrage de sprint type
+
+```
+Je travaille sur alto-llm-corrector.
+Les specs complètes sont dans SPECS.md.
+
+Aujourd'hui : Sprint 2 — Hyphenation Reconciler.
+
+Avant de coder :
+1. Lis SPECS.md section "Hyphenation Reconciler"
+2. Lis les fichiers existants : app/schemas/__init__.py, app/alto/parser.py
+3. Explique comment tu vas implémenter hyphenation.py et ses 3 fonctions
+4. Insiste sur la règle centrale : l'app orchestre, le LLM informe seulement
+5. Une fois validé, implémente avec les tests
+6. Lance pytest, corrige si nécessaire
+7. Committe "feat: hyphenation reconciler"
+```
+
+### Décisions d'architecture clés à retenir
+
+1. **Le LLM informe, l'app décide** : pour les césures, le LLM reçoit des métadonnées de contexte mais ne reconstruit jamais les frontières physiques lui-même.
+
+2. **Trois niveaux de confiance pour SUBS_CONTENT** :
+   - Source ALTO explicite (SUBS_TYPE + SUBS_CONTENT dans l'original) → confiance totale → écrire
+   - Source ALTO partielle (HYP présent, SUBS_CONTENT absent) → confiance partielle → écrire si reconciler confirme
+   - Heuristique (tiret terminal, sans marquage SUBS) → pas de confiance → ne pas écrire
+
+3. **Les paires sont atomiques** : du parsing au chunk planner à l'orchestrateur au rewriter, une paire PART1/PART2 est toujours traitée ensemble. Jamais séparée.
+
+4. **En cas de doute, conserver la source** : à chaque étape (reconciler, validator, orchestrator), le fallback ultime est de garder les textes OCR source. Un ALTO source intact vaut mieux qu'un ALTO inventé.
