@@ -586,3 +586,62 @@ def test_link_alto_to_images_no_match():
     result = link_alto_to_images(pages_info, saved_alto, saved_images)
 
     assert result == {}, f"Expected no matches, got {result}"
+
+
+# ---------------------------------------------------------------------------
+# macOS ZIP artefact tests
+# ---------------------------------------------------------------------------
+
+def _make_macos_zip(xml_bytes: bytes, xml_name: str) -> bytes:
+    """
+    Build a ZIP that mimics what macOS Finder produces:
+    - the real XML file
+    - an AppleDouble metadata file  ._<name>  at the root
+    - the same AppleDouble file inside __MACOSX/
+    - a dummy image and its AppleDouble counterpart
+    """
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        zf.writestr(xml_name, xml_bytes)                           # real file
+        zf.writestr(f"._{xml_name}", b"\x00\x05\x16\x07fakeAD")   # AppleDouble at root
+        zf.writestr(f"__MACOSX/._{xml_name}", b"\x00\x05\x16\x07fakeAD")  # inside __MACOSX
+        zf.writestr("scan.jpg", b"\xff\xd8\xff" + b"\x00" * 16)   # real image
+        zf.writestr("._scan.jpg", b"\x00\x05\x16\x07fakeAD")      # AppleDouble image
+        zf.writestr("__MACOSX/._scan.jpg", b"\x00\x05\x16\x07")   # inside __MACOSX
+    buf.seek(0)
+    return buf.read()
+
+
+def test_macos_zip_skips_appledouble_xml():
+    """._<name>.xml AppleDouble files must never reach the XML parser."""
+    job_id = job_store.create_job(Provider.OPENAI, "mock")
+    init_job_dirs(job_id)
+
+    xml_bytes = SAMPLE_XML.read_bytes()
+    zip_bytes = _make_macos_zip(xml_bytes, "0000.xml")
+
+    saved, images = save_uploaded_files(job_id, [("archive.zip", zip_bytes)])
+
+    # Only the real XML must be saved — not ._0000.xml
+    assert list(saved.keys()) == ["0000.xml"], (
+        f"Expected only '0000.xml', got {list(saved.keys())}"
+    )
+    # Only the real image must be saved — not ._scan.jpg
+    assert list(images.keys()) == ["scan"], (
+        f"Expected only 'scan', got {list(images.keys())}"
+    )
+
+
+def test_macos_zip_parses_without_error():
+    """A macOS ZIP must parse cleanly (no 'Document is empty' error)."""
+    job_id = job_store.create_job(Provider.OPENAI, "mock")
+    init_job_dirs(job_id)
+
+    xml_bytes = SAMPLE_XML.read_bytes()
+    zip_bytes = _make_macos_zip(xml_bytes, "page.xml")
+
+    saved, _ = save_uploaded_files(job_id, [("archive.zip", zip_bytes)])
+
+    # Must not raise
+    doc = build_document_manifest([(p, n) for n, p in saved.items()])
+    assert doc.total_lines > 0

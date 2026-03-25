@@ -68,6 +68,12 @@ def save_uploaded_files(
             with zipfile.ZipFile(io.BytesIO(content)) as zf:
                 for member in zf.infolist():
                     member_path = Path(member.filename)
+                    # Skip macOS metadata: AppleDouble files (._*) and the
+                    # __MACOSX directory that macOS injects into every ZIP.
+                    if member_path.name.startswith("._"):
+                        continue
+                    if "__MACOSX" in member_path.parts:
+                        continue
                     msuffix = member_path.suffix.lower()
                     if msuffix in _ALLOWED_EXTENSIONS:
                         flat_name = member_path.name
