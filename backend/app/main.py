@@ -1,17 +1,20 @@
 """FastAPI application entry point."""
 from __future__ import annotations
 
-import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.api.jobs import router as jobs_router
 from app.api.providers import router as providers_router
+
+# Resolved once at import time — same process for the lifetime of the container
+_STATIC_DIR = Path(__file__).parent.parent / "static"
+_INDEX_HTML = _STATIC_DIR / "index.html"
 
 
 # ---------------------------------------------------------------------------
@@ -35,52 +38,55 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
-    # CORS — never combine allow_credentials=True with wildcard origins
-    # (Starlette 1.0.0 raises ValueError for that combination)
-    cors_origins_raw = os.environ.get("CORS_ORIGINS", "*")
-    if cors_origins_raw == "*":
-        origins = ["*"]
-        allow_credentials = False
-    else:
-        origins = [o.strip() for o in cors_origins_raw.split(",") if o.strip()]
-        allow_credentials = True
-
+    # ------------------------------------------------------------------
+    # CORS
+    # The simplest safe config: wildcard origins, no credentials.
+    # NEVER pass allow_credentials=True with allow_origins=["*"] —
+    # Starlette raises ValueError on first request in some versions.
+    # ------------------------------------------------------------------
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=origins,
-        allow_credentials=allow_credentials,
+        allow_origins=["*"],
         allow_methods=["*"],
         allow_headers=["*"],
     )
 
-    # Health check
-    @app.get("/health", tags=["health"])
+    # ------------------------------------------------------------------
+    # Health check — registered first, always reachable, never depends
+    # on static files or any other optional feature.
+    # ------------------------------------------------------------------
+    @app.get("/health", include_in_schema=False)
     async def health():
-        return {"status": "ok"}
+        return JSONResponse({"status": "ok"})
 
+    # ------------------------------------------------------------------
     # API routers
+    # ------------------------------------------------------------------
     app.include_router(providers_router, prefix="/api/providers", tags=["providers"])
     app.include_router(jobs_router, prefix="/api/jobs", tags=["jobs"])
 
+    # ------------------------------------------------------------------
     # Static frontend (HF Spaces single-container mode)
-    static_dir = Path(__file__).parent.parent / "static"
-    if static_dir.exists():
-        app.mount("/assets", StaticFiles(directory=static_dir / "assets"), name="assets")
+    # Mount /assets for cache-able JS/CSS, then serve index.html for
+    # every other path so the React SPA handles its own routing.
+    # Routes are ALWAYS registered regardless of whether static files
+    # exist — root always returns 200, avoiding health-check failures.
+    # ------------------------------------------------------------------
+    assets_dir = _STATIC_DIR / "assets"
+    if assets_dir.is_dir():
+        app.mount("/assets", StaticFiles(directory=str(assets_dir)), name="assets")
 
-        # Explicit root handler — Starlette 1.0.0 may not match {path:path} for "/"
-        @app.get("/", include_in_schema=False)
-        async def root():
-            index = static_dir / "index.html"
-            if index.exists():
-                return FileResponse(str(index))
-            return {"status": "ok"}
+    @app.get("/", include_in_schema=False)
+    async def root():
+        if _INDEX_HTML.exists():
+            return FileResponse(str(_INDEX_HTML))
+        return JSONResponse({"status": "ok"})
 
-        @app.get("/{full_path:path}", include_in_schema=False)
-        async def spa_fallback(full_path: str):
-            index = static_dir / "index.html"
-            if index.exists():
-                return FileResponse(str(index))
-            raise HTTPException(status_code=404, detail="Not found")
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def spa_fallback(full_path: str):
+        if _INDEX_HTML.exists():
+            return FileResponse(str(_INDEX_HTML))
+        return JSONResponse({"status": "ok"})
 
     return app
 

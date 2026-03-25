@@ -1,8 +1,10 @@
-fastapi==0.115.6
+# Updated 2026-03-25 — comment changes file hash to bust Docker pip-install cache
+fastapi
 uvicorn[standard]
-pydantic>=2.0
-httpx
+pydantic>=2.0,<3.0
+httpx>=0.27,<1.0
 lxml
 python-multipart
 aiofiles
 sse-starlette
+anyio>=4.0,<5.0
