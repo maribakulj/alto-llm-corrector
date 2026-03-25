@@ -76,6 +76,15 @@ def reconcile_hyphen_pair(
     """
     # --- Heuristic mode: conservative, no SUBS_CONTENT reconstruction ---
     if not part1.hyphen_source_explicit:
+        # If PART1 OCR ended with "-" but the LLM removed it (fused the word),
+        # fall back PART1 to OCR source to preserve physical line boundaries.
+        if part1.ocr_text.endswith("-") and not corrected_part1.endswith("-"):
+            safe_part2 = (
+                corrected_part2
+                if corrected_part2 and "\n" not in corrected_part2
+                else part2.ocr_text
+            )
+            return part1.ocr_text, safe_part2, None
         return corrected_part1, corrected_part2, None
 
     # --- Explicit mode ---

@@ -190,6 +190,66 @@ def test_reconcile_ambiguous_returns_source():
     assert t2 == "vauxxx"
 
 
+def test_reconcile_heuristic_llm_completed_word():
+    """Heuristic: LLM removed trailing dash and fused word → PART1 falls back to OCR."""
+    part1 = make_line(
+        "TL1", "Rus-",
+        hyphen_role=HyphenRole.PART1,
+        hyphen_pair_line_id="TL2",
+        hyphen_source_explicit=False,
+    )
+    part2 = make_line(
+        "TL2", "sie le tsar.",
+        hyphen_role=HyphenRole.PART2,
+        hyphen_pair_line_id="TL1",
+        hyphen_source_explicit=False,
+    )
+    t1, t2, subs = reconcile_hyphen_pair(part1, part2, "Russie", "sie le tsar.")
+    assert t1 == "Rus-", "PART1 must fall back to OCR source"
+    assert t2 == "sie le tsar.", "PART2 correction is valid, keep it"
+    assert subs is None
+
+
+def test_reconcile_heuristic_llm_completed_word_part2_also_bad():
+    """Heuristic: LLM fused word AND PART2 correction is empty → both fall back."""
+    part1 = make_line(
+        "TL1", "Rus-",
+        hyphen_role=HyphenRole.PART1,
+        hyphen_pair_line_id="TL2",
+        hyphen_source_explicit=False,
+    )
+    part2 = make_line(
+        "TL2", "sie le tsar.",
+        hyphen_role=HyphenRole.PART2,
+        hyphen_pair_line_id="TL1",
+        hyphen_source_explicit=False,
+    )
+    t1, t2, subs = reconcile_hyphen_pair(part1, part2, "Russie", "")
+    assert t1 == "Rus-", "PART1 must fall back to OCR source"
+    assert t2 == "sie le tsar.", "PART2 empty → fall back to OCR source"
+    assert subs is None
+
+
+def test_reconcile_heuristic_tiret_preserved():
+    """Heuristic: LLM kept the trailing dash → corrections accepted as-is."""
+    part1 = make_line(
+        "TL1", "Rus-",
+        hyphen_role=HyphenRole.PART1,
+        hyphen_pair_line_id="TL2",
+        hyphen_source_explicit=False,
+    )
+    part2 = make_line(
+        "TL2", "sie le tsar.",
+        hyphen_role=HyphenRole.PART2,
+        hyphen_pair_line_id="TL1",
+        hyphen_source_explicit=False,
+    )
+    t1, t2, subs = reconcile_hyphen_pair(part1, part2, "Rus-", "sie le tsar.")
+    assert t1 == "Rus-", "LLM respected the dash, keep correction"
+    assert t2 == "sie le tsar."
+    assert subs is None
+
+
 def test_reconcile_no_line_fusion():
     """Result must always be two distinct non-empty strings."""
     part1 = make_line(
