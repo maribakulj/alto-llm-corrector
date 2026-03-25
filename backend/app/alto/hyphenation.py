@@ -88,6 +88,16 @@ def reconcile_hyphen_pair(
         return corrected_part1, corrected_part2, None
 
     # --- Explicit mode ---
+    # Guard: if the LLM removed the trailing dash (fused the word),
+    # fall back PART1 to OCR source to preserve physical line boundaries.
+    if part1.ocr_text.endswith("-") and not corrected_part1.endswith("-"):
+        safe_part2 = (
+            corrected_part2
+            if corrected_part2 and "\n" not in corrected_part2
+            else part2.ocr_text
+        )
+        return part1.ocr_text, safe_part2, part1.hyphen_subs_content
+
     # Extract boundary tokens
     tokens1 = corrected_part1.split()
     tokens2 = corrected_part2.split()
