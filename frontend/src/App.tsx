@@ -16,6 +16,7 @@ import type { DiffData, JobStats, LayoutData, Provider } from './types'
 export default function App() {
   // Upload state
   const [files, setFiles] = useState<File[]>([])
+  const [resetKey, setResetKey] = useState(0)
 
   // Config state
   const [provider, setProvider] = useState<Provider | null>(null)
@@ -101,9 +102,12 @@ export default function App() {
     setSubmitError(null)
     setFinalStats(null)
     setDiffData(null)
+    setDiffLoading(false)
     setLayoutData(null)
+    setLayoutLoading(false)
     resetModels()
     setSelectedModel(null)
+    setResetKey((k) => k + 1)  // Force FileUpload to remount and clear internal state
   }
 
   // Extract stats from the success log entry when completed
@@ -155,7 +159,7 @@ export default function App() {
             <span className="font-mono text-amber-500 text-xs">01</span>
             Upload ALTO files
           </h2>
-          <FileUpload onFilesChange={setFiles} disabled={isRunning || isDone} />
+          <FileUpload key={resetKey} onFilesChange={setFiles} disabled={isRunning || isDone} />
         </section>
 
         {/* 2. Configuration */}
@@ -226,7 +230,7 @@ export default function App() {
         </section>
 
         {/* 4. Progress — shown once job started */}
-        {(jobId || isRunning || isDone || isFailed) && (
+        {jobId && (isRunning || isDone || isFailed) && (
           <section>
             <h2 className="font-serif text-base font-semibold text-slate-300 mb-3 flex items-center gap-2">
               <span className="font-mono text-amber-500 text-xs">03</span>
@@ -275,23 +279,24 @@ export default function App() {
           </section>
         )}
 
-        {/* 8. Layout viewer */}
-        {isDone && jobId && (
-          <section>
-            <h2 className="font-serif text-base font-semibold text-slate-300 mb-3 flex items-center gap-2">
-              <span className="font-mono text-amber-500 text-xs">07</span>
-              Mise en page ALTO
-            </h2>
-            {layoutLoading && (
-              <div className="flex items-center gap-2 font-mono text-xs text-slate-500 py-4">
-                <span className="w-3 h-3 border border-slate-500 border-t-transparent rounded-full animate-spin" />
-                Chargement de la mise en page…
-              </div>
-            )}
-            {layoutData && <LayoutViewer data={layoutData} />}
-          </section>
-        )}
       </main>
+
+      {/* 8. Layout viewer — wider container for dual side-by-side panels */}
+      {isDone && jobId && (
+        <section className="max-w-6xl mx-auto px-4 py-6">
+          <h2 className="font-serif text-base font-semibold text-slate-300 mb-3 flex items-center gap-2">
+            <span className="font-mono text-amber-500 text-xs">07</span>
+            Mise en page ALTO
+          </h2>
+          {layoutLoading && (
+            <div className="flex items-center gap-2 font-mono text-xs text-slate-500 py-4">
+              <span className="w-3 h-3 border border-slate-500 border-t-transparent rounded-full animate-spin" />
+              Chargement de la mise en page…
+            </div>
+          )}
+          {layoutData && <LayoutViewer data={layoutData} />}
+        </section>
+      )}
 
       {/* Footer */}
       <footer className="border-t border-slate-800 mt-16 py-6">
