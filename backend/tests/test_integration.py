@@ -18,8 +18,10 @@ from app.jobs.orchestrator import run_job
 from app.jobs.store import job_store
 from app.schemas import ModelInfo, Provider
 from app.storage import (
+    get_image_files,
     get_output_files,
     init_job_dirs,
+    link_alto_to_images,
     output_dir,
     save_uploaded_files,
 )
@@ -85,7 +87,7 @@ def _run_job_directly(
     job_id = job_store.create_job(Provider.OPENAI, "mock")
     init_job_dirs(job_id)
 
-    saved = save_uploaded_files(job_id, list(source_bytes.items()))
+    saved, _ = save_uploaded_files(job_id, list(source_bytes.items()))
     doc = build_document_manifest([(p, n) for n, p in saved.items()])
     job_store.update_job(job_id, document_manifest=doc)
 
@@ -238,7 +240,7 @@ def test_sse_events_order():
     job_id = job_store.create_job(Provider.OPENAI, "mock")
     init_job_dirs(job_id)
 
-    saved = save_uploaded_files(job_id, [(SAMPLE_XML.name, SAMPLE_XML.read_bytes())])
+    saved, _ = save_uploaded_files(job_id, [(SAMPLE_XML.name, SAMPLE_XML.read_bytes())])
     doc = build_document_manifest([(p, n) for n, p in saved.items()])
     job_store.update_job(job_id, document_manifest=doc)
 
@@ -479,3 +481,108 @@ def test_heuristic_hyphen_no_subs_content():
                 f"{line_id} must not have SUBS_CONTENT (heuristic pair), "
                 f"got {s.get('SUBS_CONTENT')!r}"
             )
+
+
+# ---------------------------------------------------------------------------
+# test_zip_with_images
+# ---------------------------------------------------------------------------
+
+def test_zip_with_images():
+    """ZIP with XML + PNG → image saved, job completes, image served via API."""
+    # Minimal valid PNG magic (backend stores and serves without parsing content)
+    fake_png = b'\x89PNG\r\n\x1a\n' + b'\x00' * 64
+
+    xml_data = SAMPLE_XML.read_bytes()
+    # The image stem must match the XML stem for auto-linking
+    xml_name = SAMPLE_XML.stem + ".xml"
+    img_name = SAMPLE_XML.stem + ".png"
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        zf.writestr(xml_name, xml_data)
+        zf.writestr(img_name, fake_png)
+
+    client = _make_client()
+    try:
+        resp = client.post(
+            "/api/jobs",
+            data={"provider": "openai", "api_key": "x", "model": "mock"},
+            files=[("files", ("archive.zip", buf.getvalue(), "application/zip"))],
+        )
+        assert resp.status_code == 200
+        job_id = resp.json()["job_id"]
+
+        status = _poll_completed(client, job_id)
+        assert status == "completed"
+
+        # Layout should reference the image
+        layout = client.get(f"/api/jobs/{job_id}/layout").json()
+        image_url = layout["pages"][0].get("image_url")
+        assert image_url is not None, "image_url should be set when image matches ALTO stem"
+
+        # Image endpoint should return the PNG bytes
+        img_resp = client.get(image_url)
+        assert img_resp.status_code == 200
+        assert img_resp.headers["content-type"] == "image/png"
+        assert img_resp.content[:8] == b'\x89PNG\r\n\x1a\n'
+    finally:
+        _restore(client)
+
+
+# ---------------------------------------------------------------------------
+# test_link_alto_to_images_by_filename
+# ---------------------------------------------------------------------------
+
+def test_link_alto_to_images_by_filename():
+    """link_alto_to_images matches by lowercase stem of the ALTO source file."""
+    job_id = job_store.create_job(Provider.OPENAI, "mock")
+    init_job_dirs(job_id)
+
+    xml_data = SAMPLE_XML.read_bytes()
+    # Use a predictable name so stem is known
+    files = [("mypage.xml", xml_data)]
+    saved_alto, _ = save_uploaded_files(job_id, files)
+
+    # Simulate an image whose stem matches the XML stem
+    from app.storage import images_dir
+    imgs = images_dir(job_id)
+    imgs.mkdir(parents=True, exist_ok=True)
+    img_path = imgs / "mypage.jpg"
+    img_path.write_bytes(b'\xff\xd8\xff' + b'\x00' * 16)  # fake JPEG
+
+    saved_images = {"mypage": img_path}
+
+    # Build a minimal pages list
+    doc = build_document_manifest([(p, n) for n, p in saved_alto.items()])
+    pages_info = [(p.page_id, p.source_file) for p in doc.pages]
+
+    result = link_alto_to_images(pages_info, saved_alto, saved_images)
+
+    assert len(result) == len(pages_info), (
+        f"Expected {len(pages_info)} matches (one per page), got {result}"
+    )
+    for page_id in result:
+        assert result[page_id] == "mypage.jpg"
+
+
+# ---------------------------------------------------------------------------
+# test_link_alto_to_images_no_match
+# ---------------------------------------------------------------------------
+
+def test_link_alto_to_images_no_match():
+    """link_alto_to_images returns empty dict when no stem matches."""
+    job_id = job_store.create_job(Provider.OPENAI, "mock")
+    init_job_dirs(job_id)
+
+    xml_data = SAMPLE_XML.read_bytes()
+    saved_alto, _ = save_uploaded_files(job_id, [("doc_a.xml", xml_data)])
+
+    # Image has a different stem → no match
+    saved_images = {"doc_b": Path("/tmp/nonexistent/doc_b.png")}
+
+    doc = build_document_manifest([(p, n) for n, p in saved_alto.items()])
+    pages_info = [(p.page_id, p.source_file) for p in doc.pages]
+
+    result = link_alto_to_images(pages_info, saved_alto, saved_images)
+
+    assert result == {}, f"Expected no matches, got {result}"

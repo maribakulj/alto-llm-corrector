@@ -113,6 +113,7 @@ export interface LayoutPage {
   page_index: number
   page_width: number
   page_height: number
+  image_url: string | null
   blocks: LayoutBlock[]
 }
 

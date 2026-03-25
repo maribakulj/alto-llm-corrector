@@ -24,7 +24,9 @@ from app.schemas import (
 )
 from app.storage import (
     get_output_files,
+    images_dir,
     init_job_dirs,
+    link_alto_to_images,
     output_dir,
     save_uploaded_files,
 )
@@ -72,8 +74,8 @@ async def create_job(
     job_id = job_store.create_job(provider_enum, model)
     init_job_dirs(job_id)
 
-    # Save and extract files
-    saved = save_uploaded_files(job_id, file_tuples)
+    # Save and extract files (also extracts images from ZIPs)
+    saved, image_files = save_uploaded_files(job_id, file_tuples)
 
     if not saved:
         raise HTTPException(
@@ -94,7 +96,9 @@ async def create_job(
             detail="No text lines found in the uploaded ALTO files.",
         )
 
-    job_store.update_job(job_id, document_manifest=doc_manifest)
+    pages_info = [(p.page_id, p.source_file) for p in doc_manifest.pages]
+    images_map = link_alto_to_images(pages_info, saved, image_files)
+    job_store.update_job(job_id, document_manifest=doc_manifest, images=images_map)
 
     # Resolve provider instance
     from app.providers import get_provider as _get_provider
@@ -314,12 +318,46 @@ async def get_job_layout(job_id: str) -> dict:
                 "lines": lines_out,
             })
 
+        image_filename = job.images.get(page.page_id)
+        image_url = f"/api/jobs/{job_id}/images/{image_filename}" if image_filename else None
         pages_out.append({
             "page_id": page.page_id,
             "page_index": page.page_index,
             "page_width": page.page_width,
             "page_height": page.page_height,
+            "image_url": image_url,
             "blocks": blocks_out,
         })
 
     return {"job_id": job_id, "pages": pages_out}
+
+
+# ---------------------------------------------------------------------------
+# GET /api/jobs/{job_id}/images/{image_name}
+# ---------------------------------------------------------------------------
+
+_IMAGE_MIME: dict[str, str] = {
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+    ".tif": "image/tiff",
+    ".tiff": "image/tiff",
+}
+
+
+@router.get("/{job_id}/images/{image_name}")
+async def get_job_image(job_id: str, image_name: str) -> Response:
+    """Serve a source scan image for a job."""
+    if job_store.get_job(job_id) is None:
+        raise HTTPException(status_code=404, detail=f"Job not found: {job_id!r}")
+
+    # Sanitise: only allow plain filenames (no path traversal)
+    if "/" in image_name or "\\" in image_name or image_name.startswith("."):
+        raise HTTPException(status_code=400, detail="Invalid image name.")
+
+    img_path = images_dir(job_id) / image_name
+    if not img_path.exists():
+        raise HTTPException(status_code=404, detail=f"Image not found: {image_name!r}")
+
+    mime = _IMAGE_MIME.get(img_path.suffix.lower(), "application/octet-stream")
+    return Response(content=img_path.read_bytes(), media_type=mime)
