@@ -35,17 +35,20 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
-    # CORS
+    # CORS — never combine allow_credentials=True with wildcard origins
+    # (Starlette 1.0.0 raises ValueError for that combination)
     cors_origins_raw = os.environ.get("CORS_ORIGINS", "*")
     if cors_origins_raw == "*":
         origins = ["*"]
+        allow_credentials = False
     else:
         origins = [o.strip() for o in cors_origins_raw.split(",") if o.strip()]
+        allow_credentials = True
 
     app.add_middleware(
         CORSMiddleware,
         allow_origins=origins,
-        allow_credentials=True,
+        allow_credentials=allow_credentials,
         allow_methods=["*"],
         allow_headers=["*"],
     )
@@ -63,6 +66,14 @@ def create_app() -> FastAPI:
     static_dir = Path(__file__).parent.parent / "static"
     if static_dir.exists():
         app.mount("/assets", StaticFiles(directory=static_dir / "assets"), name="assets")
+
+        # Explicit root handler — Starlette 1.0.0 may not match {path:path} for "/"
+        @app.get("/", include_in_schema=False)
+        async def root():
+            index = static_dir / "index.html"
+            if index.exists():
+                return FileResponse(str(index))
+            return {"status": "ok"}
 
         @app.get("/{full_path:path}", include_in_schema=False)
         async def spa_fallback(full_path: str):
