@@ -1,4 +1,4 @@
-fastapi
+fastapi==0.115.6
 uvicorn[standard]
 pydantic>=2.0
 httpx
