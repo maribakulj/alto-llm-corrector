@@ -24,7 +24,18 @@ interface PageSVGProps {
 }
 
 function PageSVG({ page, side }: PageSVGProps) {
-  const { page_width: W, page_height: H, blocks } = page
+  const { blocks } = page
+  // Fallback: derive dimensions from block content if page-level attrs are 0
+  const W = page.page_width || blocks.reduce((m, b) => Math.max(m, b.hpos + b.width), 0)
+  const H = page.page_height || blocks.reduce((m, b) => Math.max(m, b.vpos + b.height), 0)
+
+  if (!W || !H) {
+    return (
+      <div className="p-6 font-mono text-xs text-slate-500 text-center">
+        Coordonnées ALTO absentes — impossible d'afficher la mise en page.
+      </div>
+    )
+  }
 
   return (
     <svg
@@ -112,7 +123,10 @@ interface PageImageOverlayProps {
 }
 
 function PageImageOverlay({ page, side }: PageImageOverlayProps) {
-  const { page_width: W, page_height: H, blocks, image_url } = page
+  const { blocks, image_url } = page
+  // Fallback: derive dimensions from block content if page-level attrs are 0
+  const W = page.page_width || blocks.reduce((m, b) => Math.max(m, b.hpos + b.width), 0)
+  const H = page.page_height || blocks.reduce((m, b) => Math.max(m, b.vpos + b.height), 0)
 
   return (
     <div style={{ position: 'relative', lineHeight: 0 }}>
@@ -123,7 +137,7 @@ function PageImageOverlay({ page, side }: PageImageOverlayProps) {
       />
       <svg
         viewBox={`0 0 ${W} ${H}`}
-        preserveAspectRatio="xMinYMin meet"
+        preserveAspectRatio="none"
         style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}
       >
         {blocks.map((block) => (

@@ -318,13 +318,25 @@ async def get_job_layout(job_id: str) -> dict:
                 "lines": lines_out,
             })
 
+        # Derive page dimensions from line coordinates if the ALTO Page element
+        # doesn't carry WIDTH/HEIGHT (some producers omit these attributes).
+        pw = page.page_width
+        ph = page.page_height
+        if pw == 0 or ph == 0:
+            xs = [lm.coords.hpos + lm.coords.width for lm in page.lines]
+            ys = [lm.coords.vpos + lm.coords.height for lm in page.lines]
+            if pw == 0 and xs:
+                pw = max(xs)
+            if ph == 0 and ys:
+                ph = max(ys)
+
         image_filename = job.images.get(page.page_id)
         image_url = f"/api/jobs/{job_id}/images/{image_filename}" if image_filename else None
         pages_out.append({
             "page_id": page.page_id,
             "page_index": page.page_index,
-            "page_width": page.page_width,
-            "page_height": page.page_height,
+            "page_width": pw,
+            "page_height": ph,
             "image_url": image_url,
             "blocks": blocks_out,
         })
