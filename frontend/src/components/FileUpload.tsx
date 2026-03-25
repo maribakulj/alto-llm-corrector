@@ -78,7 +78,7 @@ export function FileUpload({ onFilesChange, disabled }: FileUploadProps) {
           Drop files here or <span className="text-amber-400 underline">browse</span>
         </p>
         <p className="text-slate-500 font-mono text-xs mt-1">
-          {ACCEPTED.join(' · ')}
+          {ACCEPTED.join(' · ')} — ZIP can include images (.jpg .png .tif)
         </p>
         <input
           ref={inputRef}

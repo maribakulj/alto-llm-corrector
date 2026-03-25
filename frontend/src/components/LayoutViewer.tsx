@@ -70,7 +70,7 @@ function PageSVG({ page, side }: PageSVGProps) {
                   />
                 )}
 
-                {/* Hyphen left border (2px amber bar) */}
+                {/* Hyphen left border (amber bar) */}
                 {hasHyphen && (
                   <rect
                     x={line.hpos}
@@ -103,6 +103,73 @@ function PageSVG({ page, side }: PageSVGProps) {
 }
 
 // ---------------------------------------------------------------------------
+// PageImageOverlay — image scan with SVG box overlay
+// ---------------------------------------------------------------------------
+
+interface PageImageOverlayProps {
+  page: LayoutPage
+}
+
+function PageImageOverlay({ page }: PageImageOverlayProps) {
+  const { page_width: W, page_height: H, blocks, image_url } = page
+
+  return (
+    <div style={{ position: 'relative', lineHeight: 0 }}>
+      <img
+        src={image_url!}
+        alt="source scan"
+        style={{ width: '100%', display: 'block' }}
+      />
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        preserveAspectRatio="xMinYMin meet"
+        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}
+      >
+        {blocks.map((block) => (
+          <g key={block.block_id}>
+            <rect
+              x={block.hpos}
+              y={block.vpos}
+              width={block.width}
+              height={block.height}
+              fill="none"
+              stroke={C.blockBorder}
+              strokeWidth={6}
+              opacity={0.6}
+            />
+            {block.lines.map((line) => (
+              <g key={line.line_id}>
+                {line.modified && (
+                  <rect
+                    x={line.hpos}
+                    y={line.vpos}
+                    width={line.width}
+                    height={line.height}
+                    fill="rgba(251,191,36,0.30)"
+                    stroke="rgba(251,191,36,0.70)"
+                    strokeWidth={3}
+                  />
+                )}
+                {line.hyphen_role !== 'none' && (
+                  <rect
+                    x={line.hpos}
+                    y={line.vpos}
+                    width={8}
+                    height={line.height}
+                    fill={C.hyphenBar}
+                    opacity={0.8}
+                  />
+                )}
+              </g>
+            ))}
+          </g>
+        ))}
+      </svg>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // LayoutViewer
 // ---------------------------------------------------------------------------
 
@@ -112,11 +179,13 @@ interface LayoutViewerProps {
 
 export function LayoutViewer({ data }: LayoutViewerProps) {
   const [pageIdx, setPageIdx] = useState(0)
+  const [viewMode, setViewMode] = useState<'split' | 'overlay'>('split')
   const leftRef  = useRef<HTMLDivElement>(null)
   const rightRef = useRef<HTMLDivElement>(null)
   const syncing  = useRef(false)
 
   const currentPage = data.pages[pageIdx] ?? data.pages[0]
+  const hasImage = !!currentPage.image_url
 
   const onScrollLeft = useCallback(() => {
     if (syncing.current || !leftRef.current || !rightRef.current) return
@@ -140,50 +209,77 @@ export function LayoutViewer({ data }: LayoutViewerProps) {
         <h3 className="font-serif text-sm font-semibold text-slate-200">
           Visionneuse structurelle
         </h3>
-        {data.pages.length > 1 && (
-          <select
-            value={pageIdx}
-            onChange={(e) => setPageIdx(Number(e.target.value))}
-            className="font-mono text-xs bg-slate-700 border border-slate-600 text-slate-200
-                       rounded px-2 py-1 focus:outline-none focus:border-amber-500"
-          >
-            {data.pages.map((p, i) => (
-              <option key={p.page_id} value={i}>
-                Page {i + 1} — {p.page_id}
-              </option>
-            ))}
-          </select>
-        )}
+        <div className="flex items-center gap-3 flex-wrap">
+          {hasImage && (
+            <button
+              onClick={() => setViewMode(m => m === 'split' ? 'overlay' : 'split')}
+              className="font-mono text-[10px] uppercase tracking-wider border rounded px-2 py-1 transition-colors
+                         border-amber-500/50 text-amber-400 hover:bg-amber-500/10"
+            >
+              {viewMode === 'split' ? 'Image overlay' : 'SVG split'}
+            </button>
+          )}
+          {data.pages.length > 1 && (
+            <select
+              value={pageIdx}
+              onChange={(e) => setPageIdx(Number(e.target.value))}
+              className="font-mono text-xs bg-slate-700 border border-slate-600 text-slate-200
+                         rounded px-2 py-1 focus:outline-none focus:border-amber-500"
+            >
+              {data.pages.map((p, i) => (
+                <option key={p.page_id} value={i}>
+                  Page {i + 1} — {p.page_id}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
       </div>
 
-      {/* Panel column headers */}
-      <div className="grid grid-cols-2 border-b border-slate-700/40 bg-slate-800/60">
-        <div className="px-3 py-1.5 font-mono text-[10px] text-slate-500 uppercase tracking-wider
-                        border-r border-slate-700/40">
-          OCR source
-        </div>
-        <div className="px-3 py-1.5 font-mono text-[10px] text-slate-500 uppercase tracking-wider">
-          Corrigé
-        </div>
-      </div>
+      {viewMode === 'overlay' && hasImage ? (
+        /* Image overlay mode — single scrollable panel */
+        <>
+          <div className="px-3 py-1.5 font-mono text-[10px] text-slate-500 uppercase tracking-wider
+                          border-b border-slate-700/40 bg-slate-800/60">
+            Scan source + surlignage des corrections
+          </div>
+          <div className="overflow-auto max-h-[70vh]">
+            <PageImageOverlay page={currentPage} />
+          </div>
+        </>
+      ) : (
+        /* Split SVG mode */
+        <>
+          {/* Panel column headers */}
+          <div className="grid grid-cols-2 border-b border-slate-700/40 bg-slate-800/60">
+            <div className="px-3 py-1.5 font-mono text-[10px] text-slate-500 uppercase tracking-wider
+                            border-r border-slate-700/40">
+              OCR source
+            </div>
+            <div className="px-3 py-1.5 font-mono text-[10px] text-slate-500 uppercase tracking-wider">
+              Corrigé
+            </div>
+          </div>
 
-      {/* Dual SVG panels with synchronised scroll */}
-      <div className="grid grid-cols-2 divide-x divide-slate-700/40">
-        <div
-          ref={leftRef}
-          onScroll={onScrollLeft}
-          className="overflow-auto max-h-[60vh]"
-        >
-          <PageSVG page={currentPage} side="ocr" />
-        </div>
-        <div
-          ref={rightRef}
-          onScroll={onScrollRight}
-          className="overflow-auto max-h-[60vh]"
-        >
-          <PageSVG page={currentPage} side="corrected" />
-        </div>
-      </div>
+          {/* Dual SVG panels with synchronised scroll */}
+          <div className="grid grid-cols-2 divide-x divide-slate-700/40">
+            <div
+              ref={leftRef}
+              onScroll={onScrollLeft}
+              className="overflow-auto max-h-[60vh]"
+            >
+              <PageSVG page={currentPage} side="ocr" />
+            </div>
+            <div
+              ref={rightRef}
+              onScroll={onScrollRight}
+              className="overflow-auto max-h-[60vh]"
+            >
+              <PageSVG page={currentPage} side="corrected" />
+            </div>
+          </div>
+        </>
+      )}
 
       {/* Legend */}
       <div className="px-4 py-2.5 border-t border-slate-700/40 flex items-center gap-6 flex-wrap">

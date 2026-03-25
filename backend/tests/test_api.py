@@ -245,7 +245,7 @@ def test_download_single_xml(client: TestClient):
     job_id = job_store.create_job(provider_enum, "mock")
     init_job_dirs(job_id)
 
-    saved = save_uploaded_files(job_id, [(SAMPLE_XML.name, SAMPLE_XML.read_bytes())])
+    saved, _ = save_uploaded_files(job_id, [(SAMPLE_XML.name, SAMPLE_XML.read_bytes())])
     doc = build_document_manifest([(p, n) for n, p in saved.items()])
     job_store.update_job(job_id, document_manifest=doc)
 

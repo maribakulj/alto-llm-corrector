@@ -156,6 +156,7 @@ class JobManifest(BaseModel):
     fallbacks: int = 0
     duration_seconds: Optional[float] = None
     error: Optional[str] = None
+    images: dict[str, str] = Field(default_factory=dict)
 
 
 # ---------------------------------------------------------------------------
