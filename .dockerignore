@@ -1,0 +1,34 @@
+# Git
+.git
+.gitignore
+
+# Node
+**/node_modules
+frontend/dist
+
+# Python
+**/__pycache__
+**/*.pyc
+**/*.pyo
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+
+# Dev/editor
+.env
+.env.*
+**/.venv
+**/venv
+.DS_Store
+**/.idea
+**/.vscode
+
+# Test artefacts
+**/htmlcov
+**/.coverage
+**/coverage.xml
+
+# Docker itself
+Dockerfile
+docker-compose*.yml
+.dockerignore
