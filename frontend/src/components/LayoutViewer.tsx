@@ -179,13 +179,20 @@ interface LayoutViewerProps {
 
 export function LayoutViewer({ data }: LayoutViewerProps) {
   const [pageIdx, setPageIdx] = useState(0)
-  const [viewMode, setViewMode] = useState<'split' | 'overlay'>('split')
+  const [viewMode, setViewMode] = useState<'split' | 'overlay'>(
+    data.pages[0]?.image_url ? 'overlay' : 'split'
+  )
   const leftRef  = useRef<HTMLDivElement>(null)
   const rightRef = useRef<HTMLDivElement>(null)
   const syncing  = useRef(false)
 
   const currentPage = data.pages[pageIdx] ?? data.pages[0]
   const hasImage = !!currentPage.image_url
+
+  function handlePageChange(newIdx: number) {
+    setPageIdx(newIdx)
+    setViewMode(data.pages[newIdx]?.image_url ? 'overlay' : 'split')
+  }
 
   const onScrollLeft = useCallback(() => {
     if (syncing.current || !leftRef.current || !rightRef.current) return
@@ -222,7 +229,7 @@ export function LayoutViewer({ data }: LayoutViewerProps) {
           {data.pages.length > 1 && (
             <select
               value={pageIdx}
-              onChange={(e) => setPageIdx(Number(e.target.value))}
+              onChange={(e) => handlePageChange(Number(e.target.value))}
               className="font-mono text-xs bg-slate-700 border border-slate-600 text-slate-200
                          rounded px-2 py-1 focus:outline-none focus:border-amber-500"
             >
