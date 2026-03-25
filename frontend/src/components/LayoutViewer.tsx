@@ -10,23 +10,28 @@ const C = {
   blockBorder:  '#475569',   // slate-600
   textUnchanged:'#94a3b8',   // slate-400
   textChanged:  '#d97706',   // amber-600 (readable on white)
-  rectChanged:  'rgba(253,230,138,0.25)',  // amber-200 25%
+  rectChanged:  'rgba(253,230,138,0.25)',
   hyphenBar:    '#f59e0b',   // amber-500
 } as const
 
 // ---------------------------------------------------------------------------
-// PageSVG — renders one page in one SVG, for one side (ocr | corrected)
+// SVGOverlay — the annotation layer (blocks + lines + text)
+// Rendered either on a white background (no image) or as a transparent
+// overlay on top of a scan image.
 // ---------------------------------------------------------------------------
 
-interface PageSVGProps {
+interface SVGOverlayProps {
   page: LayoutPage
   side: 'ocr' | 'corrected'
+  /** 0 = invisible, 1 = fully opaque. Applied to the whole SVG group. */
+  opacity: number
+  /** When true, a white page rect is drawn first (standalone mode). */
+  withBackground: boolean
 }
 
-function PageSVG({ page, side }: PageSVGProps) {
+function SVGOverlay({ page, side, opacity, withBackground }: SVGOverlayProps) {
   const { blocks } = page
-  // Fallback: derive dimensions from block content if page-level attrs are 0
-  const W = page.page_width || blocks.reduce((m, b) => Math.max(m, b.hpos + b.width), 0)
+  const W = page.page_width  || blocks.reduce((m, b) => Math.max(m, b.hpos + b.width),  0)
   const H = page.page_height || blocks.reduce((m, b) => Math.max(m, b.vpos + b.height), 0)
 
   if (!W || !H) {
@@ -41,105 +46,17 @@ function PageSVG({ page, side }: PageSVGProps) {
     <svg
       viewBox={`0 0 ${W} ${H}`}
       width="100%"
-      preserveAspectRatio="xMinYMin meet"
-      style={{ display: 'block' }}
+      preserveAspectRatio={withBackground ? 'xMinYMin meet' : 'none'}
+      style={{
+        display: 'block',
+        ...(withBackground ? {} : {
+          position: 'absolute', inset: 0, width: '100%', height: '100%',
+        }),
+      }}
     >
-      {/* Page background */}
-      <rect x={0} y={0} width={W} height={H} fill={C.pageBg} />
+      {withBackground && <rect x={0} y={0} width={W} height={H} fill={C.pageBg} />}
 
-      {blocks.map((block) => (
-        <g key={block.block_id}>
-          {/* Block outline */}
-          <rect
-            x={block.hpos}
-            y={block.vpos}
-            width={block.width}
-            height={block.height}
-            fill="none"
-            stroke={C.blockBorder}
-            strokeWidth={6}
-          />
-
-          {block.lines.map((line) => {
-            const displayText = side === 'ocr' ? line.ocr_text : line.corrected_text
-            const fontSize = Math.max(line.height * 0.7, 1)
-            const textY = line.vpos + line.height * 0.75
-            const textX = line.hpos + 4
-            const maxW = line.width - 8
-            const hasHyphen = line.hyphen_role !== 'none'
-
-            return (
-              <g key={line.line_id}>
-                {/* Modified line background */}
-                {line.modified && (
-                  <rect
-                    x={line.hpos}
-                    y={line.vpos}
-                    width={line.width}
-                    height={line.height}
-                    fill={C.rectChanged}
-                  />
-                )}
-
-                {/* Hyphen left border (amber bar) */}
-                {hasHyphen && (
-                  <rect
-                    x={line.hpos}
-                    y={line.vpos}
-                    width={8}
-                    height={line.height}
-                    fill={C.hyphenBar}
-                  />
-                )}
-
-                {/* Line text */}
-                <text
-                  x={textX}
-                  y={textY}
-                  fontSize={fontSize}
-                  fill={line.modified ? C.textChanged : C.textUnchanged}
-                  textLength={maxW > 0 ? maxW : undefined}
-                  lengthAdjust="spacingAndGlyphs"
-                  style={{ fontFamily: 'serif' }}
-                >
-                  {displayText}
-                </text>
-              </g>
-            )
-          })}
-        </g>
-      ))}
-    </svg>
-  )
-}
-
-// ---------------------------------------------------------------------------
-// PageImageOverlay — image scan with SVG text + highlight overlay
-// ---------------------------------------------------------------------------
-
-interface PageImageOverlayProps {
-  page: LayoutPage
-  side: 'ocr' | 'corrected'
-}
-
-function PageImageOverlay({ page, side }: PageImageOverlayProps) {
-  const { blocks, image_url } = page
-  // Fallback: derive dimensions from block content if page-level attrs are 0
-  const W = page.page_width || blocks.reduce((m, b) => Math.max(m, b.hpos + b.width), 0)
-  const H = page.page_height || blocks.reduce((m, b) => Math.max(m, b.vpos + b.height), 0)
-
-  return (
-    <div style={{ position: 'relative', lineHeight: 0 }}>
-      <img
-        src={image_url!}
-        alt="source scan"
-        style={{ width: '100%', display: 'block' }}
-      />
-      <svg
-        viewBox={`0 0 ${W} ${H}`}
-        preserveAspectRatio="none"
-        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}
-      >
+      <g opacity={opacity}>
         {blocks.map((block) => (
           <g key={block.block_id}>
             <rect
@@ -150,58 +67,126 @@ function PageImageOverlay({ page, side }: PageImageOverlayProps) {
               fill="none"
               stroke={C.blockBorder}
               strokeWidth={6}
-              opacity={0.6}
+              opacity={withBackground ? 1 : 0.6}
             />
+
             {block.lines.map((line) => {
               const displayText = side === 'ocr' ? line.ocr_text : line.corrected_text
-              const fontSize = Math.max(line.height * 0.72, 1)
-              const textY = line.vpos + line.height * 0.78
-              const textX = line.hpos + 4
-              const maxW = line.width - 8
               const hasHyphen = line.hyphen_role !== 'none'
 
-              return (
-                <g key={line.line_id}>
-                  {/* Semi-transparent background behind every line for readability */}
-                  <rect
-                    x={line.hpos}
-                    y={line.vpos}
-                    width={line.width}
-                    height={line.height}
-                    fill={line.modified ? 'rgba(251,191,36,0.70)' : 'rgba(255,255,255,0.78)'}
-                    stroke={line.modified ? 'rgba(217,119,6,0.90)' : 'rgba(148,163,184,0.40)'}
-                    strokeWidth={2}
-                  />
-                  {/* Hyphen left border */}
-                  {hasHyphen && (
+              if (withBackground) {
+                // SVG-only mode: coloured text on white page
+                const fontSize = Math.max(line.height * 0.7, 1)
+                const textY    = line.vpos + line.height * 0.75
+                return (
+                  <g key={line.line_id}>
+                    {line.modified && (
+                      <rect
+                        x={line.hpos} y={line.vpos}
+                        width={line.width} height={line.height}
+                        fill={C.rectChanged}
+                      />
+                    )}
+                    {hasHyphen && (
+                      <rect
+                        x={line.hpos} y={line.vpos}
+                        width={8} height={line.height}
+                        fill={C.hyphenBar}
+                      />
+                    )}
+                    <text
+                      x={line.hpos + 4}
+                      y={textY}
+                      fontSize={fontSize}
+                      fill={line.modified ? C.textChanged : C.textUnchanged}
+                      textLength={line.width - 8 > 0 ? line.width - 8 : undefined}
+                      lengthAdjust="spacingAndGlyphs"
+                      style={{ fontFamily: 'serif' }}
+                    >
+                      {displayText}
+                    </text>
+                  </g>
+                )
+              } else {
+                // Image overlay mode: semi-opaque bg behind text for readability
+                const fontSize = Math.max(line.height * 0.72, 1)
+                const textY    = line.vpos + line.height * 0.78
+                return (
+                  <g key={line.line_id}>
                     <rect
-                      x={line.hpos}
-                      y={line.vpos}
-                      width={8}
-                      height={line.height}
-                      fill={C.hyphenBar}
-                      opacity={0.9}
+                      x={line.hpos} y={line.vpos}
+                      width={line.width} height={line.height}
+                      fill={line.modified ? 'rgba(251,191,36,0.70)' : 'rgba(255,255,255,0.78)'}
+                      stroke={line.modified ? 'rgba(217,119,6,0.90)' : 'rgba(148,163,184,0.40)'}
+                      strokeWidth={2}
                     />
-                  )}
-                  {/* Text always in dark slate for contrast */}
-                  <text
-                    x={textX}
-                    y={textY}
-                    fontSize={fontSize}
-                    fill="#0f172a"
-                    textLength={maxW > 0 ? maxW : undefined}
-                    lengthAdjust="spacingAndGlyphs"
-                    style={{ fontFamily: 'serif' }}
-                  >
-                    {displayText}
-                  </text>
-                </g>
-              )
+                    {hasHyphen && (
+                      <rect
+                        x={line.hpos} y={line.vpos}
+                        width={8} height={line.height}
+                        fill={C.hyphenBar}
+                        opacity={0.9}
+                      />
+                    )}
+                    <text
+                      x={line.hpos + 4}
+                      y={textY}
+                      fontSize={fontSize}
+                      fill="#0f172a"
+                      textLength={line.width - 8 > 0 ? line.width - 8 : undefined}
+                      lengthAdjust="spacingAndGlyphs"
+                      style={{ fontFamily: 'serif' }}
+                    >
+                      {displayText}
+                    </text>
+                  </g>
+                )
+              }
             })}
           </g>
         ))}
-      </svg>
-    </div>
+      </g>
+    </svg>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// PagePanel — one side (ocr | corrected): image background + SVG overlay
+// ---------------------------------------------------------------------------
+
+interface PagePanelProps {
+  page: LayoutPage
+  side: 'ocr' | 'corrected'
+  overlayOpacity: number
+}
+
+function PagePanel({ page, side, overlayOpacity }: PagePanelProps) {
+  if (page.image_url) {
+    return (
+      <div style={{ position: 'relative', lineHeight: 0 }}>
+        <img
+          src={page.image_url}
+          alt="source scan"
+          style={{ width: '100%', display: 'block' }}
+        />
+        <SVGOverlay
+          page={page}
+          side={side}
+          opacity={overlayOpacity}
+          withBackground={false}
+        />
+      </div>
+    )
+  }
+
+  // No image: SVG-only with white background, text always fully visible
+  return (
+    <SVGOverlay
+      page={page}
+      side={side}
+      opacity={1}
+      withBackground={true}
+    />
   )
 }
 
@@ -214,21 +199,14 @@ interface LayoutViewerProps {
 }
 
 export function LayoutViewer({ data }: LayoutViewerProps) {
-  const [pageIdx, setPageIdx] = useState(0)
-  const [viewMode, setViewMode] = useState<'split' | 'overlay'>(
-    data.pages[0]?.image_url ? 'overlay' : 'split'
-  )
+  const [pageIdx,         setPageIdx]         = useState(0)
+  const [overlayOpacity,  setOverlayOpacity]  = useState(0.85)
   const leftRef  = useRef<HTMLDivElement>(null)
   const rightRef = useRef<HTMLDivElement>(null)
   const syncing  = useRef(false)
 
   const currentPage = data.pages[pageIdx] ?? data.pages[0]
-  const hasImage = !!currentPage.image_url
-
-  function handlePageChange(newIdx: number) {
-    setPageIdx(newIdx)
-    setViewMode(data.pages[newIdx]?.image_url ? 'overlay' : 'split')
-  }
+  const hasImage    = !!currentPage.image_url
 
   const onScrollLeft = useCallback(() => {
     if (syncing.current || !leftRef.current || !rightRef.current) return
@@ -252,20 +230,33 @@ export function LayoutViewer({ data }: LayoutViewerProps) {
         <h3 className="font-serif text-sm font-semibold text-slate-200">
           Visionneuse structurelle
         </h3>
-        <div className="flex items-center gap-3 flex-wrap">
+
+        <div className="flex items-center gap-4 flex-wrap">
+          {/* Opacity slider — only when scan images are available */}
           {hasImage && (
-            <button
-              onClick={() => setViewMode(m => m === 'split' ? 'overlay' : 'split')}
-              className="font-mono text-[10px] uppercase tracking-wider border rounded px-2 py-1 transition-colors
-                         border-amber-500/50 text-amber-400 hover:bg-amber-500/10"
-            >
-              {viewMode === 'split' ? 'Image overlay' : 'SVG split'}
-            </button>
+            <label className="flex items-center gap-2">
+              <span className="font-mono text-[10px] text-slate-500 uppercase tracking-wider whitespace-nowrap">
+                Texte
+              </span>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                value={Math.round(overlayOpacity * 100)}
+                onChange={(e) => setOverlayOpacity(Number(e.target.value) / 100)}
+                className="w-24 accent-amber-500 cursor-pointer"
+              />
+              <span className="font-mono text-[10px] text-amber-400 w-7 text-right">
+                {Math.round(overlayOpacity * 100)}%
+              </span>
+            </label>
           )}
+
+          {/* Page selector */}
           {data.pages.length > 1 && (
             <select
               value={pageIdx}
-              onChange={(e) => handlePageChange(Number(e.target.value))}
+              onChange={(e) => setPageIdx(Number(e.target.value))}
               className="font-mono text-xs bg-slate-700 border border-slate-600 text-slate-200
                          rounded px-2 py-1 focus:outline-none focus:border-amber-500"
             >
@@ -279,68 +270,26 @@ export function LayoutViewer({ data }: LayoutViewerProps) {
         </div>
       </div>
 
-      {viewMode === 'overlay' && hasImage ? (
-        /* Image overlay mode — two panels with scan backgrounds */
-        <>
-          <div className="grid grid-cols-2 border-b border-slate-700/40 bg-slate-800/60">
-            <div className="px-3 py-1.5 font-mono text-[10px] text-slate-500 uppercase tracking-wider
-                            border-r border-slate-700/40">
-              OCR source (scan)
-            </div>
-            <div className="px-3 py-1.5 font-mono text-[10px] text-slate-500 uppercase tracking-wider">
-              Corrigé (scan)
-            </div>
-          </div>
-          <div className="grid grid-cols-2 divide-x divide-slate-700/40">
-            <div
-              ref={leftRef}
-              onScroll={onScrollLeft}
-              className="overflow-auto max-h-[60vh]"
-            >
-              <PageImageOverlay page={currentPage} side="ocr" />
-            </div>
-            <div
-              ref={rightRef}
-              onScroll={onScrollRight}
-              className="overflow-auto max-h-[60vh]"
-            >
-              <PageImageOverlay page={currentPage} side="corrected" />
-            </div>
-          </div>
-        </>
-      ) : (
-        /* Split SVG mode */
-        <>
-          {/* Panel column headers */}
-          <div className="grid grid-cols-2 border-b border-slate-700/40 bg-slate-800/60">
-            <div className="px-3 py-1.5 font-mono text-[10px] text-slate-500 uppercase tracking-wider
-                            border-r border-slate-700/40">
-              OCR source
-            </div>
-            <div className="px-3 py-1.5 font-mono text-[10px] text-slate-500 uppercase tracking-wider">
-              Corrigé
-            </div>
-          </div>
+      {/* Column labels */}
+      <div className="grid grid-cols-2 border-b border-slate-700/40 bg-slate-800/60">
+        <div className="px-3 py-1.5 font-mono text-[10px] text-slate-500 uppercase tracking-wider
+                        border-r border-slate-700/40">
+          OCR source{hasImage ? ' (scan)' : ''}
+        </div>
+        <div className="px-3 py-1.5 font-mono text-[10px] text-slate-500 uppercase tracking-wider">
+          Corrigé{hasImage ? ' (scan)' : ''}
+        </div>
+      </div>
 
-          {/* Dual SVG panels with synchronised scroll */}
-          <div className="grid grid-cols-2 divide-x divide-slate-700/40">
-            <div
-              ref={leftRef}
-              onScroll={onScrollLeft}
-              className="overflow-auto max-h-[60vh]"
-            >
-              <PageSVG page={currentPage} side="ocr" />
-            </div>
-            <div
-              ref={rightRef}
-              onScroll={onScrollRight}
-              className="overflow-auto max-h-[60vh]"
-            >
-              <PageSVG page={currentPage} side="corrected" />
-            </div>
-          </div>
-        </>
-      )}
+      {/* Dual panels with synchronised scroll */}
+      <div className="grid grid-cols-2 divide-x divide-slate-700/40">
+        <div ref={leftRef} onScroll={onScrollLeft} className="overflow-auto max-h-[60vh]">
+          <PagePanel page={currentPage} side="ocr" overlayOpacity={overlayOpacity} />
+        </div>
+        <div ref={rightRef} onScroll={onScrollRight} className="overflow-auto max-h-[60vh]">
+          <PagePanel page={currentPage} side="corrected" overlayOpacity={overlayOpacity} />
+        </div>
+      </div>
 
       {/* Legend */}
       <div className="px-4 py-2.5 border-t border-slate-700/40 flex items-center gap-6 flex-wrap">
