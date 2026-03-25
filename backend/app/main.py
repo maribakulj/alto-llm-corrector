@@ -50,6 +50,11 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
+    # Health check
+    @app.get("/health", tags=["health"])
+    async def health():
+        return {"status": "ok"}
+
     # API routers
     app.include_router(providers_router, prefix="/api/providers", tags=["providers"])
     app.include_router(jobs_router, prefix="/api/jobs", tags=["jobs"])
