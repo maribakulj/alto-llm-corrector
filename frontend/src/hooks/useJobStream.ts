@@ -34,7 +34,13 @@ export function useJobStream(jobId: string | null): UseJobStreamReturn {
   const esRef = useRef<EventSource | null>(null)
 
   useEffect(() => {
-    if (!jobId) return
+    if (!jobId) {
+      // Reset all state when job is cleared (e.g. "New correction" clicked)
+      setLogs([])
+      setProgress(INITIAL_PROGRESS)
+      setStatus(null)
+      return
+    }
 
     // Reset on new job
     setLogs([])
