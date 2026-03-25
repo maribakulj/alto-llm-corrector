@@ -252,7 +252,7 @@ async def run_job(
         job_store.emit(job_id, "document_parsed", {
             "total_pages": document_manifest.total_pages,
             "total_lines": document_manifest.total_lines,
-            "hyphen_pairs_count": total_hyphen_pairs,
+            "hyphen_pairs": total_hyphen_pairs,
         })
 
         # Build line lookup
@@ -278,6 +278,7 @@ async def run_job(
             )
             job_store.emit(job_id, "page_started", {
                 "page_id": page.page_id,
+                "page_index": page.page_index,
                 "line_count": len(page.lines),
                 "hyphen_pair_count": page_hyphen_pairs,
             })
@@ -314,8 +315,14 @@ async def run_job(
             total_reconciled += page_reconciled
             page.status = JobStatus.COMPLETED
 
+            page_corrections = sum(
+                1 for lm in page.lines
+                if lm.corrected_text is not None and lm.corrected_text != lm.ocr_text
+            )
             job_store.emit(job_id, "page_completed", {
                 "page_id": page.page_id,
+                "page_index": page.page_index,
+                "corrections": page_corrections,
                 "hyphen_pairs_reconciled": page_reconciled,
             })
 
@@ -333,19 +340,28 @@ async def run_job(
             out_path = output_dir / f"{stem}_corrected.xml"
             out_path.write_bytes(xml_bytes)
 
+        lines_modified = sum(
+            1 for page in document_manifest.pages
+            for lm in page.lines
+            if lm.corrected_text is not None and lm.corrected_text != lm.ocr_text
+        )
+        elapsed = round(time.monotonic() - start_time, 2)
+
         job_store.update_job(
             job_id,
             status=JobStatus.COMPLETED,
             chunks_total=total_chunks,
-            duration_seconds=time.monotonic() - start_time,
+            lines_modified=lines_modified,
+            duration_seconds=elapsed,
         )
 
         job_store.emit(job_id, "completed", {
             "job_id": job_id,
             "total_lines": document_manifest.total_lines,
+            "lines_modified": lines_modified,
             "hyphen_pairs_total": total_reconciled,
             "chunks_total": total_chunks,
-            "duration_seconds": round(time.monotonic() - start_time, 2),
+            "duration_seconds": elapsed,
         })
 
     except Exception as exc:
