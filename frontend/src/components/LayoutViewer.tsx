@@ -179,12 +179,12 @@ function PagePanel({ page, side, overlayOpacity }: PagePanelProps) {
     )
   }
 
-  // No image: SVG-only with white background, text always fully visible
+  // No image: SVG on white background — opacity still controlled by slider
   return (
     <SVGOverlay
       page={page}
       side={side}
-      opacity={1}
+      opacity={overlayOpacity}
       withBackground={true}
     />
   )
@@ -232,25 +232,23 @@ export function LayoutViewer({ data }: LayoutViewerProps) {
         </h3>
 
         <div className="flex items-center gap-4 flex-wrap">
-          {/* Opacity slider — only when scan images are available */}
-          {hasImage && (
-            <label className="flex items-center gap-2">
-              <span className="font-mono text-[10px] text-slate-500 uppercase tracking-wider whitespace-nowrap">
-                Texte
-              </span>
-              <input
-                type="range"
-                min={0}
-                max={100}
-                value={Math.round(overlayOpacity * 100)}
-                onChange={(e) => setOverlayOpacity(Number(e.target.value) / 100)}
-                className="w-24 accent-amber-500 cursor-pointer"
-              />
-              <span className="font-mono text-[10px] text-amber-400 w-7 text-right">
-                {Math.round(overlayOpacity * 100)}%
-              </span>
-            </label>
-          )}
+          {/* Opacity slider — always visible */}
+          <label className="flex items-center gap-2">
+            <span className="font-mono text-[10px] text-slate-500 uppercase tracking-wider whitespace-nowrap">
+              Texte
+            </span>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              value={Math.round(overlayOpacity * 100)}
+              onChange={(e) => setOverlayOpacity(Number(e.target.value) / 100)}
+              className="w-24 accent-amber-500 cursor-pointer"
+            />
+            <span className="font-mono text-[10px] text-amber-400 w-7 text-right">
+              {Math.round(overlayOpacity * 100)}%
+            </span>
+          </label>
 
           {/* Page selector */}
           {data.pages.length > 1 && (
