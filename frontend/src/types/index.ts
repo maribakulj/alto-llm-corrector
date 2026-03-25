@@ -84,6 +84,44 @@ export type SSEEventData =
   | SSEKeepalive
 
 // ---------------------------------------------------------------------------
+// Layout viewer
+// ---------------------------------------------------------------------------
+
+export interface LayoutLine {
+  line_id: string
+  hpos: number
+  vpos: number
+  width: number
+  height: number
+  ocr_text: string
+  corrected_text: string
+  modified: boolean
+  hyphen_role: 'none' | 'HypPart1' | 'HypPart2'
+}
+
+export interface LayoutBlock {
+  block_id: string
+  hpos: number
+  vpos: number
+  width: number
+  height: number
+  lines: LayoutLine[]
+}
+
+export interface LayoutPage {
+  page_id: string
+  page_index: number
+  page_width: number
+  page_height: number
+  blocks: LayoutBlock[]
+}
+
+export interface LayoutData {
+  job_id: string
+  pages: LayoutPage[]
+}
+
+// ---------------------------------------------------------------------------
 // Diff viewer
 // ---------------------------------------------------------------------------
 

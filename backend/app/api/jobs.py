@@ -262,3 +262,64 @@ async def get_job_diff(job_id: str) -> dict:
             "hyphen_pairs": hyphen_pairs,
         },
     }
+
+
+# ---------------------------------------------------------------------------
+# GET /api/jobs/{job_id}/layout
+# ---------------------------------------------------------------------------
+
+@router.get("/{job_id}/layout")
+async def get_job_layout(job_id: str) -> dict:
+    """Return structural layout data (blocks + lines with ALTO coordinates)."""
+    job = job_store.get_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail=f"Job not found: {job_id!r}")
+    if job.status != JobStatus.COMPLETED:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Job is not completed yet (status: {job.status.value})",
+        )
+    if job.document_manifest is None:
+        raise HTTPException(status_code=404, detail="No document manifest available.")
+
+    pages_out = []
+    for page in job.document_manifest.pages:
+        line_by_id = {lm.line_id: lm for lm in page.lines}
+
+        blocks_out = []
+        for block in page.blocks:
+            lines_out = []
+            for line_id in block.line_ids:
+                lm = line_by_id.get(line_id)
+                if lm is None:
+                    continue
+                corrected = lm.corrected_text if lm.corrected_text is not None else lm.ocr_text
+                lines_out.append({
+                    "line_id": lm.line_id,
+                    "hpos": lm.coords.hpos,
+                    "vpos": lm.coords.vpos,
+                    "width": lm.coords.width,
+                    "height": lm.coords.height,
+                    "ocr_text": lm.ocr_text,
+                    "corrected_text": corrected,
+                    "modified": corrected != lm.ocr_text,
+                    "hyphen_role": lm.hyphen_role.value,
+                })
+            blocks_out.append({
+                "block_id": block.block_id,
+                "hpos": block.coords.hpos,
+                "vpos": block.coords.vpos,
+                "width": block.coords.width,
+                "height": block.coords.height,
+                "lines": lines_out,
+            })
+
+        pages_out.append({
+            "page_id": page.page_id,
+            "page_index": page.page_index,
+            "page_width": page.page_width,
+            "page_height": page.page_height,
+            "blocks": blocks_out,
+        })
+
+    return {"job_id": job_id, "pages": pages_out}

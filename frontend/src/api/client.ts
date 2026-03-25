@@ -1,4 +1,4 @@
-import type { DiffData, ModelInfo, Provider } from '../types'
+import type { DiffData, LayoutData, ModelInfo, Provider } from '../types'
 
 // proxied via vite → http://localhost:8000
 const BASE = ''
@@ -51,8 +51,17 @@ export async function createJob(
 }
 
 // ---------------------------------------------------------------------------
-// downloadJob — triggers browser download
+// fetchLayout
 // ---------------------------------------------------------------------------
+
+export async function fetchLayout(jobId: string): Promise<LayoutData> {
+  const resp = await fetch(`${BASE}/api/jobs/${jobId}/layout`)
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({ detail: resp.statusText }))
+    throw new Error(err.detail ?? 'Failed to fetch layout')
+  }
+  return resp.json() as Promise<LayoutData>
+}
 
 // ---------------------------------------------------------------------------
 // fetchDiff
