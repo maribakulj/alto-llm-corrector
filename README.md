@@ -1,3 +1,12 @@
+---
+title: ALTO LLM Corrector
+emoji: 📄
+colorFrom: blue
+colorTo: indigo
+sdk: docker
+pinned: false
+---
+
 # ALTO LLM Corrector
 
 Post-OCR text correction of ALTO XML files using LLM providers (OpenAI, Anthropic, Mistral, Google Gemini).
