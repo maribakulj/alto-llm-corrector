@@ -1,4 +1,4 @@
-import type { ModelInfo, Provider } from '../types'
+import type { DiffData, ModelInfo, Provider } from '../types'
 
 // proxied via vite → http://localhost:8000
 const BASE = ''
@@ -48,6 +48,23 @@ export async function createJob(
     throw new Error(err.detail ?? 'Failed to create job')
   }
   return resp.json()
+}
+
+// ---------------------------------------------------------------------------
+// downloadJob — triggers browser download
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// fetchDiff
+// ---------------------------------------------------------------------------
+
+export async function fetchDiff(jobId: string): Promise<DiffData> {
+  const resp = await fetch(`${BASE}/api/jobs/${jobId}/diff`)
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({ detail: resp.statusText }))
+    throw new Error(err.detail ?? 'Failed to fetch diff')
+  }
+  return resp.json() as Promise<DiffData>
 }
 
 // ---------------------------------------------------------------------------

@@ -17,6 +17,7 @@ from app.jobs.orchestrator import run_job
 from app.jobs.store import job_store
 from app.schemas import (
     CreateJobResponse,
+    HyphenRole,
     JobStatus,
     JobStatusResponse,
     Provider,
@@ -202,3 +203,62 @@ async def download_job(job_id: str) -> Response:
         media_type="application/zip",
         headers={"Content-Disposition": f'attachment; filename="{zip_name}"'},
     )
+
+
+# ---------------------------------------------------------------------------
+# GET /api/jobs/{job_id}/diff
+# ---------------------------------------------------------------------------
+
+@router.get("/{job_id}/diff")
+async def get_job_diff(job_id: str) -> dict:
+    """Return per-line OCR vs corrected diff data for a completed job."""
+    job = job_store.get_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail=f"Job not found: {job_id!r}")
+    if job.status != JobStatus.COMPLETED:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Job is not completed yet (status: {job.status.value})",
+        )
+    if job.document_manifest is None:
+        raise HTTPException(status_code=404, detail="No document manifest available.")
+
+    pages_out = []
+    total_lines = 0
+    modified_lines = 0
+    hyphen_pairs = 0
+
+    for page in job.document_manifest.pages:
+        lines_out = []
+        for lm in page.lines:
+            corrected = lm.corrected_text if lm.corrected_text is not None else lm.ocr_text
+            modified = corrected != lm.ocr_text
+            lines_out.append({
+                "line_id": lm.line_id,
+                "ocr_text": lm.ocr_text,
+                "corrected_text": corrected,
+                "modified": modified,
+                "hyphen_role": lm.hyphen_role.value,
+                "hyphen_subs_content": lm.hyphen_subs_content,
+            })
+            total_lines += 1
+            if modified:
+                modified_lines += 1
+            if lm.hyphen_role == HyphenRole.PART1:
+                hyphen_pairs += 1
+
+        pages_out.append({
+            "page_id": page.page_id,
+            "page_index": page.page_index,
+            "lines": lines_out,
+        })
+
+    return {
+        "job_id": job_id,
+        "pages": pages_out,
+        "stats": {
+            "total_lines": total_lines,
+            "modified_lines": modified_lines,
+            "hyphen_pairs": hyphen_pairs,
+        },
+    }
