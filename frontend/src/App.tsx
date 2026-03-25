@@ -1,16 +1,17 @@
 import { useEffect, useState } from 'react'
-import { createJob, fetchDiff } from './api/client'
+import { createJob, fetchDiff, fetchLayout } from './api/client'
 import { ApiKeyInput } from './components/ApiKeyInput'
 import { DiffViewer } from './components/DiffViewer'
 import { DownloadButton } from './components/DownloadButton'
 import { FileUpload } from './components/FileUpload'
 import { JobProgressPanel } from './components/JobProgress'
+import { LayoutViewer } from './components/LayoutViewer'
 import { LogPanel } from './components/LogPanel'
 import { ModelSelector } from './components/ModelSelector'
 import { ProviderSelector } from './components/ProviderSelector'
 import { useJobStream } from './hooks/useJobStream'
 import { useModels } from './hooks/useModels'
-import type { DiffData, JobStats, Provider } from './types'
+import type { DiffData, JobStats, LayoutData, Provider } from './types'
 
 export default function App() {
   // Upload state
@@ -28,6 +29,8 @@ export default function App() {
   const [finalStats, setFinalStats] = useState<JobStats | null>(null)
   const [diffData, setDiffData] = useState<DiffData | null>(null)
   const [diffLoading, setDiffLoading] = useState(false)
+  const [layoutData, setLayoutData] = useState<LayoutData | null>(null)
+  const [layoutLoading, setLayoutLoading] = useState(false)
 
   // Models
   const { models, loading: modelsLoading, error: modelsError, loadModels, reset: resetModels } = useModels()
@@ -41,16 +44,24 @@ export default function App() {
   const isDone = status === 'completed'
   const isFailed = status === 'failed'
 
-  // Load diff data once the job is completed
+  // Load diff + layout data in parallel once the job is completed
   useEffect(() => {
-    if (isDone && jobId && !diffData && !diffLoading) {
+    if (!isDone || !jobId) return
+    if (!diffData && !diffLoading) {
       setDiffLoading(true)
       fetchDiff(jobId)
         .then(setDiffData)
-        .catch(() => { /* silently ignore — diff is non-critical */ })
+        .catch(() => { /* non-critical */ })
         .finally(() => setDiffLoading(false))
     }
-  }, [isDone, jobId, diffData, diffLoading])
+    if (!layoutData && !layoutLoading) {
+      setLayoutLoading(true)
+      fetchLayout(jobId)
+        .then(setLayoutData)
+        .catch(() => { /* non-critical */ })
+        .finally(() => setLayoutLoading(false))
+    }
+  }, [isDone, jobId, diffData, diffLoading, layoutData, layoutLoading])
 
   // Capture stats when completed
   if (isDone && !finalStats && progress.lines_total > 0) {
@@ -90,6 +101,7 @@ export default function App() {
     setSubmitError(null)
     setFinalStats(null)
     setDiffData(null)
+    setLayoutData(null)
     resetModels()
     setSelectedModel(null)
   }
@@ -260,6 +272,23 @@ export default function App() {
               </div>
             )}
             {diffData && <DiffViewer data={diffData} />}
+          </section>
+        )}
+
+        {/* 8. Layout viewer */}
+        {isDone && jobId && (
+          <section>
+            <h2 className="font-serif text-base font-semibold text-slate-300 mb-3 flex items-center gap-2">
+              <span className="font-mono text-amber-500 text-xs">07</span>
+              Mise en page ALTO
+            </h2>
+            {layoutLoading && (
+              <div className="flex items-center gap-2 font-mono text-xs text-slate-500 py-4">
+                <span className="w-3 h-3 border border-slate-500 border-t-transparent rounded-full animate-spin" />
+                Chargement de la mise en page…
+              </div>
+            )}
+            {layoutData && <LayoutViewer data={layoutData} />}
           </section>
         )}
       </main>
