@@ -140,25 +140,25 @@ function PageImageOverlay({ page, side }: PageImageOverlayProps) {
             />
             {block.lines.map((line) => {
               const displayText = side === 'ocr' ? line.ocr_text : line.corrected_text
-              const fontSize = Math.max(line.height * 0.7, 1)
-              const textY = line.vpos + line.height * 0.75
+              const fontSize = Math.max(line.height * 0.72, 1)
+              const textY = line.vpos + line.height * 0.78
               const textX = line.hpos + 4
               const maxW = line.width - 8
               const hasHyphen = line.hyphen_role !== 'none'
 
               return (
                 <g key={line.line_id}>
-                  {line.modified && (
-                    <rect
-                      x={line.hpos}
-                      y={line.vpos}
-                      width={line.width}
-                      height={line.height}
-                      fill="rgba(251,191,36,0.30)"
-                      stroke="rgba(251,191,36,0.70)"
-                      strokeWidth={3}
-                    />
-                  )}
+                  {/* Semi-transparent background behind every line for readability */}
+                  <rect
+                    x={line.hpos}
+                    y={line.vpos}
+                    width={line.width}
+                    height={line.height}
+                    fill={line.modified ? 'rgba(251,191,36,0.70)' : 'rgba(255,255,255,0.78)'}
+                    stroke={line.modified ? 'rgba(217,119,6,0.90)' : 'rgba(148,163,184,0.40)'}
+                    strokeWidth={2}
+                  />
+                  {/* Hyphen left border */}
                   {hasHyphen && (
                     <rect
                       x={line.hpos}
@@ -166,14 +166,15 @@ function PageImageOverlay({ page, side }: PageImageOverlayProps) {
                       width={8}
                       height={line.height}
                       fill={C.hyphenBar}
-                      opacity={0.8}
+                      opacity={0.9}
                     />
                   )}
+                  {/* Text always in dark slate for contrast */}
                   <text
                     x={textX}
                     y={textY}
                     fontSize={fontSize}
-                    fill={line.modified ? C.textChanged : C.textUnchanged}
+                    fill="#0f172a"
                     textLength={maxW > 0 ? maxW : undefined}
                     lengthAdjust="spacingAndGlyphs"
                     style={{ fontFamily: 'serif' }}
