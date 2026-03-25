@@ -84,6 +84,35 @@ export type SSEEventData =
   | SSEKeepalive
 
 // ---------------------------------------------------------------------------
+// Diff viewer
+// ---------------------------------------------------------------------------
+
+export interface DiffLine {
+  line_id: string
+  ocr_text: string
+  corrected_text: string
+  modified: boolean
+  hyphen_role: 'none' | 'HypPart1' | 'HypPart2'
+  hyphen_subs_content: string | null
+}
+
+export interface DiffPage {
+  page_id: string
+  page_index: number
+  lines: DiffLine[]
+}
+
+export interface DiffData {
+  job_id: string
+  pages: DiffPage[]
+  stats: {
+    total_lines: number
+    modified_lines: number
+    hyphen_pairs: number
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Final job stats (for DownloadButton)
 // ---------------------------------------------------------------------------
 

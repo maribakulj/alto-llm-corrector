@@ -1,6 +1,7 @@
-import { useState } from 'react'
-import { createJob } from './api/client'
+import { useEffect, useState } from 'react'
+import { createJob, fetchDiff } from './api/client'
 import { ApiKeyInput } from './components/ApiKeyInput'
+import { DiffViewer } from './components/DiffViewer'
 import { DownloadButton } from './components/DownloadButton'
 import { FileUpload } from './components/FileUpload'
 import { JobProgressPanel } from './components/JobProgress'
@@ -9,7 +10,7 @@ import { ModelSelector } from './components/ModelSelector'
 import { ProviderSelector } from './components/ProviderSelector'
 import { useJobStream } from './hooks/useJobStream'
 import { useModels } from './hooks/useModels'
-import type { JobStats, Provider } from './types'
+import type { DiffData, JobStats, Provider } from './types'
 
 export default function App() {
   // Upload state
@@ -25,6 +26,8 @@ export default function App() {
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [finalStats, setFinalStats] = useState<JobStats | null>(null)
+  const [diffData, setDiffData] = useState<DiffData | null>(null)
+  const [diffLoading, setDiffLoading] = useState(false)
 
   // Models
   const { models, loading: modelsLoading, error: modelsError, loadModels, reset: resetModels } = useModels()
@@ -37,6 +40,17 @@ export default function App() {
   // Actually we compute stats from progress + last completed event
   const isDone = status === 'completed'
   const isFailed = status === 'failed'
+
+  // Load diff data once the job is completed
+  useEffect(() => {
+    if (isDone && jobId && !diffData && !diffLoading) {
+      setDiffLoading(true)
+      fetchDiff(jobId)
+        .then(setDiffData)
+        .catch(() => { /* silently ignore — diff is non-critical */ })
+        .finally(() => setDiffLoading(false))
+    }
+  }, [isDone, jobId, diffData, diffLoading])
 
   // Capture stats when completed
   if (isDone && !finalStats && progress.lines_total > 0) {
@@ -75,6 +89,7 @@ export default function App() {
     setJobId(null)
     setSubmitError(null)
     setFinalStats(null)
+    setDiffData(null)
     resetModels()
     setSelectedModel(null)
   }
@@ -228,6 +243,23 @@ export default function App() {
               Download
             </h2>
             <DownloadButton jobId={jobId} stats={displayStats} />
+          </section>
+        )}
+
+        {/* 7. Diff viewer */}
+        {isDone && jobId && (
+          <section>
+            <h2 className="font-serif text-base font-semibold text-slate-300 mb-3 flex items-center gap-2">
+              <span className="font-mono text-amber-500 text-xs">06</span>
+              Corrections
+            </h2>
+            {diffLoading && (
+              <div className="flex items-center gap-2 font-mono text-xs text-slate-500 py-4">
+                <span className="w-3 h-3 border border-slate-500 border-t-transparent rounded-full animate-spin" />
+                Chargement du diff…
+              </div>
+            )}
+            {diffData && <DiffViewer data={diffData} />}
           </section>
         )}
       </main>
