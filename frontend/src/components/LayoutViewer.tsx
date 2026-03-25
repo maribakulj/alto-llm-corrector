@@ -103,14 +103,15 @@ function PageSVG({ page, side }: PageSVGProps) {
 }
 
 // ---------------------------------------------------------------------------
-// PageImageOverlay — image scan with SVG box overlay
+// PageImageOverlay — image scan with SVG text + highlight overlay
 // ---------------------------------------------------------------------------
 
 interface PageImageOverlayProps {
   page: LayoutPage
+  side: 'ocr' | 'corrected'
 }
 
-function PageImageOverlay({ page }: PageImageOverlayProps) {
+function PageImageOverlay({ page, side }: PageImageOverlayProps) {
   const { page_width: W, page_height: H, blocks, image_url } = page
 
   return (
@@ -137,31 +138,51 @@ function PageImageOverlay({ page }: PageImageOverlayProps) {
               strokeWidth={6}
               opacity={0.6}
             />
-            {block.lines.map((line) => (
-              <g key={line.line_id}>
-                {line.modified && (
-                  <rect
-                    x={line.hpos}
-                    y={line.vpos}
-                    width={line.width}
-                    height={line.height}
-                    fill="rgba(251,191,36,0.30)"
-                    stroke="rgba(251,191,36,0.70)"
-                    strokeWidth={3}
-                  />
-                )}
-                {line.hyphen_role !== 'none' && (
-                  <rect
-                    x={line.hpos}
-                    y={line.vpos}
-                    width={8}
-                    height={line.height}
-                    fill={C.hyphenBar}
-                    opacity={0.8}
-                  />
-                )}
-              </g>
-            ))}
+            {block.lines.map((line) => {
+              const displayText = side === 'ocr' ? line.ocr_text : line.corrected_text
+              const fontSize = Math.max(line.height * 0.7, 1)
+              const textY = line.vpos + line.height * 0.75
+              const textX = line.hpos + 4
+              const maxW = line.width - 8
+              const hasHyphen = line.hyphen_role !== 'none'
+
+              return (
+                <g key={line.line_id}>
+                  {line.modified && (
+                    <rect
+                      x={line.hpos}
+                      y={line.vpos}
+                      width={line.width}
+                      height={line.height}
+                      fill="rgba(251,191,36,0.30)"
+                      stroke="rgba(251,191,36,0.70)"
+                      strokeWidth={3}
+                    />
+                  )}
+                  {hasHyphen && (
+                    <rect
+                      x={line.hpos}
+                      y={line.vpos}
+                      width={8}
+                      height={line.height}
+                      fill={C.hyphenBar}
+                      opacity={0.8}
+                    />
+                  )}
+                  <text
+                    x={textX}
+                    y={textY}
+                    fontSize={fontSize}
+                    fill={line.modified ? C.textChanged : C.textUnchanged}
+                    textLength={maxW > 0 ? maxW : undefined}
+                    lengthAdjust="spacingAndGlyphs"
+                    style={{ fontFamily: 'serif' }}
+                  >
+                    {displayText}
+                  </text>
+                </g>
+              )
+            })}
           </g>
         ))}
       </svg>
@@ -244,14 +265,32 @@ export function LayoutViewer({ data }: LayoutViewerProps) {
       </div>
 
       {viewMode === 'overlay' && hasImage ? (
-        /* Image overlay mode — single scrollable panel */
+        /* Image overlay mode — two panels with scan backgrounds */
         <>
-          <div className="px-3 py-1.5 font-mono text-[10px] text-slate-500 uppercase tracking-wider
-                          border-b border-slate-700/40 bg-slate-800/60">
-            Scan source + surlignage des corrections
+          <div className="grid grid-cols-2 border-b border-slate-700/40 bg-slate-800/60">
+            <div className="px-3 py-1.5 font-mono text-[10px] text-slate-500 uppercase tracking-wider
+                            border-r border-slate-700/40">
+              OCR source (scan)
+            </div>
+            <div className="px-3 py-1.5 font-mono text-[10px] text-slate-500 uppercase tracking-wider">
+              Corrigé (scan)
+            </div>
           </div>
-          <div className="overflow-auto max-h-[70vh]">
-            <PageImageOverlay page={currentPage} />
+          <div className="grid grid-cols-2 divide-x divide-slate-700/40">
+            <div
+              ref={leftRef}
+              onScroll={onScrollLeft}
+              className="overflow-auto max-h-[60vh]"
+            >
+              <PageImageOverlay page={currentPage} side="ocr" />
+            </div>
+            <div
+              ref={rightRef}
+              onScroll={onScrollRight}
+              className="overflow-auto max-h-[60vh]"
+            >
+              <PageImageOverlay page={currentPage} side="corrected" />
+            </div>
           </div>
         </>
       ) : (

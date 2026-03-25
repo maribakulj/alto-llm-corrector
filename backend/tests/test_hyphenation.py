@@ -146,6 +146,28 @@ def test_reconcile_explicit_preserves_boundaries():
     assert subs == "porte"
 
 
+def test_reconcile_explicit_llm_completed_word():
+    """Explicit pair: LLM removed trailing dash and fused word → PART1 falls back to OCR."""
+    part1 = make_line(
+        "TL1", "Rus-",
+        hyphen_role=HyphenRole.PART1,
+        hyphen_pair_line_id="TL2",
+        hyphen_subs_content="Russie",
+        hyphen_source_explicit=True,
+    )
+    part2 = make_line(
+        "TL2", "sie le tsar.",
+        hyphen_role=HyphenRole.PART2,
+        hyphen_pair_line_id="TL1",
+        hyphen_subs_content="Russie",
+        hyphen_source_explicit=True,
+    )
+    t1, t2, subs = reconcile_hyphen_pair(part1, part2, "Russie", "sie le tsar.")
+    assert t1 == "Rus-", "PART1 must fall back to OCR source when LLM fuses the word"
+    assert t2 == "sie le tsar.", "PART2 correction is valid, keep it"
+    assert subs == "Russie", "SUBS_CONTENT should be preserved from source"
+
+
 def test_reconcile_heuristic_conservative():
     """Heuristic pair: subs_content must be None, corrected texts returned as-is."""
     part1 = make_line(
