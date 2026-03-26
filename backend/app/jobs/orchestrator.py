@@ -255,12 +255,6 @@ async def run_job(
             "hyphen_pairs": total_hyphen_pairs,
         })
 
-        # Build line lookup
-        line_by_id: dict[str, LineManifest] = {}
-        for page in document_manifest.pages:
-            for lm in page.lines:
-                line_by_id[lm.line_id] = lm
-
         job_store.update_job(
             job_id,
             status=JobStatus.RUNNING,
@@ -273,6 +267,13 @@ async def run_job(
         config = _DEFAULT_CONFIG
 
         for page in document_manifest.pages:
+            # Build a page-local line lookup to prevent ID collisions across pages.
+            # Multiple ALTO files often reuse the same TextLine IDs (e.g. "l0001").
+            # A global dict would let page N's lines overwrite page M's, causing
+            # corrections to be applied to the wrong LineManifest objects.
+            # prev_line_id / next_line_id are always within-page (set by parser),
+            # so a page-local dict is fully sufficient for context enrichment too.
+            line_by_id: dict[str, LineManifest] = {lm.line_id: lm for lm in page.lines}
             page_hyphen_pairs = sum(
                 1 for lm in page.lines if lm.hyphen_role == HyphenRole.PART1
             )
