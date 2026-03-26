@@ -330,7 +330,9 @@ async def get_job_layout(job_id: str) -> dict:
             if ph == 0 and ys:
                 ph = max(ys)
 
-        image_filename = job.images.get(page.page_id)
+        # images map is keyed by source_file (not page_id) to avoid collisions
+        # when multiple ALTO files share the same Page/@ID value.
+        image_filename = job.images.get(page.source_file)
         image_url = f"/api/jobs/{job_id}/images/{image_filename}" if image_filename else None
         pages_out.append({
             "page_id": page.page_id,
