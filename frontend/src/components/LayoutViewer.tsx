@@ -46,13 +46,8 @@ function SVGOverlay({ page, side, opacity, withBackground }: SVGOverlayProps) {
     <svg
       viewBox={`0 0 ${W} ${H}`}
       width="100%"
-      preserveAspectRatio={withBackground ? 'xMinYMin meet' : 'none'}
-      style={{
-        display: 'block',
-        ...(withBackground ? {} : {
-          position: 'absolute', inset: 0, width: '100%', height: '100%',
-        }),
-      }}
+      preserveAspectRatio="xMinYMin meet"
+      style={{ display: 'block', position: 'relative', zIndex: 1 }}
     >
       {withBackground && <rect x={0} y={0} width={W} height={H} fill={C.pageBg} />}
 
@@ -161,19 +156,33 @@ interface PagePanelProps {
 }
 
 function PagePanel({ page, side, overlayOpacity }: PagePanelProps) {
+  const { blocks } = page
+  const W = page.page_width  || blocks.reduce((m, b) => Math.max(m, b.hpos + b.width),  0)
+  const H = page.page_height || blocks.reduce((m, b) => Math.max(m, b.vpos + b.height), 0)
+
   if (page.image_url) {
+    // The SVG is the in-flow element that establishes the container height
+    // via its viewBox aspect ratio. The image sits behind it (position: absolute).
+    // This avoids the CSS issue where `height: 100%` on an absolutely-positioned
+    // child of a height:auto container resolves to `auto`, not the parent's height.
     return (
-      <div style={{ position: 'relative', lineHeight: 0 }}>
-        <img
-          src={page.image_url}
-          alt="source scan"
-          style={{ width: '100%', display: 'block' }}
-        />
+      <div style={{ position: 'relative' }}>
+        {W && H && (
+          <img
+            src={page.image_url}
+            alt="source scan"
+            style={{
+              position: 'absolute', top: 0, left: 0,
+              width: '100%', height: '100%',
+              objectFit: 'fill',
+            }}
+          />
+        )}
         <SVGOverlay
           page={page}
           side={side}
           opacity={overlayOpacity}
-          withBackground={false}
+          withBackground={!W || !H}
         />
       </div>
     )
