@@ -115,23 +115,33 @@ def link_alto_to_images(
     saved_images: dict[str, Path],
 ) -> dict[str, str]:
     """
-    Match ALTO pages to images.
+    Match ALTO source files to images.
 
     pages: list of (page_id, source_file) pairs from the document manifest.
     saved_alto: {filename → Path} mapping from save_uploaded_files.
     saved_images: {lowercase_stem → Path} mapping from save_uploaded_files.
 
-    Strategy:
+    Strategy per source file:
     1. Parse sourceImageInformation/fileName from the ALTO XML.
     2. Fall back to matching by lowercase stem of the ALTO source filename.
 
-    Returns {page_id: image_filename} for matched pages.
+    Returns {source_file: image_filename}.
+
+    Keying by source_file (not page_id) avoids collisions when multiple ALTO
+    files all declare the same Page ID (e.g. ID="Page1"), which is very common
+    in per-page scan workflows. The layout endpoint looks up by source_file.
     """
     from lxml import etree
 
     result: dict[str, str] = {}
 
-    for page_id, source_file in pages:
+    # Deduplicate: each source_file appears once (even if it contains many pages)
+    seen_sources: set[str] = set()
+    for _page_id, source_file in pages:
+        if source_file in seen_sources:
+            continue
+        seen_sources.add(source_file)
+
         alto_path = saved_alto.get(source_file)
         if alto_path is None:
             continue
@@ -153,7 +163,7 @@ def link_alto_to_images(
             image_key = Path(source_file).stem.lower()
 
         if image_key in saved_images:
-            result[page_id] = saved_images[image_key].name
+            result[source_file] = saved_images[image_key].name
 
     return result
 

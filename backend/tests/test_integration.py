@@ -558,11 +558,13 @@ def test_link_alto_to_images_by_filename():
 
     result = link_alto_to_images(pages_info, saved_alto, saved_images)
 
-    assert len(result) == len(pages_info), (
-        f"Expected {len(pages_info)} matches (one per page), got {result}"
+    # Result is keyed by source_file (not page_id) to handle ALTO files that
+    # all declare the same Page/@ID (e.g. ID="Page1").
+    unique_sources = {sf for _, sf in pages_info}
+    assert len(result) == len(unique_sources), (
+        f"Expected one entry per unique source file ({len(unique_sources)}), got {result}"
     )
-    for page_id in result:
-        assert result[page_id] == "mypage.jpg"
+    assert result.get("mypage.xml") == "mypage.jpg"
 
 
 # ---------------------------------------------------------------------------
