@@ -9,12 +9,11 @@ from typing import Any, Optional
 
 from app.alto.hyphenation import enrich_chunk_lines, reconcile_hyphen_pair
 from app.alto.rewriter import rewrite_alto_file
-from app.jobs.chunk_planner import downgrade_granularity, plan_page
+from app.jobs.chunk_planner import plan_page
 from app.jobs.store import job_store
 from app.jobs.validator import validate_llm_response
 from app.providers.base import OUTPUT_JSON_SCHEMA, SYSTEM_PROMPT, BaseProvider
 from app.schemas import (
-    ChunkGranularity,
     ChunkPlannerConfig,
     ChunkRequest,
     DocumentManifest,
@@ -155,7 +154,7 @@ async def _run_chunk(
                 job_store.emit(job_id, "retry", {
                     "chunk_id": chunk.chunk_id,
                     "attempt": attempt,
-                    "reason": "hyphen_integrity_violation",
+                    "error": "hyphen_integrity_violation",
                 })
                 job_store.update_job(job_id,
                     retries=getattr(job_store.get_job(job_id), "retries", 0) + 1)
@@ -167,7 +166,7 @@ async def _run_chunk(
                 job_store.emit(job_id, "retry", {
                     "chunk_id": chunk.chunk_id,
                     "attempt": attempt,
-                    "reason": msg[:120],
+                    "error": msg[:120],
                 })
                 job_store.update_job(job_id,
                     retries=getattr(job_store.get_job(job_id), "retries", 0) + 1)
@@ -234,6 +233,7 @@ async def _run_chunk(
 
         job_store.emit(job_id, "chunk_completed", {
             "chunk_id": chunk.chunk_id,
+            "line_count": len(chunk_lines),
             "hyphen_pairs_reconciled": reconciled_count,
         })
         return reconciled_count
@@ -314,9 +314,8 @@ async def run_job(
                 "hyphen_pair_count": page_hyphen_pairs,
             })
 
-            # Plan with granularity downgrade fallback
-            granularity: Optional[ChunkGranularity] = None
-            plan = plan_page(page, document_manifest.document_id, config, granularity)
+            # plan_page auto-selects granularity: PAGE → BLOCK → WINDOW
+            plan = plan_page(page, document_manifest.document_id, config)
 
             job_store.emit(job_id, "chunk_planned", {
                 "page_id": page.page_id,

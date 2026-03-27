@@ -97,15 +97,9 @@ def _validate_hyphen_integrity(
     """
     Check that no hyphen-pair line has been illegally merged.
 
-    hyphen_pairs maps PART1 → PART2 and PART2 → PART1.
-    We iterate PART1 entries only (those whose pair is also in chunk).
+    hyphen_pairs maps PART1 → PART2 and PART2 → PART1 (both directions).
+    We deduplicate via frozenset and check each pair once.
     """
-    # Collect PART1 ids: PART1 id is the one whose value (PART2) is also in chunk
-    # hyphen_pairs contains both directions: part1->part2 and part2->part1
-    # We need to determine which side is PART1. We can do this by checking
-    # whether the key's corrected_text ends with '-' or by convention.
-    # The caller is responsible for providing the mapping correctly.
-    # We check each entry in hyphen_pairs where both key and value are in chunk.
     checked_pairs: set[frozenset[str]] = set()
 
     for id_a, id_b in hyphen_pairs.items():
@@ -119,38 +113,17 @@ def _validate_hyphen_integrity(
         text_a = text_by_id.get(id_a, "")
         text_b = text_by_id.get(id_b, "")
 
-        # Determine which is PART1: it should end with '-' in the original,
-        # but here we rely on the mapping convention: key=PART1, value=PART2
-        # for the first direction we encounter. We check both directions.
-        # The caller passes both part1->part2 and part2->part1.
-        # We identify PART1 as the key that points to PART2.
-        # Since both directions are present, we check only once per pair.
-        # Convention: treat id_a as PART1 candidate if text_a ends with '-'.
-        if text_a.rstrip("-").endswith("") and text_b == "":
-            raise ValueError(
-                f"hyphen_integrity_violation: corrected_text for PART2 "
-                f"line {id_b!r} is empty"
-            )
-        if text_b == "":
+        # Either side being empty means illegal fusion/deletion
+        if not text_a:
             raise ValueError(
                 f"hyphen_integrity_violation: corrected_text for line "
-                f"{id_b!r} (PART2) is empty"
+                f"{id_a!r} is empty"
             )
-
-    # Now check fusion: PART1 corrected_text should not contain the full
-    # logical word (i.e. corrected_part1.rstrip('-') == hyphen_subs_content).
-    # We receive hyphen_subs_content implicitly via the pair mapping.
-    # The caller must pass a dict that includes subs_content if the check
-    # is needed. For the fusion check, we look at entries where the value
-    # is a tuple (part2_id, subs_content). However the interface uses
-    # dict[str, str] so we handle it differently.
-    #
-    # The fusion check (PART1 text stripped of '-' equals the full logical word)
-    # is done in validate_llm_response via the hyphen_pairs_with_subs variant.
-    # Since the public API uses dict[str,str], the caller may encode subs_content
-    # as a special sentinel. We support an extended form where the value can be
-    # a "|"-separated "part2_id|subs_content". See extended validation below.
-    pass
+        if not text_b:
+            raise ValueError(
+                f"hyphen_integrity_violation: corrected_text for line "
+                f"{id_b!r} is empty"
+            )
 
 
 def validate_llm_response_with_subs(

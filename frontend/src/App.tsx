@@ -65,13 +65,15 @@ export default function App() {
   }, [isDone, jobId, diffData, diffLoading, layoutData, layoutLoading])
 
   // Capture stats when completed
-  if (isDone && !finalStats && progress.lines_total > 0) {
-    setFinalStats({
-      lines_modified: 0, // will be set via log parsing below
-      hyphen_pairs: progress.hyphen_pairs_reconciled,
-      duration_seconds: 0,
-    })
-  }
+  useEffect(() => {
+    if (isDone && !finalStats && progress.lines_total > 0) {
+      setFinalStats({
+        lines_modified: 0, // will be set via log parsing below
+        hyphen_pairs: progress.hyphen_pairs_reconciled,
+        duration_seconds: 0,
+      })
+    }
+  }, [isDone, finalStats, progress.lines_total, progress.hyphen_pairs_reconciled])
 
   const canPlay =
     files.length > 0 &&
