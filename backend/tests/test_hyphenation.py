@@ -147,25 +147,27 @@ def test_reconcile_explicit_preserves_boundaries():
 
 
 def test_reconcile_explicit_llm_completed_word():
-    """Explicit pair: LLM removed trailing dash and fused word → PART1 falls back to OCR."""
+    """Explicit pair: LLM completed hyphenated word → PART1 falls back to OCR."""
     part1 = make_line(
-        "TL1", "Rus-",
+        "TL1", "néces-",
         hyphen_role=HyphenRole.PART1,
         hyphen_pair_line_id="TL2",
-        hyphen_subs_content="Russie",
+        hyphen_subs_content="nécessaires",
         hyphen_source_explicit=True,
     )
     part2 = make_line(
-        "TL2", "sie le tsar.",
+        "TL2", "saires pour y faire",
         hyphen_role=HyphenRole.PART2,
         hyphen_pair_line_id="TL1",
-        hyphen_subs_content="Russie",
+        hyphen_subs_content="nécessaires",
         hyphen_source_explicit=True,
     )
-    t1, t2, subs = reconcile_hyphen_pair(part1, part2, "Russie", "sie le tsar.")
-    assert t1 == "Rus-", "PART1 must fall back to OCR source when LLM fuses the word"
-    assert t2 == "sie le tsar.", "PART2 correction is valid, keep it"
-    assert subs == "Russie", "SUBS_CONTENT should be preserved from source"
+    t1, t2, subs = reconcile_hyphen_pair(
+        part1, part2, "nécessaires", "pour y faire"
+    )
+    assert t1 == "néces-", "PART1 must fall back to OCR source when LLM completes the word"
+    assert t2 == "pour y faire", "PART2 corrected text is valid, keep it"
+    assert subs == "nécessaires", "SUBS_CONTENT preserved from source"
 
 
 def test_reconcile_heuristic_conservative():
@@ -213,42 +215,72 @@ def test_reconcile_ambiguous_returns_source():
 
 
 def test_reconcile_heuristic_llm_completed_word():
-    """Heuristic: LLM removed trailing dash and fused word → PART1 falls back to OCR."""
+    """Heuristic: LLM completed hyphenated word (longer text, no dash) → PART1 falls back."""
     part1 = make_line(
-        "TL1", "Rus-",
+        "TL1", "néces-",
         hyphen_role=HyphenRole.PART1,
         hyphen_pair_line_id="TL2",
         hyphen_source_explicit=False,
     )
     part2 = make_line(
-        "TL2", "sie le tsar.",
+        "TL2", "saires pour y faire",
         hyphen_role=HyphenRole.PART2,
         hyphen_pair_line_id="TL1",
         hyphen_source_explicit=False,
     )
-    t1, t2, subs = reconcile_hyphen_pair(part1, part2, "Russie", "sie le tsar.")
-    assert t1 == "Rus-", "PART1 must fall back to OCR source"
-    assert t2 == "sie le tsar.", "PART2 correction is valid, keep it"
+    t1, t2, subs = reconcile_hyphen_pair(
+        part1, part2, "nécessaires", "pour y faire"
+    )
+    assert t1 == "néces-", "PART1 must fall back to OCR source"
+    assert t2 == "pour y faire", "PART2 corrected text is valid, keep it"
     assert subs is None
 
 
 def test_reconcile_heuristic_llm_completed_word_part2_also_bad():
-    """Heuristic: LLM fused word AND PART2 correction is empty → both fall back."""
+    """Heuristic: LLM completed word AND PART2 correction is invalid → both fall back."""
     part1 = make_line(
-        "TL1", "Rus-",
+        "TL1", "néces-",
         hyphen_role=HyphenRole.PART1,
         hyphen_pair_line_id="TL2",
         hyphen_source_explicit=False,
     )
     part2 = make_line(
-        "TL2", "sie le tsar.",
+        "TL2", "saires pour y faire",
         hyphen_role=HyphenRole.PART2,
         hyphen_pair_line_id="TL1",
         hyphen_source_explicit=False,
     )
-    t1, t2, subs = reconcile_hyphen_pair(part1, part2, "Russie", "")
-    assert t1 == "Rus-", "PART1 must fall back to OCR source"
-    assert t2 == "sie le tsar.", "PART2 empty → fall back to OCR source"
+    # empty corrected_part2
+    t1, t2, subs = reconcile_hyphen_pair(part1, part2, "nécessaires", "")
+    assert t1 == "néces-", "PART1 must fall back to OCR source"
+    assert t2 == "saires pour y faire", "PART2 empty → fall back to OCR source"
+    assert subs is None
+    # corrected_part2 with embedded newline
+    t1b, t2b, _ = reconcile_hyphen_pair(part1, part2, "nécessaires", "pour\ny faire")
+    assert t1b == "néces-"
+    assert t2b == "saires pour y faire", "PART2 with newline → fall back to OCR source"
+
+
+def test_reconcile_heuristic_normal_case_unchanged():
+    """Heuristic: LLM preserved the trailing dash → fallback must NOT trigger."""
+    part1 = make_line(
+        "TL1", "néces-",
+        hyphen_role=HyphenRole.PART1,
+        hyphen_pair_line_id="TL2",
+        hyphen_source_explicit=False,
+    )
+    part2 = make_line(
+        "TL2", "saires pour y faire",
+        hyphen_role=HyphenRole.PART2,
+        hyphen_pair_line_id="TL1",
+        hyphen_source_explicit=False,
+    )
+    t1, t2, subs = reconcile_hyphen_pair(
+        part1, part2, "néces-", "saires pour y faire"
+    )
+    # LLM respected the dash: correction accepted as-is, no OCR fallback
+    assert t1 == "néces-"
+    assert t2 == "saires pour y faire"
     assert subs is None
 
 
