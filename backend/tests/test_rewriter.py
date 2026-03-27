@@ -168,6 +168,8 @@ def test_coords_preserved(tmp_path):
 
 
 def test_string_ids_pattern(tmp_path):
+    """When corrected text has more words than original, extra words get generated IDs.
+    The first word reuses the original ID; the second gets a generated fallback."""
     lines_xml = """\
 <TextLine ID="TL1" HPOS="10" VPOS="20" WIDTH="400" HEIGHT="30">
   <String ID="S1" CONTENT="old" HPOS="10" VPOS="20" WIDTH="100" HEIGHT="30"/>
@@ -176,7 +178,8 @@ def test_string_ids_pattern(tmp_path):
     root = write_and_rewrite(tmp_path, lines_xml, [lm])
     strings = root.findall(f".//{_ns('String')}")
     ids = [s.get("ID") for s in strings]
-    assert "TL1_STR_0000" in ids
+    # Original ID "S1" is reused for position 0; position 1 gets generated ID
+    assert "S1" in ids
     assert "TL1_STR_0001" in ids
 
 
@@ -327,6 +330,75 @@ def test_round_trip_normal(tmp_path):
     assert len(pages2) == 1
     assert len(pages2[0].lines) == 1
     assert pages2[0].lines[0].line_id == "TL1"
+
+
+# ---------------------------------------------------------------------------
+# Bug-fix tests: soft hyphen, WC, String IDs, HYP node preservation
+# ---------------------------------------------------------------------------
+
+def test_rewriter_no_soft_hyphen_in_content(tmp_path):
+    """U+00AD soft hyphen must be stripped from String CONTENT."""
+    lines_xml = """\
+<TextLine ID="TL1" HPOS="10" VPOS="20" WIDTH="400" HEIGHT="30">
+  <String ID="S1" CONTENT="n\u00e9ces-" HPOS="10" VPOS="20" WIDTH="200" HEIGHT="30"/>
+</TextLine>"""
+    # corrected_text contains a soft hyphen injected by the LLM
+    lm = make_line("TL1", "n\u00e9ces-", corrected_text="n\u00e9ces\u00ad")
+    root = write_and_rewrite(tmp_path, lines_xml, [lm])
+    for s in root.findall(f".//{_ns('String')}"):
+        assert "\u00ad" not in (s.get("CONTENT") or ""), \
+            "Soft hyphen U+00AD must not appear in CONTENT"
+
+
+def test_rewriter_preserves_wc(tmp_path):
+    """WC confidence scores must be copied from original String nodes by position."""
+    lines_xml = """\
+<TextLine ID="TL1" HPOS="10" VPOS="20" WIDTH="400" HEIGHT="30">
+  <String ID="S1" CONTENT="Bon" HPOS="10" VPOS="20" WIDTH="150" HEIGHT="30" WC="0.95"/>
+  <SP WIDTH="10" HPOS="160" VPOS="20"/>
+  <String ID="S2" CONTENT="jour" HPOS="170" VPOS="20" WIDTH="200" HEIGHT="30" WC="0.87"/>
+</TextLine>"""
+    lm = make_line("TL1", "Bon jour", corrected_text="Bon jour")
+    root = write_and_rewrite(tmp_path, lines_xml, [lm])
+    strings = root.findall(f".//{_ns('String')}")
+    assert len(strings) == 2
+    assert strings[0].get("WC") == "0.95", "First String WC must be preserved"
+    assert strings[1].get("WC") == "0.87", "Second String WC must be preserved"
+
+
+def test_rewriter_preserves_string_ids(tmp_path):
+    """Original String IDs must be reused by position after rewrite."""
+    lines_xml = """\
+<TextLine ID="TL1" HPOS="10" VPOS="20" WIDTH="400" HEIGHT="30">
+  <String ID="word_001" CONTENT="Hello" HPOS="10" VPOS="20" WIDTH="180" HEIGHT="30"/>
+  <SP WIDTH="10" HPOS="190" VPOS="20"/>
+  <String ID="word_002" CONTENT="world" HPOS="200" VPOS="20" WIDTH="200" HEIGHT="30"/>
+</TextLine>"""
+    lm = make_line("TL1", "Hello world", corrected_text="Hello world")
+    root = write_and_rewrite(tmp_path, lines_xml, [lm])
+    strings = root.findall(f".//{_ns('String')}")
+    ids = [s.get("ID") for s in strings]
+    assert "word_001" in ids, "First original String ID must be preserved"
+    assert "word_002" in ids, "Second original String ID must be preserved"
+
+
+def test_rewriter_preserves_hyp_node_heuristic(tmp_path):
+    """A heuristic PART1 line must always have a HYP child after rewrite."""
+    lines_xml = """\
+<TextLine ID="TL1" HPOS="10" VPOS="20" WIDTH="400" HEIGHT="30">
+  <String ID="S1" CONTENT="boule-" HPOS="10" VPOS="20" WIDTH="120" HEIGHT="30"/>
+  <HYP CONTENT="-" HPOS="130" VPOS="20" WIDTH="16" HEIGHT="30"/>
+</TextLine>"""
+    lm = make_line(
+        "TL1", "boule-", corrected_text="boule-",
+        hyphen_role=HyphenRole.PART1,
+        hyphen_source_explicit=False,
+    )
+    root = write_and_rewrite(tmp_path, lines_xml, [lm])
+    tl = root.find(f".//{_ns('TextLine')}")
+    hyp_els = tl.findall(_ns("HYP"))
+    assert len(hyp_els) == 1, "HYP node must be present for heuristic PART1 line"
+    assert hyp_els[0].get("CONTENT") == "-"
 
 
 def test_round_trip_with_hyphen(tmp_path):

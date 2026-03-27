@@ -104,6 +104,28 @@ def _clear_line(line_el: etree._Element, ns: str) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Internal: collect original String attributes before clearing
+# ---------------------------------------------------------------------------
+
+def _collect_original_strings(
+    line_el: etree._Element,
+    ns: str,
+) -> list[dict[str, str | None]]:
+    """
+    Return [{id, wc}, ...] for each original String child, in document order.
+
+    Called before _clear_line so that original IDs and WC confidence scores
+    can be re-applied to the rebuilt String nodes at the same position.
+    """
+    string_tag = _tag("String", ns)
+    return [
+        {"id": child.get("ID"), "wc": child.get("WC")}
+        for child in line_el
+        if child.tag == string_tag
+    ]
+
+
+# ---------------------------------------------------------------------------
 # Rebuild helpers
 # ---------------------------------------------------------------------------
 
@@ -114,6 +136,14 @@ def _rebuild_normal_line(
     ns: str,
 ) -> None:
     """Rebuild a non-hyphenated TextLine with corrected text."""
+    orig = _collect_original_strings(line_el, ns)
+
+    # Preserve any HYP nodes that exist on this line: the parser may have
+    # missed PART1 detection (e.g. heuristic miss), so we must not silently
+    # drop the hyphen element.  They are re-appended at the end.
+    hyp_tag = _tag("HYP", ns)
+    saved_hyp = [c for c in line_el if c.tag == hyp_tag]
+
     _clear_line(line_el, ns)
 
     hpos = int(line_el.get("HPOS", 0))
@@ -123,6 +153,8 @@ def _rebuild_normal_line(
 
     tokens = _tokenize(corrected_text)
     if not tokens:
+        for hyp_el in saved_hyp:
+            line_el.append(hyp_el)
         return
 
     geo = _compute_geometry(hpos, width, tokens)
@@ -136,13 +168,19 @@ def _rebuild_normal_line(
             sp.set("VPOS", str(vpos))
         else:
             s = etree.SubElement(line_el, _tag("String", ns))
-            s.set("ID", f"{manifest.line_id}_STR_{str_n:04d}")
-            s.set("CONTENT", token)
+            orig_id = orig[str_n]["id"] if str_n < len(orig) else None
+            s.set("ID", orig_id or f"{manifest.line_id}_STR_{str_n:04d}")
+            s.set("CONTENT", token.replace("\u00ad", ""))
             s.set("HPOS", str(tok_hpos))
             s.set("VPOS", str(vpos))
             s.set("WIDTH", str(tok_width))
             s.set("HEIGHT", str(height))
+            if str_n < len(orig) and orig[str_n]["wc"] is not None:
+                s.set("WC", orig[str_n]["wc"])
             str_n += 1
+
+    for hyp_el in saved_hyp:
+        line_el.append(hyp_el)
 
 
 def _rebuild_hyp_part1(
@@ -152,6 +190,7 @@ def _rebuild_hyp_part1(
     ns: str,
 ) -> None:
     """Rebuild a PART1 (hyphen-left) TextLine."""
+    orig = _collect_original_strings(line_el, ns)
     _clear_line(line_el, ns)
 
     hpos = int(line_el.get("HPOS", 0))
@@ -159,13 +198,20 @@ def _rebuild_hyp_part1(
     width = int(line_el.get("WIDTH", 0))
     height = int(line_el.get("HEIGHT", 0))
 
-    tokens = _tokenize(corrected_text)
-    if not tokens:
-        return
-
     # Reserve ~4% of width for the HYP element
     hyp_width = max(1, round(width * 0.04))
     text_width = max(1, width - hyp_width)
+
+    tokens = _tokenize(corrected_text)
+    if not tokens:
+        # No text content, but the HYP node must still be present.
+        hyp = etree.SubElement(line_el, _tag("HYP", ns))
+        hyp.set("CONTENT", "-")
+        hyp.set("HPOS", str(hpos + text_width))
+        hyp.set("VPOS", str(vpos))
+        hyp.set("WIDTH", str(hyp_width))
+        hyp.set("HEIGHT", str(height))
+        return
 
     geo = _compute_geometry(hpos, text_width, tokens)
     words = [t for t in tokens if t.strip() != ""]
@@ -185,12 +231,15 @@ def _rebuild_hyp_part1(
         else:
             is_last_word = (token == last_word_token and str_n == len(words) - 1)
             s = etree.SubElement(line_el, _tag("String", ns))
-            s.set("ID", f"{manifest.line_id}_STR_{str_n:04d}")
-            s.set("CONTENT", token)
+            orig_id = orig[str_n]["id"] if str_n < len(orig) else None
+            s.set("ID", orig_id or f"{manifest.line_id}_STR_{str_n:04d}")
+            s.set("CONTENT", token.replace("\u00ad", ""))
             s.set("HPOS", str(tok_hpos))
             s.set("VPOS", str(vpos))
             s.set("WIDTH", str(tok_width))
             s.set("HEIGHT", str(height))
+            if str_n < len(orig) and orig[str_n]["wc"] is not None:
+                s.set("WC", orig[str_n]["wc"])
 
             if is_last_word:
                 last_word_hpos = tok_hpos
@@ -222,6 +271,7 @@ def _rebuild_hyp_part2(
     ns: str,
 ) -> None:
     """Rebuild a PART2 (hyphen-right) TextLine."""
+    orig = _collect_original_strings(line_el, ns)
     _clear_line(line_el, ns)
 
     hpos = int(line_el.get("HPOS", 0))
@@ -245,12 +295,15 @@ def _rebuild_hyp_part2(
             sp.set("VPOS", str(vpos))
         else:
             s = etree.SubElement(line_el, _tag("String", ns))
-            s.set("ID", f"{manifest.line_id}_STR_{str_n:04d}")
-            s.set("CONTENT", token)
+            orig_id = orig[str_n]["id"] if str_n < len(orig) else None
+            s.set("ID", orig_id or f"{manifest.line_id}_STR_{str_n:04d}")
+            s.set("CONTENT", token.replace("\u00ad", ""))
             s.set("HPOS", str(tok_hpos))
             s.set("VPOS", str(vpos))
             s.set("WIDTH", str(tok_width))
             s.set("HEIGHT", str(height))
+            if str_n < len(orig) and orig[str_n]["wc"] is not None:
+                s.set("WC", orig[str_n]["wc"])
 
             if str_n == 0:
                 # First word: SUBS_TYPE="HypPart2" if explicit
