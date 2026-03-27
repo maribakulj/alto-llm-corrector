@@ -1,11 +1,12 @@
 """Storage helpers: job directories and file I/O."""
 from __future__ import annotations
 
+import os
 import shutil
 import zipfile
 from pathlib import Path
 
-_BASE_DIR = Path("/tmp/app-jobs")
+_BASE_DIR = Path(os.environ.get("JOB_STORAGE_DIR", "/tmp/app-jobs"))
 
 _ALLOWED_EXTENSIONS = {".xml", ".alto"}
 _IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".tif", ".tiff"}
