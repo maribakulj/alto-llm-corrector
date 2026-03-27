@@ -47,6 +47,32 @@ def _build_hyphen_pairs(
     return pairs
 
 
+def _line_drift_too_large(ocr_text: str, corrected_text: str) -> bool:
+    """
+    Return True if corrected text deviates too far from the OCR source,
+    indicating the LLM shifted content between lines.
+    """
+    ocr_words = ocr_text.split()
+    corrected_words = corrected_text.split()
+    ocr_wc = len(ocr_words)
+    corrected_wc = len(corrected_words)
+
+    # Word-count tolerance: allow generous margin for OCR fixes
+    tolerance = max(3, int(ocr_wc * 0.4))
+    if abs(corrected_wc - ocr_wc) > tolerance:
+        return True
+
+    # Character-length ratio check
+    ocr_len = len(ocr_text)
+    corrected_len = len(corrected_text)
+    if ocr_len > 0:
+        ratio = corrected_len / ocr_len
+        if ratio > 2.0 or ratio < 0.25:
+            return True
+
+    return False
+
+
 def _count_hyphen_pairs_in_chunk(lines: list[LineManifest]) -> int:
     return sum(
         1 for lm in lines
@@ -194,13 +220,17 @@ async def _run_chunk(
                 processed_part2.add(part2_id)
                 reconciled_count += 1
 
-        # Apply remaining lines
+        # Apply remaining lines (with drift guard)
         for lm in chunk_lines:
             if lm.corrected_text is None:
                 corrected = text_by_id.get(lm.line_id)
                 if corrected is not None:
-                    lm.corrected_text = corrected
-                    lm.status = LineStatus.CORRECTED
+                    if _line_drift_too_large(lm.ocr_text, corrected):
+                        lm.corrected_text = lm.ocr_text
+                        lm.status = LineStatus.FALLBACK
+                    else:
+                        lm.corrected_text = corrected
+                        lm.status = LineStatus.CORRECTED
 
         job_store.emit(job_id, "chunk_completed", {
             "chunk_id": chunk.chunk_id,

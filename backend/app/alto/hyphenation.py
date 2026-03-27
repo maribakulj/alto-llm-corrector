@@ -58,6 +58,55 @@ def enrich_chunk_lines(
     return result
 
 
+def _part1_text_migrated(ocr_text: str, corrected_text: str) -> bool:
+    """
+    Return True if corrected PART1 text looks like the LLM extended the
+    hyphenated word or pulled text from the next line.
+    """
+    ocr_bare = ocr_text.rstrip("-").rstrip()
+    corrected_bare = corrected_text.rstrip("-").rstrip(".")
+
+    ocr_words = ocr_bare.split()
+    corrected_words = corrected_bare.split()
+
+    # Word count increased significantly → text was pulled from next line
+    if len(corrected_words) > len(ocr_words) + 1:
+        return True
+
+    # Same or similar word count, but last word got much longer
+    # (word completion, e.g. "néces" → "nécessaires")
+    if ocr_words and corrected_words:
+        ocr_last = ocr_words[-1].rstrip("-")
+        corrected_last = corrected_words[-1].rstrip("-")
+        if len(corrected_last) > len(ocr_last) + 3:
+            return True
+
+    # Overall character length grew substantially
+    if len(corrected_bare) > len(ocr_bare) * 1.4 + 8:
+        return True
+
+    return False
+
+
+def _part2_text_migrated(ocr_text: str, corrected_text: str) -> bool:
+    """
+    Return True if corrected PART2 text is drastically different from
+    original, indicating cascade propagation from a shifted PART1.
+    """
+    ocr_words = ocr_text.split()
+    corrected_words = corrected_text.split()
+
+    # Dramatic shrinkage → content was absorbed by previous line
+    if ocr_words and len(corrected_words) < len(ocr_words) * 0.4:
+        return True
+
+    # Dramatic growth → text pulled from next line
+    if len(corrected_words) > len(ocr_words) + max(3, int(len(ocr_words) * 0.4)):
+        return True
+
+    return False
+
+
 def reconcile_hyphen_pair(
     part1: LineManifest,
     part2: LineManifest,
@@ -74,44 +123,32 @@ def reconcile_hyphen_pair(
     - No text migrates from one line to the other.
     - On ambiguity, fall back to OCR source texts.
     """
-    # --- Heuristic mode: conservative, no SUBS_CONTENT reconstruction ---
-    if not part1.hyphen_source_explicit:
-        # If PART1 OCR ended with "-" AND the LLM removed the hyphen AND
-        # extended the text (i.e. completed the hyphenated word), fall back
-        # PART1 to the OCR source.  The "longer than bare OCR" condition
-        # distinguishes word-completion ("néces-" → "nécessaires") from a
-        # legitimate stray-hyphen cleanup ("néces-" → "néces"), which should
-        # be allowed through.
-        ocr_bare = part1.ocr_text.rstrip("-")
-        if (
-            part1.ocr_text.endswith("-")
-            and not corrected_part1.endswith("-")
-            and len(corrected_part1) > len(ocr_bare)
-        ):
-            safe_part2 = (
-                corrected_part2
-                if corrected_part2 and "\n" not in corrected_part2
-                else part2.ocr_text
-            )
-            return part1.ocr_text, safe_part2, None
-        return corrected_part1, corrected_part2, None
-
-    # --- Explicit mode ---
-    # Guard: if the LLM removed the trailing dash AND completed the word
-    # (corrected text is longer than the bare OCR fragment), fall back PART1
-    # to OCR source to preserve physical line boundaries.
-    ocr_bare = part1.ocr_text.rstrip("-")
-    if (
-        part1.ocr_text.endswith("-")
-        and not corrected_part1.endswith("-")
-        and len(corrected_part1) > len(ocr_bare)
-    ):
+    # --- Shared guard: detect word extension / text migration on PART1 ---
+    # The LLM may complete the hyphenated word on PART1 (e.g. "néces-" →
+    # "nécessaires-") or pull text from PART2 onto PART1.  We detect this
+    # by comparing word counts and character lengths.
+    _fell_back = False
+    if _part1_text_migrated(part1.ocr_text, corrected_part1):
         safe_part2 = (
             corrected_part2
             if corrected_part2 and "\n" not in corrected_part2
             else part2.ocr_text
         )
-        return part1.ocr_text, safe_part2, part1.hyphen_subs_content
+        subs = part1.hyphen_subs_content if part1.hyphen_source_explicit else None
+        corrected_part1 = part1.ocr_text
+        corrected_part2 = safe_part2
+        _fell_back = True
+        # Early return: boundaries are restored, preserve SUBS_CONTENT
+        return corrected_part1, corrected_part2, subs
+
+    # Also guard PART2: if corrected PART2 is drastically different from
+    # original (cascade propagation), fall it back to OCR source.
+    if _part2_text_migrated(part2.ocr_text, corrected_part2):
+        corrected_part2 = part2.ocr_text
+
+    # --- Heuristic mode: conservative, no SUBS_CONTENT reconstruction ---
+    if not part1.hyphen_source_explicit:
+        return corrected_part1, corrected_part2, None
 
     # Extract boundary tokens
     tokens1 = corrected_part1.split()
