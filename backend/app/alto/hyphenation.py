@@ -76,9 +76,18 @@ def reconcile_hyphen_pair(
     """
     # --- Heuristic mode: conservative, no SUBS_CONTENT reconstruction ---
     if not part1.hyphen_source_explicit:
-        # If PART1 OCR ended with "-" but the LLM removed it (fused the word),
-        # fall back PART1 to OCR source to preserve physical line boundaries.
-        if part1.ocr_text.endswith("-") and not corrected_part1.endswith("-"):
+        # If PART1 OCR ended with "-" AND the LLM removed the hyphen AND
+        # extended the text (i.e. completed the hyphenated word), fall back
+        # PART1 to the OCR source.  The "longer than bare OCR" condition
+        # distinguishes word-completion ("néces-" → "nécessaires") from a
+        # legitimate stray-hyphen cleanup ("néces-" → "néces"), which should
+        # be allowed through.
+        ocr_bare = part1.ocr_text.rstrip("-")
+        if (
+            part1.ocr_text.endswith("-")
+            and not corrected_part1.endswith("-")
+            and len(corrected_part1) > len(ocr_bare)
+        ):
             safe_part2 = (
                 corrected_part2
                 if corrected_part2 and "\n" not in corrected_part2
@@ -88,9 +97,15 @@ def reconcile_hyphen_pair(
         return corrected_part1, corrected_part2, None
 
     # --- Explicit mode ---
-    # Guard: if the LLM removed the trailing dash (fused the word),
-    # fall back PART1 to OCR source to preserve physical line boundaries.
-    if part1.ocr_text.endswith("-") and not corrected_part1.endswith("-"):
+    # Guard: if the LLM removed the trailing dash AND completed the word
+    # (corrected text is longer than the bare OCR fragment), fall back PART1
+    # to OCR source to preserve physical line boundaries.
+    ocr_bare = part1.ocr_text.rstrip("-")
+    if (
+        part1.ocr_text.endswith("-")
+        and not corrected_part1.endswith("-")
+        and len(corrected_part1) > len(ocr_bare)
+    ):
         safe_part2 = (
             corrected_part2
             if corrected_part2 and "\n" not in corrected_part2
