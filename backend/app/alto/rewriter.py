@@ -112,16 +112,43 @@ def _collect_original_strings(
     ns: str,
 ) -> list[dict[str, str | None]]:
     """
-    Return [{id, wc}, ...] for each original String child, in document order.
+    Return [{id, wc, hpos, vpos, width, height}, ...] for each original
+    String child, in document order.
 
-    Called before _clear_line so that original IDs and WC confidence scores
-    can be re-applied to the rebuilt String nodes at the same position.
+    Called before _clear_line so that original attributes can be re-applied
+    to the rebuilt String nodes at the same position.
     """
     string_tag = _tag("String", ns)
     return [
-        {"id": child.get("ID"), "wc": child.get("WC")}
+        {
+            "id": child.get("ID"),
+            "wc": child.get("WC"),
+            "hpos": child.get("HPOS"),
+            "vpos": child.get("VPOS"),
+            "width": child.get("WIDTH"),
+            "height": child.get("HEIGHT"),
+        }
         for child in line_el
         if child.tag == string_tag
+    ]
+
+
+def _collect_original_spaces(
+    line_el: etree._Element,
+    ns: str,
+) -> list[dict[str, str | None]]:
+    """
+    Return [{hpos, vpos, width}, ...] for each original SP child, in order.
+    """
+    sp_tag = _tag("SP", ns)
+    return [
+        {
+            "hpos": child.get("HPOS"),
+            "vpos": child.get("VPOS"),
+            "width": child.get("WIDTH"),
+        }
+        for child in line_el
+        if child.tag == sp_tag
     ]
 
 
@@ -137,6 +164,7 @@ def _rebuild_normal_line(
 ) -> None:
     """Rebuild a non-hyphenated TextLine with corrected text."""
     orig = _collect_original_strings(line_el, ns)
+    orig_sp = _collect_original_spaces(line_el, ns)
 
     # Preserve any HYP nodes that exist on this line: the parser may have
     # missed PART1 detection (e.g. heuristic miss), so we must not silently
@@ -157,30 +185,102 @@ def _rebuild_normal_line(
             line_el.append(hyp_el)
         return
 
+    word_tokens = [t for t in tokens if t.strip() != ""]
+
+    # --- Fast path: word count matches original → preserve geometry ---
+    if len(word_tokens) == len(orig):
+        _rebuild_preserving_geometry(line_el, tokens, orig, orig_sp, ns, manifest)
+        for hyp_el in saved_hyp:
+            line_el.append(hyp_el)
+        return
+
+    # --- Slow path: word count differs → proportional geometry ---
     geo = _compute_geometry(hpos, width, tokens)
     str_n = 0
+    sp_n = 0
 
     for token, tok_hpos, tok_width in geo:
         if token.strip() == "":
             sp = etree.SubElement(line_el, _tag("SP", ns))
-            sp.set("WIDTH", str(tok_width))
-            sp.set("HPOS", str(tok_hpos))
-            sp.set("VPOS", str(vpos))
+            # Reuse original SP geometry when possible
+            if sp_n < len(orig_sp) and orig_sp[sp_n]["width"] is not None:
+                sp.set("WIDTH", orig_sp[sp_n]["width"])
+                sp.set("HPOS", orig_sp[sp_n].get("hpos") or str(tok_hpos))
+                sp.set("VPOS", orig_sp[sp_n].get("vpos") or str(vpos))
+            else:
+                sp.set("WIDTH", str(tok_width))
+                sp.set("HPOS", str(tok_hpos))
+                sp.set("VPOS", str(vpos))
+            sp_n += 1
         else:
             s = etree.SubElement(line_el, _tag("String", ns))
             orig_id = orig[str_n]["id"] if str_n < len(orig) else None
             s.set("ID", orig_id or f"{manifest.line_id}_STR_{str_n:04d}")
             s.set("CONTENT", token.replace("\u00ad", ""))
             s.set("HPOS", str(tok_hpos))
-            s.set("VPOS", str(vpos))
+            # Preserve per-token VPOS/HEIGHT from originals when available
+            if str_n < len(orig) and orig[str_n]["vpos"] is not None:
+                s.set("VPOS", orig[str_n]["vpos"])
+            else:
+                s.set("VPOS", str(vpos))
             s.set("WIDTH", str(tok_width))
-            s.set("HEIGHT", str(height))
+            if str_n < len(orig) and orig[str_n]["height"] is not None:
+                s.set("HEIGHT", orig[str_n]["height"])
+            else:
+                s.set("HEIGHT", str(height))
             if str_n < len(orig) and orig[str_n]["wc"] is not None:
                 s.set("WC", orig[str_n]["wc"])
             str_n += 1
 
     for hyp_el in saved_hyp:
         line_el.append(hyp_el)
+
+
+def _rebuild_preserving_geometry(
+    line_el: etree._Element,
+    tokens: list[str],
+    orig_strings: list[dict[str, str | None]],
+    orig_spaces: list[dict[str, str | None]],
+    ns: str,
+    manifest: LineManifest,
+) -> None:
+    """
+    Rebuild a TextLine preserving the original per-String and per-SP geometry.
+
+    Called when the corrected text has exactly the same word count as the
+    original, so we can map corrected words 1:1 to original String elements
+    and only update CONTENT.
+    """
+    str_n = 0
+    sp_n = 0
+    vpos_fallback = line_el.get("VPOS", "0")
+    height_fallback = line_el.get("HEIGHT", "0")
+
+    for token in tokens:
+        if token.strip() == "":
+            sp = etree.SubElement(line_el, _tag("SP", ns))
+            if sp_n < len(orig_spaces):
+                osp = orig_spaces[sp_n]
+                sp.set("WIDTH", osp.get("width") or "10")
+                sp.set("HPOS", osp.get("hpos") or "0")
+                sp.set("VPOS", osp.get("vpos") or vpos_fallback)
+            else:
+                sp.set("WIDTH", "10")
+                sp.set("HPOS", "0")
+                sp.set("VPOS", vpos_fallback)
+            sp_n += 1
+        else:
+            o = orig_strings[str_n]
+            s = etree.SubElement(line_el, _tag("String", ns))
+            s.set("ID", o.get("id") or f"{manifest.line_id}_STR_{str_n:04d}")
+            s.set("CONTENT", token.replace("\u00ad", ""))
+            s.set("HPOS", o.get("hpos") or "0")
+            s.set("VPOS", o.get("vpos") or vpos_fallback)
+            s.set("WIDTH", o.get("width") or "0")
+            s.set("HEIGHT", o.get("height") or height_fallback)
+            if o.get("wc") is not None:
+                s.set("WC", o["wc"])
+            str_n += 1
 
 
 def _rebuild_hyp_part1(
@@ -191,6 +291,16 @@ def _rebuild_hyp_part1(
 ) -> None:
     """Rebuild a PART1 (hyphen-left) TextLine."""
     orig = _collect_original_strings(line_el, ns)
+    orig_sp = _collect_original_spaces(line_el, ns)
+
+    # Capture original HYP element geometry before clearing
+    hyp_tag = _tag("HYP", ns)
+    orig_hyp_attribs: dict[str, str] = {}
+    for child in line_el:
+        if child.tag == hyp_tag:
+            orig_hyp_attribs = dict(child.attrib)
+            break
+
     _clear_line(line_el, ns)
 
     hpos = int(line_el.get("HPOS", 0))
@@ -204,30 +314,96 @@ def _rebuild_hyp_part1(
 
     tokens = _tokenize(corrected_text)
     if not tokens:
-        # No text content, but the HYP node must still be present.
         hyp = etree.SubElement(line_el, _tag("HYP", ns))
         hyp.set("CONTENT", "-")
-        hyp.set("HPOS", str(hpos + text_width))
-        hyp.set("VPOS", str(vpos))
-        hyp.set("WIDTH", str(hyp_width))
-        hyp.set("HEIGHT", str(height))
+        if orig_hyp_attribs:
+            for attr in ("HPOS", "VPOS", "WIDTH", "HEIGHT"):
+                if attr in orig_hyp_attribs:
+                    hyp.set(attr, orig_hyp_attribs[attr])
+        else:
+            hyp.set("HPOS", str(hpos + text_width))
+            hyp.set("VPOS", str(vpos))
+            hyp.set("WIDTH", str(hyp_width))
+            hyp.set("HEIGHT", str(height))
         return
 
-    geo = _compute_geometry(hpos, text_width, tokens)
     words = [t for t in tokens if t.strip() != ""]
 
-    # Determine which geo entry is the last word token
+    # --- Fast path: same word count → preserve original geometry ---
+    if len(words) == len(orig):
+        str_n = 0
+        sp_n = 0
+        last_word_hpos = hpos
+        last_word_width = hyp_width
+
+        for token in tokens:
+            if token.strip() == "":
+                sp = etree.SubElement(line_el, _tag("SP", ns))
+                if sp_n < len(orig_sp):
+                    osp = orig_sp[sp_n]
+                    sp.set("WIDTH", osp.get("width") or "10")
+                    sp.set("HPOS", osp.get("hpos") or "0")
+                    sp.set("VPOS", osp.get("vpos") or str(vpos))
+                else:
+                    sp.set("WIDTH", "10")
+                    sp.set("HPOS", "0")
+                    sp.set("VPOS", str(vpos))
+                sp_n += 1
+            else:
+                o = orig[str_n]
+                s = etree.SubElement(line_el, _tag("String", ns))
+                s.set("ID", o.get("id") or f"{manifest.line_id}_STR_{str_n:04d}")
+                s.set("CONTENT", token.replace("\u00ad", ""))
+                s.set("HPOS", o.get("hpos") or "0")
+                s.set("VPOS", o.get("vpos") or str(vpos))
+                s.set("WIDTH", o.get("width") or "0")
+                s.set("HEIGHT", o.get("height") or str(height))
+                if o.get("wc") is not None:
+                    s.set("WC", o["wc"])
+
+                if str_n == len(words) - 1:
+                    last_word_hpos = int(o.get("hpos") or hpos)
+                    last_word_width = int(o.get("width") or hyp_width)
+                    if manifest.hyphen_source_explicit and manifest.hyphen_subs_content:
+                        s.set("SUBS_TYPE", "HypPart1")
+                        s.set("SUBS_CONTENT", manifest.hyphen_subs_content)
+                str_n += 1
+
+        # Append HYP element using original geometry if available
+        hyp = etree.SubElement(line_el, _tag("HYP", ns))
+        hyp.set("CONTENT", "-")
+        if orig_hyp_attribs:
+            for attr in ("HPOS", "VPOS", "WIDTH", "HEIGHT"):
+                if attr in orig_hyp_attribs:
+                    hyp.set(attr, orig_hyp_attribs[attr])
+        else:
+            hyp.set("HPOS", str(last_word_hpos + last_word_width))
+            hyp.set("VPOS", str(vpos))
+            hyp.set("WIDTH", str(hyp_width))
+            hyp.set("HEIGHT", str(height))
+        return
+
+    # --- Slow path: different word count → proportional geometry ---
+    geo = _compute_geometry(hpos, text_width, tokens)
+
     last_word_token = words[-1] if words else None
     str_n = 0
+    sp_n = 0
     last_word_hpos = hpos
-    last_word_width = hyp_width  # fallback
+    last_word_width = hyp_width
 
     for token, tok_hpos, tok_width in geo:
         if token.strip() == "":
             sp = etree.SubElement(line_el, _tag("SP", ns))
-            sp.set("WIDTH", str(tok_width))
-            sp.set("HPOS", str(tok_hpos))
-            sp.set("VPOS", str(vpos))
+            if sp_n < len(orig_sp) and orig_sp[sp_n]["width"] is not None:
+                sp.set("WIDTH", orig_sp[sp_n]["width"])
+                sp.set("HPOS", orig_sp[sp_n].get("hpos") or str(tok_hpos))
+                sp.set("VPOS", orig_sp[sp_n].get("vpos") or str(vpos))
+            else:
+                sp.set("WIDTH", str(tok_width))
+                sp.set("HPOS", str(tok_hpos))
+                sp.set("VPOS", str(vpos))
+            sp_n += 1
         else:
             is_last_word = (token == last_word_token and str_n == len(words) - 1)
             s = etree.SubElement(line_el, _tag("String", ns))
@@ -235,33 +411,39 @@ def _rebuild_hyp_part1(
             s.set("ID", orig_id or f"{manifest.line_id}_STR_{str_n:04d}")
             s.set("CONTENT", token.replace("\u00ad", ""))
             s.set("HPOS", str(tok_hpos))
-            s.set("VPOS", str(vpos))
+            if str_n < len(orig) and orig[str_n]["vpos"] is not None:
+                s.set("VPOS", orig[str_n]["vpos"])
+            else:
+                s.set("VPOS", str(vpos))
             s.set("WIDTH", str(tok_width))
-            s.set("HEIGHT", str(height))
+            if str_n < len(orig) and orig[str_n]["height"] is not None:
+                s.set("HEIGHT", orig[str_n]["height"])
+            else:
+                s.set("HEIGHT", str(height))
             if str_n < len(orig) and orig[str_n]["wc"] is not None:
                 s.set("WC", orig[str_n]["wc"])
 
             if is_last_word:
                 last_word_hpos = tok_hpos
                 last_word_width = tok_width
-                # Add SUBS_TYPE/SUBS_CONTENT only for explicit source
-                if (
-                    manifest.hyphen_source_explicit
-                    and manifest.hyphen_subs_content
-                ):
+                if manifest.hyphen_source_explicit and manifest.hyphen_subs_content:
                     s.set("SUBS_TYPE", "HypPart1")
                     s.set("SUBS_CONTENT", manifest.hyphen_subs_content)
 
             str_n += 1
 
     # Append HYP element
-    hyp_hpos = last_word_hpos + last_word_width
     hyp = etree.SubElement(line_el, _tag("HYP", ns))
     hyp.set("CONTENT", "-")
-    hyp.set("HPOS", str(hyp_hpos))
-    hyp.set("VPOS", str(vpos))
-    hyp.set("WIDTH", str(hyp_width))
-    hyp.set("HEIGHT", str(height))
+    if orig_hyp_attribs:
+        for attr in ("HPOS", "VPOS", "WIDTH", "HEIGHT"):
+            if attr in orig_hyp_attribs:
+                hyp.set(attr, orig_hyp_attribs[attr])
+    else:
+        hyp.set("HPOS", str(last_word_hpos + last_word_width))
+        hyp.set("VPOS", str(vpos))
+        hyp.set("WIDTH", str(hyp_width))
+        hyp.set("HEIGHT", str(height))
 
 
 def _rebuild_hyp_part2(
@@ -272,6 +454,7 @@ def _rebuild_hyp_part2(
 ) -> None:
     """Rebuild a PART2 (hyphen-right) TextLine."""
     orig = _collect_original_strings(line_el, ns)
+    orig_sp = _collect_original_spaces(line_el, ns)
     _clear_line(line_el, ns)
 
     hpos = int(line_el.get("HPOS", 0))
@@ -283,34 +466,80 @@ def _rebuild_hyp_part2(
     if not tokens:
         return
 
-    geo = _compute_geometry(hpos, width, tokens)
     words = [t for t in tokens if t.strip() != ""]
+
+    # --- Fast path: same word count → preserve original geometry ---
+    if len(words) == len(orig):
+        str_n = 0
+        sp_n = 0
+        for token in tokens:
+            if token.strip() == "":
+                sp = etree.SubElement(line_el, _tag("SP", ns))
+                if sp_n < len(orig_sp):
+                    osp = orig_sp[sp_n]
+                    sp.set("WIDTH", osp.get("width") or "10")
+                    sp.set("HPOS", osp.get("hpos") or "0")
+                    sp.set("VPOS", osp.get("vpos") or str(vpos))
+                else:
+                    sp.set("WIDTH", "10")
+                    sp.set("HPOS", "0")
+                    sp.set("VPOS", str(vpos))
+                sp_n += 1
+            else:
+                o = orig[str_n]
+                s = etree.SubElement(line_el, _tag("String", ns))
+                s.set("ID", o.get("id") or f"{manifest.line_id}_STR_{str_n:04d}")
+                s.set("CONTENT", token.replace("\u00ad", ""))
+                s.set("HPOS", o.get("hpos") or "0")
+                s.set("VPOS", o.get("vpos") or str(vpos))
+                s.set("WIDTH", o.get("width") or "0")
+                s.set("HEIGHT", o.get("height") or str(height))
+                if o.get("wc") is not None:
+                    s.set("WC", o["wc"])
+                if str_n == 0:
+                    if manifest.hyphen_source_explicit and manifest.hyphen_subs_content:
+                        s.set("SUBS_TYPE", "HypPart2")
+                        s.set("SUBS_CONTENT", manifest.hyphen_subs_content)
+                str_n += 1
+        return
+
+    # --- Slow path: different word count → proportional geometry ---
+    geo = _compute_geometry(hpos, width, tokens)
     str_n = 0
+    sp_n = 0
 
     for token, tok_hpos, tok_width in geo:
         if token.strip() == "":
             sp = etree.SubElement(line_el, _tag("SP", ns))
-            sp.set("WIDTH", str(tok_width))
-            sp.set("HPOS", str(tok_hpos))
-            sp.set("VPOS", str(vpos))
+            if sp_n < len(orig_sp) and orig_sp[sp_n]["width"] is not None:
+                sp.set("WIDTH", orig_sp[sp_n]["width"])
+                sp.set("HPOS", orig_sp[sp_n].get("hpos") or str(tok_hpos))
+                sp.set("VPOS", orig_sp[sp_n].get("vpos") or str(vpos))
+            else:
+                sp.set("WIDTH", str(tok_width))
+                sp.set("HPOS", str(tok_hpos))
+                sp.set("VPOS", str(vpos))
+            sp_n += 1
         else:
             s = etree.SubElement(line_el, _tag("String", ns))
             orig_id = orig[str_n]["id"] if str_n < len(orig) else None
             s.set("ID", orig_id or f"{manifest.line_id}_STR_{str_n:04d}")
             s.set("CONTENT", token.replace("\u00ad", ""))
             s.set("HPOS", str(tok_hpos))
-            s.set("VPOS", str(vpos))
+            if str_n < len(orig) and orig[str_n]["vpos"] is not None:
+                s.set("VPOS", orig[str_n]["vpos"])
+            else:
+                s.set("VPOS", str(vpos))
             s.set("WIDTH", str(tok_width))
-            s.set("HEIGHT", str(height))
+            if str_n < len(orig) and orig[str_n]["height"] is not None:
+                s.set("HEIGHT", orig[str_n]["height"])
+            else:
+                s.set("HEIGHT", str(height))
             if str_n < len(orig) and orig[str_n]["wc"] is not None:
                 s.set("WC", orig[str_n]["wc"])
 
             if str_n == 0:
-                # First word: SUBS_TYPE="HypPart2" if explicit
-                if (
-                    manifest.hyphen_source_explicit
-                    and manifest.hyphen_subs_content
-                ):
+                if manifest.hyphen_source_explicit and manifest.hyphen_subs_content:
                     s.set("SUBS_TYPE", "HypPart2")
                     s.set("SUBS_CONTENT", manifest.hyphen_subs_content)
 
