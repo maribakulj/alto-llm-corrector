@@ -58,6 +58,10 @@ def enrich_chunk_lines(
     return result
 
 
+# ---------------------------------------------------------------------------
+# Pair-coherence helpers
+# ---------------------------------------------------------------------------
+
 def _part1_text_migrated(ocr_text: str, corrected_text: str) -> bool:
     """
     Return True if corrected PART1 text looks like the LLM extended the
@@ -107,6 +111,41 @@ def _part2_text_migrated(ocr_text: str, corrected_text: str) -> bool:
     return False
 
 
+def _pair_is_coherent(
+    corrected_part1: str,
+    corrected_part2: str,
+    subs_content: Optional[str],
+) -> bool:
+    """
+    Return True if PART1 + PART2 form a coherent hyphen pair.
+
+    When subs_content is known, the join of the boundary fragments must
+    match it.  When unknown, we only check that PART1 still ends with a
+    trailing hyphen (indicating the LLM respected the split).
+    """
+    tokens1 = corrected_part1.split()
+    tokens2 = corrected_part2.split()
+    if not tokens1 or not tokens2:
+        return False
+
+    left_bare = tokens1[-1].rstrip("-")
+    right_fragment = tokens2[0]
+
+    if subs_content:
+        joined = left_bare + right_fragment
+        return joined.lower() == subs_content.lower()
+
+    # No subs_content reference — coherent if PART1 still has a trailing
+    # hyphen (LLM didn't complete the word) and boundary tokens look
+    # like fragments (neither side is a full standalone word by itself
+    # that would make no sense split).
+    return corrected_part1.rstrip().endswith("-")
+
+
+# ---------------------------------------------------------------------------
+# Main reconciliation
+# ---------------------------------------------------------------------------
+
 def reconcile_hyphen_pair(
     part1: LineManifest,
     part2: LineManifest,
@@ -121,66 +160,49 @@ def reconcile_hyphen_pair(
     Guarantees:
     - The two physical lines remain distinct.
     - No text migrates from one line to the other.
+    - If either side migrated, BOTH sides fall back to OCR source and
+      SUBS_CONTENT is neutralised (None) unless the pair can be
+      positively verified as coherent.
     - On ambiguity, fall back to OCR source texts.
     """
-    # --- Shared guard: detect word extension / text migration on PART1 ---
-    # The LLM may complete the hyphenated word on PART1 (e.g. "néces-" →
-    # "nécessaires-") or pull text from PART2 onto PART1.  We detect this
-    # by comparing word counts and character lengths.
-    _fell_back = False
-    if _part1_text_migrated(part1.ocr_text, corrected_part1):
-        safe_part2 = (
-            corrected_part2
-            if corrected_part2 and "\n" not in corrected_part2
-            else part2.ocr_text
-        )
-        subs = part1.hyphen_subs_content if part1.hyphen_source_explicit else None
-        corrected_part1 = part1.ocr_text
-        corrected_part2 = safe_part2
-        _fell_back = True
-        # Early return: boundaries are restored, preserve SUBS_CONTENT
-        return corrected_part1, corrected_part2, subs
+    p1_migrated = _part1_text_migrated(part1.ocr_text, corrected_part1)
+    p2_migrated = _part2_text_migrated(part2.ocr_text, corrected_part2)
 
-    # Also guard PART2: if corrected PART2 is drastically different from
-    # original (cascade propagation), fall it back to OCR source.
-    if _part2_text_migrated(part2.ocr_text, corrected_part2):
-        corrected_part2 = part2.ocr_text
+    # --- If either side migrated, fall back BOTH sides to OCR source ---
+    if p1_migrated or p2_migrated:
+        return part1.ocr_text, part2.ocr_text, None
 
     # --- Heuristic mode: conservative, no SUBS_CONTENT reconstruction ---
     if not part1.hyphen_source_explicit:
         return corrected_part1, corrected_part2, None
 
-    # Extract boundary tokens
+    # --- Explicit mode: verify pair coherence ---
     tokens1 = corrected_part1.split()
     tokens2 = corrected_part2.split()
 
     if not tokens1 or not tokens2:
-        # Empty corrected text on either side — fall back to source
+        # Empty corrected text on either side — fall back both to source
         return part1.ocr_text, part2.ocr_text, None
 
     left_fragment = tokens1[-1]   # last token of part1 (possibly ends with "-")
     right_fragment = tokens2[0]   # first token of part2
-
-    # Strip trailing hyphen from left fragment for join
     left_bare = left_fragment.rstrip("-")
 
-    resolved_subs: Optional[str] = None
+    subs_content = part1.hyphen_subs_content
 
-    if part1.hyphen_subs_content:
-        expected = part1.hyphen_subs_content
+    if subs_content:
         joined = left_bare + right_fragment
-        # Accept if the join matches the expected logical word (case-insensitive)
-        if joined.lower() == expected.lower():
-            resolved_subs = expected
+        if joined.lower() == subs_content.lower():
+            # Pair is coherent: SUBS_CONTENT matches the join
+            return corrected_part1, corrected_part2, subs_content
         else:
-            # Mismatch — uncertain, keep boundaries but no SUBS_CONTENT
-            resolved_subs = None
+            # Pair is incoherent: SUBS_CONTENT doesn't match the
+            # corrected fragments.  Neutralise SUBS_CONTENT entirely.
+            return corrected_part1, corrected_part2, None
     else:
-        # No reference word: just accept the corrected texts as-is,
+        # No reference word — accept corrected texts as-is,
         # physical boundaries are preserved by returning them unchanged.
-        resolved_subs = None
-
-    return corrected_part1, corrected_part2, resolved_subs
+        return corrected_part1, corrected_part2, None
 
 
 def should_stay_in_same_chunk(

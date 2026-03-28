@@ -141,6 +141,7 @@ async def _run_chunk(
                 raw,
                 [lm.line_id for lm in chunk_lines],
                 hyphen_pairs if hyphen_pairs else None,
+                {lm.line_id: lm.ocr_text for lm in chunk_lines},
             )
             hyphen_violation = False
 
@@ -210,11 +211,13 @@ async def _run_chunk(
 
                 lm.corrected_text = final_p1
                 lm.status = LineStatus.CORRECTED
-                lm.hyphen_subs_content = subs or lm.hyphen_subs_content
+                # Only keep SUBS_CONTENT when reconcile positively confirmed it.
+                # None means "uncertain" — neutralise to avoid incoherent metadata.
+                lm.hyphen_subs_content = subs
 
                 part2.corrected_text = final_p2
                 part2.status = LineStatus.CORRECTED
-                part2.hyphen_subs_content = subs or part2.hyphen_subs_content
+                part2.hyphen_subs_content = subs
 
                 processed_part2.add(part2_id)
                 reconciled_count += 1

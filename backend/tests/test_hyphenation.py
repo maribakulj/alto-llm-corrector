@@ -147,7 +147,8 @@ def test_reconcile_explicit_preserves_boundaries():
 
 
 def test_reconcile_explicit_llm_completed_word():
-    """Explicit pair: LLM completed hyphenated word → PART1 falls back to OCR."""
+    """Explicit pair: LLM completed hyphenated word → BOTH sides fall back to OCR,
+    SUBS_CONTENT neutralised because the pair is incoherent."""
     part1 = make_line(
         "TL1", "néces-",
         hyphen_role=HyphenRole.PART1,
@@ -165,9 +166,11 @@ def test_reconcile_explicit_llm_completed_word():
     t1, t2, subs = reconcile_hyphen_pair(
         part1, part2, "nécessaires", "pour y faire"
     )
-    assert t1 == "néces-", "PART1 must fall back to OCR source when LLM completes the word"
-    assert t2 == "pour y faire", "PART2 corrected text is valid, keep it"
-    assert subs == "nécessaires", "SUBS_CONTENT preserved from source"
+    # PART1 migrated (word completion) → both sides fall back to OCR source
+    assert t1 == "néces-", "PART1 must fall back to OCR source"
+    assert t2 == "saires pour y faire", "PART2 must also fall back to OCR source"
+    # SUBS_CONTENT neutralised — the pair became incoherent
+    assert subs is None, "SUBS_CONTENT must be neutralised on incoherent fallback"
 
 
 def test_reconcile_heuristic_conservative():
@@ -192,8 +195,8 @@ def test_reconcile_heuristic_conservative():
     assert subs is None
 
 
-def test_reconcile_ambiguous_returns_source():
-    """When LLM join doesn't match expected subs_content, fall back to source."""
+def test_reconcile_ambiguous_returns_no_subs():
+    """When LLM join doesn't match expected subs_content, SUBS_CONTENT neutralised."""
     part1 = make_line(
         "TL1", "tra-",
         hyphen_role=HyphenRole.PART1,
@@ -207,15 +210,15 @@ def test_reconcile_ambiguous_returns_source():
         hyphen_source_explicit=True,
     )
     t1, t2, subs = reconcile_hyphen_pair(part1, part2, "tra-", "vauxxx")
-    # subs is None because join is wrong
+    # subs is None because join is wrong — SUBS_CONTENT neutralised
     assert subs is None
-    # But corrected texts are still returned (boundaries intact)
+    # Corrected texts returned (boundaries intact, no migration)
     assert t1 == "tra-"
     assert t2 == "vauxxx"
 
 
 def test_reconcile_heuristic_llm_completed_word():
-    """Heuristic: LLM completed hyphenated word (longer text, no dash) → PART1 falls back."""
+    """Heuristic: LLM completed hyphenated word → BOTH sides fall back."""
     part1 = make_line(
         "TL1", "néces-",
         hyphen_role=HyphenRole.PART1,
@@ -232,7 +235,7 @@ def test_reconcile_heuristic_llm_completed_word():
         part1, part2, "nécessaires", "pour y faire"
     )
     assert t1 == "néces-", "PART1 must fall back to OCR source"
-    assert t2 == "pour y faire", "PART2 corrected text is valid, keep it"
+    assert t2 == "saires pour y faire", "PART2 must also fall back to OCR source"
     assert subs is None
 
 
@@ -250,15 +253,15 @@ def test_reconcile_heuristic_llm_completed_word_part2_also_bad():
         hyphen_pair_line_id="TL1",
         hyphen_source_explicit=False,
     )
-    # empty corrected_part2
+    # PART1 completed → both fall back regardless of PART2 state
     t1, t2, subs = reconcile_hyphen_pair(part1, part2, "nécessaires", "")
     assert t1 == "néces-", "PART1 must fall back to OCR source"
-    assert t2 == "saires pour y faire", "PART2 empty → fall back to OCR source"
+    assert t2 == "saires pour y faire", "PART2 must fall back to OCR source"
     assert subs is None
-    # corrected_part2 with embedded newline
+    # With newline in PART2 — same behavior
     t1b, t2b, _ = reconcile_hyphen_pair(part1, part2, "nécessaires", "pour\ny faire")
     assert t1b == "néces-"
-    assert t2b == "saires pour y faire", "PART2 with newline → fall back to OCR source"
+    assert t2b == "saires pour y faire"
 
 
 def test_reconcile_heuristic_normal_case_unchanged():
@@ -328,6 +331,60 @@ def test_reconcile_no_line_fusion():
     assert "struction" not in t1
     # No text from part1 leaked into t2
     assert "con-" not in t2
+
+
+def test_reconcile_cascade_both_sides_fallback():
+    """When PART1 pulls text from PART2, BOTH sides must fall back to OCR source
+    and SUBS_CONTENT must be neutralised."""
+    part1 = make_line(
+        "TL1", "la plate-forme sur laquelle le cou-",
+        hyphen_role=HyphenRole.PART1,
+        hyphen_pair_line_id="TL2",
+        hyphen_subs_content="couronnement",
+        hyphen_source_explicit=True,
+    )
+    part2 = make_line(
+        "TL2", "ronnement va avoir lieu.",
+        hyphen_role=HyphenRole.PART2,
+        hyphen_pair_line_id="TL1",
+        hyphen_subs_content="couronnement",
+        hyphen_source_explicit=True,
+    )
+    # LLM completed the word and absorbed PART2 content into PART1
+    t1, t2, subs = reconcile_hyphen_pair(
+        part1, part2,
+        "la plate-forme sur laquelle le couronnement va avoir lieu.-",
+        "ronnement va avoir lieu.",
+    )
+    assert t1 == "la plate-forme sur laquelle le cou-", "PART1 → OCR source"
+    assert t2 == "ronnement va avoir lieu.", "PART2 → OCR source"
+    assert subs is None, "SUBS_CONTENT neutralised"
+
+
+def test_reconcile_explicit_coherent_correction():
+    """Explicit pair: LLM corrected both fragments but kept the split coherent."""
+    part1 = make_line(
+        "TL1", "nôccs-",
+        hyphen_role=HyphenRole.PART1,
+        hyphen_pair_line_id="TL2",
+        hyphen_subs_content="nécessaires",
+        hyphen_source_explicit=True,
+    )
+    part2 = make_line(
+        "TL2", "saires pour y faiie",
+        hyphen_role=HyphenRole.PART2,
+        hyphen_pair_line_id="TL1",
+        hyphen_subs_content="nécessaires",
+        hyphen_source_explicit=True,
+    )
+    # LLM fixed OCR errors while keeping the split
+    t1, t2, subs = reconcile_hyphen_pair(
+        part1, part2, "néces-", "saires pour y faire"
+    )
+    assert t1 == "néces-"
+    assert t2 == "saires pour y faire"
+    # SUBS_CONTENT matches: "néces" + "saires" = "nécessaires"
+    assert subs == "nécessaires"
 
 
 # ---------------------------------------------------------------------------
