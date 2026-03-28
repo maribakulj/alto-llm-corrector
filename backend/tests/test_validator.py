@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.jobs.validator import validate_llm_response, validate_llm_response_with_subs
+from app.jobs.validator import validate_llm_response
 from app.schemas import LLMResponse
 
 
@@ -125,16 +125,6 @@ def test_count_mismatch():
 # ---------------------------------------------------------------------------
 
 def test_hyphen_part2_empty_violation():
-    # LLM returned PART2 as empty string (which fails basic validation first)
-    # Use validate_llm_response_with_subs which builds on basic validation
-    raw = {
-        "lines": [
-            {"line_id": "L1", "corrected_text": "por-"},
-            {"line_id": "L2", "corrected_text": " "},
-        ]
-    }
-    # L2 has whitespace-only content — valid string but we can test via hyphen check
-    # More directly: pass L2 with empty corrected_text
     raw_empty = {
         "lines": [
             {"line_id": "L1", "corrected_text": "por-"},
@@ -142,7 +132,10 @@ def test_hyphen_part2_empty_violation():
         ]
     }
     with pytest.raises(ValueError):
-        validate_llm_response(raw_empty, ["L1", "L2"], hyphen_pairs={"L1": "L2", "L2": "L1"})
+        validate_llm_response(
+            raw_empty, ["L1", "L2"],
+            hyphen_pairs={"L1": "L2", "L2": "L1"},
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -150,7 +143,7 @@ def test_hyphen_part2_empty_violation():
 # ---------------------------------------------------------------------------
 
 def test_hyphen_part1_fusion_violation():
-    # PART1 corrected_text stripped of '-' equals full subs_content → fusion
+    """PART1 corrected_text stripped of '-' equals full subs_content → fusion."""
     raw = {
         "lines": [
             {"line_id": "L1", "corrected_text": "porte"},  # full word, no hyphen
@@ -158,8 +151,51 @@ def test_hyphen_part1_fusion_violation():
         ]
     }
     with pytest.raises(ValueError, match="hyphen_integrity_violation"):
-        validate_llm_response_with_subs(
+        validate_llm_response(
             raw,
             ["L1", "L2"],
-            hyphen_triples=[("L1", "L2", "porte")],
+            hyphen_pairs={"L1": "L2", "L2": "L1"},
+            hyphen_subs={"L1": "porte"},
+        )
+
+
+# ---------------------------------------------------------------------------
+# test_hyphen_part1_drift_violation
+# ---------------------------------------------------------------------------
+
+def test_hyphen_part1_drift_violation():
+    """PART1 grew by more than 2 words → text migration suspected."""
+    raw = {
+        "lines": [
+            {"line_id": "L1", "corrected_text": "nécessaires pour y faire"},
+            {"line_id": "L2", "corrected_text": "suite du texte"},
+        ]
+    }
+    with pytest.raises(ValueError, match="hyphen_integrity_violation"):
+        validate_llm_response(
+            raw,
+            ["L1", "L2"],
+            hyphen_pairs={"L1": "L2", "L2": "L1"},
+            ocr_texts={"L1": "néces-", "L2": "saires pour y faire suite du texte"},
+        )
+
+
+# ---------------------------------------------------------------------------
+# test_hyphen_fusion_multiword_part1
+# ---------------------------------------------------------------------------
+
+def test_hyphen_fusion_multiword_part1():
+    """PART1 with multiple words — last word equals subs → fusion detected."""
+    raw = {
+        "lines": [
+            {"line_id": "L1", "corrected_text": "Il nécessaires"},
+            {"line_id": "L2", "corrected_text": "pour y faire"},
+        ]
+    }
+    with pytest.raises(ValueError, match="hyphen_integrity_violation.*fusion"):
+        validate_llm_response(
+            raw,
+            ["L1", "L2"],
+            hyphen_pairs={"L1": "L2", "L2": "L1"},
+            hyphen_subs={"L1": "nécessaires"},
         )

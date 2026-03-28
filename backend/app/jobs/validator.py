@@ -11,6 +11,7 @@ def validate_llm_response(
     expected_line_ids: list[str],
     hyphen_pairs: Optional[dict[str, str]] = None,
     ocr_texts: Optional[dict[str, str]] = None,
+    hyphen_subs: Optional[dict[str, str]] = None,
 ) -> LLMResponse:
     """
     Validate an LLM response dict and return a typed LLMResponse.
@@ -27,6 +28,11 @@ def validate_llm_response(
     ocr_texts:
         Mapping of line_id → original OCR text.  Used together with
         hyphen_pairs for semantic drift checks on hyphen-pair lines.
+    hyphen_subs:
+        Mapping of PART1 line_id → subs_content (the expected full word
+        for the hyphen pair).  Used for fusion detection: if PART1
+        corrected text equals the full word, the LLM illegally merged
+        the pair.
 
     Raises
     ------
@@ -89,7 +95,8 @@ def validate_llm_response(
     if hyphen_pairs:
         text_by_id = {o.line_id: o.corrected_text for o in outputs}
         _validate_hyphen_integrity(
-            text_by_id, hyphen_pairs, expected_set, ocr_texts or {},
+            text_by_id, hyphen_pairs, expected_set,
+            ocr_texts or {}, hyphen_subs or {},
         )
 
     return LLMResponse(lines=outputs)
@@ -100,6 +107,7 @@ def _validate_hyphen_integrity(
     hyphen_pairs: dict[str, str],
     chunk_ids: set[str],
     ocr_texts: dict[str, str],
+    hyphen_subs: dict[str, str],
 ) -> None:
     """
     Check that no hyphen-pair line has been illegally merged or shifted.
@@ -111,6 +119,7 @@ def _validate_hyphen_integrity(
     1. Neither side is empty.
     2. PART1 word count didn't grow drastically (text pulled from PART2).
     3. PART2 word count didn't shrink drastically (absorbed by PART1).
+    4. PART1 doesn't contain the full logical word (fusion with subs_content).
     """
     checked_pairs: set[frozenset[str]] = set()
 
@@ -143,6 +152,23 @@ def _validate_hyphen_integrity(
         if ocr_a and ocr_b:
             _check_pair_drift(id_a, id_b, text_a, text_b, ocr_a, ocr_b)
 
+    # 4. Fusion check: PART1 contains the full logical word
+    for part1_id, subs_content in hyphen_subs.items():
+        if not subs_content or part1_id not in text_by_id:
+            continue
+        part1_text = text_by_id[part1_id]
+        # Strip trailing dash and whitespace to get the bare text
+        part1_words = part1_text.rstrip().rstrip("-").split()
+        if not part1_words:
+            continue
+        part1_last_word = part1_words[-1]
+        if part1_last_word.lower() == subs_content.lower():
+            raise ValueError(
+                f"hyphen_integrity_violation: PART1 line {part1_id!r} "
+                f"contains full logical word {subs_content!r} "
+                f"(fusion detected)"
+            )
+
 
 def _check_pair_drift(
     id_a: str,
@@ -171,45 +197,3 @@ def _check_pair_drift(
             f"hyphen_integrity_violation: PART2 line {id_b!r} shrank from "
             f"{ocr_b_wc} to {cor_b_wc} words (text migration suspected)"
         )
-
-
-def validate_llm_response_with_subs(
-    raw: dict,
-    expected_line_ids: list[str],
-    hyphen_triples: Optional[list[tuple[str, str, Optional[str]]]] = None,
-    ocr_texts: Optional[dict[str, str]] = None,
-) -> LLMResponse:
-    """
-    Extended validation that also checks PART1 fusion against subs_content.
-
-    hyphen_triples: list of (part1_id, part2_id, subs_content_or_None)
-    """
-    # First run basic + simple hyphen check
-    if hyphen_triples:
-        simple_pairs = {}
-        for p1, p2, _ in hyphen_triples:
-            simple_pairs[p1] = p2
-            simple_pairs[p2] = p1
-    else:
-        simple_pairs = None
-
-    response = validate_llm_response(
-        raw, expected_line_ids, simple_pairs, ocr_texts,
-    )
-
-    # Fusion check
-    if hyphen_triples:
-        text_by_id = {o.line_id: o.corrected_text for o in response.lines}
-        for part1_id, part2_id, subs_content in hyphen_triples:
-            if subs_content is None:
-                continue
-            part1_text = text_by_id.get(part1_id, "")
-            # Violation: LLM merged — corrected_part1 stripped of hyphen equals full word
-            if part1_text.rstrip("-").lower() == subs_content.lower():
-                raise ValueError(
-                    f"hyphen_integrity_violation: PART1 line {part1_id!r} "
-                    f"contains the full logical word {subs_content!r} "
-                    f"(fusion detected)"
-                )
-
-    return response

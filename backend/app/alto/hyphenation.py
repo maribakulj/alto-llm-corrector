@@ -111,35 +111,39 @@ def _part2_text_migrated(ocr_text: str, corrected_text: str) -> bool:
     return False
 
 
-def _pair_is_coherent(
-    corrected_part1: str,
-    corrected_part2: str,
-    subs_content: Optional[str],
-) -> bool:
+def _part2_boundary_word_diverged(ocr_text: str, corrected_text: str) -> bool:
     """
-    Return True if PART1 + PART2 form a coherent hyphen pair.
+    Return True if the first word of corrected PART2 is completely different
+    from the first word of OCR PART2.
 
-    When subs_content is known, the join of the boundary fragments must
-    match it.  When unknown, we only check that PART1 still ends with a
-    trailing hyphen (indicating the LLM respected the split).
+    The first word of PART2 is the continuation of the hyphenated word from
+    PART1.  If the LLM replaced it with an unrelated word (e.g. "saires" →
+    "urgentes"), the hyphen pair is semantically broken.
+
+    Minor OCR corrections (same first 2 chars, similar length) are allowed.
     """
-    tokens1 = corrected_part1.split()
-    tokens2 = corrected_part2.split()
-    if not tokens1 or not tokens2:
+    ocr_words = ocr_text.split()
+    cor_words = corrected_text.split()
+
+    if not ocr_words or not cor_words:
+        return False  # empty cases handled by migration/empty checks
+
+    ocr_first = ocr_words[0].lower()
+    cor_first = cor_words[0].lower()
+
+    if ocr_first == cor_first:
         return False
 
-    left_bare = tokens1[-1].rstrip("-")
-    right_fragment = tokens2[0]
+    # Accept minor corrections: first 2 chars match and length ratio reasonable
+    prefix_len = min(2, len(ocr_first), len(cor_first))
+    if (
+        prefix_len >= 2
+        and ocr_first[:prefix_len] == cor_first[:prefix_len]
+        and 0.5 <= len(cor_first) / max(1, len(ocr_first)) <= 2.0
+    ):
+        return False
 
-    if subs_content:
-        joined = left_bare + right_fragment
-        return joined.lower() == subs_content.lower()
-
-    # No subs_content reference — coherent if PART1 still has a trailing
-    # hyphen (LLM didn't complete the word) and boundary tokens look
-    # like fragments (neither side is a full standalone word by itself
-    # that would make no sense split).
-    return corrected_part1.rstrip().endswith("-")
+    return True
 
 
 # ---------------------------------------------------------------------------
@@ -157,52 +161,67 @@ def reconcile_hyphen_pair(
 
     Returns (final_text_part1, final_text_part2, resolved_subs_content).
 
-    Guarantees:
+    Invariants enforced:
     - The two physical lines remain distinct.
     - No text migrates from one line to the other.
+    - PART1 must still end with a trailing hyphen.
     - If either side migrated, BOTH sides fall back to OCR source and
-      SUBS_CONTENT is neutralised (None) unless the pair can be
-      positively verified as coherent.
-    - On ambiguity, fall back to OCR source texts.
+      SUBS_CONTENT is neutralised (None).
+    - For explicit pairs: if subs_content is known and the join of
+      boundary fragments doesn't match, BOTH sides fall back.
+    - For heuristic pairs: if the boundary word diverged, BOTH sides
+      fall back.
+    - No incoherent pair (mixed OCR+corrected) can survive.
     """
-    p1_migrated = _part1_text_migrated(part1.ocr_text, corrected_part1)
-    p2_migrated = _part2_text_migrated(part2.ocr_text, corrected_part2)
+    _fallback = (part1.ocr_text, part2.ocr_text, None)
 
-    # --- If either side migrated, fall back BOTH sides to OCR source ---
-    if p1_migrated or p2_migrated:
-        return part1.ocr_text, part2.ocr_text, None
+    # --- Migration check (PART1 extended or PART2 collapsed) ---
+    if _part1_text_migrated(part1.ocr_text, corrected_part1):
+        return _fallback
+    if _part2_text_migrated(part2.ocr_text, corrected_part2):
+        return _fallback
 
-    # --- Heuristic mode: conservative, no SUBS_CONTENT reconstruction ---
-    if not part1.hyphen_source_explicit:
-        return corrected_part1, corrected_part2, None
+    # --- PART1 must still end with a trailing hyphen ---
+    if not corrected_part1.rstrip().endswith("-"):
+        return _fallback
 
-    # --- Explicit mode: verify pair coherence ---
+    # --- Empty corrected text on either side ---
     tokens1 = corrected_part1.split()
     tokens2 = corrected_part2.split()
-
     if not tokens1 or not tokens2:
-        # Empty corrected text on either side — fall back both to source
-        return part1.ocr_text, part2.ocr_text, None
+        return _fallback
 
-    left_fragment = tokens1[-1]   # last token of part1 (possibly ends with "-")
-    right_fragment = tokens2[0]   # first token of part2
-    left_bare = left_fragment.rstrip("-")
+    # =================================================================
+    # Explicit mode: subs_content is the authority for coherence
+    # =================================================================
+    if part1.hyphen_source_explicit:
+        subs_content = part1.hyphen_subs_content
 
-    subs_content = part1.hyphen_subs_content
+        if subs_content:
+            left_bare = tokens1[-1].rstrip("-")
+            right_fragment = tokens2[0]
+            joined = left_bare + right_fragment
 
-    if subs_content:
-        joined = left_bare + right_fragment
-        if joined.lower() == subs_content.lower():
-            # Pair is coherent: SUBS_CONTENT matches the join
-            return corrected_part1, corrected_part2, subs_content
-        else:
-            # Pair is incoherent: SUBS_CONTENT doesn't match the
-            # corrected fragments.  Neutralise SUBS_CONTENT entirely.
-            return corrected_part1, corrected_part2, None
-    else:
-        # No reference word — accept corrected texts as-is,
-        # physical boundaries are preserved by returning them unchanged.
+            if joined.lower() == subs_content.lower():
+                # Pair is coherent: correction accepted
+                return corrected_part1, corrected_part2, subs_content
+            else:
+                # Pair is incoherent: join doesn't match subs_content.
+                # Fall back BOTH sides — never leave a mixed pair.
+                return _fallback
+
+        # No subs_content reference — use boundary word check as safety net
+        if _part2_boundary_word_diverged(part2.ocr_text, corrected_part2):
+            return _fallback
         return corrected_part1, corrected_part2, None
+
+    # =================================================================
+    # Heuristic mode: conservative, no SUBS_CONTENT reconstruction
+    # =================================================================
+    if _part2_boundary_word_diverged(part2.ocr_text, corrected_part2):
+        return _fallback
+
+    return corrected_part1, corrected_part2, None
 
 
 def should_stay_in_same_chunk(
