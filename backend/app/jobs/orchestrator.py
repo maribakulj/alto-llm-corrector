@@ -137,11 +137,20 @@ async def _run_chunk(
                 temperature=temperature,
             )
 
+            # Build subs mapping for fusion detection in the validator
+            hyphen_subs = {
+                lm.line_id: lm.hyphen_subs_content
+                for lm in chunk_lines
+                if lm.hyphen_role == HyphenRole.PART1
+                and lm.hyphen_subs_content
+            }
+
             response = validate_llm_response(
                 raw,
                 [lm.line_id for lm in chunk_lines],
                 hyphen_pairs if hyphen_pairs else None,
                 {lm.line_id: lm.ocr_text for lm in chunk_lines},
+                hyphen_subs if hyphen_subs else None,
             )
             hyphen_violation = False
 
@@ -368,7 +377,7 @@ async def run_job(
             if not pages_for_file:
                 continue
 
-            xml_bytes = rewrite_alto_file(xml_path, pages_for_file, provider_name, model)
+            xml_bytes, _rewriter_metrics = rewrite_alto_file(xml_path, pages_for_file, provider_name, model)
             stem = xml_path.stem
             out_path = output_dir / f"{stem}_corrected.xml"
             out_path.write_bytes(xml_bytes)

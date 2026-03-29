@@ -119,7 +119,7 @@ def test_enrich_no_hyphen_fields_on_normal_line():
 
 
 # ---------------------------------------------------------------------------
-# reconcile_hyphen_pair
+# reconcile_hyphen_pair — Explicit mode
 # ---------------------------------------------------------------------------
 
 def test_reconcile_explicit_preserves_boundaries():
@@ -139,16 +139,14 @@ def test_reconcile_explicit_preserves_boundaries():
         hyphen_source_explicit=True,
     )
     t1, t2, subs = reconcile_hyphen_pair(part1, part2, "Il por-", "te ouverte")
-    # Physical boundaries preserved
     assert t1 == "Il por-"
     assert t2 == "te ouverte"
-    # SUBS_CONTENT resolved: left_bare="por" + right="te" = "porte"
     assert subs == "porte"
 
 
 def test_reconcile_explicit_llm_completed_word():
-    """Explicit pair: LLM completed hyphenated word → BOTH sides fall back to OCR,
-    SUBS_CONTENT neutralised because the pair is incoherent."""
+    """Explicit: LLM completed hyphenated word → BOTH sides fall back,
+    SUBS_CONTENT neutralised."""
     part1 = make_line(
         "TL1", "néces-",
         hyphen_role=HyphenRole.PART1,
@@ -166,12 +164,226 @@ def test_reconcile_explicit_llm_completed_word():
     t1, t2, subs = reconcile_hyphen_pair(
         part1, part2, "nécessaires", "pour y faire"
     )
-    # PART1 migrated (word completion) → both sides fall back to OCR source
     assert t1 == "néces-", "PART1 must fall back to OCR source"
     assert t2 == "saires pour y faire", "PART2 must also fall back to OCR source"
-    # SUBS_CONTENT neutralised — the pair became incoherent
-    assert subs is None, "SUBS_CONTENT must be neutralised on incoherent fallback"
+    assert subs is None, "SUBS_CONTENT must be neutralised"
 
+
+def test_reconcile_explicit_subs_mismatch_falls_back():
+    """Explicit: LLM kept the dash but gave PART2 a wrong first word.
+    Join doesn't match subs_content → BOTH sides fall back to OCR."""
+    part1 = make_line(
+        "TL1", "néces-",
+        hyphen_role=HyphenRole.PART1,
+        hyphen_pair_line_id="TL2",
+        hyphen_subs_content="nécessaires",
+        hyphen_source_explicit=True,
+    )
+    part2 = make_line(
+        "TL2", "saires pour y faire",
+        hyphen_role=HyphenRole.PART2,
+        hyphen_pair_line_id="TL1",
+        hyphen_subs_content="nécessaires",
+        hyphen_source_explicit=True,
+    )
+    # LLM replaced PART2 first word with "urgentes"
+    t1, t2, subs = reconcile_hyphen_pair(
+        part1, part2, "néces-", "urgentes pour y faire"
+    )
+    assert t1 == "néces-", "PART1 must fall back to OCR"
+    assert t2 == "saires pour y faire", "PART2 must fall back to OCR"
+    assert subs is None, "SUBS_CONTENT must be neutralised"
+
+
+def test_reconcile_explicit_part2_absurd_word():
+    """Explicit: PART2 replaced with a completely unrelated word like 'la'.
+    This is the documented bug — must never produce a mixed incoherent pair."""
+    part1 = make_line(
+        "TL1", "pratica-",
+        hyphen_role=HyphenRole.PART1,
+        hyphen_pair_line_id="TL2",
+        hyphen_subs_content="praticables",
+        hyphen_source_explicit=True,
+    )
+    part2 = make_line(
+        "TL2", "bles du chemin",
+        hyphen_role=HyphenRole.PART2,
+        hyphen_pair_line_id="TL1",
+        hyphen_subs_content="praticables",
+        hyphen_source_explicit=True,
+    )
+    # LLM replaced PART2 first word with "la"
+    t1, t2, subs = reconcile_hyphen_pair(
+        part1, part2, "pratica-", "la du chemin"
+    )
+    assert t1 == "pratica-", "PART1 → OCR source"
+    assert t2 == "bles du chemin", "PART2 → OCR source"
+    assert subs is None
+
+
+def test_reconcile_explicit_condamne_coherent():
+    """Explicit: 'con- / damne' with correct LLM output → accepted."""
+    part1 = make_line(
+        "TL1", "con-",
+        hyphen_role=HyphenRole.PART1,
+        hyphen_pair_line_id="TL2",
+        hyphen_subs_content="condamne",
+        hyphen_source_explicit=True,
+    )
+    part2 = make_line(
+        "TL2", "damne à mort",
+        hyphen_role=HyphenRole.PART2,
+        hyphen_pair_line_id="TL1",
+        hyphen_subs_content="condamne",
+        hyphen_source_explicit=True,
+    )
+    t1, t2, subs = reconcile_hyphen_pair(
+        part1, part2, "con-", "damne à mort"
+    )
+    assert t1 == "con-"
+    assert t2 == "damne à mort"
+    assert subs == "condamne"
+
+
+def test_reconcile_explicit_condamne_fusion():
+    """Explicit: LLM fused 'con- / damne' into 'condamne' → both fall back."""
+    part1 = make_line(
+        "TL1", "con-",
+        hyphen_role=HyphenRole.PART1,
+        hyphen_pair_line_id="TL2",
+        hyphen_subs_content="condamne",
+        hyphen_source_explicit=True,
+    )
+    part2 = make_line(
+        "TL2", "damne à mort",
+        hyphen_role=HyphenRole.PART2,
+        hyphen_pair_line_id="TL1",
+        hyphen_subs_content="condamne",
+        hyphen_source_explicit=True,
+    )
+    t1, t2, subs = reconcile_hyphen_pair(
+        part1, part2, "condamne", "à mort"
+    )
+    assert t1 == "con-", "PART1 → OCR source"
+    assert t2 == "damne à mort", "PART2 → OCR source"
+    assert subs is None
+
+
+def test_reconcile_explicit_coherent_correction():
+    """Explicit: LLM corrected OCR errors but kept the split coherent."""
+    part1 = make_line(
+        "TL1", "nôccs-",
+        hyphen_role=HyphenRole.PART1,
+        hyphen_pair_line_id="TL2",
+        hyphen_subs_content="nécessaires",
+        hyphen_source_explicit=True,
+    )
+    part2 = make_line(
+        "TL2", "saires pour y faiie",
+        hyphen_role=HyphenRole.PART2,
+        hyphen_pair_line_id="TL1",
+        hyphen_subs_content="nécessaires",
+        hyphen_source_explicit=True,
+    )
+    t1, t2, subs = reconcile_hyphen_pair(
+        part1, part2, "néces-", "saires pour y faire"
+    )
+    assert t1 == "néces-"
+    assert t2 == "saires pour y faire"
+    assert subs == "nécessaires"
+
+
+def test_reconcile_explicit_part1_lost_dash():
+    """Explicit: LLM dropped the trailing dash → both fall back."""
+    part1 = make_line(
+        "TL1", "néces-",
+        hyphen_role=HyphenRole.PART1,
+        hyphen_pair_line_id="TL2",
+        hyphen_subs_content="nécessaires",
+        hyphen_source_explicit=True,
+    )
+    part2 = make_line(
+        "TL2", "saires pour y faire",
+        hyphen_role=HyphenRole.PART2,
+        hyphen_pair_line_id="TL1",
+        hyphen_subs_content="nécessaires",
+        hyphen_source_explicit=True,
+    )
+    t1, t2, subs = reconcile_hyphen_pair(
+        part1, part2, "néces", "saires pour y faire"
+    )
+    assert t1 == "néces-", "PART1 → OCR source (dash was lost)"
+    assert t2 == "saires pour y faire", "PART2 → OCR source"
+    assert subs is None
+
+
+def test_reconcile_ambiguous_returns_no_subs():
+    """When LLM join doesn't match subs_content → BOTH sides fall back."""
+    part1 = make_line(
+        "TL1", "tra-",
+        hyphen_role=HyphenRole.PART1,
+        hyphen_subs_content="travail",
+        hyphen_source_explicit=True,
+    )
+    part2 = make_line(
+        "TL2", "vauxxx",
+        hyphen_role=HyphenRole.PART2,
+        hyphen_subs_content="travail",
+        hyphen_source_explicit=True,
+    )
+    t1, t2, subs = reconcile_hyphen_pair(part1, part2, "tra-", "vauxxx")
+    assert subs is None
+    # Both fall back to OCR source (OCR == corrected in this case)
+    assert t1 == "tra-"
+    assert t2 == "vauxxx"
+
+
+def test_reconcile_explicit_no_subs_boundary_ok():
+    """Explicit without subs_content: PART1 has dash, boundary word OK → accepted."""
+    part1 = make_line(
+        "TL1", "por-",
+        hyphen_role=HyphenRole.PART1,
+        hyphen_pair_line_id="TL2",
+        hyphen_subs_content=None,
+        hyphen_source_explicit=True,
+    )
+    part2 = make_line(
+        "TL2", "te ouverte",
+        hyphen_role=HyphenRole.PART2,
+        hyphen_pair_line_id="TL1",
+        hyphen_source_explicit=True,
+    )
+    t1, t2, subs = reconcile_hyphen_pair(part1, part2, "por-", "te ouverte")
+    assert t1 == "por-"
+    assert t2 == "te ouverte"
+    assert subs is None
+
+
+def test_reconcile_explicit_no_subs_boundary_diverged():
+    """Explicit without subs_content: boundary word diverged → both fall back."""
+    part1 = make_line(
+        "TL1", "por-",
+        hyphen_role=HyphenRole.PART1,
+        hyphen_pair_line_id="TL2",
+        hyphen_subs_content=None,
+        hyphen_source_explicit=True,
+    )
+    part2 = make_line(
+        "TL2", "te ouverte",
+        hyphen_role=HyphenRole.PART2,
+        hyphen_pair_line_id="TL1",
+        hyphen_source_explicit=True,
+    )
+    # LLM changed PART2 first word from "te" to "la" (completely different)
+    t1, t2, subs = reconcile_hyphen_pair(part1, part2, "por-", "la ouverte")
+    assert t1 == "por-", "PART1 → OCR source"
+    assert t2 == "te ouverte", "PART2 → OCR source"
+    assert subs is None
+
+
+# ---------------------------------------------------------------------------
+# reconcile_hyphen_pair — Heuristic mode
+# ---------------------------------------------------------------------------
 
 def test_reconcile_heuristic_conservative():
     """Heuristic pair: subs_content must be None, corrected texts returned as-is."""
@@ -195,28 +407,6 @@ def test_reconcile_heuristic_conservative():
     assert subs is None
 
 
-def test_reconcile_ambiguous_returns_no_subs():
-    """When LLM join doesn't match expected subs_content, SUBS_CONTENT neutralised."""
-    part1 = make_line(
-        "TL1", "tra-",
-        hyphen_role=HyphenRole.PART1,
-        hyphen_subs_content="travail",
-        hyphen_source_explicit=True,
-    )
-    part2 = make_line(
-        "TL2", "vauxxx",   # garbled — "tra" + "vauxxx" != "travail"
-        hyphen_role=HyphenRole.PART2,
-        hyphen_subs_content="travail",
-        hyphen_source_explicit=True,
-    )
-    t1, t2, subs = reconcile_hyphen_pair(part1, part2, "tra-", "vauxxx")
-    # subs is None because join is wrong — SUBS_CONTENT neutralised
-    assert subs is None
-    # Corrected texts returned (boundaries intact, no migration)
-    assert t1 == "tra-"
-    assert t2 == "vauxxx"
-
-
 def test_reconcile_heuristic_llm_completed_word():
     """Heuristic: LLM completed hyphenated word → BOTH sides fall back."""
     part1 = make_line(
@@ -235,7 +425,7 @@ def test_reconcile_heuristic_llm_completed_word():
         part1, part2, "nécessaires", "pour y faire"
     )
     assert t1 == "néces-", "PART1 must fall back to OCR source"
-    assert t2 == "saires pour y faire", "PART2 must also fall back to OCR source"
+    assert t2 == "saires pour y faire", "PART2 must also fall back"
     assert subs is None
 
 
@@ -253,19 +443,14 @@ def test_reconcile_heuristic_llm_completed_word_part2_also_bad():
         hyphen_pair_line_id="TL1",
         hyphen_source_explicit=False,
     )
-    # PART1 completed → both fall back regardless of PART2 state
     t1, t2, subs = reconcile_hyphen_pair(part1, part2, "nécessaires", "")
-    assert t1 == "néces-", "PART1 must fall back to OCR source"
-    assert t2 == "saires pour y faire", "PART2 must fall back to OCR source"
+    assert t1 == "néces-"
+    assert t2 == "saires pour y faire"
     assert subs is None
-    # With newline in PART2 — same behavior
-    t1b, t2b, _ = reconcile_hyphen_pair(part1, part2, "nécessaires", "pour\ny faire")
-    assert t1b == "néces-"
-    assert t2b == "saires pour y faire"
 
 
 def test_reconcile_heuristic_normal_case_unchanged():
-    """Heuristic: LLM preserved the trailing dash → fallback must NOT trigger."""
+    """Heuristic: LLM preserved the trailing dash → correction accepted."""
     part1 = make_line(
         "TL1", "néces-",
         hyphen_role=HyphenRole.PART1,
@@ -281,7 +466,6 @@ def test_reconcile_heuristic_normal_case_unchanged():
     t1, t2, subs = reconcile_hyphen_pair(
         part1, part2, "néces-", "saires pour y faire"
     )
-    # LLM respected the dash: correction accepted as-is, no OCR fallback
     assert t1 == "néces-"
     assert t2 == "saires pour y faire"
     assert subs is None
@@ -302,10 +486,57 @@ def test_reconcile_heuristic_tiret_preserved():
         hyphen_source_explicit=False,
     )
     t1, t2, subs = reconcile_hyphen_pair(part1, part2, "Rus-", "sie le tsar.")
-    assert t1 == "Rus-", "LLM respected the dash, keep correction"
+    assert t1 == "Rus-"
     assert t2 == "sie le tsar."
     assert subs is None
 
+
+def test_reconcile_heuristic_part1_lost_dash():
+    """Heuristic: LLM dropped the trailing dash → both fall back."""
+    part1 = make_line(
+        "TL1", "Rus-",
+        hyphen_role=HyphenRole.PART1,
+        hyphen_pair_line_id="TL2",
+        hyphen_source_explicit=False,
+    )
+    part2 = make_line(
+        "TL2", "sie le tsar.",
+        hyphen_role=HyphenRole.PART2,
+        hyphen_pair_line_id="TL1",
+        hyphen_source_explicit=False,
+    )
+    t1, t2, subs = reconcile_hyphen_pair(part1, part2, "Rus", "sie le tsar.")
+    assert t1 == "Rus-", "PART1 → OCR source (dash was lost)"
+    assert t2 == "sie le tsar.", "PART2 → OCR source"
+    assert subs is None
+
+
+def test_reconcile_heuristic_boundary_word_diverged():
+    """Heuristic: PART2 first word completely changed → both fall back."""
+    part1 = make_line(
+        "TL1", "boule-",
+        hyphen_role=HyphenRole.PART1,
+        hyphen_pair_line_id="TL2",
+        hyphen_source_explicit=False,
+    )
+    part2 = make_line(
+        "TL2", "vard du roi",
+        hyphen_role=HyphenRole.PART2,
+        hyphen_pair_line_id="TL1",
+        hyphen_source_explicit=False,
+    )
+    # LLM replaced "vard" with "I'armée"
+    t1, t2, subs = reconcile_hyphen_pair(
+        part1, part2, "boule-", "I'armée du roi"
+    )
+    assert t1 == "boule-", "PART1 → OCR source"
+    assert t2 == "vard du roi", "PART2 → OCR source"
+    assert subs is None
+
+
+# ---------------------------------------------------------------------------
+# reconcile_hyphen_pair — No-fusion / no-merge invariant
+# ---------------------------------------------------------------------------
 
 def test_reconcile_no_line_fusion():
     """Result must always be two distinct non-empty strings."""
@@ -324,18 +555,14 @@ def test_reconcile_no_line_fusion():
     t1, t2, subs = reconcile_hyphen_pair(
         part1, part2, "con-", "struction solide"
     )
-    # Both lines must remain non-empty and distinct
     assert t1 and t2
     assert t1 != t2
-    # No text from part2 leaked into t1
     assert "struction" not in t1
-    # No text from part1 leaked into t2
     assert "con-" not in t2
 
 
 def test_reconcile_cascade_both_sides_fallback():
-    """When PART1 pulls text from PART2, BOTH sides must fall back to OCR source
-    and SUBS_CONTENT must be neutralised."""
+    """When PART1 pulls text from PART2, BOTH sides fall back."""
     part1 = make_line(
         "TL1", "la plate-forme sur laquelle le cou-",
         hyphen_role=HyphenRole.PART1,
@@ -350,7 +577,6 @@ def test_reconcile_cascade_both_sides_fallback():
         hyphen_subs_content="couronnement",
         hyphen_source_explicit=True,
     )
-    # LLM completed the word and absorbed PART2 content into PART1
     t1, t2, subs = reconcile_hyphen_pair(
         part1, part2,
         "la plate-forme sur laquelle le couronnement va avoir lieu.-",
@@ -358,33 +584,57 @@ def test_reconcile_cascade_both_sides_fallback():
     )
     assert t1 == "la plate-forme sur laquelle le cou-", "PART1 → OCR source"
     assert t2 == "ronnement va avoir lieu.", "PART2 → OCR source"
-    assert subs is None, "SUBS_CONTENT neutralised"
+    assert subs is None
 
 
-def test_reconcile_explicit_coherent_correction():
-    """Explicit pair: LLM corrected both fragments but kept the split coherent."""
+# ---------------------------------------------------------------------------
+# reconcile_hyphen_pair — SUBS_CONTENT neutralisation
+# ---------------------------------------------------------------------------
+
+def test_reconcile_subs_content_neutralised_on_mismatch():
+    """SUBS_CONTENT must be None when the pair is incoherent,
+    even if a subs_content was originally known."""
     part1 = make_line(
-        "TL1", "nôccs-",
+        "TL1", "pratica-",
         hyphen_role=HyphenRole.PART1,
         hyphen_pair_line_id="TL2",
-        hyphen_subs_content="nécessaires",
+        hyphen_subs_content="praticables",
         hyphen_source_explicit=True,
     )
     part2 = make_line(
-        "TL2", "saires pour y faiie",
+        "TL2", "bles dans ce terrain",
         hyphen_role=HyphenRole.PART2,
         hyphen_pair_line_id="TL1",
-        hyphen_subs_content="nécessaires",
+        hyphen_subs_content="praticables",
         hyphen_source_explicit=True,
     )
-    # LLM fixed OCR errors while keeping the split
-    t1, t2, subs = reconcile_hyphen_pair(
-        part1, part2, "néces-", "saires pour y faire"
+    # LLM changed PART2 to start with "urgentes" instead of "bles"
+    _, _, subs = reconcile_hyphen_pair(
+        part1, part2, "pratica-", "urgentes dans ce terrain"
     )
-    assert t1 == "néces-"
-    assert t2 == "saires pour y faire"
-    # SUBS_CONTENT matches: "néces" + "saires" = "nécessaires"
-    assert subs == "nécessaires"
+    assert subs is None, "SUBS_CONTENT must be neutralised on incoherent pair"
+
+
+def test_reconcile_subs_content_preserved_when_coherent():
+    """SUBS_CONTENT must be preserved when pair is coherent."""
+    part1 = make_line(
+        "TL1", "pratica-",
+        hyphen_role=HyphenRole.PART1,
+        hyphen_pair_line_id="TL2",
+        hyphen_subs_content="praticables",
+        hyphen_source_explicit=True,
+    )
+    part2 = make_line(
+        "TL2", "bles dans ce terrain",
+        hyphen_role=HyphenRole.PART2,
+        hyphen_pair_line_id="TL1",
+        hyphen_subs_content="praticables",
+        hyphen_source_explicit=True,
+    )
+    _, _, subs = reconcile_hyphen_pair(
+        part1, part2, "pratica-", "bles dans ce terrain"
+    )
+    assert subs == "praticables"
 
 
 # ---------------------------------------------------------------------------
@@ -403,7 +653,6 @@ def test_should_stay_linked_pair():
         hyphen_pair_line_id="TL1",
     )
     assert should_stay_in_same_chunk(part1, part2) is True
-    # Symmetric
     assert should_stay_in_same_chunk(part2, part1) is True
 
 
@@ -414,11 +663,10 @@ def test_should_stay_unrelated_lines():
 
 
 def test_should_stay_part1_wrong_pair_id():
-    """PART1 pointing to a different line must not match."""
     part1 = make_line(
         "TL1", "por-",
         hyphen_role=HyphenRole.PART1,
-        hyphen_pair_line_id="TL99",  # points elsewhere
+        hyphen_pair_line_id="TL99",
     )
     part2 = make_line(
         "TL2", "te",
