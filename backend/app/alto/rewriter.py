@@ -2,12 +2,34 @@ from __future__ import annotations
 
 import copy
 import re
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
 from lxml import etree
 
 from app.schemas import HyphenRole, LineManifest, PageManifest
+
+
+# ---------------------------------------------------------------------------
+# Metrics
+# ---------------------------------------------------------------------------
+
+@dataclass
+class RewriterMetrics:
+    """Counts of lines per rewriter path."""
+    untouched: int = 0
+    subs_only: int = 0
+    fast_path: int = 0
+    slow_path: int = 0
+
+    @property
+    def total_processed(self) -> int:
+        return self.subs_only + self.fast_path + self.slow_path
+
+    @property
+    def total_lines(self) -> int:
+        return self.untouched + self.subs_only + self.fast_path + self.slow_path
 
 # ---------------------------------------------------------------------------
 # Namespace helpers (mirrors parser)
@@ -438,7 +460,7 @@ def rewrite_alto_file(
     page_manifests: list[PageManifest],
     provider: str,
     model: str,
-) -> bytes:
+) -> tuple[bytes, RewriterMetrics]:
     """
     Rewrite an ALTO XML file with corrected text from page_manifests.
 
@@ -448,11 +470,12 @@ def rewrite_alto_file(
       Path 3 — FAST PATH:  text changed + word count same → in-place CONTENT + SUBS
       Path 4 — SLOW PATH:  word count changed → rebuild line + SUBS
 
-    Returns the rewritten XML as UTF-8 bytes.
+    Returns (rewritten_xml_bytes, metrics).
     """
     tree = etree.parse(str(xml_path))
     root = tree.getroot()
     ns = _detect_namespace(root)
+    metrics = RewriterMetrics()
 
     line_by_id: dict[str, LineManifest] = {}
     for page in page_manifests:
@@ -472,16 +495,19 @@ def rewrite_alto_file(
 
         # --- Path 1: UNTOUCHED ---
         if not text_changed and not subs_changed:
+            metrics.untouched += 1
             continue
 
         # --- Path 2: SUBS-ONLY ---
         if not text_changed:
             _apply_subs(tl_el, lm, ns)
+            metrics.subs_only += 1
             continue
 
         # --- Path 3: FAST PATH (word count same) ---
         if _update_content_in_place(tl_el, corrected, ns):
             _apply_subs(tl_el, lm, ns)
+            metrics.fast_path += 1
             continue
 
         # --- Path 4: SLOW PATH (word count changed) ---
@@ -492,9 +518,11 @@ def rewrite_alto_file(
         else:
             _rebuild_normal_line(tl_el, corrected, lm, ns)
         _apply_subs(tl_el, lm, ns)
+        metrics.slow_path += 1
 
     _add_processing_entry(root, ns, provider, model)
-    return etree.tostring(root, xml_declaration=True, encoding="UTF-8", pretty_print=True)
+    xml_bytes = etree.tostring(root, xml_declaration=True, encoding="UTF-8", pretty_print=True)
+    return xml_bytes, metrics
 
 
 def _add_processing_entry(

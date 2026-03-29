@@ -1,8 +1,25 @@
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from typing import Optional
 
 from app.schemas import HyphenRole, LLMLineInput, LineManifest
+
+
+# ---------------------------------------------------------------------------
+# Metrics
+# ---------------------------------------------------------------------------
+
+@dataclass
+class ReconcileMetrics:
+    """Counts of hyphen pair reconciliation outcomes."""
+    coherent: int = 0      # pair accepted as corrected
+    fallback: int = 0      # both sides reverted to OCR
+    neutralised: int = 0   # accepted but subs_content set to None
+
+    @property
+    def total(self) -> int:
+        return self.coherent + self.fallback + self.neutralised
 
 
 def enrich_chunk_lines(
@@ -222,6 +239,37 @@ def reconcile_hyphen_pair(
         return _fallback
 
     return corrected_part1, corrected_part2, None
+
+
+def classify_reconcile_outcome(
+    part1_ocr: str,
+    part2_ocr: str,
+    corrected_part1: str,
+    corrected_part2: str,
+    final_part1: str,
+    final_part2: str,
+    subs_content: Optional[str],
+) -> str:
+    """
+    Classify the outcome of reconcile_hyphen_pair.
+
+    Returns one of: "coherent", "fallback", "neutralised".
+
+    - coherent: correction accepted with subs_content validated
+    - fallback: reconciler reverted both sides to OCR (because
+      the LLM proposed something that broke an invariant)
+    - neutralised: correction accepted but subs_content is None
+      (heuristic mode or no subs reference)
+    """
+    # If reconciler reverted to OCR and LLM had proposed something different
+    # on either side, it's a fallback
+    proposed_change = (corrected_part1 != part1_ocr or corrected_part2 != part2_ocr)
+    reverted = (final_part1 == part1_ocr and final_part2 == part2_ocr)
+    if reverted and proposed_change:
+        return "fallback"
+    if subs_content is not None:
+        return "coherent"
+    return "neutralised"
 
 
 def should_stay_in_same_chunk(

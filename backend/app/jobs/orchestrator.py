@@ -377,7 +377,7 @@ async def run_job(
             if not pages_for_file:
                 continue
 
-            xml_bytes = rewrite_alto_file(xml_path, pages_for_file, provider_name, model)
+            xml_bytes, _rewriter_metrics = rewrite_alto_file(xml_path, pages_for_file, provider_name, model)
             stem = xml_path.stem
             out_path = output_dir / f"{stem}_corrected.xml"
             out_path.write_bytes(xml_bytes)
