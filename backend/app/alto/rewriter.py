@@ -34,7 +34,7 @@ def _tokenize(text: str) -> list[str]:
 
 
 # ---------------------------------------------------------------------------
-# Geometry
+# Geometry (slow-path only)
 # ---------------------------------------------------------------------------
 
 def _compute_geometry(
@@ -54,11 +54,9 @@ def _compute_geometry(
     total_chars = sum(len(t) for t in tokens)
     if total_chars == 0:
         per = width // len(tokens) if tokens else 0
-        result = [(t, hpos + i * per, per) for i, t in enumerate(tokens)]
-        return result
+        return [(t, hpos + i * per, per) for i, t in enumerate(tokens)]
 
     unit = width / total_chars
-
     raw_widths: list[int] = []
     for t in tokens:
         if t.strip() == "":
@@ -75,54 +73,39 @@ def _compute_geometry(
     for t, w in zip(tokens, raw_widths):
         result.append((t, cursor, w))
         cursor += w
-
     return result
 
 
 # ---------------------------------------------------------------------------
-# Conservative helpers: read original children without destroying them
+# Element accessors (non-destructive)
 # ---------------------------------------------------------------------------
 
-def _get_string_children(
-    line_el: etree._Element,
-    ns: str,
-) -> list[etree._Element]:
-    """Return original String children in document order."""
-    string_tag = _tag("String", ns)
-    return [c for c in line_el if c.tag == string_tag]
+def _get_string_children(el: etree._Element, ns: str) -> list[etree._Element]:
+    tag = _tag("String", ns)
+    return [c for c in el if c.tag == tag]
 
 
-def _get_sp_children(
-    line_el: etree._Element,
-    ns: str,
-) -> list[etree._Element]:
-    """Return original SP children in document order."""
-    sp_tag = _tag("SP", ns)
-    return [c for c in line_el if c.tag == sp_tag]
+def _get_sp_children(el: etree._Element, ns: str) -> list[etree._Element]:
+    tag = _tag("SP", ns)
+    return [c for c in el if c.tag == tag]
 
 
-def _get_hyp_children(
-    line_el: etree._Element,
-    ns: str,
-) -> list[etree._Element]:
-    """Return original HYP children in document order."""
-    hyp_tag = _tag("HYP", ns)
-    return [c for c in line_el if c.tag == hyp_tag]
+def _get_hyp_children(el: etree._Element, ns: str) -> list[etree._Element]:
+    tag = _tag("HYP", ns)
+    return [c for c in el if c.tag == tag]
 
 
-def _extract_text_from_line(
-    line_el: etree._Element,
-    ns: str,
-) -> str:
-    """
-    Reconstruct the OCR text from a TextLine's children (String + SP + HYP).
-    Used to compare with corrected_text to detect unchanged lines.
-    """
+# ---------------------------------------------------------------------------
+# Text comparison
+# ---------------------------------------------------------------------------
+
+def _extract_text_from_line(el: etree._Element, ns: str) -> str:
+    """Reconstruct text from a TextLine's children (String + SP + HYP)."""
     string_tag = _tag("String", ns)
     sp_tag = _tag("SP", ns)
     hyp_tag = _tag("HYP", ns)
     parts: list[str] = []
-    for child in line_el:
+    for child in el:
         if child.tag == string_tag:
             parts.append(child.get("CONTENT", ""))
         elif child.tag == sp_tag:
@@ -134,112 +117,149 @@ def _extract_text_from_line(
     return "".join(parts)
 
 
-def _line_text_unchanged(
-    line_el: etree._Element,
-    corrected_text: str,
+def _line_text_unchanged(el: etree._Element, corrected: str, ns: str) -> bool:
+    return _extract_text_from_line(el, ns) == corrected
+
+
+# ---------------------------------------------------------------------------
+# SUBS attribute logic (centralized — the ONLY place SUBS is written)
+# ---------------------------------------------------------------------------
+
+def _desired_subs(
+    manifest: LineManifest,
+) -> tuple[Optional[str], Optional[str]]:
+    """Return (wanted_subs_type, wanted_subs_content) based on validated state."""
+    if manifest.hyphen_source_explicit and manifest.hyphen_subs_content:
+        if manifest.hyphen_role == HyphenRole.PART1:
+            return "HypPart1", manifest.hyphen_subs_content
+        if manifest.hyphen_role == HyphenRole.PART2:
+            return "HypPart2", manifest.hyphen_subs_content
+    return None, None
+
+
+def _subs_target(
+    el: etree._Element,
+    manifest: LineManifest,
+    ns: str,
+) -> Optional[etree._Element]:
+    """Return the String element that should carry SUBS attributes, or None."""
+    strings = _get_string_children(el, ns)
+    if not strings:
+        return None
+    if manifest.hyphen_role == HyphenRole.PART1:
+        return strings[-1]
+    if manifest.hyphen_role == HyphenRole.PART2:
+        return strings[0]
+    return None
+
+
+def _subs_need_update(
+    el: etree._Element,
+    manifest: LineManifest,
     ns: str,
 ) -> bool:
-    """Return True if the corrected text matches what the line already contains."""
-    current = _extract_text_from_line(line_el, ns)
-    return current == corrected_text
+    """Return True if the XML SUBS state differs from the desired state."""
+    if manifest.hyphen_role == HyphenRole.NONE:
+        return False
+    want_type, want_content = _desired_subs(manifest)
+    target = _subs_target(el, manifest, ns)
+    if target is None:
+        return want_type is not None
+    return (
+        target.get("SUBS_TYPE") != want_type
+        or target.get("SUBS_CONTENT") != want_content
+    )
+
+
+def _apply_subs(
+    el: etree._Element,
+    manifest: LineManifest,
+    ns: str,
+) -> None:
+    """Set or remove SUBS_TYPE/SUBS_CONTENT on the correct String element."""
+    target = _subs_target(el, manifest, ns)
+    if target is None:
+        return
+    want_type, want_content = _desired_subs(manifest)
+    if want_type and want_content:
+        target.set("SUBS_TYPE", want_type)
+        target.set("SUBS_CONTENT", want_content)
+    else:
+        for attr in ("SUBS_TYPE", "SUBS_CONTENT"):
+            if attr in target.attrib:
+                del target.attrib[attr]
 
 
 # ---------------------------------------------------------------------------
-# Internal: clear existing String/SP/HYP children and WC/CC attributes
-# ---------------------------------------------------------------------------
-
-def _clear_line(line_el: etree._Element, ns: str) -> None:
-    string_tag = _tag("String", ns)
-    sp_tag = _tag("SP", ns)
-    hyp_tag = _tag("HYP", ns)
-    to_remove = [
-        c for c in line_el
-        if c.tag in (string_tag, sp_tag, hyp_tag)
-    ]
-    for c in to_remove:
-        line_el.remove(c)
-    for attr in ("WC", "CC"):
-        if attr in line_el.attrib:
-            del line_el.attrib[attr]
-
-
-# ---------------------------------------------------------------------------
-# In-place update: modify only CONTENT on existing String elements
+# Fast path: in-place CONTENT update (word count unchanged)
 # ---------------------------------------------------------------------------
 
 def _update_content_in_place(
-    line_el: etree._Element,
-    corrected_text: str,
+    el: etree._Element,
+    corrected: str,
     ns: str,
 ) -> bool:
     """
-    When word count matches, update only CONTENT attributes in-place.
+    When word count matches, update only CONTENT on existing String elements.
 
-    Returns True if the in-place update succeeded.
-    All original attributes (ID, HPOS, VPOS, WIDTH, HEIGHT, WC, STYLE,
-    FONTSIZE, CC, etc.) and SP/HYP elements are left completely untouched.
+    Returns True on success. ALL other attributes (ID, HPOS, VPOS, WIDTH,
+    HEIGHT, WC, CC, STYLEREFS, etc.) and SP/HYP elements stay untouched.
     """
-    orig_strings = _get_string_children(line_el, ns)
-    tokens = _tokenize(corrected_text)
-    word_tokens = [t for t in tokens if t.strip() != ""]
-
-    if len(word_tokens) != len(orig_strings):
+    orig_strings = _get_string_children(el, ns)
+    words = [t for t in _tokenize(corrected) if t.strip()]
+    if len(words) != len(orig_strings):
         return False
-
-    # Update only CONTENT on each String element
-    for string_el, word in zip(orig_strings, word_tokens):
+    for string_el, word in zip(orig_strings, words):
         string_el.set("CONTENT", word.replace("\u00ad", ""))
-
     return True
 
 
 # ---------------------------------------------------------------------------
-# Rebuild helpers (slow path: used only when word count changed)
+# Internal: clear existing String/SP/HYP children
+# ---------------------------------------------------------------------------
+
+def _clear_line(el: etree._Element, ns: str) -> None:
+    """Remove String/SP/HYP children.  TextLine attributes are untouched."""
+    tags = {_tag("String", ns), _tag("SP", ns), _tag("HYP", ns)}
+    for c in [c for c in el if c.tag in tags]:
+        el.remove(c)
+
+
+# ---------------------------------------------------------------------------
+# Slow path: rebuild when word count changed
 # ---------------------------------------------------------------------------
 
 def _rebuild_normal_line(
-    line_el: etree._Element,
-    corrected_text: str,
+    el: etree._Element,
+    corrected: str,
     manifest: LineManifest,
     ns: str,
 ) -> None:
-    """Rebuild a non-hyphenated TextLine with corrected text."""
-    # --- Fast path: same word count → in-place CONTENT update only ---
-    if _update_content_in_place(line_el, corrected_text, ns):
-        return
+    """Slow-path rebuild for a normal (non-hyphenated) TextLine."""
+    orig_string_attribs = [dict(s.attrib) for s in _get_string_children(el, ns)]
+    orig_sp_attribs = [dict(s.attrib) for s in _get_sp_children(el, ns)]
+    saved_hyp = [copy.deepcopy(c) for c in el if c.tag == _tag("HYP", ns)]
 
-    # --- Slow path: word count differs → full rebuild with proportional geometry ---
-    # Save full copies of original children for geometry reference
-    orig_strings = _get_string_children(line_el, ns)
-    orig_sps = _get_sp_children(line_el, ns)
-    orig_string_attribs = [dict(s.attrib) for s in orig_strings]
-    orig_sp_attribs = [dict(s.attrib) for s in orig_sps]
+    _clear_line(el, ns)
 
-    hyp_tag = _tag("HYP", ns)
-    saved_hyp = [copy.deepcopy(c) for c in line_el if c.tag == hyp_tag]
+    hpos = int(el.get("HPOS", 0))
+    vpos = int(el.get("VPOS", 0))
+    width = int(el.get("WIDTH", 0))
+    height = int(el.get("HEIGHT", 0))
 
-    _clear_line(line_el, ns)
-
-    hpos = int(line_el.get("HPOS", 0))
-    vpos = int(line_el.get("VPOS", 0))
-    width = int(line_el.get("WIDTH", 0))
-    height = int(line_el.get("HEIGHT", 0))
-
-    tokens = _tokenize(corrected_text)
+    tokens = _tokenize(corrected)
     if not tokens:
-        for hyp_el in saved_hyp:
-            line_el.append(hyp_el)
+        for h in saved_hyp:
+            el.append(h)
         return
 
     geo = _compute_geometry(hpos, width, tokens)
-    str_n = 0
-    sp_n = 0
+    str_n = sp_n = 0
 
     for token, tok_hpos, tok_width in geo:
         if token.strip() == "":
-            sp = etree.SubElement(line_el, _tag("SP", ns))
+            sp = etree.SubElement(el, _tag("SP", ns))
             if sp_n < len(orig_sp_attribs):
-                # Reuse ALL original SP attributes
                 for k, v in orig_sp_attribs[sp_n].items():
                     sp.set(k, v)
             else:
@@ -248,11 +268,11 @@ def _rebuild_normal_line(
                 sp.set("VPOS", str(vpos))
             sp_n += 1
         else:
-            s = etree.SubElement(line_el, _tag("String", ns))
+            s = etree.SubElement(el, _tag("String", ns))
             if str_n < len(orig_string_attribs):
-                # Copy ALL original attributes, then override only what changed
                 for k, v in orig_string_attribs[str_n].items():
-                    s.set(k, v)
+                    if k not in ("SUBS_TYPE", "SUBS_CONTENT"):
+                        s.set(k, v)
                 s.set("CONTENT", token.replace("\u00ad", ""))
                 s.set("HPOS", str(tok_hpos))
                 s.set("WIDTH", str(tok_width))
@@ -265,64 +285,40 @@ def _rebuild_normal_line(
                 s.set("HEIGHT", str(height))
             str_n += 1
 
-    for hyp_el in saved_hyp:
-        line_el.append(hyp_el)
+    for h in saved_hyp:
+        el.append(h)
 
 
 def _rebuild_hyp_part1(
-    line_el: etree._Element,
-    corrected_text: str,
+    el: etree._Element,
+    corrected: str,
     manifest: LineManifest,
     ns: str,
 ) -> None:
-    """Rebuild a PART1 (hyphen-left) TextLine."""
-    orig_strings = _get_string_children(line_el, ns)
-    orig_sps = _get_sp_children(line_el, ns)
-    orig_hyps = _get_hyp_children(line_el, ns)
-
-    tokens = _tokenize(corrected_text)
-    words = [t for t in tokens if t.strip() != ""]
-
-    # --- Fast path: same word count → in-place CONTENT update only ---
-    if len(words) == len(orig_strings):
-        for string_el, word in zip(orig_strings, words):
-            string_el.set("CONTENT", word.replace("\u00ad", ""))
-
-        # Update SUBS attributes on last String
-        last_str = orig_strings[-1] if orig_strings else None
-        if last_str is not None:
-            if manifest.hyphen_source_explicit and manifest.hyphen_subs_content:
-                last_str.set("SUBS_TYPE", "HypPart1")
-                last_str.set("SUBS_CONTENT", manifest.hyphen_subs_content)
-            else:
-                # Remove stale SUBS attributes if subs_content was neutralised
-                for attr in ("SUBS_TYPE", "SUBS_CONTENT"):
-                    if attr in last_str.attrib:
-                        del last_str.attrib[attr]
-        return
-
-    # --- Slow path: different word count → full rebuild ---
-    orig_string_attribs = [dict(s.attrib) for s in orig_strings]
-    orig_sp_attribs = [dict(s.attrib) for s in orig_sps]
+    """Slow-path rebuild for a PART1 (hyphen-left) TextLine."""
+    orig_string_attribs = [dict(s.attrib) for s in _get_string_children(el, ns)]
+    orig_sp_attribs = [dict(s.attrib) for s in _get_sp_children(el, ns)]
+    orig_hyps = _get_hyp_children(el, ns)
     orig_hyp_attribs = dict(orig_hyps[0].attrib) if orig_hyps else {}
 
-    _clear_line(line_el, ns)
+    _clear_line(el, ns)
 
-    hpos = int(line_el.get("HPOS", 0))
-    vpos = int(line_el.get("VPOS", 0))
-    width = int(line_el.get("WIDTH", 0))
-    height = int(line_el.get("HEIGHT", 0))
+    hpos = int(el.get("HPOS", 0))
+    vpos = int(el.get("VPOS", 0))
+    width = int(el.get("WIDTH", 0))
+    height = int(el.get("HEIGHT", 0))
 
     hyp_width = max(1, round(width * 0.04))
     text_width = max(1, width - hyp_width)
 
+    tokens = _tokenize(corrected)
     if not tokens:
-        hyp = etree.SubElement(line_el, _tag("HYP", ns))
-        hyp.set("CONTENT", "-")
+        hyp = etree.SubElement(el, _tag("HYP", ns))
         if orig_hyp_attribs:
             for k, v in orig_hyp_attribs.items():
                 hyp.set(k, v)
         else:
+            hyp.set("CONTENT", "-")
             hyp.set("HPOS", str(hpos + text_width))
             hyp.set("VPOS", str(vpos))
             hyp.set("WIDTH", str(hyp_width))
@@ -330,14 +326,13 @@ def _rebuild_hyp_part1(
         return
 
     geo = _compute_geometry(hpos, text_width, tokens)
-    str_n = 0
-    sp_n = 0
+    str_n = sp_n = 0
     last_word_hpos = hpos
     last_word_width = hyp_width
 
     for token, tok_hpos, tok_width in geo:
         if token.strip() == "":
-            sp = etree.SubElement(line_el, _tag("SP", ns))
+            sp = etree.SubElement(el, _tag("SP", ns))
             if sp_n < len(orig_sp_attribs):
                 for k, v in orig_sp_attribs[sp_n].items():
                     sp.set(k, v)
@@ -347,11 +342,11 @@ def _rebuild_hyp_part1(
                 sp.set("VPOS", str(vpos))
             sp_n += 1
         else:
-            is_last_word = (str_n == len(words) - 1)
-            s = etree.SubElement(line_el, _tag("String", ns))
+            s = etree.SubElement(el, _tag("String", ns))
             if str_n < len(orig_string_attribs):
                 for k, v in orig_string_attribs[str_n].items():
-                    s.set(k, v)
+                    if k not in ("SUBS_TYPE", "SUBS_CONTENT"):
+                        s.set(k, v)
                 s.set("CONTENT", token.replace("\u00ad", ""))
                 s.set("HPOS", str(tok_hpos))
                 s.set("WIDTH", str(tok_width))
@@ -363,21 +358,12 @@ def _rebuild_hyp_part1(
                 s.set("WIDTH", str(tok_width))
                 s.set("HEIGHT", str(height))
 
-            if is_last_word:
-                last_word_hpos = tok_hpos
-                last_word_width = tok_width
-                if manifest.hyphen_source_explicit and manifest.hyphen_subs_content:
-                    s.set("SUBS_TYPE", "HypPart1")
-                    s.set("SUBS_CONTENT", manifest.hyphen_subs_content)
-                else:
-                    for attr in ("SUBS_TYPE", "SUBS_CONTENT"):
-                        if attr in s.attrib:
-                            del s.attrib[attr]
-
+            last_word_hpos = tok_hpos
+            last_word_width = tok_width
             str_n += 1
 
-    # Append HYP element preserving ALL original attributes
-    hyp = etree.SubElement(line_el, _tag("HYP", ns))
+    # Append HYP element preserving all original attributes
+    hyp = etree.SubElement(el, _tag("HYP", ns))
     if orig_hyp_attribs:
         for k, v in orig_hyp_attribs.items():
             hyp.set(k, v)
@@ -390,56 +376,32 @@ def _rebuild_hyp_part1(
 
 
 def _rebuild_hyp_part2(
-    line_el: etree._Element,
-    corrected_text: str,
+    el: etree._Element,
+    corrected: str,
     manifest: LineManifest,
     ns: str,
 ) -> None:
-    """Rebuild a PART2 (hyphen-right) TextLine."""
-    orig_strings = _get_string_children(line_el, ns)
-    orig_sps = _get_sp_children(line_el, ns)
+    """Slow-path rebuild for a PART2 (hyphen-right) TextLine."""
+    orig_string_attribs = [dict(s.attrib) for s in _get_string_children(el, ns)]
+    orig_sp_attribs = [dict(s.attrib) for s in _get_sp_children(el, ns)]
 
-    tokens = _tokenize(corrected_text)
-    words = [t for t in tokens if t.strip() != ""]
+    _clear_line(el, ns)
 
-    # --- Fast path: same word count → in-place CONTENT update only ---
-    if len(words) == len(orig_strings):
-        for string_el, word in zip(orig_strings, words):
-            string_el.set("CONTENT", word.replace("\u00ad", ""))
+    hpos = int(el.get("HPOS", 0))
+    vpos = int(el.get("VPOS", 0))
+    width = int(el.get("WIDTH", 0))
+    height = int(el.get("HEIGHT", 0))
 
-        # Update SUBS attributes on first String
-        first_str = orig_strings[0] if orig_strings else None
-        if first_str is not None:
-            if manifest.hyphen_source_explicit and manifest.hyphen_subs_content:
-                first_str.set("SUBS_TYPE", "HypPart2")
-                first_str.set("SUBS_CONTENT", manifest.hyphen_subs_content)
-            else:
-                for attr in ("SUBS_TYPE", "SUBS_CONTENT"):
-                    if attr in first_str.attrib:
-                        del first_str.attrib[attr]
-        return
-
-    # --- Slow path: different word count → full rebuild ---
-    orig_string_attribs = [dict(s.attrib) for s in orig_strings]
-    orig_sp_attribs = [dict(s.attrib) for s in orig_sps]
-
-    _clear_line(line_el, ns)
-
-    hpos = int(line_el.get("HPOS", 0))
-    vpos = int(line_el.get("VPOS", 0))
-    width = int(line_el.get("WIDTH", 0))
-    height = int(line_el.get("HEIGHT", 0))
-
+    tokens = _tokenize(corrected)
     if not tokens:
         return
 
     geo = _compute_geometry(hpos, width, tokens)
-    str_n = 0
-    sp_n = 0
+    str_n = sp_n = 0
 
     for token, tok_hpos, tok_width in geo:
         if token.strip() == "":
-            sp = etree.SubElement(line_el, _tag("SP", ns))
+            sp = etree.SubElement(el, _tag("SP", ns))
             if sp_n < len(orig_sp_attribs):
                 for k, v in orig_sp_attribs[sp_n].items():
                     sp.set(k, v)
@@ -449,10 +411,11 @@ def _rebuild_hyp_part2(
                 sp.set("VPOS", str(vpos))
             sp_n += 1
         else:
-            s = etree.SubElement(line_el, _tag("String", ns))
+            s = etree.SubElement(el, _tag("String", ns))
             if str_n < len(orig_string_attribs):
                 for k, v in orig_string_attribs[str_n].items():
-                    s.set(k, v)
+                    if k not in ("SUBS_TYPE", "SUBS_CONTENT"):
+                        s.set(k, v)
                 s.set("CONTENT", token.replace("\u00ad", ""))
                 s.set("HPOS", str(tok_hpos))
                 s.set("WIDTH", str(tok_width))
@@ -463,16 +426,6 @@ def _rebuild_hyp_part2(
                 s.set("VPOS", str(vpos))
                 s.set("WIDTH", str(tok_width))
                 s.set("HEIGHT", str(height))
-
-            if str_n == 0:
-                if manifest.hyphen_source_explicit and manifest.hyphen_subs_content:
-                    s.set("SUBS_TYPE", "HypPart2")
-                    s.set("SUBS_CONTENT", manifest.hyphen_subs_content)
-                else:
-                    for attr in ("SUBS_TYPE", "SUBS_CONTENT"):
-                        if attr in s.attrib:
-                            del s.attrib[attr]
-
             str_n += 1
 
 
@@ -489,19 +442,23 @@ def rewrite_alto_file(
     """
     Rewrite an ALTO XML file with corrected text from page_manifests.
 
+    Follows a 4-path strategy:
+      Path 1 — UNTOUCHED:  text same + SUBS same → skip entirely
+      Path 2 — SUBS-ONLY:  text same + SUBS changed → in-place SUBS update
+      Path 3 — FAST PATH:  text changed + word count same → in-place CONTENT + SUBS
+      Path 4 — SLOW PATH:  word count changed → rebuild line + SUBS
+
     Returns the rewritten XML as UTF-8 bytes.
     """
     tree = etree.parse(str(xml_path))
     root = tree.getroot()
     ns = _detect_namespace(root)
 
-    # Build lookup: line_id → LineManifest
     line_by_id: dict[str, LineManifest] = {}
     for page in page_manifests:
         for lm in page.lines:
             line_by_id[lm.line_id] = lm
 
-    # Walk all TextLine elements
     textline_tag = _tag("TextLine", ns)
     for tl_el in root.iter(textline_tag):
         line_id = tl_el.get("ID")
@@ -509,30 +466,34 @@ def rewrite_alto_file(
             continue
         lm = line_by_id[line_id]
 
-        # Use corrected_text if available, otherwise keep OCR source
         corrected = lm.corrected_text if lm.corrected_text is not None else lm.ocr_text
+        text_changed = not _line_text_unchanged(tl_el, corrected, ns)
+        subs_changed = _subs_need_update(tl_el, lm, ns)
 
-        # --- Conservative: skip entirely unchanged lines ---
-        # If the text hasn't changed AND no SUBS_CONTENT update is needed,
-        # leave the original XML completely untouched.
-        subs_needs_update = (
-            lm.hyphen_role != HyphenRole.NONE
-            and lm.hyphen_source_explicit
-            and lm.hyphen_subs_content is not None
-        )
-        if not subs_needs_update and _line_text_unchanged(tl_el, corrected, ns):
+        # --- Path 1: UNTOUCHED ---
+        if not text_changed and not subs_changed:
             continue
 
+        # --- Path 2: SUBS-ONLY ---
+        if not text_changed:
+            _apply_subs(tl_el, lm, ns)
+            continue
+
+        # --- Path 3: FAST PATH (word count same) ---
+        if _update_content_in_place(tl_el, corrected, ns):
+            _apply_subs(tl_el, lm, ns)
+            continue
+
+        # --- Path 4: SLOW PATH (word count changed) ---
         if lm.hyphen_role == HyphenRole.PART1:
             _rebuild_hyp_part1(tl_el, corrected, lm, ns)
         elif lm.hyphen_role == HyphenRole.PART2:
             _rebuild_hyp_part2(tl_el, corrected, lm, ns)
         else:
             _rebuild_normal_line(tl_el, corrected, lm, ns)
+        _apply_subs(tl_el, lm, ns)
 
-    # Add processing entry if Description/Processing exists
     _add_processing_entry(root, ns, provider, model)
-
     return etree.tostring(root, xml_declaration=True, encoding="UTF-8", pretty_print=True)
 
 

@@ -123,8 +123,7 @@ def test_tokenize_multiple_spaces():
 def test_geometry_sum_equals_width():
     tokens = _tokenize("hello world foo")
     geo = _compute_geometry(0, 300, tokens)
-    total = sum(w for _, _, w in geo)
-    assert total == 300
+    assert sum(w for _, _, w in geo) == 300
 
 
 def test_geometry_sum_single_word():
@@ -139,7 +138,444 @@ def test_geometry_sum_many_tokens():
 
 
 # ---------------------------------------------------------------------------
-# TextLine invariants
+# Path 1 — UNTOUCHED: unchanged line is XML-identical
+# ---------------------------------------------------------------------------
+
+def test_unchanged_line_preserves_all_string_attributes(tmp_path):
+    """When text is unchanged, ALL attributes on String elements are preserved."""
+    lines_xml = """\
+<TextLine ID="TL1" HPOS="10" VPOS="20" WIDTH="400" HEIGHT="30">
+  <String ID="S1" CONTENT="Hello" HPOS="10" VPOS="20" WIDTH="180" HEIGHT="30"
+          WC="0.95" CC="09999" STYLEREFS="font1"/>
+  <SP WIDTH="10" HPOS="190" VPOS="20"/>
+  <String ID="S2" CONTENT="world" HPOS="200" VPOS="20" WIDTH="200" HEIGHT="30"
+          WC="0.87" CC="99999"/>
+</TextLine>"""
+    lm = make_line("TL1", "Hello world")  # no corrected_text → uses ocr_text
+    root = write_and_rewrite(tmp_path, lines_xml, [lm])
+
+    strings = root.findall(f".//{_ns('String')}")
+    assert len(strings) == 2
+
+    # First String: every attribute preserved
+    s1 = strings[0]
+    assert s1.get("ID") == "S1"
+    assert s1.get("CONTENT") == "Hello"
+    assert s1.get("HPOS") == "10"
+    assert s1.get("VPOS") == "20"
+    assert s1.get("WIDTH") == "180"
+    assert s1.get("HEIGHT") == "30"
+    assert s1.get("WC") == "0.95"
+    assert s1.get("CC") == "09999"
+    assert s1.get("STYLEREFS") == "font1"
+
+    # Second String
+    s2 = strings[1]
+    assert s2.get("ID") == "S2"
+    assert s2.get("CONTENT") == "world"
+    assert s2.get("WC") == "0.87"
+    assert s2.get("CC") == "99999"
+
+
+def test_unchanged_line_preserves_sp_attributes(tmp_path):
+    """Unchanged line: SP elements are fully preserved."""
+    lines_xml = """\
+<TextLine ID="TL1" HPOS="10" VPOS="20" WIDTH="400" HEIGHT="30">
+  <String ID="S1" CONTENT="Bon" HPOS="10" VPOS="20" WIDTH="150" HEIGHT="30"/>
+  <SP WIDTH="12" HPOS="160" VPOS="22"/>
+  <String ID="S2" CONTENT="jour" HPOS="172" VPOS="20" WIDTH="200" HEIGHT="30"/>
+</TextLine>"""
+    lm = make_line("TL1", "Bon jour")
+    root = write_and_rewrite(tmp_path, lines_xml, [lm])
+
+    sps = root.findall(f".//{_ns('SP')}")
+    assert len(sps) == 1
+    assert sps[0].get("WIDTH") == "12"
+    assert sps[0].get("HPOS") == "160"
+    assert sps[0].get("VPOS") == "22"
+
+
+def test_unchanged_line_preserves_hyp_element(tmp_path):
+    """Unchanged PART1 line: HYP element and its attributes are fully preserved."""
+    lines_xml = """\
+<TextLine ID="TL1" HPOS="10" VPOS="20" WIDTH="400" HEIGHT="30">
+  <String ID="S1" CONTENT="por-" HPOS="10" VPOS="20" WIDTH="100" HEIGHT="30"
+          SUBS_TYPE="HypPart1" SUBS_CONTENT="porte"/>
+  <HYP CONTENT="-" HPOS="110" VPOS="20" WIDTH="16" HEIGHT="30"/>
+</TextLine>"""
+    lm = make_line(
+        "TL1", "por-",
+        hyphen_role=HyphenRole.PART1,
+        hyphen_subs_content="porte",
+        hyphen_source_explicit=True,
+    )
+    root = write_and_rewrite(tmp_path, lines_xml, [lm])
+
+    tl = root.find(f".//{_ns('TextLine')}")
+    hyps = tl.findall(_ns("HYP"))
+    assert len(hyps) == 1
+    assert hyps[0].get("CONTENT") == "-"
+    assert hyps[0].get("HPOS") == "110"
+    assert hyps[0].get("WIDTH") == "16"
+
+    # SUBS preserved on the String too
+    s = tl.find(_ns("String"))
+    assert s.get("SUBS_TYPE") == "HypPart1"
+    assert s.get("SUBS_CONTENT") == "porte"
+
+
+def test_unchanged_line_string_count_unchanged(tmp_path):
+    """Unchanged line: number of String/SP/HYP children is unchanged."""
+    lines_xml = """\
+<TextLine ID="TL1" HPOS="10" VPOS="20" WIDTH="400" HEIGHT="30">
+  <String ID="S1" CONTENT="un" HPOS="10" VPOS="20" WIDTH="50" HEIGHT="30"/>
+  <SP WIDTH="8" HPOS="60" VPOS="20"/>
+  <String ID="S2" CONTENT="deux" HPOS="68" VPOS="20" WIDTH="90" HEIGHT="30"/>
+  <SP WIDTH="8" HPOS="158" VPOS="20"/>
+  <String ID="S3" CONTENT="trois" HPOS="166" VPOS="20" WIDTH="100" HEIGHT="30"/>
+</TextLine>"""
+    lm = make_line("TL1", "un deux trois")
+    root = write_and_rewrite(tmp_path, lines_xml, [lm])
+
+    assert len(root.findall(f".//{_ns('String')}")) == 3
+    assert len(root.findall(f".//{_ns('SP')}")) == 2
+
+
+# ---------------------------------------------------------------------------
+# Path 2 — SUBS-ONLY: text unchanged, only SUBS attributes updated
+# ---------------------------------------------------------------------------
+
+def test_subs_only_update_sets_subs(tmp_path):
+    """Text unchanged but subs_content is newly set → only SUBS attributes change."""
+    lines_xml = """\
+<TextLine ID="TL1" HPOS="10" VPOS="20" WIDTH="400" HEIGHT="30">
+  <String ID="S1" CONTENT="por-" HPOS="10" VPOS="20" WIDTH="100" HEIGHT="30"/>
+  <HYP CONTENT="-" HPOS="110" VPOS="20" WIDTH="16" HEIGHT="30"/>
+</TextLine>"""
+    # Text is "por-" (matches XML), but subs_content now set
+    lm = make_line(
+        "TL1", "por-",
+        hyphen_role=HyphenRole.PART1,
+        hyphen_subs_content="porte",
+        hyphen_source_explicit=True,
+    )
+    root = write_and_rewrite(tmp_path, lines_xml, [lm])
+
+    s = root.find(f".//{_ns('String')}")
+    assert s.get("SUBS_TYPE") == "HypPart1"
+    assert s.get("SUBS_CONTENT") == "porte"
+    # All other attributes untouched
+    assert s.get("ID") == "S1"
+    assert s.get("HPOS") == "10"
+    assert s.get("WIDTH") == "100"
+    # HYP preserved
+    hyps = root.findall(f".//{_ns('HYP')}")
+    assert len(hyps) == 1
+    assert hyps[0].get("HPOS") == "110"
+
+
+def test_subs_only_update_removes_stale_subs(tmp_path):
+    """Text unchanged but subs_content was neutralised → SUBS attributes removed."""
+    lines_xml = """\
+<TextLine ID="TL1" HPOS="10" VPOS="20" WIDTH="400" HEIGHT="30">
+  <String ID="S1" CONTENT="por-" HPOS="10" VPOS="20" WIDTH="100" HEIGHT="30"
+          SUBS_TYPE="HypPart1" SUBS_CONTENT="porte"/>
+  <HYP CONTENT="-" HPOS="110" VPOS="20" WIDTH="16" HEIGHT="30"/>
+</TextLine>"""
+    # Text unchanged, but subs_content is now None (pair incoherent)
+    lm = make_line(
+        "TL1", "por-",
+        hyphen_role=HyphenRole.PART1,
+        hyphen_subs_content=None,
+        hyphen_source_explicit=True,
+    )
+    root = write_and_rewrite(tmp_path, lines_xml, [lm])
+
+    s = root.find(f".//{_ns('String')}")
+    assert s.get("SUBS_TYPE") is None, "Stale SUBS_TYPE must be removed"
+    assert s.get("SUBS_CONTENT") is None, "Stale SUBS_CONTENT must be removed"
+    # ID and geometry untouched
+    assert s.get("ID") == "S1"
+    assert s.get("HPOS") == "10"
+
+
+# ---------------------------------------------------------------------------
+# Path 3 — FAST PATH: text changed, same word count, in-place update
+# ---------------------------------------------------------------------------
+
+def test_fast_path_only_content_changes(tmp_path):
+    """Fast path: only CONTENT changes; ID, geometry, WC, CC preserved."""
+    lines_xml = """\
+<TextLine ID="TL1" HPOS="10" VPOS="20" WIDTH="400" HEIGHT="30">
+  <String ID="S1" CONTENT="Helo" HPOS="10" VPOS="20" WIDTH="180" HEIGHT="30"
+          WC="0.72" CC="0900" STYLEREFS="font1"/>
+  <SP WIDTH="10" HPOS="190" VPOS="20"/>
+  <String ID="S2" CONTENT="wrld" HPOS="200" VPOS="20" WIDTH="200" HEIGHT="30"
+          WC="0.65" CC="9090"/>
+</TextLine>"""
+    lm = make_line("TL1", "Helo wrld", corrected_text="Hello world")
+    root = write_and_rewrite(tmp_path, lines_xml, [lm])
+
+    strings = root.findall(f".//{_ns('String')}")
+    assert len(strings) == 2
+
+    # CONTENT updated
+    assert strings[0].get("CONTENT") == "Hello"
+    assert strings[1].get("CONTENT") == "world"
+
+    # Everything else preserved
+    assert strings[0].get("ID") == "S1"
+    assert strings[0].get("HPOS") == "10"
+    assert strings[0].get("VPOS") == "20"
+    assert strings[0].get("WIDTH") == "180"
+    assert strings[0].get("HEIGHT") == "30"
+    assert strings[0].get("WC") == "0.72"
+    assert strings[0].get("CC") == "0900"
+    assert strings[0].get("STYLEREFS") == "font1"
+
+    assert strings[1].get("ID") == "S2"
+    assert strings[1].get("HPOS") == "200"
+    assert strings[1].get("WC") == "0.65"
+
+    # SP preserved
+    sps = root.findall(f".//{_ns('SP')}")
+    assert len(sps) == 1
+    assert sps[0].get("WIDTH") == "10"
+
+
+def test_fast_path_soft_hyphen_stripped(tmp_path):
+    """Fast path: U+00AD soft hyphen stripped from CONTENT."""
+    lines_xml = """\
+<TextLine ID="TL1" HPOS="10" VPOS="20" WIDTH="400" HEIGHT="30">
+  <String ID="S1" CONTENT="n\u00e9ces-" HPOS="10" VPOS="20" WIDTH="200" HEIGHT="30"/>
+</TextLine>"""
+    lm = make_line("TL1", "n\u00e9ces-", corrected_text="n\u00e9ces\u00ad")
+    root = write_and_rewrite(tmp_path, lines_xml, [lm])
+    for s in root.findall(f".//{_ns('String')}"):
+        assert "\u00ad" not in (s.get("CONTENT") or "")
+
+
+def test_fast_path_preserves_wc(tmp_path):
+    """Fast path: WC confidence scores preserved."""
+    lines_xml = """\
+<TextLine ID="TL1" HPOS="10" VPOS="20" WIDTH="400" HEIGHT="30">
+  <String ID="S1" CONTENT="Bon" HPOS="10" VPOS="20" WIDTH="150" HEIGHT="30" WC="0.95"/>
+  <SP WIDTH="10" HPOS="160" VPOS="20"/>
+  <String ID="S2" CONTENT="jour" HPOS="170" VPOS="20" WIDTH="200" HEIGHT="30" WC="0.87"/>
+</TextLine>"""
+    lm = make_line("TL1", "Bon jour", corrected_text="Bon jour")
+    root = write_and_rewrite(tmp_path, lines_xml, [lm])
+    strings = root.findall(f".//{_ns('String')}")
+    assert strings[0].get("WC") == "0.95"
+    assert strings[1].get("WC") == "0.87"
+
+
+def test_fast_path_preserves_string_ids(tmp_path):
+    """Fast path: original String IDs are preserved."""
+    lines_xml = """\
+<TextLine ID="TL1" HPOS="10" VPOS="20" WIDTH="400" HEIGHT="30">
+  <String ID="word_001" CONTENT="Hello" HPOS="10" VPOS="20" WIDTH="180" HEIGHT="30"/>
+  <SP WIDTH="10" HPOS="190" VPOS="20"/>
+  <String ID="word_002" CONTENT="world" HPOS="200" VPOS="20" WIDTH="200" HEIGHT="30"/>
+</TextLine>"""
+    lm = make_line("TL1", "Hello world", corrected_text="Hello world")
+    root = write_and_rewrite(tmp_path, lines_xml, [lm])
+    strings = root.findall(f".//{_ns('String')}")
+    assert strings[0].get("ID") == "word_001"
+    assert strings[1].get("ID") == "word_002"
+
+
+# ---------------------------------------------------------------------------
+# Path 3 + SUBS: fast path with hyphenation
+# ---------------------------------------------------------------------------
+
+def test_fast_path_part1_subs_applied(tmp_path):
+    """Fast path PART1: SUBS_TYPE/SUBS_CONTENT applied to last String."""
+    lines_xml = """\
+<TextLine ID="TL1" HPOS="10" VPOS="20" WIDTH="400" HEIGHT="30">
+  <String ID="S1" CONTENT="tra-" HPOS="10" VPOS="20" WIDTH="100" HEIGHT="30"
+          SUBS_TYPE="HypPart1" SUBS_CONTENT="travail"/>
+  <HYP CONTENT="-"/>
+</TextLine>"""
+    lm = make_line(
+        "TL1", "tra-", corrected_text="tra-",
+        hyphen_role=HyphenRole.PART1,
+        hyphen_subs_content="travail",
+        hyphen_source_explicit=True,
+    )
+    root = write_and_rewrite(tmp_path, lines_xml, [lm])
+    s = root.findall(f".//{_ns('String')}")[-1]
+    assert s.get("SUBS_TYPE") == "HypPart1"
+    assert s.get("SUBS_CONTENT") == "travail"
+
+
+def test_fast_path_part2_subs_applied(tmp_path):
+    """Fast path PART2: SUBS_TYPE/SUBS_CONTENT applied to first String."""
+    lines_xml = """\
+<TextLine ID="TL2" HPOS="10" VPOS="55" WIDTH="400" HEIGHT="30">
+  <String ID="S2" CONTENT="vail" HPOS="10" VPOS="55" WIDTH="80" HEIGHT="30"
+          SUBS_TYPE="HypPart2" SUBS_CONTENT="travail"/>
+</TextLine>"""
+    lm = make_line(
+        "TL2", "vail", corrected_text="vail",
+        hyphen_role=HyphenRole.PART2,
+        hyphen_subs_content="travail",
+        hyphen_source_explicit=True,
+    )
+    root = write_and_rewrite(tmp_path, lines_xml, [lm])
+    s = root.findall(f".//{_ns('String')}")[0]
+    assert s.get("SUBS_TYPE") == "HypPart2"
+    assert s.get("SUBS_CONTENT") == "travail"
+
+
+def test_fast_path_no_subs_when_neutralised(tmp_path):
+    """Fast path: when subs_content is None, no SUBS attributes on any String."""
+    lines_xml = """\
+<TextLine ID="TL1" HPOS="10" VPOS="20" WIDTH="400" HEIGHT="30">
+  <String ID="S1" CONTENT="boule-" HPOS="10" VPOS="20" WIDTH="120" HEIGHT="30"/>
+</TextLine>"""
+    lm = make_line(
+        "TL1", "boule-", corrected_text="boule-",
+        hyphen_role=HyphenRole.PART1,
+        hyphen_subs_content=None,
+        hyphen_source_explicit=False,
+    )
+    root = write_and_rewrite(tmp_path, lines_xml, [lm])
+    for s in root.findall(f".//{_ns('String')}"):
+        assert s.get("SUBS_TYPE") is None
+        assert s.get("SUBS_CONTENT") is None
+
+
+def test_fast_path_subs_not_on_wrong_token(tmp_path):
+    """Fast path PART2: SUBS must be on first String only, not second."""
+    lines_xml = """\
+<TextLine ID="TL2" HPOS="10" VPOS="55" WIDTH="400" HEIGHT="30">
+  <String ID="S2a" CONTENT="te" HPOS="10" VPOS="55" WIDTH="60" HEIGHT="30"
+          SUBS_TYPE="HypPart2" SUBS_CONTENT="porte"/>
+  <SP WIDTH="10" HPOS="70" VPOS="55"/>
+  <String ID="S2b" CONTENT="ouverte" HPOS="80" VPOS="55" WIDTH="200" HEIGHT="30"/>
+</TextLine>"""
+    lm = make_line(
+        "TL2", "te ouverte", corrected_text="te ouverte",
+        hyphen_role=HyphenRole.PART2,
+        hyphen_subs_content="porte",
+        hyphen_source_explicit=True,
+    )
+    root = write_and_rewrite(tmp_path, lines_xml, [lm])
+
+    strings = root.findall(f".//{_ns('String')}")
+    assert strings[0].get("SUBS_TYPE") == "HypPart2"
+    assert strings[0].get("SUBS_CONTENT") == "porte"
+    # Second String must NOT have SUBS
+    assert strings[1].get("SUBS_TYPE") is None
+    assert strings[1].get("SUBS_CONTENT") is None
+
+
+# ---------------------------------------------------------------------------
+# Path 4 — SLOW PATH: word count changed, rebuild
+# ---------------------------------------------------------------------------
+
+def test_slow_path_preserves_original_attributes(tmp_path):
+    """Slow path: attributes from original Strings are preserved where possible."""
+    lines_xml = """\
+<TextLine ID="TL1" HPOS="10" VPOS="20" WIDTH="400" HEIGHT="30">
+  <String ID="S1" CONTENT="old" HPOS="10" VPOS="20" WIDTH="100" HEIGHT="30"
+          WC="0.95" CC="999" STYLEREFS="font1"/>
+</TextLine>"""
+    # Word count changes: 1 → 2 (slow path)
+    lm = make_line("TL1", "old", corrected_text="hello world")
+    root = write_and_rewrite(tmp_path, lines_xml, [lm])
+
+    strings = root.findall(f".//{_ns('String')}")
+    assert len(strings) == 2
+
+    # First String reuses original attributes (except CONTENT, HPOS, WIDTH)
+    s1 = strings[0]
+    assert s1.get("ID") == "S1"
+    assert s1.get("CONTENT") == "hello"
+    assert s1.get("VPOS") == "20"
+    assert s1.get("HEIGHT") == "30"
+    assert s1.get("WC") == "0.95"
+    assert s1.get("CC") == "999"
+    assert s1.get("STYLEREFS") == "font1"
+
+    # Second String gets generated ID
+    s2 = strings[1]
+    assert s2.get("ID") == "TL1_STR_0001"
+    assert s2.get("CONTENT") == "world"
+
+
+def test_slow_path_does_not_copy_stale_subs(tmp_path):
+    """Slow path: SUBS_TYPE/SUBS_CONTENT from original String must NOT be blindly copied."""
+    lines_xml = """\
+<TextLine ID="TL1" HPOS="10" VPOS="20" WIDTH="400" HEIGHT="30">
+  <String ID="S1" CONTENT="por-" HPOS="10" VPOS="20" WIDTH="100" HEIGHT="30"
+          SUBS_TYPE="HypPart1" SUBS_CONTENT="porte"/>
+  <HYP CONTENT="-" HPOS="110" VPOS="20" WIDTH="16" HEIGHT="30"/>
+</TextLine>"""
+    # Word count changes: 1 → 2 (slow path)
+    # subs_content is None (neutralised) — no SUBS should appear
+    lm = make_line(
+        "TL1", "por-", corrected_text="por- extra",
+        hyphen_role=HyphenRole.PART1,
+        hyphen_subs_content=None,
+        hyphen_source_explicit=True,
+    )
+    root = write_and_rewrite(tmp_path, lines_xml, [lm])
+
+    for s in root.findall(f".//{_ns('String')}"):
+        assert s.get("SUBS_TYPE") is None, \
+            f"Stale SUBS_TYPE must not be copied (found on {s.get('ID')})"
+        assert s.get("SUBS_CONTENT") is None, \
+            f"Stale SUBS_CONTENT must not be copied (found on {s.get('ID')})"
+
+
+def test_slow_path_part1_preserves_hyp(tmp_path):
+    """Slow path PART1: HYP element is re-created with original attributes."""
+    lines_xml = """\
+<TextLine ID="TL1" HPOS="10" VPOS="20" WIDTH="400" HEIGHT="30">
+  <String ID="S1" CONTENT="por-" HPOS="10" VPOS="20" WIDTH="100" HEIGHT="30"/>
+  <HYP CONTENT="-" HPOS="110" VPOS="20" WIDTH="16" HEIGHT="30"/>
+</TextLine>"""
+    # 1 word → 2 words (slow path)
+    lm = make_line(
+        "TL1", "por-", corrected_text="Il por-",
+        hyphen_role=HyphenRole.PART1,
+        hyphen_subs_content="porte",
+        hyphen_source_explicit=True,
+    )
+    root = write_and_rewrite(tmp_path, lines_xml, [lm])
+    tl = root.find(f".//{_ns('TextLine')}")
+
+    hyps = tl.findall(_ns("HYP"))
+    assert len(hyps) == 1
+    assert hyps[0].get("CONTENT") == "-"
+    # Original HYP attributes preserved
+    assert hyps[0].get("HPOS") == "110"
+    assert hyps[0].get("WIDTH") == "16"
+
+
+def test_slow_path_preserves_sp_attributes(tmp_path):
+    """Slow path: original SP attributes are preserved where possible."""
+    lines_xml = """\
+<TextLine ID="TL1" HPOS="10" VPOS="20" WIDTH="400" HEIGHT="30">
+  <String ID="S1" CONTENT="un" HPOS="10" VPOS="20" WIDTH="50" HEIGHT="30"/>
+  <SP WIDTH="12" HPOS="60" VPOS="22"/>
+  <String ID="S2" CONTENT="deux" HPOS="72" VPOS="20" WIDTH="90" HEIGHT="30"/>
+</TextLine>"""
+    # 2 words → 3 words (slow path)
+    lm = make_line("TL1", "un deux", corrected_text="un deux trois")
+    root = write_and_rewrite(tmp_path, lines_xml, [lm])
+
+    sps = root.findall(f".//{_ns('SP')}")
+    # First SP reuses original attributes
+    assert sps[0].get("WIDTH") == "12"
+    assert sps[0].get("HPOS") == "60"
+    assert sps[0].get("VPOS") == "22"
+
+
+# ---------------------------------------------------------------------------
+# TextLine invariant preservation
 # ---------------------------------------------------------------------------
 
 def test_line_id_preserved(tmp_path):
@@ -167,22 +603,6 @@ def test_coords_preserved(tmp_path):
     assert tl.get("HEIGHT") == "30"
 
 
-def test_string_ids_pattern(tmp_path):
-    """When corrected text has more words than original, extra words get generated IDs.
-    The first word reuses the original ID; the second gets a generated fallback."""
-    lines_xml = """\
-<TextLine ID="TL1" HPOS="10" VPOS="20" WIDTH="400" HEIGHT="30">
-  <String ID="S1" CONTENT="old" HPOS="10" VPOS="20" WIDTH="100" HEIGHT="30"/>
-</TextLine>"""
-    lm = make_line("TL1", "old", corrected_text="hello world")
-    root = write_and_rewrite(tmp_path, lines_xml, [lm])
-    strings = root.findall(f".//{_ns('String')}")
-    ids = [s.get("ID") for s in strings]
-    # Original ID "S1" is reused for position 0; position 1 gets generated ID
-    assert "S1" in ids
-    assert "TL1_STR_0001" in ids
-
-
 def test_no_newline_in_content(tmp_path):
     lines_xml = """\
 <TextLine ID="TL1" HPOS="10" VPOS="20" WIDTH="400" HEIGHT="30">
@@ -192,11 +612,24 @@ def test_no_newline_in_content(tmp_path):
     root = write_and_rewrite(tmp_path, lines_xml, [lm])
     for s in root.findall(f".//{_ns('String')}"):
         assert "\n" not in (s.get("CONTENT") or "")
-        assert "\r" not in (s.get("CONTENT") or "")
+
+
+def test_string_ids_slow_path(tmp_path):
+    """Slow path: extra words get generated IDs; existing words reuse original."""
+    lines_xml = """\
+<TextLine ID="TL1" HPOS="10" VPOS="20" WIDTH="400" HEIGHT="30">
+  <String ID="S1" CONTENT="old" HPOS="10" VPOS="20" WIDTH="100" HEIGHT="30"/>
+</TextLine>"""
+    lm = make_line("TL1", "old", corrected_text="hello world")
+    root = write_and_rewrite(tmp_path, lines_xml, [lm])
+    strings = root.findall(f".//{_ns('String')}")
+    ids = [s.get("ID") for s in strings]
+    assert "S1" in ids
+    assert "TL1_STR_0001" in ids
 
 
 # ---------------------------------------------------------------------------
-# Hyphenation: PART1
+# Hyphenation: HYP preservation
 # ---------------------------------------------------------------------------
 
 def test_part1_has_hyp_element(tmp_path):
@@ -213,47 +646,29 @@ def test_part1_has_hyp_element(tmp_path):
         hyphen_source_explicit=True,
     )
     root = write_and_rewrite(tmp_path, lines_xml, [lm])
-    tl = root.find(f".//{_ns('TextLine')}")
-    hyp_els = tl.findall(_ns("HYP"))
-    assert len(hyp_els) == 1
-    assert hyp_els[0].get("CONTENT") == "-"
+    hyps = root.find(f".//{_ns('TextLine')}").findall(_ns("HYP"))
+    assert len(hyps) == 1
+    assert hyps[0].get("CONTENT") == "-"
 
 
-def test_part1_subs_type_when_explicit(tmp_path):
+def test_heuristic_hyp_preserved(tmp_path):
+    """Heuristic PART1: HYP element is preserved even without explicit subs."""
     lines_xml = """\
 <TextLine ID="TL1" HPOS="10" VPOS="20" WIDTH="400" HEIGHT="30">
-  <String ID="S1" CONTENT="tra-" HPOS="10" VPOS="20" WIDTH="100" HEIGHT="30"
-          SUBS_TYPE="HypPart1" SUBS_CONTENT="travail"/>
-  <HYP CONTENT="-"/>
+  <String ID="S1" CONTENT="boule-" HPOS="10" VPOS="20" WIDTH="120" HEIGHT="30"/>
+  <HYP CONTENT="-" HPOS="130" VPOS="20" WIDTH="16" HEIGHT="30"/>
 </TextLine>"""
     lm = make_line(
-        "TL1", "tra-", corrected_text="tra-",
+        "TL1", "boule-", corrected_text="boule-",
         hyphen_role=HyphenRole.PART1,
-        hyphen_subs_content="travail",
-        hyphen_source_explicit=True,
+        hyphen_source_explicit=False,
     )
     root = write_and_rewrite(tmp_path, lines_xml, [lm])
-    strings = root.findall(f".//{_ns('String')}")
-    last_str = strings[-1]
-    assert last_str.get("SUBS_TYPE") == "HypPart1"
-
-
-def test_part2_subs_type_when_explicit(tmp_path):
-    lines_xml = """\
-<TextLine ID="TL2" HPOS="10" VPOS="55" WIDTH="400" HEIGHT="30">
-  <String ID="S2" CONTENT="vail" HPOS="10" VPOS="55" WIDTH="80" HEIGHT="30"
-          SUBS_TYPE="HypPart2" SUBS_CONTENT="travail"/>
-</TextLine>"""
-    lm = make_line(
-        "TL2", "vail", corrected_text="vail",
-        hyphen_role=HyphenRole.PART2,
-        hyphen_subs_content="travail",
-        hyphen_source_explicit=True,
-    )
-    root = write_and_rewrite(tmp_path, lines_xml, [lm])
-    strings = root.findall(f".//{_ns('String')}")
-    first_str = strings[0]
-    assert first_str.get("SUBS_TYPE") == "HypPart2"
+    tl = root.find(f".//{_ns('TextLine')}")
+    hyps = tl.findall(_ns("HYP"))
+    assert len(hyps) == 1
+    assert hyps[0].get("CONTENT") == "-"
+    assert hyps[0].get("HPOS") == "130"
 
 
 def test_subs_content_written_when_explicit(tmp_path):
@@ -270,26 +685,8 @@ def test_subs_content_written_when_explicit(tmp_path):
         hyphen_source_explicit=True,
     )
     root = write_and_rewrite(tmp_path, lines_xml, [lm])
-    strings = root.findall(f".//{_ns('String')}")
-    last_str = strings[-1]
+    last_str = root.findall(f".//{_ns('String')}")[-1]
     assert last_str.get("SUBS_CONTENT") == "construction"
-
-
-def test_subs_content_absent_when_heuristic(tmp_path):
-    lines_xml = """\
-<TextLine ID="TL1" HPOS="10" VPOS="20" WIDTH="400" HEIGHT="30">
-  <String ID="S1" CONTENT="boule-" HPOS="10" VPOS="20" WIDTH="120" HEIGHT="30"/>
-</TextLine>"""
-    lm = make_line(
-        "TL1", "boule-", corrected_text="boule-",
-        hyphen_role=HyphenRole.PART1,
-        hyphen_subs_content=None,
-        hyphen_source_explicit=False,  # heuristic
-    )
-    root = write_and_rewrite(tmp_path, lines_xml, [lm])
-    for s in root.findall(f".//{_ns('String')}"):
-        assert s.get("SUBS_CONTENT") is None
-        assert s.get("SUBS_TYPE") is None
 
 
 # ---------------------------------------------------------------------------
@@ -297,7 +694,7 @@ def test_subs_content_absent_when_heuristic(tmp_path):
 # ---------------------------------------------------------------------------
 
 def test_round_trip_normal(tmp_path):
-    """Parse → rewrite without any correction → re-parse → same IDs."""
+    """Parse → rewrite without correction → re-parse → same IDs."""
     xml_content = f"""\
 <?xml version="1.0" encoding="UTF-8"?>
 <alto xmlns="{NS_V3}">
@@ -319,10 +716,8 @@ def test_round_trip_normal(tmp_path):
     xml_path.write_text(xml_content, encoding="utf-8")
 
     pages, _ = parse_alto_file(xml_path, "round.xml")
-    # No corrections applied — corrected_text stays None, rewriter uses ocr_text
     result_bytes = rewrite_alto_file(xml_path, pages, "openai", "gpt-4o")
 
-    # Re-parse result
     out_path = tmp_path / "out.xml"
     out_path.write_bytes(result_bytes)
     pages2, _ = parse_alto_file(out_path, "out.xml")
@@ -332,77 +727,8 @@ def test_round_trip_normal(tmp_path):
     assert pages2[0].lines[0].line_id == "TL1"
 
 
-# ---------------------------------------------------------------------------
-# Bug-fix tests: soft hyphen, WC, String IDs, HYP node preservation
-# ---------------------------------------------------------------------------
-
-def test_rewriter_no_soft_hyphen_in_content(tmp_path):
-    """U+00AD soft hyphen must be stripped from String CONTENT."""
-    lines_xml = """\
-<TextLine ID="TL1" HPOS="10" VPOS="20" WIDTH="400" HEIGHT="30">
-  <String ID="S1" CONTENT="n\u00e9ces-" HPOS="10" VPOS="20" WIDTH="200" HEIGHT="30"/>
-</TextLine>"""
-    # corrected_text contains a soft hyphen injected by the LLM
-    lm = make_line("TL1", "n\u00e9ces-", corrected_text="n\u00e9ces\u00ad")
-    root = write_and_rewrite(tmp_path, lines_xml, [lm])
-    for s in root.findall(f".//{_ns('String')}"):
-        assert "\u00ad" not in (s.get("CONTENT") or ""), \
-            "Soft hyphen U+00AD must not appear in CONTENT"
-
-
-def test_rewriter_preserves_wc(tmp_path):
-    """WC confidence scores must be copied from original String nodes by position."""
-    lines_xml = """\
-<TextLine ID="TL1" HPOS="10" VPOS="20" WIDTH="400" HEIGHT="30">
-  <String ID="S1" CONTENT="Bon" HPOS="10" VPOS="20" WIDTH="150" HEIGHT="30" WC="0.95"/>
-  <SP WIDTH="10" HPOS="160" VPOS="20"/>
-  <String ID="S2" CONTENT="jour" HPOS="170" VPOS="20" WIDTH="200" HEIGHT="30" WC="0.87"/>
-</TextLine>"""
-    lm = make_line("TL1", "Bon jour", corrected_text="Bon jour")
-    root = write_and_rewrite(tmp_path, lines_xml, [lm])
-    strings = root.findall(f".//{_ns('String')}")
-    assert len(strings) == 2
-    assert strings[0].get("WC") == "0.95", "First String WC must be preserved"
-    assert strings[1].get("WC") == "0.87", "Second String WC must be preserved"
-
-
-def test_rewriter_preserves_string_ids(tmp_path):
-    """Original String IDs must be reused by position after rewrite."""
-    lines_xml = """\
-<TextLine ID="TL1" HPOS="10" VPOS="20" WIDTH="400" HEIGHT="30">
-  <String ID="word_001" CONTENT="Hello" HPOS="10" VPOS="20" WIDTH="180" HEIGHT="30"/>
-  <SP WIDTH="10" HPOS="190" VPOS="20"/>
-  <String ID="word_002" CONTENT="world" HPOS="200" VPOS="20" WIDTH="200" HEIGHT="30"/>
-</TextLine>"""
-    lm = make_line("TL1", "Hello world", corrected_text="Hello world")
-    root = write_and_rewrite(tmp_path, lines_xml, [lm])
-    strings = root.findall(f".//{_ns('String')}")
-    ids = [s.get("ID") for s in strings]
-    assert "word_001" in ids, "First original String ID must be preserved"
-    assert "word_002" in ids, "Second original String ID must be preserved"
-
-
-def test_rewriter_preserves_hyp_node_heuristic(tmp_path):
-    """A heuristic PART1 line must always have a HYP child after rewrite."""
-    lines_xml = """\
-<TextLine ID="TL1" HPOS="10" VPOS="20" WIDTH="400" HEIGHT="30">
-  <String ID="S1" CONTENT="boule-" HPOS="10" VPOS="20" WIDTH="120" HEIGHT="30"/>
-  <HYP CONTENT="-" HPOS="130" VPOS="20" WIDTH="16" HEIGHT="30"/>
-</TextLine>"""
-    lm = make_line(
-        "TL1", "boule-", corrected_text="boule-",
-        hyphen_role=HyphenRole.PART1,
-        hyphen_source_explicit=False,
-    )
-    root = write_and_rewrite(tmp_path, lines_xml, [lm])
-    tl = root.find(f".//{_ns('TextLine')}")
-    hyp_els = tl.findall(_ns("HYP"))
-    assert len(hyp_els) == 1, "HYP node must be present for heuristic PART1 line"
-    assert hyp_els[0].get("CONTENT") == "-"
-
-
 def test_round_trip_with_hyphen(tmp_path):
-    """Parse ALTO with explicit hyphen pair → rewrite → re-parse → HYP present."""
+    """Parse with explicit hyphen → rewrite → HYP present, IDs intact."""
     xml_content = f"""\
 <?xml version="1.0" encoding="UTF-8"?>
 <alto xmlns="{NS_V3}">
@@ -437,7 +763,6 @@ def test_round_trip_with_hyphen(tmp_path):
     assert len(hyp_els) >= 1
     assert hyp_els[0].get("CONTENT") == "-"
 
-    # TL1 ID and coords must be intact
     tl1 = root.find(f".//{{{NS_V3}}}TextLine[@ID='TL1']")
     assert tl1 is not None
     assert tl1.get("WIDTH") == "400"
