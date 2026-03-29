@@ -51,7 +51,17 @@ def _build_ocr_text(textline: etree._Element, ns: str) -> str:
         elif local == "SP":
             parts.append(" ")
         elif local == "HYP":
-            parts.append(child.get("CONTENT", "-"))
+            # Normalize: HYP contributes a single "-" to the logical text.
+            # Avoid double-dash when preceding String CONTENT already ends
+            # with a hyphen, and normalize soft-hyphen (\xad) to "-".
+            hyp_char = child.get("CONTENT", "-")
+            if hyp_char == "\u00ad":
+                hyp_char = "-"
+            # Skip if the accumulated text already ends with a dash
+            current = "".join(parts)
+            if current.endswith("-"):
+                continue
+            parts.append(hyp_char)
     text = "".join(parts)
     text = text.replace("\r", "")
     text = unicodedata.normalize("NFC", text)

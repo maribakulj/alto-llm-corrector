@@ -122,7 +122,11 @@ def _get_hyp_children(el: etree._Element, ns: str) -> list[etree._Element]:
 # ---------------------------------------------------------------------------
 
 def _extract_text_from_line(el: etree._Element, ns: str) -> str:
-    """Reconstruct text from a TextLine's children (String + SP + HYP)."""
+    """Reconstruct text from a TextLine's children (String + SP + HYP).
+
+    Applies the same normalization as the parser: soft-hyphen → "-",
+    and HYP is skipped if preceding CONTENT already ends with "-".
+    """
     string_tag = _tag("String", ns)
     sp_tag = _tag("SP", ns)
     hyp_tag = _tag("HYP", ns)
@@ -133,9 +137,14 @@ def _extract_text_from_line(el: etree._Element, ns: str) -> str:
         elif child.tag == sp_tag:
             parts.append(" ")
         elif child.tag == hyp_tag:
-            content = child.get("CONTENT", "-")
-            if content:
-                parts.append(content)
+            hyp_char = child.get("CONTENT", "-")
+            if hyp_char == "\u00ad":
+                hyp_char = "-"
+            current = "".join(parts)
+            if current.endswith("-"):
+                continue
+            if hyp_char:
+                parts.append(hyp_char)
     return "".join(parts)
 
 

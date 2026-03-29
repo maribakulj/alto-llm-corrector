@@ -393,13 +393,13 @@ class TestSampleCorpus:
             "TL2": "La France traversa une période troublée.",  # fix Frauce, uue, tronblée
             "TL3": "Les citoyens se soulevèrent contre l'oppression.",  # fix citoyeus etc
             "TL5": "çait les abus du pouvoir absolu.",  # fix pouvolr
-            "TL8": "L'assemblée nationale proclama les droits fonda--",  # fix uationale, keep --
+            "TL8": "L'assemblée nationale proclama les droits fonda-",  # fix uationale
             "TL9": "mentaux de l'homme et du citoyen.",  # fix l'hoinme, citoyeu
             "TL10": "Ces principes allaient transformer le monde entier.",  # fix priucipes etc
         }
         # Corrections for hyphen lines (keep structure)
         hyphen_corrections = {
-            "TL4": "Le peuple réclamait la liberté et dénon--",  # same words, keep --
+            "TL4": "Le peuple réclamait la liberté et dénon-",  # same words
             "TL6": "Chaque journée apportait son lot de bouleverse-",  # fix jouruée, sou, bouleYerse
             "TL7": "ments.",  # unchanged
         }
@@ -572,11 +572,11 @@ def test_diagnostic_report(tmp_path, capsys):
         "TL1": "HISTOIRE DE LA RÉVOLUTION",
         "TL2": "La France traversa une période troublée.",
         "TL3": "Les citoyens se soulevèrent contre l'oppression.",
-        "TL4": "Le peuple réclamait la liberté et dénon--",
+        "TL4": "Le peuple réclamait la liberté et dénon-",
         "TL5": "çait les abus du pouvoir absolu.",
         "TL6": "Chaque journée apportait son lot de bouleverse-",
         "TL7": "ments.",
-        "TL8": "L'assemblée nationale proclama les droits fonda--",
+        "TL8": "L'assemblée nationale proclama les droits fonda-",
         "TL9": "mentaux de l'homme et du citoyen.",
         "TL10": "Ces principes allaient transformer le monde entier.",
     }
