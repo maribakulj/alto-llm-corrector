@@ -127,11 +127,6 @@ def _try_block(
             if pair and pair.block_id != lm.block_id:
                 if lm.block_id in parent and pair.block_id in parent:
                     union(lm.block_id, pair.block_id)
-        elif lm.hyphen_role == HyphenRole.BOTH and lm.hyphen_forward_pair_id:
-            pair = line_by_id.get(lm.hyphen_forward_pair_id)
-            if pair and pair.block_id != lm.block_id:
-                if lm.block_id in parent and pair.block_id in parent:
-                    union(lm.block_id, pair.block_id)
 
     # Collect groups in page order (use dict to deduplicate while preserving order)
     seen_roots: dict[str, None] = {}
@@ -244,16 +239,12 @@ def _plan_line(
     i = 0
     while i < len(lines):
         lm = lines[i]
-        # PART1+PART2 are atomic (also BOTH's forward partner)
-        forward_pair = (
-            lm.hyphen_pair_line_id if lm.hyphen_role == HyphenRole.PART1
-            else lm.hyphen_forward_pair_id if lm.hyphen_role == HyphenRole.BOTH
-            else None
-        )
+        # PART1+PART2 are atomic
         if (
-            forward_pair
+            lm.hyphen_role == HyphenRole.PART1
+            and lm.hyphen_pair_line_id
             and i + 1 < len(lines)
-            and lines[i + 1].line_id == forward_pair
+            and lines[i + 1].line_id == lm.hyphen_pair_line_id
         ):
             chunks.append(
                 _make_chunk(
