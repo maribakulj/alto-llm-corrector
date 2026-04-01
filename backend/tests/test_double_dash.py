@@ -104,7 +104,7 @@ class TestContentDashPlusHypDash:
         path = _write(tmp_path, "dd.xml", xml)
         pages, _ = parse_alto_file(path, "dd.xml")
 
-        xml_bytes, metrics, _paths = rewrite_alto_file(path, pages, "test", "model")
+        xml_bytes, metrics = rewrite_alto_file(path, pages, "test", "model")
         assert metrics.untouched == 2
         root = etree.fromstring(xml_bytes)
         hyps = root.findall(f".//{_ns('HYP')}")

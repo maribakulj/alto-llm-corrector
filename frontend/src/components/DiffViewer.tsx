@@ -74,19 +74,16 @@ function TokenSpan({ token }: { token: Token }) {
 // DiffRow — one TextLine
 // ---------------------------------------------------------------------------
 
-function DiffRow({ line, selected, onSelect }: { line: DiffLine; selected: boolean; onSelect?: () => void }) {
+function DiffRow({ line }: { line: DiffLine }) {
   const isModified = line.modified
   const hasHyphen = line.hyphen_role !== 'none'
 
-  const rowBase = [
-    'grid grid-cols-[5rem_1fr_1fr] gap-x-3 items-start py-2 border-b border-slate-800/60 text-sm',
-    onSelect ? 'cursor-pointer hover:bg-slate-700/30' : '',
-    selected ? 'bg-amber-500/10 ring-1 ring-amber-500/30' : '',
-  ].join(' ')
+  const rowBase =
+    'grid grid-cols-[5rem_1fr_1fr] gap-x-3 items-start py-2 border-b border-slate-800/60 text-sm'
 
   if (!isModified) {
     return (
-      <div className={rowBase} onClick={onSelect}>
+      <div className={rowBase}>
         {/* line_id */}
         <span className="font-mono text-[10px] text-slate-600 pt-0.5 truncate">
           {line.line_id}
@@ -102,7 +99,7 @@ function DiffRow({ line, selected, onSelect }: { line: DiffLine; selected: boole
   const { ocrTokens, corrTokens } = tokenDiff(line.ocr_text, line.corrected_text)
 
   return (
-    <div className={rowBase} onClick={onSelect}>
+    <div className={rowBase}>
       {/* line_id + hyphen badge */}
       <div className="flex flex-col gap-1 pt-0.5">
         <span className="font-mono text-[10px] text-slate-600 truncate">
@@ -136,11 +133,9 @@ function DiffRow({ line, selected, onSelect }: { line: DiffLine; selected: boole
 
 interface DiffViewerProps {
   data: DiffData
-  selectedLineId?: string | null
-  onSelectLine?: (lineId: string) => void
 }
 
-export function DiffViewer({ data, selectedLineId, onSelectLine }: DiffViewerProps) {
+export function DiffViewer({ data }: DiffViewerProps) {
   const [pageIdx, setPageIdx] = useState(0)
   const currentPage = data.pages[pageIdx] ?? data.pages[0]
   const { total_lines, modified_lines, hyphen_pairs } = data.stats
@@ -191,12 +186,7 @@ export function DiffViewer({ data, selectedLineId, onSelectLine }: DiffViewerPro
       {/* Lines */}
       <div className="px-4 divide-y divide-slate-800/0 max-h-[32rem] overflow-y-auto">
         {currentPage.lines.map((line) => (
-          <DiffRow
-            key={line.line_id}
-            line={line}
-            selected={selectedLineId === line.line_id}
-            onSelect={onSelectLine ? () => onSelectLine(line.line_id) : undefined}
-          />
+          <DiffRow key={line.line_id} line={line} />
         ))}
       </div>
     </div>
