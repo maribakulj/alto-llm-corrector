@@ -159,36 +159,12 @@ def _line_text_unchanged(el: etree._Element, corrected: str, ns: str) -> bool:
 def _desired_subs(
     manifest: LineManifest,
 ) -> tuple[Optional[str], Optional[str]]:
-    """Return (wanted_subs_type, wanted_subs_content) for the primary role.
-
-    For PART1: backward subs on last String.
-    For PART2: backward subs on first String.
-    For BOTH: backward subs on first String (forward handled separately).
-    """
-    if manifest.hyphen_role == HyphenRole.PART1:
-        if manifest.hyphen_source_explicit and manifest.hyphen_subs_content:
+    """Return (wanted_subs_type, wanted_subs_content) based on validated state."""
+    if manifest.hyphen_source_explicit and manifest.hyphen_subs_content:
+        if manifest.hyphen_role == HyphenRole.PART1:
             return "HypPart1", manifest.hyphen_subs_content
-    elif manifest.hyphen_role == HyphenRole.PART2:
-        if manifest.hyphen_source_explicit and manifest.hyphen_subs_content:
+        if manifest.hyphen_role == HyphenRole.PART2:
             return "HypPart2", manifest.hyphen_subs_content
-    elif manifest.hyphen_role == HyphenRole.BOTH:
-        # Backward (PART2 side) on first String
-        if manifest.hyphen_source_explicit and manifest.hyphen_subs_content:
-            return "HypPart2", manifest.hyphen_subs_content
-    return None, None
-
-
-def _desired_forward_subs(
-    manifest: LineManifest,
-) -> tuple[Optional[str], Optional[str]]:
-    """Return (wanted_subs_type, wanted_subs_content) for the forward/PART1 role.
-
-    Only applies to BOTH lines.
-    """
-    if manifest.hyphen_role != HyphenRole.BOTH:
-        return None, None
-    if manifest.hyphen_forward_explicit and manifest.hyphen_forward_subs_content:
-        return "HypPart1", manifest.hyphen_forward_subs_content
     return None, None
 
 
@@ -197,7 +173,7 @@ def _subs_target(
     manifest: LineManifest,
     ns: str,
 ) -> Optional[etree._Element]:
-    """Return the String element that should carry backward SUBS attributes."""
+    """Return the String element that should carry SUBS attributes, or None."""
     strings = _get_string_children(el, ns)
     if not strings:
         return None
@@ -205,8 +181,6 @@ def _subs_target(
         return strings[-1]
     if manifest.hyphen_role == HyphenRole.PART2:
         return strings[0]
-    if manifest.hyphen_role == HyphenRole.BOTH:
-        return strings[0]  # backward (PART2) subs on first String
     return None
 
 
@@ -218,41 +192,14 @@ def _subs_need_update(
     """Return True if the XML SUBS state differs from the desired state."""
     if manifest.hyphen_role == HyphenRole.NONE:
         return False
-
-    # Check backward subs
     want_type, want_content = _desired_subs(manifest)
     target = _subs_target(el, manifest, ns)
     if target is None:
-        if want_type is not None:
-            return True
-    elif target.get("SUBS_TYPE") != want_type or target.get("SUBS_CONTENT") != want_content:
-        return True
-
-    # Check forward subs for BOTH lines
-    if manifest.hyphen_role == HyphenRole.BOTH:
-        fw_type, fw_content = _desired_forward_subs(manifest)
-        strings = _get_string_children(el, ns)
-        if strings:
-            last = strings[-1]
-            if last.get("SUBS_TYPE") != fw_type or last.get("SUBS_CONTENT") != fw_content:
-                return True
-
-    return False
-
-
-def _set_subs_on_element(
-    target: etree._Element,
-    want_type: Optional[str],
-    want_content: Optional[str],
-) -> None:
-    """Set or remove SUBS_TYPE/SUBS_CONTENT on a single element."""
-    if want_type and want_content:
-        target.set("SUBS_TYPE", want_type)
-        target.set("SUBS_CONTENT", want_content)
-    else:
-        for attr in ("SUBS_TYPE", "SUBS_CONTENT"):
-            if attr in target.attrib:
-                del target.attrib[attr]
+        return want_type is not None
+    return (
+        target.get("SUBS_TYPE") != want_type
+        or target.get("SUBS_CONTENT") != want_content
+    )
 
 
 def _apply_subs(
@@ -260,20 +207,18 @@ def _apply_subs(
     manifest: LineManifest,
     ns: str,
 ) -> None:
-    """Set or remove SUBS_TYPE/SUBS_CONTENT on the correct String element(s)."""
-    # Backward subs
+    """Set or remove SUBS_TYPE/SUBS_CONTENT on the correct String element."""
     target = _subs_target(el, manifest, ns)
-    if target is not None:
-        want_type, want_content = _desired_subs(manifest)
-        _set_subs_on_element(target, want_type, want_content)
-
-    # Forward subs for BOTH lines (on last String)
-    if manifest.hyphen_role == HyphenRole.BOTH:
-        strings = _get_string_children(el, ns)
-        if strings and len(strings) > 1:
-            last = strings[-1]
-            fw_type, fw_content = _desired_forward_subs(manifest)
-            _set_subs_on_element(last, fw_type, fw_content)
+    if target is None:
+        return
+    want_type, want_content = _desired_subs(manifest)
+    if want_type and want_content:
+        target.set("SUBS_TYPE", want_type)
+        target.set("SUBS_CONTENT", want_content)
+    else:
+        for attr in ("SUBS_TYPE", "SUBS_CONTENT"):
+            if attr in target.attrib:
+                del target.attrib[attr]
 
 
 # ---------------------------------------------------------------------------
@@ -575,7 +520,7 @@ def rewrite_alto_file(
             continue
 
         # --- Path 4: SLOW PATH (word count changed) ---
-        if lm.hyphen_role in (HyphenRole.PART1, HyphenRole.BOTH):
+        if lm.hyphen_role == HyphenRole.PART1:
             _rebuild_hyp_part1(tl_el, corrected, lm, ns)
         elif lm.hyphen_role == HyphenRole.PART2:
             _rebuild_hyp_part2(tl_el, corrected, lm, ns)

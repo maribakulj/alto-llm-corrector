@@ -53,26 +53,6 @@ def enrich_chunk_lines(
                     next_text=next_text,
                 )
             )
-        elif lm.hyphen_role == HyphenRole.BOTH:
-            # Chained: PART2 of previous pair + PART1 of next pair
-            # Use forward subs as the primary join candidate for the LLM
-            result.append(
-                LLMLineInput(
-                    line_id=lm.line_id,
-                    prev_text=prev_text,
-                    ocr_text=lm.ocr_text,
-                    next_text=next_text,
-                    hyphenation_role=lm.hyphen_role.value,
-                    hyphen_candidate=True,
-                    hyphen_join_with_next=True,
-                    hyphen_join_with_prev=True,
-                    logical_join_candidate=(
-                        lm.hyphen_forward_subs_content
-                        or lm.hyphen_subs_content
-                        or None
-                    ),
-                )
-            )
         else:
             result.append(
                 LLMLineInput(
@@ -300,26 +280,10 @@ def should_stay_in_same_chunk(
     Return True if line_a and line_b must be in the same LLM chunk
     because they form a hyphenated pair.
     """
-    # PART1 → its forward partner
-    if (
+    return (
         line_a.hyphen_role == HyphenRole.PART1
         and line_a.hyphen_pair_line_id == line_b.line_id
-    ):
-        return True
-    if (
+    ) or (
         line_b.hyphen_role == HyphenRole.PART1
         and line_b.hyphen_pair_line_id == line_a.line_id
-    ):
-        return True
-    # BOTH → its forward partner (via forward_pair_id)
-    if (
-        line_a.hyphen_role == HyphenRole.BOTH
-        and line_a.hyphen_forward_pair_id == line_b.line_id
-    ):
-        return True
-    if (
-        line_b.hyphen_role == HyphenRole.BOTH
-        and line_b.hyphen_forward_pair_id == line_a.line_id
-    ):
-        return True
-    return False
+    )

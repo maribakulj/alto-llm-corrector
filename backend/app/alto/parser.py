@@ -96,81 +96,37 @@ def _detect_hyphenation(lines: list[LineManifest]) -> None:
 
 def _link_hyphen_pairs(lines: list[LineManifest]) -> None:
     """
-    Second pass: link PART1/BOTH lines to their forward partners.
-
-    A line with role PART1 or BOTH has a forward PART1 relationship.
-    The next line is linked as PART2/BOTH (backward side).
-
-    For PART1:  pair_line_id = forward partner, subs_content = pair subs
-    For BOTH:   forward_pair_id = forward partner, forward_subs_content = pair subs
-                (backward fields were already set by a previous iteration)
+    Second pass: for every line already marked PART1, link to the next line
+    as PART2, and propagate SUBS_CONTENT bidirectionally.
     """
     for i, line in enumerate(lines):
-        # Skip lines that don't have a forward (PART1) role
-        if line.hyphen_role not in (HyphenRole.PART1, HyphenRole.BOTH):
+        if line.hyphen_role != HyphenRole.PART1:
             continue
         if i + 1 >= len(lines):
             continue
 
         candidate = lines[i + 1]
 
-        # Accept PART2, BOTH, or NONE as forward partner
-        if candidate.hyphen_role not in (
-            HyphenRole.PART2, HyphenRole.BOTH, HyphenRole.NONE,
-        ):
+        # Accept explicit PART2 or heuristic candidate (NONE with trailing dash
+        # already cleared to PART2 in first pass, or still NONE for heuristic
+        # cases where the next line is a plain continuation).
+        if candidate.hyphen_role not in (HyphenRole.PART2, HyphenRole.NONE):
             continue
 
-        # Mark NONE candidate as PART2
+        # Mark the candidate as PART2 if it isn't already
         if candidate.hyphen_role == HyphenRole.NONE:
-            if line.hyphen_role == HyphenRole.BOTH:
-                candidate.hyphen_role = HyphenRole.PART2
-                candidate.hyphen_source_explicit = line.hyphen_forward_explicit
-            else:
-                candidate.hyphen_role = HyphenRole.PART2
-                candidate.hyphen_source_explicit = line.hyphen_source_explicit
+            candidate.hyphen_role = HyphenRole.PART2
+            candidate.hyphen_source_explicit = line.hyphen_source_explicit
 
-        # Determine subs_content for this pair
-        if line.hyphen_role == HyphenRole.BOTH:
-            # Forward side of a BOTH line
-            subs = line.hyphen_forward_subs_content
-            if not subs and candidate.hyphen_role == HyphenRole.PART2:
-                subs = candidate.hyphen_subs_content
-            elif not subs and candidate.hyphen_role == HyphenRole.BOTH:
-                subs = candidate.hyphen_subs_content  # backward subs of candidate
+        # Bidirectional link
+        line.hyphen_pair_line_id = candidate.line_id
+        candidate.hyphen_pair_line_id = line.line_id
 
-            # Set forward link on the BOTH line
-            line.hyphen_forward_pair_id = candidate.line_id
-            if subs:
-                line.hyphen_forward_subs_content = subs
-
-            # Set backward link on the candidate
-            if candidate.hyphen_role == HyphenRole.BOTH:
-                candidate.hyphen_pair_line_id = line.line_id
-                if subs:
-                    candidate.hyphen_subs_content = subs
-            else:
-                candidate.hyphen_pair_line_id = line.line_id
-                if subs:
-                    candidate.hyphen_subs_content = subs
-        else:
-            # Regular PART1 line
-            subs = line.hyphen_subs_content or candidate.hyphen_subs_content
-            if candidate.hyphen_role == HyphenRole.BOTH:
-                subs = subs or candidate.hyphen_subs_content
-
-            # Bidirectional link
-            line.hyphen_pair_line_id = candidate.line_id
-            if candidate.hyphen_role == HyphenRole.BOTH:
-                candidate.hyphen_pair_line_id = line.line_id
-            else:
-                candidate.hyphen_pair_line_id = line.line_id
-
-            if subs:
-                line.hyphen_subs_content = subs
-                if candidate.hyphen_role == HyphenRole.BOTH:
-                    candidate.hyphen_subs_content = subs
-                else:
-                    candidate.hyphen_subs_content = subs
+        # Propagate SUBS_CONTENT
+        subs = line.hyphen_subs_content or candidate.hyphen_subs_content
+        if subs:
+            line.hyphen_subs_content = subs
+            candidate.hyphen_subs_content = subs
 
 
 def _parse_textline_hyphen_info(
@@ -182,10 +138,6 @@ def _parse_textline_hyphen_info(
     First-pass hyphenation scan for a single TextLine.
     Fills hyphen_role / hyphen_source_explicit / hyphen_subs_content
     directly on the LineManifest.
-
-    A line can be both PART2 (first String has SUBS_TYPE="HypPart2") AND
-    PART1 (trailing HYP element or last String has SUBS_TYPE="HypPart1").
-    In that case, role is set to BOTH with forward fields for the PART1 side.
     """
     children = list(textline)
     if not children:
@@ -195,73 +147,54 @@ def _parse_textline_hyphen_info(
     hyp_tag = _tag("HYP", ns)
 
     # --- Detect PART2: first String has SUBS_TYPE="HypPart2" ---
-    is_part2 = False
-    backward_subs: Optional[str] = None
-
     first_string = next(
         (c for c in children if c.tag == string_tag), None
     )
     if first_string is not None:
         subs_type = first_string.get("SUBS_TYPE", "")
         if subs_type == "HypPart2":
-            is_part2 = True
-            backward_subs = first_string.get("SUBS_CONTENT")
+            line.hyphen_role = HyphenRole.PART2
+            line.hyphen_source_explicit = True
+            subs_content = first_string.get("SUBS_CONTENT")
+            if subs_content:
+                line.hyphen_subs_content = subs_content
+            return  # done for PART2
 
-    # --- Detect PART1: trailing HYP, or last String SUBS_TYPE="HypPart1",
-    #     or heuristic trailing dash ---
-    is_part1 = False
-    forward_subs: Optional[str] = None
-    forward_explicit = False
+    # --- Detect PART1: last meaningful element is HYP, or last String has
+    #     SUBS_TYPE="HypPart1" ---
 
+    # Check for trailing HYP element
     last_child = children[-1]
     if etree.QName(last_child.tag).localname == "HYP":
-        is_part1 = True
-        forward_explicit = True
+        line.hyphen_role = HyphenRole.PART1
+        line.hyphen_source_explicit = True
+        # Try to get SUBS_CONTENT from the String just before HYP
         prev_strings = [c for c in children if c.tag == string_tag]
         if prev_strings:
-            sc = prev_strings[-1].get("SUBS_CONTENT")
-            if sc:
-                forward_subs = sc
-    else:
-        last_string = next(
-            (c for c in reversed(children) if c.tag == string_tag), None
-        )
-        if last_string is not None:
-            if last_string.get("SUBS_TYPE", "") == "HypPart1":
-                is_part1 = True
-                forward_explicit = True
-                sc = last_string.get("SUBS_CONTENT")
-                if sc:
-                    forward_subs = sc
+            subs_content = prev_strings[-1].get("SUBS_CONTENT")
+            if subs_content:
+                line.hyphen_subs_content = subs_content
+        return
 
-    # Heuristic: last non-space token ends with "-"
-    if not is_part1:
-        tokens = line.ocr_text.split()
-        if tokens and tokens[-1].endswith("-"):
-            is_part1 = True
-            forward_explicit = False
+    # Check last String for SUBS_TYPE="HypPart1"
+    last_string = next(
+        (c for c in reversed(children) if c.tag == string_tag), None
+    )
+    if last_string is not None:
+        subs_type = last_string.get("SUBS_TYPE", "")
+        if subs_type == "HypPart1":
+            line.hyphen_role = HyphenRole.PART1
+            line.hyphen_source_explicit = True
+            subs_content = last_string.get("SUBS_CONTENT")
+            if subs_content:
+                line.hyphen_subs_content = subs_content
+            return
 
-    # --- Set role based on detection ---
-    if is_part2 and is_part1:
-        line.hyphen_role = HyphenRole.BOTH
-        # Backward (PART2 side) in existing fields
-        line.hyphen_source_explicit = True  # PART2 from SUBS_TYPE is always explicit
-        if backward_subs:
-            line.hyphen_subs_content = backward_subs
-        # Forward (PART1 side) in new fields
-        line.hyphen_forward_explicit = forward_explicit
-        if forward_subs:
-            line.hyphen_forward_subs_content = forward_subs
-    elif is_part2:
-        line.hyphen_role = HyphenRole.PART2
-        line.hyphen_source_explicit = True
-        if backward_subs:
-            line.hyphen_subs_content = backward_subs
-    elif is_part1:
+    # --- Heuristic: last non-space token ends with "-" ---
+    tokens = line.ocr_text.split()
+    if tokens and tokens[-1].endswith("-"):
         line.hyphen_role = HyphenRole.PART1
-        line.hyphen_source_explicit = forward_explicit
-        if forward_subs:
-            line.hyphen_subs_content = forward_subs
+        line.hyphen_source_explicit = False
 
 
 # ---------------------------------------------------------------------------
