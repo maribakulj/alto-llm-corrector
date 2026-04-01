@@ -1,4 +1,4 @@
-import type { DiffData, LayoutData, ModelInfo, Provider, TraceData } from '../types'
+import type { DiffData, LayoutData, ModelInfo, Provider } from '../types'
 
 // proxied via vite → http://localhost:8000
 const BASE = ''
@@ -74,19 +74,6 @@ export async function fetchDiff(jobId: string): Promise<DiffData> {
     throw new Error(err.detail ?? 'Failed to fetch diff')
   }
   return resp.json() as Promise<DiffData>
-}
-
-// ---------------------------------------------------------------------------
-// fetchTrace
-// ---------------------------------------------------------------------------
-
-export async function fetchTrace(jobId: string): Promise<TraceData> {
-  const resp = await fetch(`${BASE}/api/jobs/${jobId}/trace`)
-  if (!resp.ok) {
-    const err = await resp.json().catch(() => ({ detail: resp.statusText }))
-    throw new Error(err.detail ?? 'Failed to fetch trace')
-  }
-  return resp.json() as Promise<TraceData>
 }
 
 // ---------------------------------------------------------------------------

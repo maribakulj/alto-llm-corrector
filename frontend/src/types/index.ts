@@ -160,27 +160,3 @@ export interface JobStats {
   hyphen_pairs: number
   duration_seconds: number
 }
-
-// ---------------------------------------------------------------------------
-// Line trace (Sprint 5bis / Sprint 6 debug)
-// ---------------------------------------------------------------------------
-
-export interface LineTrace {
-  line_id: string
-  page_id: string
-  source_ocr_text: string
-  model_input_text: string | null
-  model_corrected_text: string | null
-  projected_text: string | null
-  output_alto_text: string | null
-  hyphen_role: string | null
-  rewriter_path: string | null
-  validation_status: string | null
-  fallback_reason: string | null
-}
-
-export interface TraceData {
-  job_id: string
-  total_lines: number
-  lines: LineTrace[]
-}

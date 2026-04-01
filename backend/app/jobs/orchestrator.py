@@ -2,14 +2,13 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import time
 from pathlib import Path
 from typing import Any, Optional
 
 from app.alto.hyphenation import enrich_chunk_lines, reconcile_hyphen_pair
-from app.alto.rewriter import extract_output_texts, rewrite_alto_file
+from app.alto.rewriter import rewrite_alto_file
 from app.jobs.chunk_planner import plan_page
 from app.jobs.store import job_store
 from app.jobs.validator import validate_llm_response
@@ -20,10 +19,8 @@ from app.schemas import (
     DocumentManifest,
     HyphenRole,
     JobStatus,
-    JobTrace,
     LineManifest,
     LineStatus,
-    LineTrace,
     LLMUserPayload,
     PageManifest,
 )
@@ -99,7 +96,6 @@ async def _run_chunk(
     api_key: str,
     model: str,
     provider_name: str,
-    traces: Optional[dict[str, LineTrace]] = None,
 ) -> int:
     """
     Process one chunk through the LLM pipeline.
@@ -127,17 +123,6 @@ async def _run_chunk(
         temperature = 0.0 if (attempt > 1 or hyphen_violation) else 0.0
 
         enriched = enrich_chunk_lines(chunk_lines, all_lines_by_id)
-
-        # --- Trace: model_input_text ---
-        if traces is not None:
-            enriched_by_id = {e.line_id: e for e in enriched}
-            for lm in chunk_lines:
-                t = traces.get(lm.line_id)
-                if t is not None:
-                    ei = enriched_by_id.get(lm.line_id)
-                    if ei is not None:
-                        t.model_input_text = ei.ocr_text
-
         payload = LLMUserPayload(
             granularity=chunk.granularity,
             document_id=chunk.document_id,
@@ -156,16 +141,6 @@ async def _run_chunk(
                 json_schema=OUTPUT_JSON_SCHEMA,
                 temperature=temperature,
             )
-
-            # --- Trace: capture raw LLM output before validation ---
-            if traces is not None:
-                raw_lines = raw.get("lines", []) if isinstance(raw, dict) else []
-                for rl in raw_lines:
-                    lid = rl.get("line_id", "") if isinstance(rl, dict) else ""
-                    rt = rl.get("corrected_text", "") if isinstance(rl, dict) else ""
-                    t = traces.get(lid)
-                    if t is not None:
-                        t.model_corrected_text = rt
 
             # Build subs mapping for fusion detection in the validator
             hyphen_subs: dict[str, str] = {}
@@ -221,12 +196,6 @@ async def _run_chunk(
             for lm in chunk_lines:
                 lm.corrected_text = lm.ocr_text
                 lm.status = LineStatus.FALLBACK
-                if traces is not None:
-                    t = traces.get(lm.line_id)
-                    if t is not None:
-                        t.projected_text = lm.ocr_text
-                        t.validation_status = "fallback"
-                        t.fallback_reason = f"all_attempts_exhausted: {msg[:120]}"
             job_store.update_job(job_id,
                 fallbacks=getattr(job_store.get_job(job_id), "fallbacks", 0) + 1)
             return 0
@@ -312,17 +281,6 @@ async def _run_chunk(
                         lm.corrected_text = corrected
                         lm.status = LineStatus.CORRECTED
 
-        # --- Trace: projected_text + validation_status ---
-        if traces is not None:
-            for lm in chunk_lines:
-                t = traces.get(lm.line_id)
-                if t is None:
-                    continue
-                t.projected_text = lm.corrected_text if lm.corrected_text is not None else lm.ocr_text
-                t.validation_status = lm.status.value
-                if lm.status == LineStatus.FALLBACK and not t.fallback_reason:
-                    t.fallback_reason = "drift_guard"
-
         job_store.emit(job_id, "chunk_completed", {
             "chunk_id": chunk.chunk_id,
             "line_count": len(chunk_lines),
@@ -391,17 +349,6 @@ async def run_job(
         total_reconciled = 0
         config = _DEFAULT_CONFIG
 
-        # --- Initialize line traces ---
-        traces: dict[str, LineTrace] = {}
-        for page in document_manifest.pages:
-            for lm in page.lines:
-                traces[lm.line_id] = LineTrace(
-                    line_id=lm.line_id,
-                    page_id=lm.page_id,
-                    source_ocr_text=lm.ocr_text,
-                    hyphen_role=lm.hyphen_role.value,
-                )
-
         for page in document_manifest.pages:
             # Build a page-local line lookup to prevent ID collisions across pages.
             # Multiple ALTO files often reuse the same TextLine IDs (e.g. "l0001").
@@ -439,7 +386,6 @@ async def run_job(
                     n = await _run_chunk(
                         job_id, chunk, line_by_id,
                         provider, api_key, model, provider_name,
-                        traces=traces,
                     )
                     page_reconciled += n
                 except Exception as exc:
@@ -473,39 +419,10 @@ async def run_job(
             if not pages_for_file:
                 continue
 
-            xml_bytes, _rewriter_metrics, rewriter_paths = rewrite_alto_file(xml_path, pages_for_file, provider_name, model)
+            xml_bytes, _rewriter_metrics = rewrite_alto_file(xml_path, pages_for_file, provider_name, model)
             stem = xml_path.stem
             out_path = output_dir / f"{stem}_corrected.xml"
             out_path.write_bytes(xml_bytes)
-
-            # --- Trace: rewriter_path per line ---
-            for lid, rpath in rewriter_paths.items():
-                t = traces.get(lid)
-                if t is not None:
-                    t.rewriter_path = rpath
-
-            # --- Trace: output_alto_text per line ---
-            file_line_ids = {
-                lm.line_id for p in pages_for_file for lm in p.lines
-            }
-            output_texts = extract_output_texts(xml_bytes, file_line_ids)
-            for lid, otxt in output_texts.items():
-                t = traces.get(lid)
-                if t is not None:
-                    t.output_alto_text = otxt
-
-        # --- Write trace.json ---
-        job_trace = JobTrace(
-            job_id=job_id,
-            total_lines=len(traces),
-            lines=list(traces.values()),
-        )
-        trace_path = output_dir / "trace.json"
-        trace_path.write_text(
-            job_trace.model_dump_json(indent=2),
-            encoding="utf-8",
-        )
-        job_store.update_job(job_id, line_traces=traces)
 
         lines_modified = sum(
             1 for page in document_manifest.pages
