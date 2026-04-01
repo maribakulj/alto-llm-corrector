@@ -44,6 +44,7 @@ class HyphenRole(str, Enum):
     NONE = "none"
     PART1 = "HypPart1"   # last line of pair: carries left fragment + hyphen
     PART2 = "HypPart2"   # first line of pair: carries right fragment
+    BOTH = "HypBoth"     # PART2 of previous pair AND PART1 of next pair (chained)
 
 
 # ---------------------------------------------------------------------------
@@ -77,10 +78,17 @@ class LineManifest(BaseModel):
     status: LineStatus = LineStatus.PENDING
 
     # Hyphenation fields
+    # For PART1: pair_line_id = forward partner (the PART2 line)
+    # For PART2: pair_line_id = backward partner (the PART1 line)
+    # For BOTH:  pair_line_id = backward partner, forward_* = forward partner
     hyphen_role: HyphenRole = HyphenRole.NONE
     hyphen_pair_line_id: Optional[str] = None
     hyphen_subs_content: Optional[str] = None
     hyphen_source_explicit: bool = False
+    # Forward link fields — used only when role == BOTH (chained hyphenation)
+    hyphen_forward_pair_id: Optional[str] = None
+    hyphen_forward_subs_content: Optional[str] = None
+    hyphen_forward_explicit: bool = False
 
 
 class BlockManifest(BaseModel):

@@ -43,6 +43,10 @@ def _build_hyphen_pairs(
         if lm.hyphen_role == HyphenRole.PART1 and lm.hyphen_pair_line_id:
             pairs[lm.line_id] = lm.hyphen_pair_line_id
             pairs[lm.hyphen_pair_line_id] = lm.line_id
+        elif lm.hyphen_role == HyphenRole.BOTH and lm.hyphen_forward_pair_id:
+            # Forward (PART1) side of a BOTH line
+            pairs[lm.line_id] = lm.hyphen_forward_pair_id
+            pairs[lm.hyphen_forward_pair_id] = lm.line_id
     return pairs
 
 
@@ -75,7 +79,8 @@ def _line_drift_too_large(ocr_text: str, corrected_text: str) -> bool:
 def _count_hyphen_pairs_in_chunk(lines: list[LineManifest]) -> int:
     return sum(
         1 for lm in lines
-        if lm.hyphen_role == HyphenRole.PART1 and lm.hyphen_pair_line_id
+        if (lm.hyphen_role == HyphenRole.PART1 and lm.hyphen_pair_line_id)
+        or (lm.hyphen_role == HyphenRole.BOTH and lm.hyphen_forward_pair_id)
     )
 
 
@@ -138,12 +143,12 @@ async def _run_chunk(
             )
 
             # Build subs mapping for fusion detection in the validator
-            hyphen_subs = {
-                lm.line_id: lm.hyphen_subs_content
-                for lm in chunk_lines
-                if lm.hyphen_role == HyphenRole.PART1
-                and lm.hyphen_subs_content
-            }
+            hyphen_subs: dict[str, str] = {}
+            for lm in chunk_lines:
+                if lm.hyphen_role == HyphenRole.PART1 and lm.hyphen_subs_content:
+                    hyphen_subs[lm.line_id] = lm.hyphen_subs_content
+                elif lm.hyphen_role == HyphenRole.BOTH and lm.hyphen_forward_subs_content:
+                    hyphen_subs[lm.line_id] = lm.hyphen_forward_subs_content
 
             response = validate_llm_response(
                 raw,
@@ -203,6 +208,7 @@ async def _run_chunk(
         processed_part2: set[str] = set()
 
         for lm in chunk_lines:
+            # Process PART1 lines (forward link via hyphen_pair_line_id)
             if lm.hyphen_role == HyphenRole.PART1 and lm.hyphen_pair_line_id:
                 part2_id = lm.hyphen_pair_line_id
                 if part2_id in processed_part2:
@@ -220,9 +226,41 @@ async def _run_chunk(
 
                 lm.corrected_text = final_p1
                 lm.status = LineStatus.CORRECTED
-                # Only keep SUBS_CONTENT when reconcile positively confirmed it.
-                # None means "uncertain" — neutralise to avoid incoherent metadata.
                 lm.hyphen_subs_content = subs
+
+                part2.corrected_text = final_p2
+                part2.status = LineStatus.CORRECTED
+                part2.hyphen_subs_content = subs
+
+                processed_part2.add(part2_id)
+                reconciled_count += 1
+
+            # Process BOTH lines (forward link via hyphen_forward_pair_id)
+            elif lm.hyphen_role == HyphenRole.BOTH and lm.hyphen_forward_pair_id:
+                part2_id = lm.hyphen_forward_pair_id
+                if part2_id in processed_part2:
+                    continue
+                part2 = line_by_id.get(part2_id)
+                if part2 is None:
+                    continue
+
+                corrected_p1 = text_by_id.get(lm.line_id, lm.corrected_text or lm.ocr_text)
+                corrected_p2 = text_by_id.get(part2_id, part2.ocr_text)
+
+                # Build a temporary manifest with forward subs for reconciliation
+                from copy import copy
+                lm_as_part1 = copy(lm)
+                lm_as_part1.hyphen_role = HyphenRole.PART1
+                lm_as_part1.hyphen_subs_content = lm.hyphen_forward_subs_content
+                lm_as_part1.hyphen_source_explicit = lm.hyphen_forward_explicit
+
+                final_p1, final_p2, subs = reconcile_hyphen_pair(
+                    lm_as_part1, part2, corrected_p1, corrected_p2
+                )
+
+                lm.corrected_text = final_p1
+                lm.status = LineStatus.CORRECTED
+                lm.hyphen_forward_subs_content = subs
 
                 part2.corrected_text = final_p2
                 part2.status = LineStatus.CORRECTED
@@ -287,7 +325,10 @@ async def run_job(
 
         # Count total hyphen pairs in document
         total_hyphen_pairs = sum(
-            sum(1 for lm in page.lines if lm.hyphen_role == HyphenRole.PART1)
+            sum(
+                1 for lm in page.lines
+                if lm.hyphen_role in (HyphenRole.PART1, HyphenRole.BOTH)
+            )
             for page in document_manifest.pages
         )
 
@@ -317,7 +358,8 @@ async def run_job(
             # so a page-local dict is fully sufficient for context enrichment too.
             line_by_id: dict[str, LineManifest] = {lm.line_id: lm for lm in page.lines}
             page_hyphen_pairs = sum(
-                1 for lm in page.lines if lm.hyphen_role == HyphenRole.PART1
+                1 for lm in page.lines
+                if lm.hyphen_role in (HyphenRole.PART1, HyphenRole.BOTH)
             )
             job_store.emit(job_id, "page_started", {
                 "page_id": page.page_id,
