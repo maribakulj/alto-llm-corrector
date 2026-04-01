@@ -170,11 +170,14 @@ def link_alto_to_images(
 
 
 def get_output_files(job_id: str) -> list[Path]:
-    """Return all files in output_dir(job_id), sorted by name."""
+    """Return corrected XML files in output_dir(job_id), sorted by name."""
     d = output_dir(job_id)
     if not d.exists():
         return []
-    return sorted(d.iterdir())
+    return sorted(
+        p for p in d.iterdir()
+        if p.suffix.lower() in (".xml", ".alto")
+    )
 
 
 def cleanup_job(job_id: str) -> None:

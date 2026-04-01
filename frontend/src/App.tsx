@@ -1,17 +1,18 @@
 import { useEffect, useState } from 'react'
-import { createJob, fetchDiff, fetchLayout } from './api/client'
+import { createJob, fetchDiff, fetchLayout, fetchTrace } from './api/client'
 import { ApiKeyInput } from './components/ApiKeyInput'
 import { DiffViewer } from './components/DiffViewer'
 import { DownloadButton } from './components/DownloadButton'
 import { FileUpload } from './components/FileUpload'
 import { JobProgressPanel } from './components/JobProgress'
 import { LayoutViewer } from './components/LayoutViewer'
+import { LineTracePanel } from './components/LineTracePanel'
 import { LogPanel } from './components/LogPanel'
 import { ModelSelector } from './components/ModelSelector'
 import { ProviderSelector } from './components/ProviderSelector'
 import { useJobStream } from './hooks/useJobStream'
 import { useModels } from './hooks/useModels'
-import type { DiffData, JobStats, LayoutData, Provider } from './types'
+import type { DiffData, JobStats, LayoutData, LineTrace, Provider, TraceData } from './types'
 
 export default function App() {
   // Upload state
@@ -32,6 +33,13 @@ export default function App() {
   const [diffLoading, setDiffLoading] = useState(false)
   const [layoutData, setLayoutData] = useState<LayoutData | null>(null)
   const [layoutLoading, setLayoutLoading] = useState(false)
+
+  // Debug / trace state
+  const [debugMode, setDebugMode] = useState(false)
+  const [traceData, setTraceData] = useState<TraceData | null>(null)
+  const [traceLoading, setTraceLoading] = useState(false)
+  const [traceByLineId, setTraceByLineId] = useState<Map<string, LineTrace>>(new Map())
+  const [selectedLineId, setSelectedLineId] = useState<string | null>(null)
 
   // Models
   const { models, loading: modelsLoading, error: modelsError, loadModels, reset: resetModels } = useModels()
@@ -63,6 +71,23 @@ export default function App() {
         .finally(() => setLayoutLoading(false))
     }
   }, [isDone, jobId, diffData, diffLoading, layoutData, layoutLoading])
+
+  // Load traces when debug mode is activated on a completed job
+  useEffect(() => {
+    if (!debugMode || !isDone || !jobId || traceData || traceLoading) return
+    setTraceLoading(true)
+    fetchTrace(jobId)
+      .then((data) => {
+        setTraceData(data)
+        const map = new Map<string, LineTrace>()
+        for (const lt of data.lines) {
+          map.set(lt.line_id, lt)
+        }
+        setTraceByLineId(map)
+      })
+      .catch(() => { /* non-critical */ })
+      .finally(() => setTraceLoading(false))
+  }, [debugMode, isDone, jobId, traceData, traceLoading])
 
   // Capture stats when completed
   useEffect(() => {
@@ -107,6 +132,11 @@ export default function App() {
     setDiffLoading(false)
     setLayoutData(null)
     setLayoutLoading(false)
+    setTraceData(null)
+    setTraceLoading(false)
+    setTraceByLineId(new Map())
+    setSelectedLineId(null)
+    setDebugMode(false)
     resetModels()
     setSelectedModel(null)
     setResetKey((k) => k + 1)  // Force FileUpload to remount and clear internal state
@@ -141,15 +171,30 @@ export default function App() {
               Post-OCR correction via LLM
             </p>
           </div>
-          {(isDone || isFailed) && (
-            <button
-              onClick={handleReset}
-              className="font-mono text-xs text-amber-400 border border-amber-500/40
-                         hover:bg-amber-500/10 rounded px-3 py-1.5 transition-colors"
-            >
-              New correction
-            </button>
-          )}
+          <div className="flex items-center gap-2">
+            {isDone && (
+              <button
+                onClick={() => setDebugMode((d) => !d)}
+                className={[
+                  'font-mono text-xs border rounded px-3 py-1.5 transition-colors',
+                  debugMode
+                    ? 'text-violet-300 border-violet-500/60 bg-violet-500/10'
+                    : 'text-slate-500 border-slate-600/40 hover:text-slate-300 hover:border-slate-500/40',
+                ].join(' ')}
+              >
+                Debug
+              </button>
+            )}
+            {(isDone || isFailed) && (
+              <button
+                onClick={handleReset}
+                className="font-mono text-xs text-amber-400 border border-amber-500/40
+                           hover:bg-amber-500/10 rounded px-3 py-1.5 transition-colors"
+              >
+                New correction
+              </button>
+            )}
+          </div>
         </div>
       </header>
 
@@ -277,7 +322,39 @@ export default function App() {
                 Chargement du diff…
               </div>
             )}
-            {diffData && <DiffViewer data={diffData} />}
+            {diffData && (
+              <DiffViewer
+                data={diffData}
+                selectedLineId={debugMode ? selectedLineId : null}
+                onSelectLine={debugMode ? setSelectedLineId : undefined}
+              />
+            )}
+            {debugMode && selectedLineId && (
+              <div className="mt-4">
+                {traceLoading && (
+                  <div className="flex items-center gap-2 font-mono text-xs text-slate-500 py-4">
+                    <span className="w-3 h-3 border border-slate-500 border-t-transparent rounded-full animate-spin" />
+                    Loading traces...
+                  </div>
+                )}
+                {traceByLineId.has(selectedLineId) && (
+                  <LineTracePanel
+                    trace={traceByLineId.get(selectedLineId)!}
+                    onClose={() => setSelectedLineId(null)}
+                  />
+                )}
+                {!traceLoading && traceData && !traceByLineId.has(selectedLineId) && (
+                  <p className="font-mono text-xs text-slate-500 py-2">
+                    No trace found for {selectedLineId}
+                  </p>
+                )}
+              </div>
+            )}
+            {debugMode && !selectedLineId && traceData && (
+              <p className="font-mono text-xs text-slate-500 mt-3">
+                Click a line above to inspect its trace ({traceData.total_lines} lines loaded)
+              </p>
+            )}
           </section>
         )}
 
