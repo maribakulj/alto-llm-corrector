@@ -201,12 +201,14 @@ def _try_window(
     while start < n:
         end = min(start + window_size, n)  # exclusive
 
-        # Extend if last line in window is PART1 and next line is its PART2
-        if end < n:
+        # Extend to keep hyphen chains intact at window boundary
+        while end < n:
             last_in_window = lines[end - 1]
             next_line = lines[end]
             if should_stay_in_same_chunk(last_in_window, next_line):
-                end = min(end + 1, n)
+                end += 1
+            else:
+                break
 
         chunk_line_ids = [lines[i].line_id for i in range(start, end)]
         chunks.append(
@@ -244,36 +246,36 @@ def _plan_line(
     i = 0
     while i < len(lines):
         lm = lines[i]
-        # PART1+PART2 are atomic (also BOTH's forward partner)
-        forward_pair = (
-            lm.hyphen_pair_line_id if lm.hyphen_role == HyphenRole.PART1
-            else lm.hyphen_forward_pair_id if lm.hyphen_role == HyphenRole.BOTH
-            else None
+        # Follow the full chain: PART1 → BOTH → ... → BOTH → PART2
+        # All lines linked by forward hyphen pairs must stay together.
+        chain_ids = [lm.line_id]
+        j = i
+        while j < len(lines):
+            cur = lines[j]
+            forward_pair = (
+                cur.hyphen_pair_line_id if cur.hyphen_role == HyphenRole.PART1
+                else cur.hyphen_forward_pair_id if cur.hyphen_role == HyphenRole.BOTH
+                else None
+            )
+            if (
+                forward_pair
+                and j + 1 < len(lines)
+                and lines[j + 1].line_id == forward_pair
+            ):
+                chain_ids.append(lines[j + 1].line_id)
+                j += 1
+            else:
+                break
+
+        chunks.append(
+            _make_chunk(
+                document_id,
+                page.page_id,
+                ChunkGranularity.LINE,
+                chain_ids,
+            )
         )
-        if (
-            forward_pair
-            and i + 1 < len(lines)
-            and lines[i + 1].line_id == forward_pair
-        ):
-            chunks.append(
-                _make_chunk(
-                    document_id,
-                    page.page_id,
-                    ChunkGranularity.LINE,
-                    [lm.line_id, lines[i + 1].line_id],
-                )
-            )
-            i += 2
-        else:
-            chunks.append(
-                _make_chunk(
-                    document_id,
-                    page.page_id,
-                    ChunkGranularity.LINE,
-                    [lm.line_id],
-                )
-            )
-            i += 1
+        i += len(chain_ids)
 
     return ChunkPlan(
         page_id=page.page_id,

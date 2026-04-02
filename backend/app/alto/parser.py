@@ -129,14 +129,14 @@ def _link_hyphen_pairs(lines: list[LineManifest]) -> None:
                 candidate.hyphen_role = HyphenRole.PART2
                 candidate.hyphen_source_explicit = line.hyphen_source_explicit
 
-        # Determine subs_content for this pair
+        # Determine subs_content and set links for this pair
         if line.hyphen_role == HyphenRole.BOTH:
             # Forward side of a BOTH line
-            subs = line.hyphen_forward_subs_content
-            if not subs and candidate.hyphen_role == HyphenRole.PART2:
-                subs = candidate.hyphen_subs_content
-            elif not subs and candidate.hyphen_role == HyphenRole.BOTH:
-                subs = candidate.hyphen_subs_content  # backward subs of candidate
+            subs = (
+                line.hyphen_forward_subs_content
+                or candidate.hyphen_subs_content
+                or None
+            )
 
             # Set forward link on the BOTH line
             line.hyphen_forward_pair_id = candidate.line_id
@@ -144,33 +144,20 @@ def _link_hyphen_pairs(lines: list[LineManifest]) -> None:
                 line.hyphen_forward_subs_content = subs
 
             # Set backward link on the candidate
-            if candidate.hyphen_role == HyphenRole.BOTH:
-                candidate.hyphen_pair_line_id = line.line_id
-                if subs:
-                    candidate.hyphen_subs_content = subs
-            else:
-                candidate.hyphen_pair_line_id = line.line_id
-                if subs:
-                    candidate.hyphen_subs_content = subs
+            candidate.hyphen_pair_line_id = line.line_id
+            if subs:
+                candidate.hyphen_subs_content = subs
         else:
             # Regular PART1 line
             subs = line.hyphen_subs_content or candidate.hyphen_subs_content
-            if candidate.hyphen_role == HyphenRole.BOTH:
-                subs = subs or candidate.hyphen_subs_content
 
             # Bidirectional link
             line.hyphen_pair_line_id = candidate.line_id
-            if candidate.hyphen_role == HyphenRole.BOTH:
-                candidate.hyphen_pair_line_id = line.line_id
-            else:
-                candidate.hyphen_pair_line_id = line.line_id
+            candidate.hyphen_pair_line_id = line.line_id
 
             if subs:
                 line.hyphen_subs_content = subs
-                if candidate.hyphen_role == HyphenRole.BOTH:
-                    candidate.hyphen_subs_content = subs
-                else:
-                    candidate.hyphen_subs_content = subs
+                candidate.hyphen_subs_content = subs
 
 
 def _parse_textline_hyphen_info(
