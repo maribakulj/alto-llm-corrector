@@ -159,12 +159,36 @@ def _line_text_unchanged(el: etree._Element, corrected: str, ns: str) -> bool:
 def _desired_subs(
     manifest: LineManifest,
 ) -> tuple[Optional[str], Optional[str]]:
-    """Return (wanted_subs_type, wanted_subs_content) based on validated state."""
-    if manifest.hyphen_source_explicit and manifest.hyphen_subs_content:
-        if manifest.hyphen_role == HyphenRole.PART1:
+    """Return (wanted_subs_type, wanted_subs_content) for the primary role.
+
+    For PART1: backward subs on last String.
+    For PART2: backward subs on first String.
+    For BOTH: backward subs on first String (forward handled separately).
+    """
+    if manifest.hyphen_role == HyphenRole.PART1:
+        if manifest.hyphen_source_explicit and manifest.hyphen_subs_content:
             return "HypPart1", manifest.hyphen_subs_content
-        if manifest.hyphen_role == HyphenRole.PART2:
+    elif manifest.hyphen_role == HyphenRole.PART2:
+        if manifest.hyphen_source_explicit and manifest.hyphen_subs_content:
             return "HypPart2", manifest.hyphen_subs_content
+    elif manifest.hyphen_role == HyphenRole.BOTH:
+        # Backward (PART2 side) on first String
+        if manifest.hyphen_source_explicit and manifest.hyphen_subs_content:
+            return "HypPart2", manifest.hyphen_subs_content
+    return None, None
+
+
+def _desired_forward_subs(
+    manifest: LineManifest,
+) -> tuple[Optional[str], Optional[str]]:
+    """Return (wanted_subs_type, wanted_subs_content) for the forward/PART1 role.
+
+    Only applies to BOTH lines.
+    """
+    if manifest.hyphen_role != HyphenRole.BOTH:
+        return None, None
+    if manifest.hyphen_forward_explicit and manifest.hyphen_forward_subs_content:
+        return "HypPart1", manifest.hyphen_forward_subs_content
     return None, None
 
 
@@ -173,7 +197,7 @@ def _subs_target(
     manifest: LineManifest,
     ns: str,
 ) -> Optional[etree._Element]:
-    """Return the String element that should carry SUBS attributes, or None."""
+    """Return the String element that should carry backward SUBS attributes."""
     strings = _get_string_children(el, ns)
     if not strings:
         return None
@@ -181,6 +205,8 @@ def _subs_target(
         return strings[-1]
     if manifest.hyphen_role == HyphenRole.PART2:
         return strings[0]
+    if manifest.hyphen_role == HyphenRole.BOTH:
+        return strings[0]  # backward (PART2) subs on first String
     return None
 
 
@@ -192,26 +218,34 @@ def _subs_need_update(
     """Return True if the XML SUBS state differs from the desired state."""
     if manifest.hyphen_role == HyphenRole.NONE:
         return False
+
+    # Check backward subs
     want_type, want_content = _desired_subs(manifest)
     target = _subs_target(el, manifest, ns)
     if target is None:
-        return want_type is not None
-    return (
-        target.get("SUBS_TYPE") != want_type
-        or target.get("SUBS_CONTENT") != want_content
-    )
+        if want_type is not None:
+            return True
+    elif target.get("SUBS_TYPE") != want_type or target.get("SUBS_CONTENT") != want_content:
+        return True
+
+    # Check forward subs for BOTH lines
+    if manifest.hyphen_role == HyphenRole.BOTH:
+        fw_type, fw_content = _desired_forward_subs(manifest)
+        strings = _get_string_children(el, ns)
+        if strings:
+            last = strings[-1]
+            if last.get("SUBS_TYPE") != fw_type or last.get("SUBS_CONTENT") != fw_content:
+                return True
+
+    return False
 
 
-def _apply_subs(
-    el: etree._Element,
-    manifest: LineManifest,
-    ns: str,
+def _set_subs_on_element(
+    target: etree._Element,
+    want_type: Optional[str],
+    want_content: Optional[str],
 ) -> None:
-    """Set or remove SUBS_TYPE/SUBS_CONTENT on the correct String element."""
-    target = _subs_target(el, manifest, ns)
-    if target is None:
-        return
-    want_type, want_content = _desired_subs(manifest)
+    """Set or remove SUBS_TYPE/SUBS_CONTENT on a single element."""
     if want_type and want_content:
         target.set("SUBS_TYPE", want_type)
         target.set("SUBS_CONTENT", want_content)
@@ -219,6 +253,27 @@ def _apply_subs(
         for attr in ("SUBS_TYPE", "SUBS_CONTENT"):
             if attr in target.attrib:
                 del target.attrib[attr]
+
+
+def _apply_subs(
+    el: etree._Element,
+    manifest: LineManifest,
+    ns: str,
+) -> None:
+    """Set or remove SUBS_TYPE/SUBS_CONTENT on the correct String element(s)."""
+    # Backward subs
+    target = _subs_target(el, manifest, ns)
+    if target is not None:
+        want_type, want_content = _desired_subs(manifest)
+        _set_subs_on_element(target, want_type, want_content)
+
+    # Forward subs for BOTH lines (on last String)
+    if manifest.hyphen_role == HyphenRole.BOTH:
+        strings = _get_string_children(el, ns)
+        if strings and len(strings) > 1:
+            last = strings[-1]
+            fw_type, fw_content = _desired_forward_subs(manifest)
+            _set_subs_on_element(last, fw_type, fw_content)
 
 
 # ---------------------------------------------------------------------------
@@ -469,7 +524,7 @@ def rewrite_alto_file(
     page_manifests: list[PageManifest],
     provider: str,
     model: str,
-) -> tuple[bytes, RewriterMetrics]:
+) -> tuple[bytes, RewriterMetrics, dict[str, str]]:
     """
     Rewrite an ALTO XML file with corrected text from page_manifests.
 
@@ -479,12 +534,14 @@ def rewrite_alto_file(
       Path 3 — FAST PATH:  text changed + word count same → in-place CONTENT + SUBS
       Path 4 — SLOW PATH:  word count changed → rebuild line + SUBS
 
-    Returns (rewritten_xml_bytes, metrics).
+    Returns (rewritten_xml_bytes, metrics, line_rewriter_paths).
+    line_rewriter_paths maps line_id → "untouched"/"subs_only"/"fast_path"/"slow_path".
     """
     tree = etree.parse(str(xml_path))
     root = tree.getroot()
     ns = _detect_namespace(root)
     metrics = RewriterMetrics()
+    line_paths: dict[str, str] = {}
 
     line_by_id: dict[str, LineManifest] = {}
     for page in page_manifests:
@@ -505,22 +562,25 @@ def rewrite_alto_file(
         # --- Path 1: UNTOUCHED ---
         if not text_changed and not subs_changed:
             metrics.untouched += 1
+            line_paths[line_id] = "untouched"
             continue
 
         # --- Path 2: SUBS-ONLY ---
         if not text_changed:
             _apply_subs(tl_el, lm, ns)
             metrics.subs_only += 1
+            line_paths[line_id] = "subs_only"
             continue
 
         # --- Path 3: FAST PATH (word count same) ---
         if _update_content_in_place(tl_el, corrected, ns):
             _apply_subs(tl_el, lm, ns)
             metrics.fast_path += 1
+            line_paths[line_id] = "fast_path"
             continue
 
         # --- Path 4: SLOW PATH (word count changed) ---
-        if lm.hyphen_role == HyphenRole.PART1:
+        if lm.hyphen_role in (HyphenRole.PART1, HyphenRole.BOTH):
             _rebuild_hyp_part1(tl_el, corrected, lm, ns)
         elif lm.hyphen_role == HyphenRole.PART2:
             _rebuild_hyp_part2(tl_el, corrected, lm, ns)
@@ -528,10 +588,28 @@ def rewrite_alto_file(
             _rebuild_normal_line(tl_el, corrected, lm, ns)
         _apply_subs(tl_el, lm, ns)
         metrics.slow_path += 1
+        line_paths[line_id] = "slow_path"
 
     _add_processing_entry(root, ns, provider, model)
     xml_bytes = etree.tostring(root, xml_declaration=True, encoding="UTF-8", pretty_print=True)
-    return xml_bytes, metrics
+    return xml_bytes, metrics, line_paths
+
+
+def extract_output_texts(xml_bytes: bytes, line_ids: set[str]) -> dict[str, str]:
+    """Re-extract text from rewritten ALTO XML for the given line IDs.
+
+    Uses the same _extract_text_from_line logic as the rewriter's
+    _line_text_unchanged check, ensuring consistency with parser normalization.
+    """
+    root = etree.fromstring(xml_bytes)
+    ns = _detect_namespace(root)
+    textline_tag = _tag("TextLine", ns)
+    result: dict[str, str] = {}
+    for tl_el in root.iter(textline_tag):
+        line_id = tl_el.get("ID")
+        if line_id in line_ids:
+            result[line_id] = _extract_text_from_line(tl_el, ns)
+    return result
 
 
 def _add_processing_entry(

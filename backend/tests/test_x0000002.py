@@ -41,31 +41,61 @@ def _all_lines(pages):
 
 
 def _reconcile_all_pairs(pages) -> ReconcileMetrics:
+    from copy import copy
     metrics = ReconcileMetrics()
     for page in pages:
         line_by_id = {lm.line_id: lm for lm in page.lines}
         for lm in page.lines:
-            if lm.hyphen_role != HyphenRole.PART1 or not lm.hyphen_pair_line_id:
-                continue
-            part2 = line_by_id.get(lm.hyphen_pair_line_id)
-            if part2 is None:
-                continue
-            corrected_p1 = lm.corrected_text or lm.ocr_text
-            corrected_p2 = part2.corrected_text or part2.ocr_text
+            # PART1 forward pairs
+            if lm.hyphen_role == HyphenRole.PART1 and lm.hyphen_pair_line_id:
+                part2 = line_by_id.get(lm.hyphen_pair_line_id)
+                if part2 is None:
+                    continue
+                corrected_p1 = lm.corrected_text or lm.ocr_text
+                corrected_p2 = part2.corrected_text or part2.ocr_text
 
-            final_p1, final_p2, subs = reconcile_hyphen_pair(
-                lm, part2, corrected_p1, corrected_p2,
-            )
-            lm.corrected_text = final_p1
-            lm.hyphen_subs_content = subs
-            part2.corrected_text = final_p2
-            part2.hyphen_subs_content = subs
+                final_p1, final_p2, subs = reconcile_hyphen_pair(
+                    lm, part2, corrected_p1, corrected_p2,
+                )
+                lm.corrected_text = final_p1
+                lm.hyphen_subs_content = subs
+                part2.corrected_text = final_p2
+                part2.hyphen_subs_content = subs
 
-            outcome = classify_reconcile_outcome(
-                lm.ocr_text, part2.ocr_text,
-                corrected_p1, corrected_p2,
-                final_p1, final_p2, subs,
-            )
+                outcome = classify_reconcile_outcome(
+                    lm.ocr_text, part2.ocr_text,
+                    corrected_p1, corrected_p2,
+                    final_p1, final_p2, subs,
+                )
+            # BOTH forward pairs
+            elif lm.hyphen_role == HyphenRole.BOTH and lm.hyphen_forward_pair_id:
+                part2 = line_by_id.get(lm.hyphen_forward_pair_id)
+                if part2 is None:
+                    continue
+                corrected_p1 = lm.corrected_text or lm.ocr_text
+                corrected_p2 = part2.corrected_text or part2.ocr_text
+
+                lm_as_p1 = copy(lm)
+                lm_as_p1.hyphen_role = HyphenRole.PART1
+                lm_as_p1.hyphen_subs_content = lm.hyphen_forward_subs_content
+                lm_as_p1.hyphen_source_explicit = lm.hyphen_forward_explicit
+
+                final_p1, final_p2, subs = reconcile_hyphen_pair(
+                    lm_as_p1, part2, corrected_p1, corrected_p2,
+                )
+                lm.corrected_text = final_p1
+                lm.hyphen_forward_subs_content = subs
+                part2.corrected_text = final_p2
+                part2.hyphen_subs_content = subs
+
+                outcome = classify_reconcile_outcome(
+                    lm.ocr_text, part2.ocr_text,
+                    corrected_p1, corrected_p2,
+                    final_p1, final_p2, subs,
+                )
+            else:
+                continue
+
             if outcome == "coherent":
                 metrics.coherent += 1
             elif outcome == "fallback":
@@ -93,29 +123,51 @@ class TestX0000002Structure:
 
         p1 = [lm for lm in lines.values() if lm.hyphen_role == HyphenRole.PART1]
         p2 = [lm for lm in lines.values() if lm.hyphen_role == HyphenRole.PART2]
+        both = [lm for lm in lines.values() if lm.hyphen_role == HyphenRole.BOTH]
         explicit = [lm for lm in p1 if lm.hyphen_source_explicit]
         heuristic = [lm for lm in p1 if not lm.hyphen_source_explicit]
 
         assert len(p1) == 104
         assert len(explicit) == 90
         assert len(heuristic) == 14
-        assert len(p2) == 125
+        assert len(p2) == 100     # was 125, 25 moved to BOTH
+        assert len(both) == 26    # chained hyphenation lines
 
     def test_linked_pairs(self):
-        """All PART1 lines with a pair_id have a matching PART2."""
+        """All PART1/BOTH lines with forward links have matching partners."""
         pages, _ = parse_alto_file(X0000002_PATH, "X0000002.xml")
         lines = _all_lines(pages)
 
+        # PART1 forward links
         linked_p1 = [
             lm for lm in lines.values()
             if lm.hyphen_role == HyphenRole.PART1 and lm.hyphen_pair_line_id
         ]
-        assert len(linked_p1) == 100  # 4 PART1s unlinked (at page/block boundary)
+        assert len(linked_p1) == 100
 
         for lm in linked_p1:
             partner = lines.get(lm.hyphen_pair_line_id)
             assert partner is not None, f"{lm.line_id} links to missing {lm.hyphen_pair_line_id}"
-            assert partner.hyphen_role == HyphenRole.PART2
+            assert partner.hyphen_role in (HyphenRole.PART2, HyphenRole.BOTH)
+
+        # BOTH forward links
+        linked_both = [
+            lm for lm in lines.values()
+            if lm.hyphen_role == HyphenRole.BOTH and lm.hyphen_forward_pair_id
+        ]
+        assert len(linked_both) == 26
+
+        for lm in linked_both:
+            partner = lines.get(lm.hyphen_forward_pair_id)
+            assert partner is not None, f"{lm.line_id} forward links to missing {lm.hyphen_forward_pair_id}"
+            assert partner.hyphen_role in (HyphenRole.PART2, HyphenRole.BOTH)
+
+        # Zero unpaired PART2
+        unpaired = [
+            lm for lm in lines.values()
+            if lm.hyphen_role == HyphenRole.PART2 and not lm.hyphen_pair_line_id
+        ]
+        assert len(unpaired) == 0
 
 
 # ===========================================================================
@@ -176,7 +228,7 @@ class TestSensitiveZones:
         assert p2.ocr_text.startswith("saires")
 
     def test_tl000016_praticables(self):
-        """pratica-/bles explicit pair."""
+        """pratica-/bles explicit pair; TL000017 is BOTH (chained)."""
         pages, _ = parse_alto_file(X0000002_PATH, "X0000002.xml")
         lines = _all_lines(pages)
 
@@ -186,7 +238,9 @@ class TestSensitiveZones:
         assert p1.ocr_text.endswith("pratica-")
 
         p2 = lines["PAG_00000002_TL000017"]
-        assert p2.hyphen_role == HyphenRole.PART2
+        assert p2.hyphen_role == HyphenRole.BOTH  # chained: PART2 of praticables + PART1 of desservent
+        assert p2.hyphen_subs_content == "praticables."  # backward subs
+        assert p2.hyphen_forward_subs_content == "desservent"  # forward subs
 
     def test_tl000033_condamne(self):
         """con-/damne explicit pair."""
@@ -221,7 +275,7 @@ class TestX0000002UnchangedRewrite:
 
     def test_all_untouched(self, tmp_path):
         pages, _ = parse_alto_file(X0000002_PATH, "X0000002.xml")
-        _xml_bytes, metrics = rewrite_alto_file(
+        _xml_bytes, metrics, _paths = rewrite_alto_file(
             X0000002_PATH, pages, "test", "test-model",
         )
         assert metrics.total_lines == 566
@@ -250,7 +304,7 @@ class TestX0000002SimulatedCorrections:
         """Corrections identical to OCR → untouched."""
         pages, _ = parse_alto_file(X0000002_PATH, "X0000002.xml")
         # No corrections at all
-        _, metrics = rewrite_alto_file(X0000002_PATH, pages, "test", "test-model")
+        _, metrics, _paths = rewrite_alto_file(X0000002_PATH, pages, "test", "test-model")
         assert metrics.untouched == 566
         assert metrics.fast_path == 0
 
@@ -259,7 +313,7 @@ class TestX0000002SimulatedCorrections:
         pages = self._parse_and_correct({
             "PAG_00000002_TL000011": "en cet état, presque tous les chemins RU",  # changed last word
         })
-        _, metrics = rewrite_alto_file(X0000002_PATH, pages, "test", "test-model")
+        _, metrics, _paths = rewrite_alto_file(X0000002_PATH, pages, "test", "test-model")
         assert metrics.fast_path == 1
         assert metrics.slow_path == 0
 
@@ -268,7 +322,7 @@ class TestX0000002SimulatedCorrections:
         pages = self._parse_and_correct({
             "PAG_00000002_TL000011": "en cet état presque tous les chemins ruraux vicinaux",  # more words
         })
-        _, metrics = rewrite_alto_file(X0000002_PATH, pages, "test", "test-model")
+        _, metrics, _paths = rewrite_alto_file(X0000002_PATH, pages, "test", "test-model")
         assert metrics.slow_path == 1
 
     def test_mixed_paths(self, tmp_path):
@@ -280,7 +334,7 @@ class TestX0000002SimulatedCorrections:
             # Slow path: word count changed
             "PAG_00000002_TL000026": "G. Dupont.",  # 1→2 words
         })
-        _, metrics = rewrite_alto_file(X0000002_PATH, pages, "test", "test-model")
+        _, metrics, _paths = rewrite_alto_file(X0000002_PATH, pages, "test", "test-model")
         assert metrics.fast_path == 2
         assert metrics.slow_path == 1
         assert metrics.untouched == 566 - 3
@@ -299,7 +353,7 @@ class TestX0000002ReconcileInvariant:
         rec = _reconcile_all_pairs(pages)
         # All pairs: correction == OCR text → neutralised
         assert rec.fallback == 0
-        assert rec.total == 100  # 100 linked pairs
+        assert rec.total == 126  # 100 PART1 + 26 BOTH forward pairs
 
     def test_coherent_pair_necessaires(self):
         """Simulated coherent correction for néces-/saires."""
@@ -356,36 +410,36 @@ def test_x0000002_diagnostic_report(tmp_path, capsys):
 
     p1_all = [lm for lm in lines.values() if lm.hyphen_role == HyphenRole.PART1]
     p2_all = [lm for lm in lines.values() if lm.hyphen_role == HyphenRole.PART2]
-    linked = [lm for lm in p1_all if lm.hyphen_pair_line_id]
+    both_all = [lm for lm in lines.values() if lm.hyphen_role == HyphenRole.BOTH]
+    linked_p1 = [lm for lm in p1_all if lm.hyphen_pair_line_id]
+    linked_both = [lm for lm in both_all if lm.hyphen_forward_pair_id]
     unpaired_p2 = [lm for lm in p2_all if not lm.hyphen_pair_line_id]
 
     # Soft-hyphen check
     soft_hyp = [lm for lm in lines.values() if "\u00ad" in lm.ocr_text]
-    double_dash_part1 = [
-        lm for lm in p1_all
-        if lm.ocr_text.rstrip().endswith("--")
-    ]
 
     # Reconcile with no corrections
     rec = _reconcile_all_pairs(pages)
 
     # Rewriter with no corrections
-    _, rw = rewrite_alto_file(X0000002_PATH, pages, "test", "test-model")
+    _, rw, _paths = rewrite_alto_file(X0000002_PATH, pages, "test", "test-model")
 
     report = [
         "",
         "=" * 65,
-        "  SPRINT 4 — DIAGNOSTIC REPORT (X0000002.xml)",
+        "  SPRINT 5 — DIAGNOSTIC REPORT (X0000002.xml)",
         "=" * 65,
         f"  Total lines:              {total_lines}",
         f"  PART1 (explicit):         {sum(1 for l in p1_all if l.hyphen_source_explicit)}",
         f"  PART1 (heuristic):        {sum(1 for l in p1_all if not l.hyphen_source_explicit)}",
         f"  PART2:                    {len(p2_all)}",
-        f"  Linked PART1→PART2:       {len(linked)}",
+        f"  BOTH (chained):           {len(both_all)}",
+        f"  Linked PART1→partner:     {len(linked_p1)}",
+        f"  Linked BOTH→forward:      {len(linked_both)}",
+        f"  Total forward pairs:      {len(linked_p1) + len(linked_both)}",
         f"  Unpaired PART2 (orphans): {len(unpaired_p2)}",
         "-" * 65,
         f"  Soft-hyphen in ocr_text:  {len(soft_hyp)}",
-        f"  Double-dash PART1:        {len(double_dash_part1)}",
         "-" * 65,
         f"  Rewriter — untouched:     {rw.untouched}",
         f"  Rewriter — subs-only:     {rw.subs_only}",
@@ -404,6 +458,7 @@ def test_x0000002_diagnostic_report(tmp_path, capsys):
     # Sanity assertions
     assert total_lines == 566
     assert len(soft_hyp) == 0, "Soft-hyphen not fully normalized"
-    assert len(double_dash_part1) == 0, "Double-dash PART1 still present"
+    assert len(unpaired_p2) == 0, "Orphan PART2 still present"
+    assert len(both_all) == 26, "Chained lines not detected"
     assert rw.untouched == 566
     assert rec.fallback == 0

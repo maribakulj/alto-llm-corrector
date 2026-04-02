@@ -44,6 +44,7 @@ class HyphenRole(str, Enum):
     NONE = "none"
     PART1 = "HypPart1"   # last line of pair: carries left fragment + hyphen
     PART2 = "HypPart2"   # first line of pair: carries right fragment
+    BOTH = "HypBoth"     # PART2 of previous pair AND PART1 of next pair (chained)
 
 
 # ---------------------------------------------------------------------------
@@ -77,10 +78,17 @@ class LineManifest(BaseModel):
     status: LineStatus = LineStatus.PENDING
 
     # Hyphenation fields
+    # For PART1: pair_line_id = forward partner (the PART2 line)
+    # For PART2: pair_line_id = backward partner (the PART1 line)
+    # For BOTH:  pair_line_id = backward partner, forward_* = forward partner
     hyphen_role: HyphenRole = HyphenRole.NONE
     hyphen_pair_line_id: Optional[str] = None
     hyphen_subs_content: Optional[str] = None
     hyphen_source_explicit: bool = False
+    # Forward link fields — used only when role == BOTH (chained hyphenation)
+    hyphen_forward_pair_id: Optional[str] = None
+    hyphen_forward_subs_content: Optional[str] = None
+    hyphen_forward_explicit: bool = False
 
 
 class BlockManifest(BaseModel):
@@ -157,6 +165,8 @@ class JobManifest(BaseModel):
     duration_seconds: Optional[float] = None
     error: Optional[str] = None
     images: dict[str, str] = Field(default_factory=dict)
+    # Line traces (Sprint 5bis) — keyed by line_id
+    line_traces: dict[str, LineTrace] = Field(default_factory=dict)
 
 
 # ---------------------------------------------------------------------------
@@ -242,3 +252,31 @@ class JobStatusResponse(BaseModel):
 class SSEEvent(BaseModel):
     event: str
     data: dict[str, Any] = Field(default_factory=dict)
+
+
+# ---------------------------------------------------------------------------
+# Line trace (Sprint 5bis — observability)
+# ---------------------------------------------------------------------------
+
+class LineTrace(BaseModel):
+    """Full text trace for a single line through the correction pipeline."""
+    line_id: str
+    page_id: str
+    source_ocr_text: str
+    model_input_text: Optional[str] = None      # ocr_text sent to LLM
+    model_corrected_text: Optional[str] = None   # raw LLM output before any post-processing
+    projected_text: Optional[str] = None          # text retained after validation/reconciliation/fallback
+    output_alto_text: Optional[str] = None        # text re-extracted from the output ALTO XML
+
+    # Diagnostic metadata
+    hyphen_role: Optional[str] = None
+    rewriter_path: Optional[str] = None           # untouched / subs_only / fast_path / slow_path
+    validation_status: Optional[str] = None       # corrected / fallback / failed
+    fallback_reason: Optional[str] = None
+
+
+class JobTrace(BaseModel):
+    """Collection of line traces for a complete job."""
+    job_id: str
+    total_lines: int = 0
+    lines: list[LineTrace] = Field(default_factory=list)
