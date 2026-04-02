@@ -149,7 +149,8 @@ def test_system_prompt_contains_hyphen_rule():
     assert "HypPart1" in SYSTEM_PROMPT
     assert "HypPart2" in SYSTEM_PROMPT
     assert "13" in SYSTEM_PROMPT
-    assert "logical_join_candidate" in SYSTEM_PROMPT
+    assert "backward_join_candidate" in SYSTEM_PROMPT
+    assert "forward_join_candidate" in SYSTEM_PROMPT
 
 
 # ---------------------------------------------------------------------------

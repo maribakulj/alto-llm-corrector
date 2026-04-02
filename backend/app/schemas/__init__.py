@@ -183,7 +183,8 @@ class LLMLineInput(BaseModel):
     hyphen_candidate: Optional[bool] = None
     hyphen_join_with_next: Optional[bool] = None
     hyphen_join_with_prev: Optional[bool] = None
-    logical_join_candidate: Optional[str] = None
+    backward_join_candidate: Optional[str] = None
+    forward_join_candidate: Optional[str] = None
 
 
 class LLMUserPayload(BaseModel):

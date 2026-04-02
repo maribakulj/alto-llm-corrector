@@ -11,6 +11,7 @@ from typing import Any, Optional
 from app.alto.hyphenation import enrich_chunk_lines, reconcile_hyphen_pair
 from app.alto.rewriter import extract_output_texts, rewrite_alto_file
 from app.jobs.chunk_planner import plan_page
+from app.jobs.line_acceptance import AcceptanceResult, check_adjacent_duplicates, check_line
 from app.jobs.store import job_store
 from app.jobs.validator import validate_llm_response
 from app.providers.base import OUTPUT_JSON_SCHEMA, SYSTEM_PROMPT, BaseProvider
@@ -33,6 +34,11 @@ logger = logging.getLogger(__name__)
 _DEFAULT_CONFIG = ChunkPlannerConfig()
 
 
+def _trace_key(lm: LineManifest) -> str:
+    """Composite key for line traces, avoiding collisions across pages."""
+    return f"{lm.page_id}:{lm.line_order_global}:{lm.line_id}"
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -51,32 +57,6 @@ def _build_hyphen_pairs(
             pairs[lm.line_id] = lm.hyphen_forward_pair_id
             pairs[lm.hyphen_forward_pair_id] = lm.line_id
     return pairs
-
-
-def _line_drift_too_large(ocr_text: str, corrected_text: str) -> bool:
-    """
-    Return True if corrected text deviates too far from the OCR source,
-    indicating the LLM shifted content between lines.
-    """
-    ocr_words = ocr_text.split()
-    corrected_words = corrected_text.split()
-    ocr_wc = len(ocr_words)
-    corrected_wc = len(corrected_words)
-
-    # Word-count tolerance: allow generous margin for OCR fixes
-    tolerance = max(3, int(ocr_wc * 0.4))
-    if abs(corrected_wc - ocr_wc) > tolerance:
-        return True
-
-    # Character-length ratio check
-    ocr_len = len(ocr_text)
-    corrected_len = len(corrected_text)
-    if ocr_len > 0:
-        ratio = corrected_len / ocr_len
-        if ratio > 2.0 or ratio < 0.25:
-            return True
-
-    return False
 
 
 def _count_hyphen_pairs_in_chunk(lines: list[LineManifest]) -> int:
@@ -132,7 +112,7 @@ async def _run_chunk(
         if traces is not None:
             enriched_by_id = {e.line_id: e for e in enriched}
             for lm in chunk_lines:
-                t = traces.get(lm.line_id)
+                t = traces.get(_trace_key(lm))
                 if t is not None:
                     ei = enriched_by_id.get(lm.line_id)
                     if ei is not None:
@@ -159,13 +139,16 @@ async def _run_chunk(
 
             # --- Trace: capture raw LLM output before validation ---
             if traces is not None:
+                lid_to_tkey = {lm.line_id: _trace_key(lm) for lm in chunk_lines}
                 raw_lines = raw.get("lines", []) if isinstance(raw, dict) else []
                 for rl in raw_lines:
                     lid = rl.get("line_id", "") if isinstance(rl, dict) else ""
                     rt = rl.get("corrected_text", "") if isinstance(rl, dict) else ""
-                    t = traces.get(lid)
-                    if t is not None:
-                        t.model_corrected_text = rt
+                    tkey = lid_to_tkey.get(lid)
+                    if tkey:
+                        t = traces.get(tkey)
+                        if t is not None:
+                            t.model_corrected_text = rt
 
             # Build subs mapping for fusion detection in the validator
             hyphen_subs: dict[str, str] = {}
@@ -222,7 +205,7 @@ async def _run_chunk(
                 lm.corrected_text = lm.ocr_text
                 lm.status = LineStatus.FALLBACK
                 if traces is not None:
-                    t = traces.get(lm.line_id)
+                    t = traces.get(_trace_key(lm))
                     if t is not None:
                         t.projected_text = lm.ocr_text
                         t.validation_status = "fallback"
@@ -234,94 +217,115 @@ async def _run_chunk(
         # --- Success: apply corrections ---
         text_by_id: dict[str, str] = {o.line_id: o.corrected_text for o in response.lines}
 
-        # Reconcile hyphen pairs
+        # Reconcile hyphen pairs in two deterministic passes:
+        # Pass 1: backward pairs (PART1 → PART2/BOTH)
+        # Pass 2: forward pairs (BOTH → PART2)
+        # This order guarantees BOTH's backward side is resolved before
+        # its forward side, so the forward reconciliation uses the
+        # already-validated text.
         reconciled_count = 0
         processed_part2: set[str] = set()
 
+        # --- Pass 1: PART1 → partner (partner may be PART2 or BOTH) ---
         for lm in chunk_lines:
-            # Process PART1 lines (forward link via hyphen_pair_line_id)
-            if lm.hyphen_role == HyphenRole.PART1 and lm.hyphen_pair_line_id:
-                part2_id = lm.hyphen_pair_line_id
-                if part2_id in processed_part2:
-                    continue
-                part2 = line_by_id.get(part2_id)
-                if part2 is None:
-                    continue
+            if lm.hyphen_role != HyphenRole.PART1 or not lm.hyphen_pair_line_id:
+                continue
+            part2_id = lm.hyphen_pair_line_id
+            if part2_id in processed_part2:
+                continue
+            part2 = line_by_id.get(part2_id)
+            if part2 is None:
+                continue
 
-                corrected_p1 = text_by_id.get(lm.line_id, lm.ocr_text)
-                corrected_p2 = text_by_id.get(part2_id, part2.ocr_text)
+            corrected_p1 = text_by_id.get(lm.line_id, lm.ocr_text)
+            corrected_p2 = text_by_id.get(part2_id, part2.ocr_text)
 
-                final_p1, final_p2, subs = reconcile_hyphen_pair(
-                    lm, part2, corrected_p1, corrected_p2
-                )
+            final_p1, final_p2, subs = reconcile_hyphen_pair(
+                lm, part2, corrected_p1, corrected_p2
+            )
 
-                lm.corrected_text = final_p1
-                lm.status = LineStatus.CORRECTED
-                lm.hyphen_subs_content = subs
+            lm.corrected_text = final_p1
+            lm.status = LineStatus.CORRECTED
+            lm.hyphen_subs_content = subs
 
-                part2.corrected_text = final_p2
-                part2.status = LineStatus.CORRECTED
-                part2.hyphen_subs_content = subs
+            part2.corrected_text = final_p2
+            part2.status = LineStatus.CORRECTED
+            part2.hyphen_subs_content = subs
 
-                processed_part2.add(part2_id)
-                reconciled_count += 1
+            processed_part2.add(part2_id)
+            reconciled_count += 1
 
-            # Process BOTH lines (forward link via hyphen_forward_pair_id)
-            elif lm.hyphen_role == HyphenRole.BOTH and lm.hyphen_forward_pair_id:
-                part2_id = lm.hyphen_forward_pair_id
-                if part2_id in processed_part2:
-                    continue
-                part2 = line_by_id.get(part2_id)
-                if part2 is None:
-                    continue
+        # --- Pass 2: BOTH → forward partner ---
+        for lm in chunk_lines:
+            if lm.hyphen_role != HyphenRole.BOTH or not lm.hyphen_forward_pair_id:
+                continue
+            part2_id = lm.hyphen_forward_pair_id
+            if part2_id in processed_part2:
+                continue
+            part2 = line_by_id.get(part2_id)
+            if part2 is None:
+                continue
 
-                corrected_p1 = text_by_id.get(lm.line_id, lm.corrected_text or lm.ocr_text)
-                corrected_p2 = text_by_id.get(part2_id, part2.ocr_text)
+            # Use BOTH's already-reconciled text from pass 1 (if available)
+            corrected_p1 = lm.corrected_text or text_by_id.get(lm.line_id, lm.ocr_text)
+            corrected_p2 = text_by_id.get(part2_id, part2.ocr_text)
 
-                # Build a temporary manifest with forward subs for reconciliation
-                from copy import copy
-                lm_as_part1 = copy(lm)
-                lm_as_part1.hyphen_role = HyphenRole.PART1
-                lm_as_part1.hyphen_subs_content = lm.hyphen_forward_subs_content
-                lm_as_part1.hyphen_source_explicit = lm.hyphen_forward_explicit
+            final_p1, final_p2, subs = reconcile_hyphen_pair(
+                lm, part2, corrected_p1, corrected_p2,
+                subs_content=lm.hyphen_forward_subs_content,
+                source_explicit=lm.hyphen_forward_explicit,
+            )
 
-                final_p1, final_p2, subs = reconcile_hyphen_pair(
-                    lm_as_part1, part2, corrected_p1, corrected_p2
-                )
+            lm.corrected_text = final_p1
+            lm.status = LineStatus.CORRECTED
+            lm.hyphen_forward_subs_content = subs
 
-                lm.corrected_text = final_p1
-                lm.status = LineStatus.CORRECTED
-                lm.hyphen_forward_subs_content = subs
+            part2.corrected_text = final_p2
+            part2.status = LineStatus.CORRECTED
+            part2.hyphen_subs_content = subs
 
-                part2.corrected_text = final_p2
-                part2.status = LineStatus.CORRECTED
-                part2.hyphen_subs_content = subs
+            processed_part2.add(part2_id)
+            reconciled_count += 1
 
-                processed_part2.add(part2_id)
-                reconciled_count += 1
-
-        # Apply remaining lines (with drift guard)
+        # Apply remaining lines via line_acceptance policy
         for lm in chunk_lines:
             if lm.corrected_text is None:
                 corrected = text_by_id.get(lm.line_id)
                 if corrected is not None:
-                    if _line_drift_too_large(lm.ocr_text, corrected):
-                        lm.corrected_text = lm.ocr_text
-                        lm.status = LineStatus.FALLBACK
-                    else:
-                        lm.corrected_text = corrected
+                    prev_ocr = all_lines_by_id[lm.prev_line_id].ocr_text if lm.prev_line_id and lm.prev_line_id in all_lines_by_id else None
+                    next_ocr = all_lines_by_id[lm.next_line_id].ocr_text if lm.next_line_id and lm.next_line_id in all_lines_by_id else None
+                    result = check_line(lm.ocr_text, corrected, prev_ocr, next_ocr)
+                    lm.corrected_text = result.text
+                    if result.accepted:
                         lm.status = LineStatus.CORRECTED
+                    else:
+                        lm.status = LineStatus.FALLBACK
+                        if traces is not None:
+                            t = traces.get(_trace_key(lm))
+                            if t is not None:
+                                t.fallback_reason = result.reason
+
+        # Adjacent duplicate detection (post-acceptance pass)
+        accepted_lines = [
+            (lm.line_id, lm.ocr_text, lm.corrected_text or lm.ocr_text)
+            for lm in chunk_lines
+        ]
+        dup_reverts = check_adjacent_duplicates(accepted_lines)
+        for lm in chunk_lines:
+            if lm.line_id in dup_reverts:
+                lm.corrected_text = lm.ocr_text
+                lm.status = LineStatus.FALLBACK
 
         # --- Trace: projected_text + validation_status ---
         if traces is not None:
             for lm in chunk_lines:
-                t = traces.get(lm.line_id)
+                t = traces.get(_trace_key(lm))
                 if t is None:
                     continue
                 t.projected_text = lm.corrected_text if lm.corrected_text is not None else lm.ocr_text
                 t.validation_status = lm.status.value
-                if lm.status == LineStatus.FALLBACK and not t.fallback_reason:
-                    t.fallback_reason = "drift_guard"
+                if lm.line_id in dup_reverts and not t.fallback_reason:
+                    t.fallback_reason = dup_reverts[lm.line_id]
 
         job_store.emit(job_id, "chunk_completed", {
             "chunk_id": chunk.chunk_id,
@@ -395,7 +399,7 @@ async def run_job(
         traces: dict[str, LineTrace] = {}
         for page in document_manifest.pages:
             for lm in page.lines:
-                traces[lm.line_id] = LineTrace(
+                traces[_trace_key(lm)] = LineTrace(
                     line_id=lm.line_id,
                     page_id=lm.page_id,
                     source_ocr_text=lm.ocr_text,
@@ -478,11 +482,19 @@ async def run_job(
             out_path = output_dir / f"{stem}_corrected.xml"
             out_path.write_bytes(xml_bytes)
 
+            # Build line_id → trace_key mapping for this file's pages
+            lid_to_tkey: dict[str, str] = {}
+            for p in pages_for_file:
+                for lm in p.lines:
+                    lid_to_tkey[lm.line_id] = _trace_key(lm)
+
             # --- Trace: rewriter_path per line ---
             for lid, rpath in rewriter_paths.items():
-                t = traces.get(lid)
-                if t is not None:
-                    t.rewriter_path = rpath
+                tkey = lid_to_tkey.get(lid)
+                if tkey:
+                    t = traces.get(tkey)
+                    if t is not None:
+                        t.rewriter_path = rpath
 
             # --- Trace: output_alto_text per line ---
             file_line_ids = {
@@ -490,9 +502,11 @@ async def run_job(
             }
             output_texts = extract_output_texts(xml_bytes, file_line_ids)
             for lid, otxt in output_texts.items():
-                t = traces.get(lid)
-                if t is not None:
-                    t.output_alto_text = otxt
+                tkey = lid_to_tkey.get(lid)
+                if tkey:
+                    t = traces.get(tkey)
+                    if t is not None:
+                        t.output_alto_text = otxt
 
         # --- Write trace.json ---
         job_trace = JobTrace(

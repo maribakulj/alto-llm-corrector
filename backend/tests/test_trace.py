@@ -137,7 +137,9 @@ def _run_job_with_traces(
     ))
 
     job = job_store.get_job(job_id)
-    return job_id, job.line_traces
+    # Build a line_id-keyed view (traces use composite page_id:line_id keys internally)
+    by_line_id = {t.line_id: t for t in job.line_traces.values()}
+    return job_id, by_line_id
 
 
 # ===========================================================================
@@ -197,7 +199,9 @@ class TestTraceCorrectionAccepted:
         pages, _ = parse_alto_file(SAMPLE_XML, "sample.xml")
         first_line = pages[0].lines[0]
 
-        corrections = {first_line.line_id: "CORRECTED TEXT"}
+        # Use a realistic correction (small change, high similarity to source)
+        corrected_text = first_line.ocr_text.replace("RÉVOLUTIOM", "RÉVOLUTION")
+        corrections = {first_line.line_id: corrected_text}
         job_id, traces = _run_job_with_traces(
             {"sample.xml": SAMPLE_XML.read_bytes()},
             provider=CorrectionProvider(corrections),
@@ -205,8 +209,8 @@ class TestTraceCorrectionAccepted:
         t = traces[first_line.line_id]
 
         assert t.source_ocr_text == first_line.ocr_text
-        assert t.model_corrected_text == "CORRECTED TEXT"
-        assert t.projected_text == "CORRECTED TEXT"
+        assert t.model_corrected_text == corrected_text
+        assert t.projected_text == corrected_text
         assert t.validation_status == "corrected"
 
 

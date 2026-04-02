@@ -24,6 +24,9 @@ def make_line(
     hyphen_source_explicit: bool = False,
     prev_line_id: str | None = None,
     next_line_id: str | None = None,
+    hyphen_forward_pair_id: str | None = None,
+    hyphen_forward_subs_content: str | None = None,
+    hyphen_forward_explicit: bool = False,
 ) -> LineManifest:
     return LineManifest(
         line_id=line_id,
@@ -39,6 +42,9 @@ def make_line(
         hyphen_source_explicit=hyphen_source_explicit,
         prev_line_id=prev_line_id,
         next_line_id=next_line_id,
+        hyphen_forward_pair_id=hyphen_forward_pair_id,
+        hyphen_forward_subs_content=hyphen_forward_subs_content,
+        hyphen_forward_explicit=hyphen_forward_explicit,
     )
 
 
@@ -104,7 +110,7 @@ def test_enrich_logical_candidate_present_when_known():
     )
     all_lines = {"TL1": part1}
     result = enrich_chunk_lines([part1], all_lines)
-    assert result[0].logical_join_candidate == "porte"
+    assert result[0].forward_join_candidate == "porte"
 
 
 def test_enrich_no_hyphen_fields_on_normal_line():
@@ -115,7 +121,8 @@ def test_enrich_no_hyphen_fields_on_normal_line():
     assert inp.hyphen_candidate is None
     assert inp.hyphen_join_with_next is None
     assert inp.hyphen_join_with_prev is None
-    assert inp.logical_join_candidate is None
+    assert inp.backward_join_candidate is None
+    assert inp.forward_join_candidate is None
 
 
 # ---------------------------------------------------------------------------
@@ -674,3 +681,130 @@ def test_should_stay_part1_wrong_pair_id():
         hyphen_pair_line_id="TL1",
     )
     assert should_stay_in_same_chunk(part1, part2) is False
+
+
+# ---------------------------------------------------------------------------
+# BOTH symmetry: enrich_chunk_lines exposes both join candidates
+# ---------------------------------------------------------------------------
+
+def test_enrich_both_exposes_backward_and_forward_candidates():
+    """A BOTH line must carry both backward and forward join candidates."""
+    both = make_line(
+        "TL2", "saires pour les me-",
+        hyphen_role=HyphenRole.BOTH,
+        hyphen_pair_line_id="TL1",
+        hyphen_subs_content="nécessaires",      # backward (PART2 side)
+        hyphen_source_explicit=True,
+        hyphen_forward_pair_id="TL3",
+        hyphen_forward_subs_content="mesures",   # forward (PART1 side)
+        hyphen_forward_explicit=True,
+    )
+    all_lines = {"TL2": both}
+    result = enrich_chunk_lines([both], all_lines)
+    inp = result[0]
+
+    assert inp.hyphenation_role == "HypBoth"
+    assert inp.hyphen_join_with_prev is True
+    assert inp.hyphen_join_with_next is True
+    assert inp.backward_join_candidate == "nécessaires"
+    assert inp.forward_join_candidate == "mesures"
+
+
+def test_enrich_both_none_candidates_when_heuristic():
+    """Heuristic BOTH line: both candidates are None if no subs available."""
+    both = make_line(
+        "TL2", "saires pour les me-",
+        hyphen_role=HyphenRole.BOTH,
+        hyphen_pair_line_id="TL1",
+        hyphen_forward_pair_id="TL3",
+    )
+    all_lines = {"TL2": both}
+    result = enrich_chunk_lines([both], all_lines)
+    inp = result[0]
+
+    assert inp.backward_join_candidate is None
+    assert inp.forward_join_candidate is None
+    assert inp.hyphen_join_with_prev is True
+    assert inp.hyphen_join_with_next is True
+
+
+def test_enrich_part1_uses_forward_candidate_only():
+    """PART1 line should only have forward_join_candidate set."""
+    part1 = make_line(
+        "TL1", "néces-",
+        hyphen_role=HyphenRole.PART1,
+        hyphen_pair_line_id="TL2",
+        hyphen_subs_content="nécessaires",
+        hyphen_source_explicit=True,
+    )
+    result = enrich_chunk_lines([part1], {"TL1": part1})
+    inp = result[0]
+    assert inp.forward_join_candidate == "nécessaires"
+    assert inp.backward_join_candidate is None
+
+
+def test_enrich_part2_uses_backward_candidate_only():
+    """PART2 line should only have backward_join_candidate set."""
+    part2 = make_line(
+        "TL2", "saires ensuite",
+        hyphen_role=HyphenRole.PART2,
+        hyphen_pair_line_id="TL1",
+        hyphen_subs_content="nécessaires",
+        hyphen_source_explicit=True,
+    )
+    result = enrich_chunk_lines([part2], {"TL2": part2})
+    inp = result[0]
+    assert inp.backward_join_candidate == "nécessaires"
+    assert inp.forward_join_candidate is None
+
+
+# ---------------------------------------------------------------------------
+# reconcile_hyphen_pair with explicit subs_content/source_explicit
+# ---------------------------------------------------------------------------
+
+def test_reconcile_explicit_params_override_manifest():
+    """Passing subs_content/source_explicit overrides manifest fields."""
+    both_line = make_line(
+        "TL2", "saires pour les me-",
+        hyphen_role=HyphenRole.BOTH,
+        hyphen_subs_content="nécessaires",       # backward subs (should be ignored)
+        hyphen_source_explicit=True,
+        hyphen_forward_subs_content="mesures",
+        hyphen_forward_explicit=True,
+    )
+    part2 = make_line(
+        "TL3", "sures nécessaires",
+        hyphen_role=HyphenRole.PART2,
+        hyphen_pair_line_id="TL2",
+    )
+
+    # Call with explicit forward params — should use "mesures" not "nécessaires"
+    final_p1, final_p2, subs = reconcile_hyphen_pair(
+        both_line, part2,
+        "saires pour les me-", "sures nécessaires",
+        subs_content="mesures",
+        source_explicit=True,
+    )
+    assert subs == "mesures"
+    assert final_p1 == "saires pour les me-"
+    assert final_p2 == "sures nécessaires"
+
+
+def test_reconcile_without_explicit_params_uses_manifest():
+    """Without explicit params, reconcile reads from manifest (backward compat)."""
+    part1 = make_line(
+        "TL1", "Il por-",
+        hyphen_role=HyphenRole.PART1,
+        hyphen_pair_line_id="TL2",
+        hyphen_subs_content="porte",
+        hyphen_source_explicit=True,
+    )
+    part2 = make_line(
+        "TL2", "te la valise",
+        hyphen_role=HyphenRole.PART2,
+        hyphen_pair_line_id="TL1",
+    )
+    final_p1, final_p2, subs = reconcile_hyphen_pair(
+        part1, part2, "Il por-", "te la valise"
+    )
+    assert subs == "porte"
