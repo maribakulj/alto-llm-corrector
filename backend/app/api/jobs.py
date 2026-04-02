@@ -210,6 +210,31 @@ async def download_job(job_id: str) -> Response:
 
 
 # ---------------------------------------------------------------------------
+# GET /api/jobs/{job_id}/trace
+# ---------------------------------------------------------------------------
+
+@router.get("/{job_id}/trace")
+async def get_job_trace(job_id: str) -> dict:
+    """Return per-line text traces for a completed job."""
+    job = job_store.get_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail=f"Job not found: {job_id!r}")
+    if job.status != JobStatus.COMPLETED:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Job is not completed yet (status: {job.status.value})",
+        )
+    if not job.line_traces:
+        raise HTTPException(status_code=404, detail="No traces available for this job.")
+
+    return {
+        "job_id": job_id,
+        "total_lines": len(job.line_traces),
+        "lines": [t.model_dump(exclude_none=True) for t in job.line_traces.values()],
+    }
+
+
+# ---------------------------------------------------------------------------
 # GET /api/jobs/{job_id}/diff
 # ---------------------------------------------------------------------------
 

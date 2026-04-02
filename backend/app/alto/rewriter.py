@@ -524,7 +524,7 @@ def rewrite_alto_file(
     page_manifests: list[PageManifest],
     provider: str,
     model: str,
-) -> tuple[bytes, RewriterMetrics]:
+) -> tuple[bytes, RewriterMetrics, dict[str, str]]:
     """
     Rewrite an ALTO XML file with corrected text from page_manifests.
 
@@ -534,12 +534,14 @@ def rewrite_alto_file(
       Path 3 — FAST PATH:  text changed + word count same → in-place CONTENT + SUBS
       Path 4 — SLOW PATH:  word count changed → rebuild line + SUBS
 
-    Returns (rewritten_xml_bytes, metrics).
+    Returns (rewritten_xml_bytes, metrics, line_rewriter_paths).
+    line_rewriter_paths maps line_id → "untouched"/"subs_only"/"fast_path"/"slow_path".
     """
     tree = etree.parse(str(xml_path))
     root = tree.getroot()
     ns = _detect_namespace(root)
     metrics = RewriterMetrics()
+    line_paths: dict[str, str] = {}
 
     line_by_id: dict[str, LineManifest] = {}
     for page in page_manifests:
@@ -560,18 +562,21 @@ def rewrite_alto_file(
         # --- Path 1: UNTOUCHED ---
         if not text_changed and not subs_changed:
             metrics.untouched += 1
+            line_paths[line_id] = "untouched"
             continue
 
         # --- Path 2: SUBS-ONLY ---
         if not text_changed:
             _apply_subs(tl_el, lm, ns)
             metrics.subs_only += 1
+            line_paths[line_id] = "subs_only"
             continue
 
         # --- Path 3: FAST PATH (word count same) ---
         if _update_content_in_place(tl_el, corrected, ns):
             _apply_subs(tl_el, lm, ns)
             metrics.fast_path += 1
+            line_paths[line_id] = "fast_path"
             continue
 
         # --- Path 4: SLOW PATH (word count changed) ---
@@ -583,10 +588,28 @@ def rewrite_alto_file(
             _rebuild_normal_line(tl_el, corrected, lm, ns)
         _apply_subs(tl_el, lm, ns)
         metrics.slow_path += 1
+        line_paths[line_id] = "slow_path"
 
     _add_processing_entry(root, ns, provider, model)
     xml_bytes = etree.tostring(root, xml_declaration=True, encoding="UTF-8", pretty_print=True)
-    return xml_bytes, metrics
+    return xml_bytes, metrics, line_paths
+
+
+def extract_output_texts(xml_bytes: bytes, line_ids: set[str]) -> dict[str, str]:
+    """Re-extract text from rewritten ALTO XML for the given line IDs.
+
+    Uses the same _extract_text_from_line logic as the rewriter's
+    _line_text_unchanged check, ensuring consistency with parser normalization.
+    """
+    root = etree.fromstring(xml_bytes)
+    ns = _detect_namespace(root)
+    textline_tag = _tag("TextLine", ns)
+    result: dict[str, str] = {}
+    for tl_el in root.iter(textline_tag):
+        line_id = tl_el.get("ID")
+        if line_id in line_ids:
+            result[line_id] = _extract_text_from_line(tl_el, ns)
+    return result
 
 
 def _add_processing_entry(
