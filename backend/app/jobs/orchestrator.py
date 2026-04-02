@@ -217,71 +217,75 @@ async def _run_chunk(
         # --- Success: apply corrections ---
         text_by_id: dict[str, str] = {o.line_id: o.corrected_text for o in response.lines}
 
-        # Reconcile hyphen pairs
+        # Reconcile hyphen pairs in two deterministic passes:
+        # Pass 1: backward pairs (PART1 → PART2/BOTH)
+        # Pass 2: forward pairs (BOTH → PART2)
+        # This order guarantees BOTH's backward side is resolved before
+        # its forward side, so the forward reconciliation uses the
+        # already-validated text.
         reconciled_count = 0
         processed_part2: set[str] = set()
 
+        # --- Pass 1: PART1 → partner (partner may be PART2 or BOTH) ---
         for lm in chunk_lines:
-            # Process PART1 lines (forward link via hyphen_pair_line_id)
-            if lm.hyphen_role == HyphenRole.PART1 and lm.hyphen_pair_line_id:
-                part2_id = lm.hyphen_pair_line_id
-                if part2_id in processed_part2:
-                    continue
-                part2 = line_by_id.get(part2_id)
-                if part2 is None:
-                    continue
+            if lm.hyphen_role != HyphenRole.PART1 or not lm.hyphen_pair_line_id:
+                continue
+            part2_id = lm.hyphen_pair_line_id
+            if part2_id in processed_part2:
+                continue
+            part2 = line_by_id.get(part2_id)
+            if part2 is None:
+                continue
 
-                corrected_p1 = text_by_id.get(lm.line_id, lm.ocr_text)
-                corrected_p2 = text_by_id.get(part2_id, part2.ocr_text)
+            corrected_p1 = text_by_id.get(lm.line_id, lm.ocr_text)
+            corrected_p2 = text_by_id.get(part2_id, part2.ocr_text)
 
-                final_p1, final_p2, subs = reconcile_hyphen_pair(
-                    lm, part2, corrected_p1, corrected_p2
-                )
+            final_p1, final_p2, subs = reconcile_hyphen_pair(
+                lm, part2, corrected_p1, corrected_p2
+            )
 
-                lm.corrected_text = final_p1
-                lm.status = LineStatus.CORRECTED
-                lm.hyphen_subs_content = subs
+            lm.corrected_text = final_p1
+            lm.status = LineStatus.CORRECTED
+            lm.hyphen_subs_content = subs
 
-                part2.corrected_text = final_p2
-                part2.status = LineStatus.CORRECTED
-                part2.hyphen_subs_content = subs
+            part2.corrected_text = final_p2
+            part2.status = LineStatus.CORRECTED
+            part2.hyphen_subs_content = subs
 
-                processed_part2.add(part2_id)
-                reconciled_count += 1
+            processed_part2.add(part2_id)
+            reconciled_count += 1
 
-            # Process BOTH lines (forward link via hyphen_forward_pair_id)
-            elif lm.hyphen_role == HyphenRole.BOTH and lm.hyphen_forward_pair_id:
-                part2_id = lm.hyphen_forward_pair_id
-                if part2_id in processed_part2:
-                    continue
-                part2 = line_by_id.get(part2_id)
-                if part2 is None:
-                    continue
+        # --- Pass 2: BOTH → forward partner ---
+        for lm in chunk_lines:
+            if lm.hyphen_role != HyphenRole.BOTH or not lm.hyphen_forward_pair_id:
+                continue
+            part2_id = lm.hyphen_forward_pair_id
+            if part2_id in processed_part2:
+                continue
+            part2 = line_by_id.get(part2_id)
+            if part2 is None:
+                continue
 
-                corrected_p1 = text_by_id.get(lm.line_id, lm.corrected_text or lm.ocr_text)
-                corrected_p2 = text_by_id.get(part2_id, part2.ocr_text)
+            # Use BOTH's already-reconciled text from pass 1 (if available)
+            corrected_p1 = lm.corrected_text or text_by_id.get(lm.line_id, lm.ocr_text)
+            corrected_p2 = text_by_id.get(part2_id, part2.ocr_text)
 
-                # Build a temporary manifest with forward subs for reconciliation
-                from copy import copy
-                lm_as_part1 = copy(lm)
-                lm_as_part1.hyphen_role = HyphenRole.PART1
-                lm_as_part1.hyphen_subs_content = lm.hyphen_forward_subs_content
-                lm_as_part1.hyphen_source_explicit = lm.hyphen_forward_explicit
+            final_p1, final_p2, subs = reconcile_hyphen_pair(
+                lm, part2, corrected_p1, corrected_p2,
+                subs_content=lm.hyphen_forward_subs_content,
+                source_explicit=lm.hyphen_forward_explicit,
+            )
 
-                final_p1, final_p2, subs = reconcile_hyphen_pair(
-                    lm_as_part1, part2, corrected_p1, corrected_p2
-                )
+            lm.corrected_text = final_p1
+            lm.status = LineStatus.CORRECTED
+            lm.hyphen_forward_subs_content = subs
 
-                lm.corrected_text = final_p1
-                lm.status = LineStatus.CORRECTED
-                lm.hyphen_forward_subs_content = subs
+            part2.corrected_text = final_p2
+            part2.status = LineStatus.CORRECTED
+            part2.hyphen_subs_content = subs
 
-                part2.corrected_text = final_p2
-                part2.status = LineStatus.CORRECTED
-                part2.hyphen_subs_content = subs
-
-                processed_part2.add(part2_id)
-                reconciled_count += 1
+            processed_part2.add(part2_id)
+            reconciled_count += 1
 
         # Apply remaining lines via line_acceptance policy
         for lm in chunk_lines:

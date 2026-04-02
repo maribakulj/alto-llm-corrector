@@ -5,6 +5,8 @@ from typing import Optional
 
 from app.schemas import HyphenRole, LLMLineInput, LineManifest
 
+_SENTINEL = object()  # distinguishes "not passed" from None
+
 
 # ---------------------------------------------------------------------------
 # Metrics
@@ -54,8 +56,8 @@ def enrich_chunk_lines(
                 )
             )
         elif lm.hyphen_role == HyphenRole.BOTH:
-            # Chained: PART2 of previous pair + PART1 of next pair
-            # Use forward subs as the primary join candidate for the LLM
+            # Chained: PART2 of previous pair + PART1 of next pair.
+            # Both join candidates exposed symmetrically.
             result.append(
                 LLMLineInput(
                     line_id=lm.line_id,
@@ -66,14 +68,11 @@ def enrich_chunk_lines(
                     hyphen_candidate=True,
                     hyphen_join_with_next=True,
                     hyphen_join_with_prev=True,
-                    logical_join_candidate=(
-                        lm.hyphen_forward_subs_content
-                        or lm.hyphen_subs_content
-                        or None
-                    ),
+                    backward_join_candidate=lm.hyphen_subs_content or None,
+                    forward_join_candidate=lm.hyphen_forward_subs_content or None,
                 )
             )
-        else:
+        elif lm.hyphen_role == HyphenRole.PART1:
             result.append(
                 LLMLineInput(
                     line_id=lm.line_id,
@@ -82,13 +81,22 @@ def enrich_chunk_lines(
                     next_text=next_text,
                     hyphenation_role=lm.hyphen_role.value,
                     hyphen_candidate=True,
-                    hyphen_join_with_next=(
-                        True if lm.hyphen_role == HyphenRole.PART1 else None
-                    ),
-                    hyphen_join_with_prev=(
-                        True if lm.hyphen_role == HyphenRole.PART2 else None
-                    ),
-                    logical_join_candidate=lm.hyphen_subs_content or None,
+                    hyphen_join_with_next=True,
+                    forward_join_candidate=lm.hyphen_subs_content or None,
+                )
+            )
+        else:
+            # PART2
+            result.append(
+                LLMLineInput(
+                    line_id=lm.line_id,
+                    prev_text=prev_text,
+                    ocr_text=lm.ocr_text,
+                    next_text=next_text,
+                    hyphenation_role=lm.hyphen_role.value,
+                    hyphen_candidate=True,
+                    hyphen_join_with_prev=True,
+                    backward_join_candidate=lm.hyphen_subs_content or None,
                 )
             )
 
@@ -192,11 +200,18 @@ def reconcile_hyphen_pair(
     part2: LineManifest,
     corrected_part1: str,
     corrected_part2: str,
+    *,
+    subs_content: Optional[str] = _SENTINEL,
+    source_explicit: Optional[bool] = None,
 ) -> tuple[str, str, Optional[str]]:
     """
     Validate and reconcile LLM corrections for a hyphenated pair.
 
     Returns (final_text_part1, final_text_part2, resolved_subs_content).
+
+    When called for a BOTH line acting as PART1 of its forward pair,
+    pass subs_content and source_explicit explicitly to avoid needing
+    a copy of the manifest.
 
     Invariants enforced:
     - The two physical lines remain distinct.
@@ -210,6 +225,10 @@ def reconcile_hyphen_pair(
       fall back.
     - No incoherent pair (mixed OCR+corrected) can survive.
     """
+    # Resolve parameters: explicit overrides take precedence over manifest fields
+    effective_subs = part1.hyphen_subs_content if subs_content is _SENTINEL else subs_content
+    effective_explicit = part1.hyphen_source_explicit if source_explicit is None else source_explicit
+
     _fallback = (part1.ocr_text, part2.ocr_text, None)
 
     # --- Migration check (PART1 extended or PART2 collapsed) ---
@@ -231,20 +250,15 @@ def reconcile_hyphen_pair(
     # =================================================================
     # Explicit mode: subs_content is the authority for coherence
     # =================================================================
-    if part1.hyphen_source_explicit:
-        subs_content = part1.hyphen_subs_content
-
-        if subs_content:
+    if effective_explicit:
+        if effective_subs:
             left_bare = tokens1[-1].rstrip("-")
             right_fragment = tokens2[0]
             joined = left_bare + right_fragment
 
-            if joined.lower() == subs_content.lower():
-                # Pair is coherent: correction accepted
-                return corrected_part1, corrected_part2, subs_content
+            if joined.lower() == effective_subs.lower():
+                return corrected_part1, corrected_part2, effective_subs
             else:
-                # Pair is incoherent: join doesn't match subs_content.
-                # Fall back BOTH sides — never leave a mixed pair.
                 return _fallback
 
         # No subs_content reference — use boundary word check as safety net

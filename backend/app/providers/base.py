@@ -55,10 +55,10 @@ Règles absolues :
 10. corrected_text doit contenir une seule ligne, sans caractère de saut de ligne.
 11. Retourne uniquement un JSON valide conforme au schéma fourni.
 12. En cas d'incertitude, fais la correction minimale.
-13. Quand une ligne porte hyphenation_role="HypPart1" ou "HypPart2", \
+13. Quand une ligne porte hyphenation_role="HypPart1", "HypPart2" ou "HypBoth", \
 tu dois corriger chaque ligne individuellement sans déplacer de texte \
-entre elles. Le mot logique (logical_join_candidate) t'est fourni \
-à titre indicatif uniquement pour le contexte.\
+entre elles. Les mots logiques (backward_join_candidate, forward_join_candidate) \
+te sont fournis à titre indicatif uniquement pour le contexte.\
 """
 
 
