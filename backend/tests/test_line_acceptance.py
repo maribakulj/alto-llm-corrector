@@ -116,6 +116,89 @@ class TestCheckLineNeighbourNext:
         assert r.reason == "closer_to_next_line"
 
 
+# ===========================================================================
+# Test: absorption guard
+# ===========================================================================
+
+class TestAbsorption:
+    """Guard 3: correction absorbs adjacent line content."""
+
+    def test_absorbs_next_line_detected(self):
+        """TL000024 pattern: source + suffix from next line → rejected."""
+        source = "cou s'ils y vont en voiture, à se donner une"
+        next_ocr = "entorse s'ils y vont à pieds."
+        corrected = "cou s'ils y vont en voiture, à se donner une entorse s'ils y vont à pied."
+        r = check_line(source, corrected, next_ocr=next_ocr)
+        assert not r.accepted
+        assert r.reason == "absorbs_next_line"
+        assert r.text == source
+
+    def test_absorbs_next_line_with_correction(self):
+        """Even if the LLM also corrects typos, absorption is caught."""
+        source = "la municipalité prenne les rnesures néces-"
+        next_ocr = "saires pour que les chemins soient"
+        corrected = "la municipalité prenne les mesures nécessaires pour que les chemins soient"
+        r = check_line(source, corrected, next_ocr=next_ocr)
+        assert not r.accepted
+        assert r.reason == "absorbs_next_line"
+
+    def test_normal_correction_not_flagged_as_absorption(self):
+        """A minor OCR fix on a line must NOT trigger absorption."""
+        source = "cou s'ils y vont en voiture, à se donner une"
+        next_ocr = "entorse s'ils y vont à pieds."
+        corrected = "cou s'ils y vont en voiture, à se donner une"
+        r = check_line(source, corrected, next_ocr=next_ocr)
+        assert r.accepted
+
+    def test_slightly_longer_correction_not_absorption(self):
+        """Adding a missing word is NOT absorption if it doesn't match next line."""
+        source = "la municipalité prenne les mesures"
+        next_ocr = "nécessaires pour que les chemins soient"
+        corrected = "la municipalité prenne les mesures urgentes"  # adds 1 word
+        r = check_line(source, corrected, next_ocr=next_ocr)
+        assert r.accepted
+
+    def test_absorbs_previous_line_detected(self):
+        """Symmetric case: correction absorbs previous line as prefix."""
+        source = "saires pour que les chemins soient"
+        prev_ocr = "la municipalité prenne les mesures néces-"
+        corrected = "la municipalité prenne les mesures nécessaires pour que les chemins soient"
+        r = check_line(source, corrected, prev_ocr=prev_ocr)
+        assert not r.accepted
+        assert r.reason == "absorbs_previous_line"
+
+    def test_no_absorption_when_next_ocr_absent(self):
+        """Without neighbour context, absorption cannot be checked."""
+        source = "cou s'ils y vont en voiture, à se donner une"
+        corrected = "cou s'ils y vont en voiture, à se donner une entorse s'ils y vont à pied."
+        # No next_ocr → guard 1 (source similarity) or accept
+        r = check_line(source, corrected)
+        # Should be handled by source similarity or accepted — not absorption
+        assert r.reason != "absorbs_next_line"
+
+    def test_duplication_scenario_end_to_end(self):
+        """
+        Full scenario: line i absorbs line i+1.
+        Line i should be rejected (absorption).
+        Line i+1 corrected badly → rejected by source similarity.
+        No duplication in final output.
+        """
+        source_i = "cou s'ils y vont en voiture, à se donner une"
+        source_next = "entorse s'ils y vont à pieds."
+        corrected_i = "cou s'ils y vont en voiture, à se donner une entorse s'ils y vont à pied."
+        corrected_next = "G."  # LLM hallucinated
+
+        r_i = check_line(source_i, corrected_i, next_ocr=source_next)
+        assert not r_i.accepted
+        assert r_i.reason == "absorbs_next_line"
+        assert r_i.text == source_i  # falls back to OCR
+
+        r_next = check_line(source_next, corrected_next, prev_ocr=source_i)
+        assert not r_next.accepted
+        assert r_next.reason == "too_different_from_source"
+        assert r_next.text == source_next  # falls back to OCR
+
+
 class TestAdjacentDuplicates:
     """Test 5: adjacent duplicate detection."""
 

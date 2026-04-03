@@ -3,7 +3,7 @@
 This module decides, for each corrected line, whether the LLM correction
 is safe to accept or should fall back to the original OCR text.
 
-Three guards are applied in order:
+Four guards are applied in order inside ``check_line``:
 
 1. **Source similarity** — reject corrections that are too different from
    the source OCR (measured via SequenceMatcher ratio).
@@ -11,7 +11,12 @@ Three guards are applied in order:
 2. **Neighbour proximity** — reject a correction that looks more like
    a neighbouring line's OCR than its own source (text migration).
 
-3. **Adjacent duplication** — reject when two adjacent corrected lines
+3. **Absorption** — reject when the correction looks like source + next
+   (or prev + source) concatenated (line absorbed its neighbour).
+
+A separate post-pass ``check_adjacent_duplicates`` applies:
+
+4. **Adjacent duplication** — reject when two adjacent corrected lines
    become (near-)identical while their sources were clearly different.
 
 All guards are intentionally conservative: on any doubt, fall back to
@@ -40,6 +45,11 @@ NEIGHBOUR_MARGIN = 0.15
 # similarity exceeds this AND their sources were below it.
 DUPLICATE_THRESHOLD = 0.85
 DUPLICATE_SOURCE_MIN_DIFF = 0.70  # sources must be below this to flag
+
+# Absorption: correction must be at least this much longer than source
+# AND look like source + neighbour concatenated at this similarity.
+ABSORPTION_LENGTH_RATIO = 1.2
+ABSORPTION_CONCAT_SIMILARITY = 0.8
 
 
 # ---------------------------------------------------------------------------
@@ -126,6 +136,28 @@ def check_line(
                 accepted=False,
                 text=source_ocr,
                 reason="closer_to_next_line",
+            )
+
+    # --- Guard 3: absorption of adjacent line ---
+    # Detects when the correction is source + neighbour concatenated.
+    src_len = max(len(source_ocr), 1)
+
+    if next_ocr and len(corrected) > src_len * ABSORPTION_LENGTH_RATIO:
+        concat_fwd = source_ocr + " " + next_ocr
+        if _similarity(corrected, concat_fwd) > ABSORPTION_CONCAT_SIMILARITY:
+            return AcceptanceResult(
+                accepted=False,
+                text=source_ocr,
+                reason="absorbs_next_line",
+            )
+
+    if prev_ocr and len(corrected) > src_len * ABSORPTION_LENGTH_RATIO:
+        concat_bwd = prev_ocr + " " + source_ocr
+        if _similarity(corrected, concat_bwd) > ABSORPTION_CONCAT_SIMILARITY:
+            return AcceptanceResult(
+                accepted=False,
+                text=source_ocr,
+                reason="absorbs_previous_line",
             )
 
     return AcceptanceResult(accepted=True, text=corrected)
