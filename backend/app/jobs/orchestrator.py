@@ -8,6 +8,8 @@ import time
 from pathlib import Path
 from typing import Any, Optional
 
+import re
+
 from app.alto.hyphenation import enrich_chunk_lines, reconcile_hyphen_pair
 from app.alto.rewriter import extract_output_texts, rewrite_alto_file
 from app.jobs.chunk_planner import plan_page
@@ -32,6 +34,21 @@ from app.schemas import (
 logger = logging.getLogger(__name__)
 
 _DEFAULT_CONFIG = ChunkPlannerConfig()
+
+# Pattern to redact Bearer tokens, API keys, and common key formats
+_SECRET_RE = re.compile(
+    r"(Bearer\s+)\S+|"            # Authorization: Bearer <key>
+    r"(sk-[A-Za-z0-9]{4})\S+|"   # OpenAI-style sk-...
+    r"(key-[A-Za-z0-9]{4})\S+",  # Mistral-style key-...
+    re.IGNORECASE,
+)
+
+
+def _sanitize_error(msg: str, api_key: str | None = None) -> str:
+    """Strip API keys and secrets from error messages."""
+    if api_key and len(api_key) > 8 and api_key in msg:
+        msg = msg.replace(api_key, api_key[:4] + "****")
+    return _SECRET_RE.sub(lambda m: (m.group(1) or m.group(2) or m.group(3) or "") + "****", msg)
 
 
 def _trace_key(lm: LineManifest) -> str:
@@ -104,7 +121,7 @@ async def _run_chunk(
     hyphen_violation = False
 
     for attempt in range(1, max_attempts + 1):
-        temperature = 0.0 if (attempt > 1 or hyphen_violation) else 0.0
+        temperature = 0.0 if (attempt > 1 or hyphen_violation) else 0.3
 
         enriched = enrich_chunk_lines(chunk_lines, all_lines_by_id)
 
@@ -167,9 +184,13 @@ async def _run_chunk(
             )
             hyphen_violation = False
 
-        except ValueError as exc:
-            msg = str(exc)
-            is_hyphen_violation = "hyphen_integrity_violation" in msg
+        except (ValueError, Exception) as exc:
+            msg = _sanitize_error(str(exc), api_key)
+            is_http_error = not isinstance(exc, ValueError)
+            is_hyphen_violation = (
+                isinstance(exc, ValueError)
+                and "hyphen_integrity_violation" in str(exc)
+            )
 
             if is_hyphen_violation and not hyphen_violation:
                 # First hyphen violation: retry immediately with temperature=0
@@ -183,9 +204,10 @@ async def _run_chunk(
                     retries=getattr(job_store.get_job(job_id), "retries", 0) + 1)
                 continue
 
-            # General failure
+            # General failure (validation error or transient HTTP/provider error)
             if attempt < max_attempts:
-                await asyncio.sleep(attempt)
+                backoff = attempt * 2 if is_http_error else attempt
+                await asyncio.sleep(backoff)
                 job_store.emit(job_id, "retry", {
                     "chunk_id": chunk.chunk_id,
                     "attempt": attempt,
@@ -547,13 +569,14 @@ async def run_job(
 
     except Exception as exc:
         logger.exception("Job %s failed", job_id)
+        safe_error = _sanitize_error(str(exc)[:500], api_key)
         job_store.update_job(
             job_id,
             status=JobStatus.FAILED,
-            error=str(exc)[:500],
+            error=safe_error,
             duration_seconds=time.monotonic() - start_time,
         )
         job_store.emit(job_id, "failed", {
             "job_id": job_id,
-            "error": str(exc)[:500],
+            "error": safe_error,
         })

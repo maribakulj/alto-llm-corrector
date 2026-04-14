@@ -10,6 +10,7 @@ _BASE_DIR = Path(os.environ.get("JOB_STORAGE_DIR", "/tmp/app-jobs"))
 
 _ALLOWED_EXTENSIONS = {".xml", ".alto"}
 _IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".tif", ".tiff"}
+_MAX_ZIP_EXTRACTED_BYTES = 500 * 1024 * 1024  # 500 MB safety limit
 
 
 # ---------------------------------------------------------------------------
@@ -67,6 +68,13 @@ def save_uploaded_files(
         if suffix == ".zip":
             import io
             with zipfile.ZipFile(io.BytesIO(content)) as zf:
+                # Guard against zip bombs: check declared uncompressed size
+                total_uncompressed = sum(m.file_size for m in zf.infolist())
+                if total_uncompressed > _MAX_ZIP_EXTRACTED_BYTES:
+                    raise ValueError(
+                        f"ZIP archive uncompressed size ({total_uncompressed} bytes) "
+                        f"exceeds safety limit ({_MAX_ZIP_EXTRACTED_BYTES} bytes)"
+                    )
                 for member in zf.infolist():
                     member_path = Path(member.filename)
                     # Skip macOS metadata: AppleDouble files (._*) and the
@@ -150,7 +158,8 @@ def link_alto_to_images(
         # Strategy 1: read sourceImageInformation/fileName from ALTO XML
         image_key: str | None = None
         try:
-            tree = etree.parse(str(alto_path))
+            _parser = etree.XMLParser(resolve_entities=False, no_network=True)
+            tree = etree.parse(str(alto_path), _parser)
             for el in tree.findall(".//{*}fileName"):
                 fname = (el.text or "").strip()
                 if fname:

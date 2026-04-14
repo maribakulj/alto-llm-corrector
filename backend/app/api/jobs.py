@@ -394,8 +394,11 @@ async def get_job_image(job_id: str, image_name: str) -> Response:
     if "/" in image_name or "\\" in image_name or image_name.startswith("."):
         raise HTTPException(status_code=400, detail="Invalid image name.")
 
-    img_path = images_dir(job_id) / image_name
-    if not img_path.exists():
+    img_path = (images_dir(job_id) / image_name).resolve()
+    allowed_dir = images_dir(job_id).resolve()
+    if not img_path.is_relative_to(allowed_dir):
+        raise HTTPException(status_code=400, detail="Invalid image name.")
+    if not img_path.is_file() or img_path.is_symlink():
         raise HTTPException(status_code=404, detail=f"Image not found: {image_name!r}")
 
     mime = _IMAGE_MIME.get(img_path.suffix.lower(), "application/octet-stream")

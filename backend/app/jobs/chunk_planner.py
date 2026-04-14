@@ -201,8 +201,11 @@ def _try_window(
     while start < n:
         end = min(start + window_size, n)  # exclusive
 
-        # Extend to keep hyphen chains intact at window boundary
-        while end < n:
+        # Extend to keep hyphen chains intact at window boundary,
+        # but cap to avoid unbounded growth beyond the token budget.
+        extension_limit = max(config.max_lines_per_request, end - start + 10)
+        max_end = min(n, start + extension_limit)
+        while end < max_end:
             last_in_window = lines[end - 1]
             next_line = lines[end]
             if should_stay_in_same_chunk(last_in_window, next_line):

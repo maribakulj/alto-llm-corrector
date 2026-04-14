@@ -1,23 +1,31 @@
-"""In-memory job store with SSE fan-out."""
+"""In-memory job store with SSE fan-out and TTL eviction."""
 from __future__ import annotations
 
 import asyncio
+import time
 import uuid
 from typing import Any, AsyncGenerator, Optional
 
 from app.schemas import JobManifest, JobStatus, Provider, SSEEvent
 
+# Completed/failed jobs are evicted after this many seconds.
+_DEFAULT_TTL_SECONDS = 3600  # 1 hour
+_MAX_COMPLETED_JOBS = 200
+
 
 class JobStore:
-    def __init__(self) -> None:
+    def __init__(self, ttl_seconds: int = _DEFAULT_TTL_SECONDS) -> None:
         self._jobs: dict[str, JobManifest] = {}
         self._subscribers: dict[str, list[asyncio.Queue]] = {}
+        self._completed_at: dict[str, float] = {}  # job_id → monotonic timestamp
+        self._ttl_seconds = ttl_seconds
 
     # ------------------------------------------------------------------
     # CRUD
     # ------------------------------------------------------------------
 
     def create_job(self, provider: Provider, model: str) -> str:
+        self._evict_stale()
         job_id = str(uuid.uuid4())
         self._jobs[job_id] = JobManifest(
             job_id=job_id,
@@ -36,6 +44,9 @@ class JobStore:
             return
         for k, v in kwargs.items():
             setattr(job, k, v)
+        # Track when a job reaches terminal state for eviction
+        if job.status in (JobStatus.COMPLETED, JobStatus.FAILED):
+            self._completed_at.setdefault(job_id, time.monotonic())
 
     # ------------------------------------------------------------------
     # SSE
@@ -89,6 +100,32 @@ class JobStore:
                     yield SSEEvent(event="keepalive", data={})
         finally:
             self.unsubscribe(job_id, queue)
+
+    # ------------------------------------------------------------------
+    # Eviction
+    # ------------------------------------------------------------------
+
+    def _evict_stale(self) -> None:
+        """Remove completed/failed jobs older than TTL or exceeding cap."""
+        now = time.monotonic()
+        expired = [
+            jid for jid, ts in self._completed_at.items()
+            if now - ts > self._ttl_seconds
+        ]
+        for jid in expired:
+            self._remove_job(jid)
+
+        # Hard cap: if too many completed jobs, evict oldest first
+        if len(self._completed_at) > _MAX_COMPLETED_JOBS:
+            by_age = sorted(self._completed_at, key=self._completed_at.get)  # type: ignore[arg-type]
+            excess = len(self._completed_at) - _MAX_COMPLETED_JOBS
+            for jid in by_age[:excess]:
+                self._remove_job(jid)
+
+    def _remove_job(self, job_id: str) -> None:
+        self._jobs.pop(job_id, None)
+        self._subscribers.pop(job_id, None)
+        self._completed_at.pop(job_id, None)
 
 
 # ---------------------------------------------------------------------------

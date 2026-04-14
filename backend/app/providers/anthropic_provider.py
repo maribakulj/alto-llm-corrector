@@ -90,5 +90,10 @@ class AnthropicProvider:
             resp.raise_for_status()
             data = resp.json()
 
-        content = data["content"][0]["text"]
-        return json.loads(content)
+        blocks = data.get("content")
+        if not blocks or not isinstance(blocks, list):
+            raise ValueError(f"Anthropic response missing 'content': {list(data.keys())}")
+        text = blocks[0].get("text")
+        if not text:
+            raise ValueError("Anthropic response has empty text in content[0]")
+        return json.loads(text)
