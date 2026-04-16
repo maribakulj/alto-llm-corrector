@@ -6,6 +6,7 @@ from typing import Any
 
 import httpx
 
+from app.providers.base import call_llm
 from app.schemas import ModelInfo
 
 _BASE = "https://generativelanguage.googleapis.com"
@@ -37,7 +38,6 @@ class GoogleProvider:
             if not _keep_model(m):
                 continue
             name: str = m.get("name", "")
-            # name is "models/gemini-1.5-pro" — use the short form as id
             mid = name.split("/")[-1] if "/" in name else name
             label = m.get("displayName") or mid
             models.append(ModelInfo(id=mid, label=label))
@@ -53,9 +53,13 @@ class GoogleProvider:
         json_schema: dict[str, Any],
         temperature: float = 0.0,
     ) -> dict[str, Any]:
-        # Unwrap outer "name"/"strict"/"schema" envelope if present
         schema_body = json_schema.get("schema", json_schema)
 
+        gen_config: dict[str, Any] = {
+            "temperature": temperature,
+            "responseMimeType": "application/json",
+            "responseSchema": schema_body,
+        }
         body: dict[str, Any] = {
             "system_instruction": {"parts": [{"text": system_prompt}]},
             "contents": [
@@ -66,42 +70,21 @@ class GoogleProvider:
                     ],
                 }
             ],
-            "generationConfig": {
-                "temperature": temperature,
-                "responseMimeType": "application/json",
-                "responseSchema": schema_body,
-            },
+            "generationConfig": gen_config,
+        }
+        fallback_body = {
+            **body,
+            "generationConfig": {k: v for k, v in gen_config.items() if k != "responseSchema"},
         }
 
         url = f"{_BASE}/v1beta/models/{model}:generateContent"
-
-        async with httpx.AsyncClient() as client:
-            resp = await client.post(
-                url,
-                params={"key": api_key},
-                json=body,
-                timeout=120,
-            )
-
-            if resp.status_code in (400, 422):
-                # Fallback: drop responseSchema
-                body_fallback = {
-                    **body,
-                    "generationConfig": {
-                        k: v
-                        for k, v in body["generationConfig"].items()
-                        if k != "responseSchema"
-                    },
-                }
-                resp = await client.post(
-                    url,
-                    params={"key": api_key},
-                    json=body_fallback,
-                    timeout=120,
-                )
-
-            resp.raise_for_status()
-            data = resp.json()
+        data = await call_llm(
+            url=url,
+            headers={"Content-Type": "application/json"},
+            body=body,
+            fallback_body=fallback_body,
+            params={"key": api_key},
+        )
 
         candidates = data.get("candidates")
         if not candidates or not isinstance(candidates, list):

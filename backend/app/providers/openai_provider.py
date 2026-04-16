@@ -6,6 +6,7 @@ from typing import Any
 
 import httpx
 
+from app.providers.base import call_llm, extract_chat_text
 from app.schemas import ModelInfo
 
 _BASE = "https://api.openai.com"
@@ -60,6 +61,10 @@ class OpenAIProvider:
         json_schema: dict[str, Any],
         temperature: float = 0.0,
     ) -> dict[str, Any]:
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        }
         body = {
             "model": model,
             "temperature": temperature,
@@ -72,23 +77,6 @@ class OpenAIProvider:
                 "json_schema": json_schema,
             },
         }
-        async with httpx.AsyncClient() as client:
-            resp = await client.post(
-                f"{_BASE}/v1/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {api_key}",
-                    "Content-Type": "application/json",
-                },
-                json=body,
-                timeout=120,
-            )
-            resp.raise_for_status()
-            data = resp.json()
 
-        choices = data.get("choices")
-        if not choices or not isinstance(choices, list):
-            raise ValueError(f"OpenAI response missing 'choices': {list(data.keys())}")
-        content = choices[0].get("message", {}).get("content")
-        if not content:
-            raise ValueError("OpenAI response has empty content in choices[0].message")
-        return json.loads(content)
+        data = await call_llm(url=f"{_BASE}/v1/chat/completions", headers=headers, body=body)
+        return extract_chat_text(data, "OpenAI")

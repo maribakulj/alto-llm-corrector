@@ -396,3 +396,107 @@ def test_multi_file(tmp_path):
     all_lines = [l for p in doc.pages for l in p.lines]
     global_orders = [l.line_order_global for l in all_lines]
     assert global_orders == [0, 1, 2]
+
+
+# ---------------------------------------------------------------------------
+# Cross-page hyphenation linking
+# ---------------------------------------------------------------------------
+
+def test_cross_page_hyphen_pair_linked(tmp_path: Path):
+    """PART1 on last line of page 1 should link to PART2 on first line of page 2."""
+    file1 = write_alto(
+        tmp_path,
+        alto_v3("""\
+<TextBlock ID="TB1" HPOS="0" VPOS="0" WIDTH="200" HEIGHT="60">
+  <TextLine ID="TL1" HPOS="0" VPOS="0" WIDTH="200" HEIGHT="20">
+    <String ID="S1" CONTENT="les" HPOS="0" VPOS="0" WIDTH="40" HEIGHT="20"/>
+    <SP HPOS="40" VPOS="0" WIDTH="10"/>
+    <String ID="S2" CONTENT="fonda" SUBS_TYPE="HypPart1" SUBS_CONTENT="fondamentaux" HPOS="50" VPOS="0" WIDTH="60" HEIGHT="20"/>
+    <HYP CONTENT="-" HPOS="110" VPOS="0" WIDTH="10"/>
+  </TextLine>
+</TextBlock>"""),
+        "page1.xml",
+    )
+    file2 = write_alto(
+        tmp_path,
+        alto_v3("""\
+<TextBlock ID="TB1" HPOS="0" VPOS="0" WIDTH="200" HEIGHT="60">
+  <TextLine ID="TL1" HPOS="0" VPOS="0" WIDTH="200" HEIGHT="20">
+    <String ID="S1" CONTENT="mentaux" SUBS_TYPE="HypPart2" SUBS_CONTENT="fondamentaux" HPOS="0" VPOS="0" WIDTH="80" HEIGHT="20"/>
+    <SP HPOS="80" VPOS="0" WIDTH="10"/>
+    <String ID="S2" CONTENT="du" HPOS="90" VPOS="0" WIDTH="30" HEIGHT="20"/>
+  </TextLine>
+</TextBlock>"""),
+        "page2.xml",
+    )
+
+    doc = build_document_manifest([(file1, "page1.xml"), (file2, "page2.xml")])
+
+    page1_last = doc.pages[0].lines[-1]
+    page2_first = doc.pages[1].lines[0]
+
+    # PART1 on page 1 should be linked to PART2 on page 2
+    assert page1_last.hyphen_role == HyphenRole.PART1
+    assert page1_last.hyphen_pair_line_id == page2_first.line_id
+
+    # PART2 on page 2 should be linked back to PART1 on page 1
+    assert page2_first.hyphen_role == HyphenRole.PART2
+    assert page2_first.hyphen_pair_line_id == page1_last.line_id
+
+    # Both should share the subs_content
+    assert page1_last.hyphen_subs_content == "fondamentaux"
+    assert page2_first.hyphen_subs_content == "fondamentaux"
+
+
+def test_cross_page_heuristic_hyphen_linked(tmp_path: Path):
+    """Heuristic PART1 (trailing dash, no SUBS_TYPE) also links cross-page."""
+    file1 = write_alto(
+        tmp_path,
+        alto_v3("""\
+<TextBlock ID="TB1" HPOS="0" VPOS="0" WIDTH="200" HEIGHT="60">
+  <TextLine ID="TL1" HPOS="0" VPOS="0" WIDTH="200" HEIGHT="20">
+    <String ID="S1" CONTENT="pratica-" HPOS="0" VPOS="0" WIDTH="100" HEIGHT="20"/>
+  </TextLine>
+</TextBlock>"""),
+        "page1.xml",
+    )
+    file2 = write_alto(
+        tmp_path,
+        alto_v3("""\
+<TextBlock ID="TB1" HPOS="0" VPOS="0" WIDTH="200" HEIGHT="60">
+  <TextLine ID="TL1" HPOS="0" VPOS="0" WIDTH="200" HEIGHT="20">
+    <String ID="S1" CONTENT="bles" HPOS="0" VPOS="0" WIDTH="50" HEIGHT="20"/>
+  </TextLine>
+</TextBlock>"""),
+        "page2.xml",
+    )
+
+    doc = build_document_manifest([(file1, "page1.xml"), (file2, "page2.xml")])
+
+    page1_last = doc.pages[0].lines[-1]
+    page2_first = doc.pages[1].lines[0]
+
+    assert page1_last.hyphen_role == HyphenRole.PART1
+    assert page1_last.hyphen_pair_line_id == page2_first.line_id
+    assert page2_first.hyphen_role == HyphenRole.PART2
+    assert page2_first.hyphen_pair_line_id == page1_last.line_id
+
+
+def test_single_page_no_cross_page_link(tmp_path: Path):
+    """A single page with orphan PART1 should NOT be linked (no partner)."""
+    file1 = write_alto(
+        tmp_path,
+        alto_v3("""\
+<TextBlock ID="TB1" HPOS="0" VPOS="0" WIDTH="200" HEIGHT="60">
+  <TextLine ID="TL1" HPOS="0" VPOS="0" WIDTH="200" HEIGHT="20">
+    <String ID="S1" CONTENT="fonda-" HPOS="0" VPOS="0" WIDTH="100" HEIGHT="20"/>
+  </TextLine>
+</TextBlock>"""),
+        "page1.xml",
+    )
+
+    doc = build_document_manifest([(file1, "page1.xml")])
+
+    orphan = doc.pages[0].lines[-1]
+    assert orphan.hyphen_role == HyphenRole.PART1
+    assert orphan.hyphen_pair_line_id is None  # no partner available

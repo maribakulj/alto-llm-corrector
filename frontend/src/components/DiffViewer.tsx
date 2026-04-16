@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import type { DiffData, DiffLine } from '../types'
 
 // ---------------------------------------------------------------------------
@@ -99,7 +99,10 @@ function DiffRow({ line, selected, onSelect }: { line: DiffLine; selected: boole
     )
   }
 
-  const { ocrTokens, corrTokens } = tokenDiff(line.ocr_text, line.corrected_text)
+  const { ocrTokens, corrTokens } = useMemo(
+    () => tokenDiff(line.ocr_text, line.corrected_text),
+    [line.ocr_text, line.corrected_text],
+  )
 
   return (
     <div className={rowBase} onClick={onSelect}>

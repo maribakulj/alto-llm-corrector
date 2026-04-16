@@ -2,11 +2,14 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import time
 import uuid
 from typing import Any, AsyncGenerator, Optional
 
 from app.schemas import JobManifest, JobStatus, Provider, SSEEvent
+
+logger = logging.getLogger(__name__)
 
 # Completed/failed jobs are evicted after this many seconds.
 _DEFAULT_TTL_SECONDS = 3600  # 1 hour
@@ -47,6 +50,14 @@ class JobStore:
         # Track when a job reaches terminal state for eviction
         if job.status in (JobStatus.COMPLETED, JobStatus.FAILED):
             self._completed_at.setdefault(job_id, time.monotonic())
+
+    def increment_counter(self, job_id: str, field: str, delta: int = 1) -> None:
+        """Atomically read-increment-write a numeric counter on a job."""
+        job = self._jobs.get(job_id)
+        if job is None:
+            return
+        current = getattr(job, field, 0) or 0
+        setattr(job, field, current + delta)
 
     # ------------------------------------------------------------------
     # SSE
@@ -126,6 +137,12 @@ class JobStore:
         self._jobs.pop(job_id, None)
         self._subscribers.pop(job_id, None)
         self._completed_at.pop(job_id, None)
+        # Clean up disk storage for evicted jobs
+        try:
+            from app.storage import cleanup_job
+            cleanup_job(job_id)
+        except Exception:
+            logger.debug("Failed to clean up disk for job %s", job_id, exc_info=True)
 
 
 # ---------------------------------------------------------------------------

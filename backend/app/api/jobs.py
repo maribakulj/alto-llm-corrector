@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import io
 import json
+import logging
 import zipfile
 from pathlib import Path
 from typing import AsyncGenerator, List
@@ -106,8 +107,15 @@ async def create_job(
 
     out_dir = output_dir(job_id)
 
-    # Launch correction in background
-    asyncio.create_task(
+    # Launch correction in background with crash tracking
+    def _on_task_done(task: asyncio.Task) -> None:
+        exc = task.exception()
+        if exc is not None:
+            logging.getLogger(__name__).error(
+                "Background job %s crashed: %s", job_id, exc,
+            )
+
+    task = asyncio.create_task(
         run_job(
             job_id=job_id,
             document_manifest=doc_manifest,
@@ -119,6 +127,7 @@ async def create_job(
             provider=provider_instance,
         )
     )
+    task.add_done_callback(_on_task_done)
 
     return CreateJobResponse(job_id=job_id)
 
