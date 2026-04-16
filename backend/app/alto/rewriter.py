@@ -270,7 +270,7 @@ def _apply_subs(
     # Forward subs for BOTH lines (on last String)
     if manifest.hyphen_role == HyphenRole.BOTH:
         strings = _get_string_children(el, ns)
-        if strings and len(strings) > 1:
+        if strings:
             last = strings[-1]
             fw_type, fw_content = _desired_forward_subs(manifest)
             _set_subs_on_element(last, fw_type, fw_content)

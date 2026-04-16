@@ -264,7 +264,8 @@ def parse_alto_file(
     """
     Parse one ALTO XML file and return (list_of_PageManifest, root_element).
     """
-    tree = etree.parse(str(xml_path))
+    parser = etree.XMLParser(resolve_entities=False, no_network=True)
+    tree = etree.parse(str(xml_path), parser)
     root = tree.getroot()
     ns = _detect_namespace(root)
 

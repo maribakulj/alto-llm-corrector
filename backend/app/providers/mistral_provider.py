@@ -82,5 +82,10 @@ class MistralProvider:
             resp.raise_for_status()
             data = resp.json()
 
-        content = data["choices"][0]["message"]["content"]
+        choices = data.get("choices")
+        if not choices or not isinstance(choices, list):
+            raise ValueError(f"Mistral response missing 'choices': {list(data.keys())}")
+        content = choices[0].get("message", {}).get("content")
+        if not content:
+            raise ValueError("Mistral response has empty content in choices[0].message")
         return json.loads(content)

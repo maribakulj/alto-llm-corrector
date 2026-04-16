@@ -267,12 +267,15 @@ def reconcile_hyphen_pair(
         return corrected_part1, corrected_part2, None
 
     # =================================================================
-    # Heuristic mode: conservative, no SUBS_CONTENT reconstruction
+    # Heuristic mode: conservative, no SUBS_CONTENT reconstruction.
+    # However, if a subs_content was explicitly provided (e.g. from a
+    # BOTH line's forward side), preserve it rather than discarding.
     # =================================================================
     if _part2_boundary_word_diverged(part2.ocr_text, corrected_part2):
         return _fallback
 
-    return corrected_part1, corrected_part2, None
+    preserved_subs = effective_subs if subs_content is not _SENTINEL else None
+    return corrected_part1, corrected_part2, preserved_subs
 
 
 def classify_reconcile_outcome(

@@ -103,5 +103,13 @@ class GoogleProvider:
             resp.raise_for_status()
             data = resp.json()
 
-        text = data["candidates"][0]["content"]["parts"][0]["text"]
+        candidates = data.get("candidates")
+        if not candidates or not isinstance(candidates, list):
+            raise ValueError(f"Gemini response missing 'candidates': {list(data.keys())}")
+        parts = candidates[0].get("content", {}).get("parts")
+        if not parts or not isinstance(parts, list):
+            raise ValueError("Gemini response has no parts in candidates[0].content")
+        text = parts[0].get("text")
+        if not text:
+            raise ValueError("Gemini response has empty text in parts[0]")
         return json.loads(text)
