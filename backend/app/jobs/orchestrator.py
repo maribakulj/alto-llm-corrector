@@ -4,11 +4,11 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
+import re
 import time
 from pathlib import Path
 from typing import Any, Optional
-
-import re
 
 from app.alto.hyphenation import enrich_chunk_lines, reconcile_hyphen_pair
 from app.alto.rewriter import extract_output_texts, rewrite_alto_file
@@ -34,6 +34,8 @@ from app.schemas import (
 logger = logging.getLogger(__name__)
 
 _DEFAULT_CONFIG = ChunkPlannerConfig()
+# Global timeout for the entire job pipeline (seconds). 0 = no limit.
+_JOB_TIMEOUT_SECONDS = int(os.environ.get("JOB_TIMEOUT_SECONDS", "1800"))  # 30 min
 
 # Pattern to redact Bearer tokens, API keys, and common key formats
 _SECRET_RE = re.compile(
@@ -121,7 +123,17 @@ async def _run_chunk(
     hyphen_violation = False
 
     for attempt in range(1, max_attempts + 1):
-        temperature = 0.0 if (attempt > 1 or hyphen_violation) else 0.3
+        # Retry temperature strategy: start deterministic (0.0), then
+        # increase diversity on subsequent attempts to escape bad patterns.
+        # Hyphen violations always use 0.0 for maximum precision.
+        if hyphen_violation:
+            temperature = 0.0
+        elif attempt == 1:
+            temperature = 0.0
+        elif attempt == 2:
+            temperature = 0.3
+        else:
+            temperature = 0.5
 
         enriched = enrich_chunk_lines(chunk_lines, all_lines_by_id)
 
@@ -200,8 +212,7 @@ async def _run_chunk(
                     "attempt": attempt,
                     "error": "hyphen_integrity_violation",
                 })
-                job_store.update_job(job_id,
-                    retries=getattr(job_store.get_job(job_id), "retries", 0) + 1)
+                job_store.increment_counter(job_id, "retries")
                 continue
 
             # General failure (validation error or transient HTTP/provider error)
@@ -213,8 +224,7 @@ async def _run_chunk(
                     "attempt": attempt,
                     "error": msg[:120],
                 })
-                job_store.update_job(job_id,
-                    retries=getattr(job_store.get_job(job_id), "retries", 0) + 1)
+                job_store.increment_counter(job_id, "retries")
                 continue
 
             # All attempts exhausted → fallback
@@ -232,8 +242,7 @@ async def _run_chunk(
                         t.projected_text = lm.ocr_text
                         t.validation_status = "fallback"
                         t.fallback_reason = f"all_attempts_exhausted: {msg[:120]}"
-            job_store.update_job(job_id,
-                fallbacks=getattr(job_store.get_job(job_id), "fallbacks", 0) + 1)
+            job_store.increment_counter(job_id, "fallbacks")
             return 0
 
         # --- Success: apply corrections ---
@@ -257,6 +266,11 @@ async def _run_chunk(
                 continue
             part2 = line_by_id.get(part2_id)
             if part2 is None:
+                logger.warning(
+                    "Hyphen pair partner %s not found for PART1 %s "
+                    "(likely cross-page pair — skipping reconciliation)",
+                    part2_id, lm.line_id,
+                )
                 continue
 
             corrected_p1 = text_by_id.get(lm.line_id, lm.ocr_text)
@@ -286,6 +300,11 @@ async def _run_chunk(
                 continue
             part2 = line_by_id.get(part2_id)
             if part2 is None:
+                logger.warning(
+                    "Hyphen forward partner %s not found for BOTH %s "
+                    "(likely cross-page pair — skipping reconciliation)",
+                    part2_id, lm.line_id,
+                )
                 continue
 
             # Use BOTH's already-reconciled text from pass 1 (if available)
@@ -361,6 +380,211 @@ async def _run_chunk(
 
 
 # ---------------------------------------------------------------------------
+# Sub-phases extracted from run_job
+# ---------------------------------------------------------------------------
+
+async def _process_page(
+    job_id: str,
+    page: PageManifest,
+    document_id: str,
+    provider: BaseProvider,
+    api_key: str,
+    model: str,
+    provider_name: str,
+    config: ChunkPlannerConfig,
+    traces: dict[str, LineTrace],
+) -> tuple[int, int]:
+    """Process a single page: plan chunks, run LLM, reconcile.
+
+    Returns (chunks_processed, hyphen_pairs_reconciled).
+    """
+    line_by_id: dict[str, LineManifest] = {lm.line_id: lm for lm in page.lines}
+    page_hyphen_pairs = sum(
+        1 for lm in page.lines
+        if lm.hyphen_role in (HyphenRole.PART1, HyphenRole.BOTH)
+    )
+    job_store.emit(job_id, "page_started", {
+        "page_id": page.page_id,
+        "page_index": page.page_index,
+        "line_count": len(page.lines),
+        "hyphen_pair_count": page_hyphen_pairs,
+    })
+
+    plan = plan_page(page, document_id, config)
+
+    job_store.emit(job_id, "chunk_planned", {
+        "page_id": page.page_id,
+        "chunk_count": len(plan.chunks),
+        "granularity": plan.granularity.value,
+    })
+
+    page_reconciled = 0
+    page_chunks = 0
+
+    for chunk in plan.chunks:
+        page_chunks += 1
+        try:
+            n = await _run_chunk(
+                job_id, chunk, line_by_id,
+                provider, api_key, model, provider_name,
+                traces=traces,
+            )
+            page_reconciled += n
+        except Exception as exc:
+            logger.exception("Chunk %s raised unexpectedly", chunk.chunk_id)
+            job_store.emit(job_id, "warning", {
+                "chunk_id": chunk.chunk_id,
+                "message": str(exc)[:200],
+            })
+
+    page.status = JobStatus.COMPLETED
+
+    page_corrections = sum(
+        1 for lm in page.lines
+        if lm.corrected_text is not None and lm.corrected_text != lm.ocr_text
+    )
+    job_store.emit(job_id, "page_completed", {
+        "page_id": page.page_id,
+        "page_index": page.page_index,
+        "corrections": page_corrections,
+        "hyphen_pairs_reconciled": page_reconciled,
+    })
+
+    return page_chunks, page_reconciled
+
+
+def _write_outputs(
+    document_manifest: DocumentManifest,
+    source_files: dict[str, Path],
+    out_dir: Path,
+    provider_name: str,
+    model: str,
+    traces: dict[str, LineTrace],
+    job_id: str,
+) -> None:
+    """Rewrite corrected ALTO files and build trace data."""
+    for source_name, xml_path in source_files.items():
+        pages_for_file = [
+            p for p in document_manifest.pages
+            if p.source_file == source_name
+        ]
+        if not pages_for_file:
+            continue
+
+        xml_bytes, _metrics, rewriter_paths = rewrite_alto_file(
+            xml_path, pages_for_file, provider_name, model,
+        )
+        out_path = out_dir / f"{xml_path.stem}_corrected.xml"
+        out_path.write_bytes(xml_bytes)
+
+        # Build line_id → trace_key mapping for this file's pages
+        lid_to_tkey: dict[str, str] = {}
+        for p in pages_for_file:
+            for lm in p.lines:
+                lid_to_tkey[lm.line_id] = _trace_key(lm)
+
+        for lid, rpath in rewriter_paths.items():
+            tkey = lid_to_tkey.get(lid)
+            if tkey:
+                t = traces.get(tkey)
+                if t is not None:
+                    t.rewriter_path = rpath
+
+        file_line_ids = {lm.line_id for p in pages_for_file for lm in p.lines}
+        output_texts = extract_output_texts(xml_bytes, file_line_ids)
+        for lid, otxt in output_texts.items():
+            tkey = lid_to_tkey.get(lid)
+            if tkey:
+                t = traces.get(tkey)
+                if t is not None:
+                    t.output_alto_text = otxt
+
+    # Write trace.json
+    job_trace = JobTrace(
+        job_id=job_id,
+        total_lines=len(traces),
+        lines=list(traces.values()),
+    )
+    trace_path = out_dir / "trace.json"
+    trace_path.write_text(
+        job_trace.model_dump_json(indent=2),
+        encoding="utf-8",
+    )
+
+
+# ---------------------------------------------------------------------------
+# Pipeline core (wrapped in timeout by run_job)
+# ---------------------------------------------------------------------------
+
+async def _run_pipeline(
+    job_id: str,
+    document_manifest: DocumentManifest,
+    provider: BaseProvider,
+    api_key: str,
+    model: str,
+    provider_name: str,
+    output_dir: Path,
+    source_files: dict[str, Path],
+) -> tuple[int, int]:
+    """Run the correction pipeline. Returns (total_chunks, total_reconciled)."""
+    job_store.update_job(job_id, status=JobStatus.STARTED)
+    job_store.emit(job_id, "started", {"job_id": job_id})
+
+    total_hyphen_pairs = sum(
+        sum(
+            1 for lm in page.lines
+            if lm.hyphen_role in (HyphenRole.PART1, HyphenRole.BOTH)
+        )
+        for page in document_manifest.pages
+    )
+
+    job_store.emit(job_id, "document_parsed", {
+        "total_pages": document_manifest.total_pages,
+        "total_lines": document_manifest.total_lines,
+        "hyphen_pairs": total_hyphen_pairs,
+    })
+
+    job_store.update_job(
+        job_id,
+        status=JobStatus.RUNNING,
+        document_manifest=document_manifest,
+        total_lines=document_manifest.total_lines,
+    )
+
+    total_chunks = 0
+    total_reconciled = 0
+    config = _DEFAULT_CONFIG
+
+    # Initialize line traces
+    traces: dict[str, LineTrace] = {}
+    for page in document_manifest.pages:
+        for lm in page.lines:
+            traces[_trace_key(lm)] = LineTrace(
+                line_id=lm.line_id,
+                page_id=lm.page_id,
+                source_ocr_text=lm.ocr_text,
+                hyphen_role=lm.hyphen_role.value,
+            )
+
+    for page in document_manifest.pages:
+        page_chunks, page_reconciled = await _process_page(
+            job_id, page, document_manifest.document_id,
+            provider, api_key, model, provider_name,
+            config, traces,
+        )
+        total_chunks += page_chunks
+        total_reconciled += page_reconciled
+
+    _write_outputs(
+        document_manifest, source_files, output_dir,
+        provider_name, model, traces, job_id,
+    )
+    job_store.update_job(job_id, line_traces=traces)
+
+    return total_chunks, total_reconciled
+
+
+# ---------------------------------------------------------------------------
 # Public entry point
 # ---------------------------------------------------------------------------
 
@@ -388,160 +612,14 @@ async def run_job(
     start_time = time.monotonic()
 
     try:
-        job_store.update_job(job_id, status=JobStatus.STARTED)
-        job_store.emit(job_id, "started", {"job_id": job_id})
-
-        # Count total hyphen pairs in document
-        total_hyphen_pairs = sum(
-            sum(
-                1 for lm in page.lines
-                if lm.hyphen_role in (HyphenRole.PART1, HyphenRole.BOTH)
-            )
-            for page in document_manifest.pages
+        timeout = _JOB_TIMEOUT_SECONDS if _JOB_TIMEOUT_SECONDS > 0 else None
+        total_chunks, total_reconciled = await asyncio.wait_for(
+            _run_pipeline(
+                job_id, document_manifest, provider, api_key, model,
+                provider_name, output_dir, source_files,
+            ),
+            timeout=timeout,
         )
-
-        job_store.emit(job_id, "document_parsed", {
-            "total_pages": document_manifest.total_pages,
-            "total_lines": document_manifest.total_lines,
-            "hyphen_pairs": total_hyphen_pairs,
-        })
-
-        job_store.update_job(
-            job_id,
-            status=JobStatus.RUNNING,
-            document_manifest=document_manifest,
-            total_lines=document_manifest.total_lines,
-        )
-
-        total_chunks = 0
-        total_reconciled = 0
-        config = _DEFAULT_CONFIG
-
-        # --- Initialize line traces ---
-        traces: dict[str, LineTrace] = {}
-        for page in document_manifest.pages:
-            for lm in page.lines:
-                traces[_trace_key(lm)] = LineTrace(
-                    line_id=lm.line_id,
-                    page_id=lm.page_id,
-                    source_ocr_text=lm.ocr_text,
-                    hyphen_role=lm.hyphen_role.value,
-                )
-
-        for page in document_manifest.pages:
-            # Build a page-local line lookup to prevent ID collisions across pages.
-            # Multiple ALTO files often reuse the same TextLine IDs (e.g. "l0001").
-            # A global dict would let page N's lines overwrite page M's, causing
-            # corrections to be applied to the wrong LineManifest objects.
-            # prev_line_id / next_line_id are always within-page (set by parser),
-            # so a page-local dict is fully sufficient for context enrichment too.
-            line_by_id: dict[str, LineManifest] = {lm.line_id: lm for lm in page.lines}
-            page_hyphen_pairs = sum(
-                1 for lm in page.lines
-                if lm.hyphen_role in (HyphenRole.PART1, HyphenRole.BOTH)
-            )
-            job_store.emit(job_id, "page_started", {
-                "page_id": page.page_id,
-                "page_index": page.page_index,
-                "line_count": len(page.lines),
-                "hyphen_pair_count": page_hyphen_pairs,
-            })
-
-            # plan_page auto-selects granularity: PAGE → BLOCK → WINDOW
-            plan = plan_page(page, document_manifest.document_id, config)
-
-            job_store.emit(job_id, "chunk_planned", {
-                "page_id": page.page_id,
-                "chunk_count": len(plan.chunks),
-                "granularity": plan.granularity.value,
-            })
-
-            page_reconciled = 0
-            chunk_failures = 0
-
-            for chunk in plan.chunks:
-                total_chunks += 1
-                try:
-                    n = await _run_chunk(
-                        job_id, chunk, line_by_id,
-                        provider, api_key, model, provider_name,
-                        traces=traces,
-                    )
-                    page_reconciled += n
-                except Exception as exc:
-                    logger.exception("Chunk %s raised unexpectedly", chunk.chunk_id)
-                    chunk_failures += 1
-                    job_store.emit(job_id, "warning", {
-                        "chunk_id": chunk.chunk_id,
-                        "message": str(exc)[:200],
-                    })
-
-            total_reconciled += page_reconciled
-            page.status = JobStatus.COMPLETED
-
-            page_corrections = sum(
-                1 for lm in page.lines
-                if lm.corrected_text is not None and lm.corrected_text != lm.ocr_text
-            )
-            job_store.emit(job_id, "page_completed", {
-                "page_id": page.page_id,
-                "page_index": page.page_index,
-                "corrections": page_corrections,
-                "hyphen_pairs_reconciled": page_reconciled,
-            })
-
-        # Rewrite output files
-        for source_name, xml_path in source_files.items():
-            pages_for_file = [
-                p for p in document_manifest.pages
-                if p.source_file == source_name
-            ]
-            if not pages_for_file:
-                continue
-
-            xml_bytes, _rewriter_metrics, rewriter_paths = rewrite_alto_file(xml_path, pages_for_file, provider_name, model)
-            stem = xml_path.stem
-            out_path = output_dir / f"{stem}_corrected.xml"
-            out_path.write_bytes(xml_bytes)
-
-            # Build line_id → trace_key mapping for this file's pages
-            lid_to_tkey: dict[str, str] = {}
-            for p in pages_for_file:
-                for lm in p.lines:
-                    lid_to_tkey[lm.line_id] = _trace_key(lm)
-
-            # --- Trace: rewriter_path per line ---
-            for lid, rpath in rewriter_paths.items():
-                tkey = lid_to_tkey.get(lid)
-                if tkey:
-                    t = traces.get(tkey)
-                    if t is not None:
-                        t.rewriter_path = rpath
-
-            # --- Trace: output_alto_text per line ---
-            file_line_ids = {
-                lm.line_id for p in pages_for_file for lm in p.lines
-            }
-            output_texts = extract_output_texts(xml_bytes, file_line_ids)
-            for lid, otxt in output_texts.items():
-                tkey = lid_to_tkey.get(lid)
-                if tkey:
-                    t = traces.get(tkey)
-                    if t is not None:
-                        t.output_alto_text = otxt
-
-        # --- Write trace.json ---
-        job_trace = JobTrace(
-            job_id=job_id,
-            total_lines=len(traces),
-            lines=list(traces.values()),
-        )
-        trace_path = output_dir / "trace.json"
-        trace_path.write_text(
-            job_trace.model_dump_json(indent=2),
-            encoding="utf-8",
-        )
-        job_store.update_job(job_id, line_traces=traces)
 
         lines_modified = sum(
             1 for page in document_manifest.pages
@@ -566,6 +644,16 @@ async def run_job(
             "chunks_total": total_chunks,
             "duration_seconds": elapsed,
         })
+
+    except asyncio.TimeoutError:
+        logger.error("Job %s timed out after %ss", job_id, _JOB_TIMEOUT_SECONDS)
+        elapsed = round(time.monotonic() - start_time, 2)
+        safe_error = f"Job timed out after {_JOB_TIMEOUT_SECONDS}s"
+        job_store.update_job(
+            job_id, status=JobStatus.FAILED, error=safe_error,
+            duration_seconds=elapsed,
+        )
+        job_store.emit(job_id, "failed", {"job_id": job_id, "error": safe_error})
 
     except Exception as exc:
         logger.exception("Job %s failed", job_id)

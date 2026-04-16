@@ -6,6 +6,7 @@ from typing import Any
 
 import httpx
 
+from app.providers.base import call_llm
 from app.schemas import ModelInfo
 
 _BASE = "https://api.anthropic.com"
@@ -47,7 +48,6 @@ class AnthropicProvider:
         json_schema: dict[str, Any],
         temperature: float = 0.0,
     ) -> dict[str, Any]:
-        # Build the schema payload (unwrap outer "name"/"strict"/"schema" if present)
         schema_body = json_schema.get("schema", json_schema)
 
         body: dict[str, Any] = {
@@ -68,27 +68,14 @@ class AnthropicProvider:
                 }
             },
         }
+        fallback_body = {k: v for k, v in body.items() if k != "output_config"}
 
-        async with httpx.AsyncClient() as client:
-            resp = await client.post(
-                f"{_BASE}/v1/messages",
-                headers=self._headers(api_key),
-                json=body,
-                timeout=120,
-            )
-
-            if resp.status_code in (400, 422):
-                # Fallback: drop output_config, rely on system prompt
-                body_fallback = {k: v for k, v in body.items() if k != "output_config"}
-                resp = await client.post(
-                    f"{_BASE}/v1/messages",
-                    headers=self._headers(api_key),
-                    json=body_fallback,
-                    timeout=120,
-                )
-
-            resp.raise_for_status()
-            data = resp.json()
+        data = await call_llm(
+            url=f"{_BASE}/v1/messages",
+            headers=self._headers(api_key),
+            body=body,
+            fallback_body=fallback_body,
+        )
 
         blocks = data.get("content")
         if not blocks or not isinstance(blocks, list):

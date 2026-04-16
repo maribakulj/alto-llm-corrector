@@ -6,6 +6,7 @@ from typing import Any
 
 import httpx
 
+from app.providers.base import call_llm, extract_chat_text
 from app.schemas import ModelInfo
 
 _BASE = "https://api.mistral.ai"
@@ -60,32 +61,12 @@ class MistralProvider:
                 "json_schema": json_schema,
             },
         }
+        fallback_body = {**body, "response_format": {"type": "json_object"}}
 
-        async with httpx.AsyncClient() as client:
-            resp = await client.post(
-                f"{_BASE}/v1/chat/completions",
-                headers=self._headers(api_key),
-                json=body,
-                timeout=120,
-            )
-
-            if resp.status_code in (400, 422):
-                # Fallback: json_object instead of json_schema
-                body_fallback = {**body, "response_format": {"type": "json_object"}}
-                resp = await client.post(
-                    f"{_BASE}/v1/chat/completions",
-                    headers=self._headers(api_key),
-                    json=body_fallback,
-                    timeout=120,
-                )
-
-            resp.raise_for_status()
-            data = resp.json()
-
-        choices = data.get("choices")
-        if not choices or not isinstance(choices, list):
-            raise ValueError(f"Mistral response missing 'choices': {list(data.keys())}")
-        content = choices[0].get("message", {}).get("content")
-        if not content:
-            raise ValueError("Mistral response has empty content in choices[0].message")
-        return json.loads(content)
+        data = await call_llm(
+            url=f"{_BASE}/v1/chat/completions",
+            headers=self._headers(api_key),
+            body=body,
+            fallback_body=fallback_body,
+        )
+        return extract_chat_text(data, "Mistral")

@@ -21,6 +21,10 @@ COPY --from=frontend-builder /frontend/dist ./static/
 
 ENV JOB_STORAGE_DIR=/tmp/app-jobs
 
+# Create non-root user and ensure storage dir is writable
+RUN useradd --create-home appuser && mkdir -p /tmp/app-jobs && chown appuser /tmp/app-jobs
+USER appuser
+
 EXPOSE 7860
 
 # No HEALTHCHECK instruction — HF Spaces performs its own HTTP health check

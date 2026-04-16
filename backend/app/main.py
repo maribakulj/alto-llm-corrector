@@ -1,6 +1,7 @@
 """FastAPI application entry point."""
 from __future__ import annotations
 
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -40,13 +41,18 @@ def create_app() -> FastAPI:
 
     # ------------------------------------------------------------------
     # CORS
-    # The simplest safe config: wildcard origins, no credentials.
-    # NEVER pass allow_credentials=True with allow_origins=["*"] —
-    # Starlette raises ValueError on first request in some versions.
+    # Origins are configurable via CORS_ORIGINS env var (comma-separated).
+    # Default: wildcard. No credentials — NEVER combine allow_credentials
+    # with allow_origins=["*"] (Starlette raises ValueError).
     # ------------------------------------------------------------------
+    cors_origins = [
+        o.strip()
+        for o in os.environ.get("CORS_ORIGINS", "*").split(",")
+        if o.strip()
+    ]
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=cors_origins,
         allow_methods=["*"],
         allow_headers=["*"],
     )
