@@ -333,6 +333,22 @@ async def _run_chunk(
             if lm.corrected_text is None:
                 corrected = text_by_id.get(lm.line_id)
                 if corrected is not None:
+                    # Guard: orphan PART1 (no partner in chunk) must keep
+                    # its trailing hyphen.  If the LLM removed it, it
+                    # likely tried to complete the word — reject.
+                    if (
+                        lm.hyphen_role in (HyphenRole.PART1, HyphenRole.BOTH)
+                        and lm.ocr_text.rstrip().endswith("-")
+                        and not corrected.rstrip().endswith("-")
+                    ):
+                        lm.corrected_text = lm.ocr_text
+                        lm.status = LineStatus.FALLBACK
+                        if traces is not None:
+                            t = traces.get(_trace_key(lm))
+                            if t is not None:
+                                t.fallback_reason = "orphan_hyphen_completed"
+                        continue
+
                     prev_ocr = all_lines_by_id[lm.prev_line_id].ocr_text if lm.prev_line_id and lm.prev_line_id in all_lines_by_id else None
                     next_ocr = all_lines_by_id[lm.next_line_id].ocr_text if lm.next_line_id and lm.next_line_id in all_lines_by_id else None
                     result = check_line(lm.ocr_text, corrected, prev_ocr, next_ocr)
