@@ -409,12 +409,20 @@ async def _process_page(
     provider_name: str,
     config: ChunkPlannerConfig,
     traces: dict[str, LineTrace],
+    cross_page_partners: dict[str, LineManifest] | None = None,
 ) -> tuple[int, int]:
     """Process a single page: plan chunks, run LLM, reconcile.
 
     Returns (chunks_processed, hyphen_pairs_reconciled).
     """
     line_by_id: dict[str, LineManifest] = {lm.line_id: lm for lm in page.lines}
+
+    # Inject cross-page hyphen partners so reconciliation can find them.
+    # Only add if the ID doesn't collide with a page-local line.
+    if cross_page_partners:
+        for partner_id, partner_lm in cross_page_partners.items():
+            if partner_id not in line_by_id:
+                line_by_id[partner_id] = partner_lm
     page_hyphen_pairs = sum(
         1 for lm in page.lines
         if lm.hyphen_role in (HyphenRole.PART1, HyphenRole.BOTH)
@@ -582,11 +590,30 @@ async def _run_pipeline(
                 hyphen_role=lm.hyphen_role.value,
             )
 
+    # Build a global line lookup for cross-page hyphen partner resolution.
+    # Keyed by line_id — but only lines that ARE cross-page partners
+    # (i.e. their partner is on a different page).
+    all_lines_global: dict[str, LineManifest] = {}
     for page in document_manifest.pages:
+        for lm in page.lines:
+            all_lines_global[lm.line_id] = lm
+
+    for page in document_manifest.pages:
+        # Find cross-page partners needed by this page's lines
+        cross_page: dict[str, LineManifest] = {}
+        for lm in page.lines:
+            for partner_id in (lm.hyphen_pair_line_id, lm.hyphen_forward_pair_id):
+                if not partner_id:
+                    continue
+                partner = all_lines_global.get(partner_id)
+                if partner and partner.page_id != page.page_id:
+                    cross_page[partner_id] = partner
+
         page_chunks, page_reconciled = await _process_page(
             job_id, page, document_manifest.document_id,
             provider, api_key, model, provider_name,
             config, traces,
+            cross_page_partners=cross_page if cross_page else None,
         )
         total_chunks += page_chunks
         total_reconciled += page_reconciled

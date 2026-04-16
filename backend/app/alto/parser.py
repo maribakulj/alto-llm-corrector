@@ -383,6 +383,24 @@ def build_document_manifest(
         for p in pages:
             line_offset += len(p.lines)
 
+    # Cross-page hyphen linking: if the last line of page N is PART1
+    # (or BOTH) and was not already linked, try to pair it with the
+    # first line of page N+1.  _link_hyphen_pairs works on any list
+    # of consecutive lines, so we pass it a 2-element list.
+    for i in range(len(all_pages) - 1):
+        if not all_pages[i].lines or not all_pages[i + 1].lines:
+            continue
+        last_line = all_pages[i].lines[-1]
+        first_line = all_pages[i + 1].lines[0]
+        # Only attempt if the last line looks like a PART1/BOTH that
+        # was NOT linked during intra-page pass (pair_line_id is None).
+        needs_forward_link = (
+            (last_line.hyphen_role == HyphenRole.PART1 and not last_line.hyphen_pair_line_id)
+            or (last_line.hyphen_role == HyphenRole.BOTH and not last_line.hyphen_forward_pair_id)
+        )
+        if needs_forward_link:
+            _link_hyphen_pairs([last_line, first_line])
+
     total_blocks = sum(len(p.blocks) for p in all_pages)
     total_lines = sum(len(p.lines) for p in all_pages)
 
