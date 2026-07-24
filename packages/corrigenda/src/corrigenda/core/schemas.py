@@ -1274,6 +1274,11 @@ class RunProvenance(BaseModel):
     config_fingerprint: str
     #: Who produced the edits (generic identity, P3.7-4).
     producer: ProducerProvenance
+    #: Phase 4 — the ESCALATE tier's producer identity, when a run was
+    #: configured with an ``escalation_producer`` (a VLM). ``None`` when the
+    #: run had a single producer, so a text-only run's provenance is
+    #: unchanged. Additive.
+    escalation_producer: ProducerProvenance | None = None
     #: source file name → ``sha256:<hex>`` of the INPUT bytes, so the
     #: report is verifiably tied to the exact document it corrected.
     #: Empty on dry runs (no source files given).

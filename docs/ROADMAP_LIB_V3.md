@@ -294,9 +294,17 @@ Le grand chantier de la revue, enfin outillé. Dépend de la Phase 2.
       chaque producteur déclare ses `capabilities` (LLM texte-seul, vision
       text+vision, injectables) ; préflight `require_capabilities` au démarrage
       (wants_image ⟹ vision, sinon `ConfigurationError`). `ModelInfo` reste la
-      face catalogue, ceci la face routage. *Reste* : la SÉLECTION per-ligne du
-      producteur dans le pipeline (router un chunk vers le VLM en respectant
-      `max_images`), qui consomme `can_serve` — l'intégration router complète.
+      face catalogue, ceci la face routage.
+- [x] **Sélection per-ligne du producteur** (`escalation_producer=`) : le
+      pipeline route chaque ligne non-césure ESCALATE vers un 2ᵉ producteur
+      (VLM) au lieu du texte, par partition des targets d'un chunk en chunks
+      frères (contexte partagé, targets disjointes), chacun porté par son
+      producteur à travers retry/descente. Césure jamais escaladée
+      (atomicité). Producteur d'escalade préflighté comme le primaire.
+      `escalated_lines` + `RunProvenance.escalation_producer` ; `producer_calls`
+      reste honnête (le routage vit dans le moteur, une seule couche décide).
+      Opt-in : sans `escalation_producer`, run byte-identique. *Reste
+      (optionnel)* : respect de `max_images` par découpe de chunk côté router.
 - [ ] **Benchmark texte vs vision vs hybride** : le VLM doit battre le texte
       seul sur le corpus gelé pour mériter sa place par défaut.
 - [ ] `CandidateSet` émergera ici, du besoin concret de candidats concurrents

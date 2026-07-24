@@ -9,6 +9,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Per-line producer selection — the escalation tier (ROADMAP V3 Phase 4,
+  §5.2 bis).** `CorrectionPipeline(..., escalation_producer=…)` routes each
+  non-hyphen line the QE scorer + RoutingPolicy send to ESCALATE to a
+  second producer (a VLM) instead of the primary text producer, on a
+  per-line basis — the vision model routed only to the lines that earn its
+  cost, the mechanism that makes the hybrid real rather than "one producer
+  for the whole run". Routing stays entirely in the engine (where SKIP
+  already lives): a chunk's targets are partitioned by tier into sibling
+  chunks (shared context `line_ids`, disjoint targets), each carried by its
+  producer through the retry/granularity-descent path. A hyphen unit is
+  never escalated (atomicity — a pair split across producers could not
+  reconcile), so its members stay with the primary producer. The escalation
+  producer is preflighted like the primary (`require_page_images` /
+  `require_capabilities`), so a run that will escalate to an image-less VLM
+  fails at start-up. `CorrectionResult.escalated_lines` counts the routed
+  lines and `RunProvenance.escalation_producer` records the second
+  producer's identity; `producer_calls` stays honest (each routed chunk is
+  one real call). Fully opt-in: without an `escalation_producer`, ESCALATE
+  lines go to the primary producer exactly as before — a byte-identical
+  run.
 - **`ModelCapabilities` — the routing descriptor (ROADMAP V3 Phase 4,
   §5.2 bis).** A declarative descriptor (`text` / `vision` /
   `structured_output` / `max_images` / `context`) the Router reads to send
