@@ -68,6 +68,7 @@ PUBLIC_API_1_0 = sorted(
         "EditProducer",
         "ProducerMetadata",
         "ProducerOptions",
+        "require_capabilities",
         "require_page_images",
         "RulesProducer",
         "SubstitutionRule",
@@ -105,6 +106,7 @@ PUBLIC_API_1_0 = sorted(
         "LineContext",
         "LineProposal",
         "LossPolicy",
+        "ModelCapabilities",
         "ModelInfo",
         "PageManifest",
         "PairingPolicy",
@@ -133,6 +135,11 @@ PUBLIC_API_1_0 = sorted(
         "RoutingDecision",
         "RoutingPolicy",
         "route_line",
+        # Structured page image (ROADMAP V3 Phase 4) — additive
+        "ImageAsset",
+        "ImageRef",
+        "ImageTransform",
+        "PageImage",
     ]
 )
 

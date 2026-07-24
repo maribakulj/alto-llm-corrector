@@ -1,0 +1,145 @@
+<alto xmlns="http://www.loc.gov/standards/alto/ns-v4#" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.loc.gov/standards/alto/ns-v4# http://www.loc.gov/standards/alto/v4/alto-4-1.xsd">
+  <Description>
+    <MeasurementUnit>mm10</MeasurementUnit>
+    <sourceImageInformation>
+      <fileName>./ALTO00003-P3_TB00014.tif</fileName>
+    </sourceImageInformation>
+  </Description>
+  <Layout>
+    <Page ID="P_0001" PHYSICAL_IMG_NR="1">
+      <PrintSpace>
+        <TextBlock ID="TB_0001">
+          <TextLine ID="TL_0001" HPOS="38" VPOS="0" WIDTH="629" HEIGHT="39">
+            <String CONTENT="La" CC="00" HPOS="39" VPOS="3" WIDTH="37" HEIGHT="27" />
+            <SP />
+            <String CONTENT="Seine," CC="000000" HPOS="96" VPOS="5" WIDTH="87" HEIGHT="32" />
+            <SP />
+            <String CONTENT="qui" CC="000" HPOS="204" VPOS="3" WIDTH="45" HEIGHT="34" />
+            <SP />
+            <String CONTENT="était" CC="00000" HPOS="270" VPOS="3" WIDTH="64" HEIGHT="27" />
+            <SP />
+            <String CONTENT="en" CC="00" HPOS="348" VPOS="11" WIDTH="31" HEIGHT="18" />
+            <SP />
+            <String CONTENT="baisse" CC="000000" HPOS="391" VPOS="2" WIDTH="86" HEIGHT="27" />
+            <SP />
+            <String CONTENT="depuis" CC="000000" HPOS="488" VPOS="0" WIDTH="93" HEIGHT="33" />
+            <SP />
+            <String CONTENT="lundi" CC="00000" HPOS="592" VPOS="2" WIDTH="75" HEIGHT="26" />
+          </TextLine>
+          <TextLine ID="TL_0002" HPOS="0" VPOS="42" WIDTH="667" HEIGHT="40">
+            <String CONTENT="matin," CC="000000" HPOS="1" VPOS="46" WIDTH="91" HEIGHT="32" />
+            <SP />
+            <String CONTENT="paraît" CC="000000" HPOS="112" VPOS="47" WIDTH="86" HEIGHT="33" />
+            <SP />
+            <String CONTENT="devoir" CC="000000" HPOS="217" VPOS="47" WIDTH="92" HEIGHT="27" />
+            <SP />
+            <String CONTENT="subir" CC="00000" HPOS="328" VPOS="46" WIDTH="75" HEIGHT="27" />
+            <SP />
+            <String CONTENT="une" CC="000" HPOS="429" VPOS="52" WIDTH="51" HEIGHT="20" />
+            <SP />
+            <String CONTENT="légère" CC="000000" HPOS="508" VPOS="43" WIDTH="89" HEIGHT="34" />
+            <SP />
+            <String CONTENT="re-" CC="000" HPOS="627" VPOS="52" WIDTH="40" HEIGHT="18" />
+          </TextLine>
+          <TextLine ID="TL_0003" HPOS="0" VPOS="85" WIDTH="668" HEIGHT="34">
+            <String CONTENT="crudescence:" CC="000000000000" HPOS="1" VPOS="88" WIDTH="188" HEIGHT="29" />
+            <SP />
+            <String CONTENT="en" CC="00" HPOS="229" VPOS="98" WIDTH="31" HEIGHT="18" />
+            <SP />
+            <String CONTENT="effet," CC="000000" HPOS="289" VPOS="88" WIDTH="77" HEIGHT="31" />
+            <SP />
+            <String CONTENT="un" CC="00" HPOS="387" VPOS="94" WIDTH="33" HEIGHT="17" />
+            <SP />
+            <String CONTENT="télégramme" CC="0000000000" HPOS="443" VPOS="86" WIDTH="170" HEIGHT="32" />
+            <SP />
+            <String CONTENT="de" CC="00" HPOS="635" VPOS="87" WIDTH="32" HEIGHT="26" />
+          </TextLine>
+          <TextLine ID="TL_0004" HPOS="0" VPOS="123" WIDTH="667" HEIGHT="40">
+            <String CONTENT="Melun," CC="000000" HPOS="1" VPOS="124" WIDTH="98" HEIGHT="38" />
+            <SP />
+            <String CONTENT="daté" CC="0000" HPOS="119" VPOS="134" WIDTH="60" HEIGHT="26" />
+            <SP />
+            <String CONTENT="du" CC="00" HPOS="199" VPOS="134" WIDTH="33" HEIGHT="25" />
+            <SP />
+            <String CONTENT="3" CC="0" HPOS="253" VPOS="132" WIDTH="16" HEIGHT="27" />
+            <SP />
+            <String CONTENT="octobre," CC="00000000" HPOS="288" VPOS="129" WIDTH="115" HEIGHT="32" />
+            <SP />
+            <String CONTENT="onze" CC="0000" HPOS="427" VPOS="136" WIDTH="65" HEIGHT="17" />
+            <SP />
+            <String CONTENT="heures" CC="000000" HPOS="513" VPOS="127" WIDTH="97" HEIGHT="27" />
+            <SP />
+            <String CONTENT="du" CC="00" HPOS="631" VPOS="129" WIDTH="36" HEIGHT="26" />
+          </TextLine>
+          <TextLine ID="TL_0005" HPOS="2" VPOS="168" WIDTH="666" HEIGHT="39">
+            <String CONTENT="matin," CC="000000" HPOS="3" VPOS="170" WIDTH="88" HEIGHT="32" />
+            <SP />
+            <String CONTENT="annonce" CC="0000000" HPOS="111" VPOS="182" WIDTH="116" HEIGHT="18" />
+            <SP />
+            <String CONTENT="que" CC="000" HPOS="248" VPOS="180" WIDTH="50" HEIGHT="26" />
+            <SP />
+            <String CONTENT="depuis" CC="000000" HPOS="320" VPOS="170" WIDTH="93" HEIGHT="32" />
+            <SP />
+            <String CONTENT="la" CC="00" HPOS="433" VPOS="169" WIDTH="23" HEIGHT="26" />
+            <SP />
+            <String CONTENT="veille" CC="000000" HPOS="468" VPOS="171" WIDTH="75" HEIGHT="26" />
+            <SP />
+            <String CONTENT="la" CC="00" HPOS="554" VPOS="170" WIDTH="25" HEIGHT="27" />
+            <SP />
+            <String CONTENT="Seine" CC="00000" HPOS="590" VPOS="170" WIDTH="77" HEIGHT="27" />
+          </TextLine>
+          <TextLine ID="TL_0006" HPOS="2" VPOS="206" WIDTH="666" HEIGHT="44">
+            <String CONTENT="avait" CC="00000" HPOS="3" VPOS="207" WIDTH="71" HEIGHT="27" />
+            <SP />
+            <String CONTENT="monté" CC="00000" HPOS="101" VPOS="219" WIDTH="87" HEIGHT="26" />
+            <SP />
+            <String CONTENT="de" CC="00" HPOS="218" VPOS="217" WIDTH="32" HEIGHT="26" />
+            <SP />
+            <String CONTENT="30" CC="00" HPOS="275" VPOS="215" WIDTH="36" HEIGHT="26" />
+            <SP />
+            <String CONTENT="centimètres," CC="000000000000" HPOS="328" VPOS="213" WIDTH="179" HEIGHT="33" />
+            <SP />
+            <String CONTENT="et" CC="00" HPOS="526" VPOS="215" WIDTH="27" HEIGHT="25" />
+            <SP />
+            <String CONTENT="que" CC="000" HPOS="573" VPOS="222" WIDTH="51" HEIGHT="27" />
+            <SP />
+            <String CONTENT="la" CC="00" HPOS="644" VPOS="215" WIDTH="23" HEIGHT="26" />
+          </TextLine>
+          <TextLine ID="TL_0007" HPOS="0" VPOS="247" WIDTH="668" HEIGHT="45">
+            <String CONTENT="plaine" CC="000000" HPOS="1" VPOS="248" WIDTH="88" HEIGHT="33" />
+            <SP />
+            <String CONTENT="de" CC="00" HPOS="119" VPOS="258" WIDTH="32" HEIGHT="27" />
+            <SP />
+            <String CONTENT="Bray-sur-Seine" CC="00000000000000" HPOS="178" VPOS="256" WIDTH="245" HEIGHT="33" />
+            <SP />
+            <String CONTENT="était" CC="00000" HPOS="452" VPOS="258" WIDTH="64" HEIGHT="27" />
+            <SP />
+            <String CONTENT="inondée," CC="00000000" HPOS="546" VPOS="257" WIDTH="121" HEIGHT="34" />
+          </TextLine>
+          <TextLine ID="TL_0008" HPOS="0" VPOS="298" WIDTH="668" HEIGHT="40">
+            <String CONTENT="sans" CC="0000" HPOS="1" VPOS="301" WIDTH="60" HEIGHT="20" />
+            <SP />
+            <String CONTENT="qu’il" CC="00000" HPOS="91" VPOS="300" WIDTH="62" HEIGHT="31" />
+            <SP />
+            <String CONTENT="y" CC="0" HPOS="180" VPOS="308" WIDTH="16" HEIGHT="25" />
+            <SP />
+            <String CONTENT="eût" CC="000" HPOS="224" VPOS="299" WIDTH="45" HEIGHT="27" />
+            <SP />
+            <String CONTENT="à" CC="0" HPOS="288" VPOS="300" WIDTH="16" HEIGHT="27" />
+            <SP />
+            <String CONTENT="regretter" CC="000000000" HPOS="323" VPOS="306" WIDTH="131" HEIGHT="31" />
+            <SP />
+            <String CONTENT="de" CC="00" HPOS="484" VPOS="302" WIDTH="32" HEIGHT="27" />
+            <SP />
+            <String CONTENT="désastres" CC="000000000" HPOS="536" VPOS="303" WIDTH="131" HEIGHT="27" />
+          </TextLine>
+          <TextLine ID="TL_0009" HPOS="0" VPOS="337" WIDTH="634" HEIGHT="45">
+            <String CONTENT="importants." CC="00000000000" HPOS="0" VPOS="338" WIDTH="165" HEIGHT="34" />
+            <SP />
+            <String CONTENT="(Moniteur.)" CC="00000000000" HPOS="465" VPOS="348" WIDTH="168" HEIGHT="34" />
+          </TextLine>
+        </TextBlock>
+      </PrintSpace>
+    </Page>
+  </Layout>
+</alto>

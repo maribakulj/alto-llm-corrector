@@ -1,0 +1,224 @@
+<alto xmlns="http://www.loc.gov/standards/alto/ns-v4#" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.loc.gov/standards/alto/ns-v4# http://www.loc.gov/standards/alto/v4/alto-4-1.xsd">
+  <Description>
+    <MeasurementUnit>mm10</MeasurementUnit>
+    <sourceImageInformation>
+      <fileName>./ALTO00001-P1_TB00010.tif</fileName>
+    </sourceImageInformation>
+  </Description>
+  <Layout>
+    <Page ID="P_0001" PHYSICAL_IMG_NR="1">
+      <PrintSpace>
+        <TextBlock ID="TB_0001">
+          <TextLine ID="TL_0001" HPOS="34" VPOS="1" WIDTH="638" HEIGHT="38">
+            <String CONTENT="La" CC="00" HPOS="35" VPOS="11" WIDTH="38" HEIGHT="26" />
+            <SP />
+            <String CONTENT="situation" CC="000000000" HPOS="86" VPOS="9" WIDTH="126" HEIGHT="29" />
+            <SP />
+            <String CONTENT="en" CC="00" HPOS="228" VPOS="14" WIDTH="31" HEIGHT="20" />
+            <SP />
+            <String CONTENT="Pologne" CC="0000000" HPOS="273" VPOS="5" WIDTH="116" HEIGHT="33" />
+            <SP />
+            <String CONTENT="ne" CC="00" HPOS="404" VPOS="11" WIDTH="32" HEIGHT="18" />
+            <SP />
+            <String CONTENT="s’améliore" CC="0000000000" HPOS="451" VPOS="2" WIDTH="148" HEIGHT="27" />
+            <SP />
+            <String CONTENT="pas." CC="0000" HPOS="616" VPOS="8" WIDTH="55" HEIGHT="27" />
+          </TextLine>
+          <TextLine ID="TL_0002" HPOS="1" VPOS="41" WIDTH="675" HEIGHT="45">
+            <String CONTENT="«Le" CC="000" HPOS="2" VPOS="52" WIDTH="61" HEIGHT="27" />
+            <SP />
+            <String CONTENT="règne" CC="00000" HPOS="76" VPOS="53" WIDTH="80" HEIGHT="32" />
+            <SP />
+            <String CONTENT="de" CC="00" HPOS="180" VPOS="50" WIDTH="32" HEIGHT="26" />
+            <SP />
+            <String CONTENT="la" CC="00" HPOS="233" VPOS="48" WIDTH="26" HEIGHT="27" />
+            <SP />
+            <String CONTENT="terreur," CC="00000000" HPOS="282" VPOS="50" WIDTH="113" HEIGHT="27" />
+            <SP />
+            <String CONTENT="dit" CC="000" HPOS="419" VPOS="44" WIDTH="39" HEIGHT="25" />
+            <SP />
+            <String CONTENT="une" CC="000" HPOS="479" VPOS="52" WIDTH="50" HEIGHT="16" />
+            <SP />
+            <String CONTENT="dépêche," CC="00000000" HPOS="550" VPOS="42" WIDTH="125" HEIGHT="33" />
+          </TextLine>
+          <TextLine ID="TL_0003" HPOS="1" VPOS="82" WIDTH="675" HEIGHT="40">
+            <String CONTENT="continue.»" CC="0000000000" HPOS="2" VPOS="92" WIDTH="156" HEIGHT="27" />
+            <SP />
+            <String CONTENT="On" CC="00" HPOS="176" VPOS="91" WIDTH="40" HEIGHT="23" />
+            <SP />
+            <String CONTENT="espère," CC="0000000" HPOS="228" VPOS="87" WIDTH="99" HEIGHT="33" />
+            <SP />
+            <String CONTENT="cependant," CC="0000000000" HPOS="344" VPOS="83" WIDTH="155" HEIGHT="32" />
+            <SP />
+            <String CONTENT="que" CC="000" HPOS="512" VPOS="91" WIDTH="49" HEIGHT="25" />
+            <SP />
+            <String CONTENT="les" CC="000" HPOS="573" VPOS="83" WIDTH="37" HEIGHT="25" />
+            <SP />
+            <String CONTENT="me-" CC="000" HPOS="624" VPOS="90" WIDTH="52" HEIGHT="17" />
+          </TextLine>
+          <TextLine ID="TL_0004" HPOS="0" VPOS="120" WIDTH="676" HEIGHT="42">
+            <String CONTENT="sures" CC="00000" HPOS="1" VPOS="137" WIDTH="76" HEIGHT="17" />
+            <SP />
+            <String CONTENT="prises" CC="000000" HPOS="90" VPOS="130" WIDTH="84" HEIGHT="31" />
+            <SP />
+            <String CONTENT="«pour" CC="00000" HPOS="190" VPOS="136" WIDTH="92" HEIGHT="22" />
+            <SP />
+            <String CONTENT="frapper" CC="0000000" HPOS="295" VPOS="125" WIDTH="109" HEIGHT="32" />
+            <SP />
+            <String CONTENT="les" CC="000" HPOS="418" VPOS="123" WIDTH="38" HEIGHT="26" />
+            <SP />
+            <String CONTENT="esprits»" CC="00000000" HPOS="469" VPOS="123" WIDTH="122" HEIGHT="32" />
+            <SP />
+            <String CONTENT="n’au-" CC="00000" HPOS="605" VPOS="121" WIDTH="71" HEIGHT="27" />
+          </TextLine>
+          <TextLine ID="TL_0005" HPOS="0" VPOS="162" WIDTH="676" HEIGHT="40">
+            <String CONTENT="ront" CC="0000" HPOS="1" VPOS="171" WIDTH="61" HEIGHT="25" />
+            <SP />
+            <String CONTENT="pas" CC="000" HPOS="75" VPOS="175" WIDTH="48" HEIGHT="26" />
+            <SP />
+            <String CONTENT="longue" CC="000000" HPOS="136" VPOS="167" WIDTH="97" HEIGHT="32" />
+            <SP />
+            <String CONTENT="durée." CC="000000" HPOS="250" VPOS="164" WIDTH="88" HEIGHT="27" />
+            <SP />
+            <String CONTENT="En" CC="00" HPOS="363" VPOS="163" WIDTH="39" HEIGHT="27" />
+            <SP />
+            <String CONTENT="attendant," CC="0000000000" HPOS="418" VPOS="163" WIDTH="148" HEIGHT="31" />
+            <SP />
+            <String CONTENT="le" CC="00" HPOS="579" VPOS="163" WIDTH="23" HEIGHT="26" />
+            <SP />
+            <String CONTENT="plus" CC="0000" HPOS="616" VPOS="163" WIDTH="59" HEIGHT="32" />
+          </TextLine>
+          <TextLine ID="TL_0006" HPOS="0" VPOS="201" WIDTH="675" HEIGHT="37">
+            <String CONTENT="morne" CC="00000" HPOS="1" VPOS="215" WIDTH="93" HEIGHT="18" />
+            <SP />
+            <String CONTENT="silence" CC="0000000" HPOS="116" VPOS="206" WIDTH="97" HEIGHT="27" />
+            <SP />
+            <String CONTENT="règne" CC="00000" HPOS="235" VPOS="204" WIDTH="80" HEIGHT="33" />
+            <SP />
+            <String CONTENT="dans" CC="0000" HPOS="339" VPOS="203" WIDTH="65" HEIGHT="27" />
+            <SP />
+            <String CONTENT="la" CC="00" HPOS="426" VPOS="203" WIDTH="25" HEIGHT="26" />
+            <SP />
+            <String CONTENT="ville," CC="000000" HPOS="473" VPOS="203" WIDTH="71" HEIGHT="33" />
+            <SP />
+            <String CONTENT="et" CC="00" HPOS="557" VPOS="204" WIDTH="26" HEIGHT="25" />
+            <SP />
+            <String CONTENT="la" CC="00" HPOS="596" VPOS="202" WIDTH="25" HEIGHT="27" />
+            <SP />
+            <String CONTENT="vie" CC="000" HPOS="635" VPOS="202" WIDTH="39" HEIGHT="27" />
+          </TextLine>
+          <TextLine ID="TL_0007" HPOS="1" VPOS="241" WIDTH="526" HEIGHT="44">
+            <String CONTENT="publique" CC="00000000" HPOS="2" VPOS="247" WIDTH="127" HEIGHT="38" />
+            <SP />
+            <String CONTENT="est" CC="000" HPOS="145" VPOS="249" WIDTH="38" HEIGHT="25" />
+            <SP />
+            <String CONTENT="totalement" CC="0000000000" HPOS="198" VPOS="245" WIDTH="157" HEIGHT="28" />
+            <SP />
+            <String CONTENT="suspendue." CC="0000000000" HPOS="369" VPOS="242" WIDTH="158" HEIGHT="34" />
+          </TextLine>
+          <TextLine ID="TL_0008" HPOS="41" VPOS="283" WIDTH="635" HEIGHT="37">
+            <String CONTENT="A" CC="0" HPOS="42" VPOS="290" WIDTH="20" HEIGHT="27" />
+            <SP />
+            <String CONTENT="la" CC="00" HPOS="78" VPOS="289" WIDTH="25" HEIGHT="27" />
+            <SP />
+            <String CONTENT="date" CC="0000" HPOS="117" VPOS="288" WIDTH="60" HEIGHT="28" />
+            <SP />
+            <String CONTENT="du" CC="00" HPOS="191" VPOS="286" WIDTH="34" HEIGHT="27" />
+            <SP />
+            <String CONTENT="12," CC="000" HPOS="250" VPOS="286" WIDTH="38" HEIGHT="32" />
+            <SP />
+            <String CONTENT="des" CC="000" HPOS="311" VPOS="285" WIDTH="45" HEIGHT="27" />
+            <SP />
+            <String CONTENT="troupes" CC="0000000" HPOS="380" VPOS="286" WIDTH="109" HEIGHT="32" />
+            <SP />
+            <String CONTENT="étaient" CC="0000000" HPOS="513" VPOS="284" WIDTH="100" HEIGHT="27" />
+            <SP />
+            <String CONTENT="en-" CC="000" HPOS="636" VPOS="291" WIDTH="40" HEIGHT="20" />
+          </TextLine>
+          <TextLine ID="TL_0009" HPOS="5" VPOS="324" WIDTH="671" HEIGHT="45">
+            <String CONTENT="voyées" CC="000000" HPOS="6" VPOS="330" WIDTH="97" HEIGHT="37" />
+            <SP />
+            <String CONTENT="dans" CC="0000" HPOS="125" VPOS="330" WIDTH="65" HEIGHT="28" />
+            <SP />
+            <String CONTENT="les" CC="000" HPOS="212" VPOS="329" WIDTH="38" HEIGHT="27" />
+            <SP />
+            <String CONTENT="provinces" CC="000000000" HPOS="272" VPOS="327" WIDTH="138" HEIGHT="36" />
+            <SP />
+            <String CONTENT="où" CC="00" HPOS="435" VPOS="326" WIDTH="32" HEIGHT="27" />
+            <SP />
+            <String CONTENT="des" CC="000" HPOS="490" VPOS="326" WIDTH="45" HEIGHT="27" />
+            <SP />
+            <String CONTENT="troubles" CC="00000000" HPOS="558" VPOS="325" WIDTH="117" HEIGHT="27" />
+          </TextLine>
+          <TextLine ID="TL_0010" HPOS="1" VPOS="371" WIDTH="216" HEIGHT="30">
+            <String CONTENT="avaient" CC="0000000" HPOS="2" VPOS="373" WIDTH="109" HEIGHT="27" />
+            <SP />
+            <String CONTENT="éclaté." CC="0000000" HPOS="124" VPOS="372" WIDTH="93" HEIGHT="27" />
+          </TextLine>
+          <TextLine ID="TL_0011" HPOS="34" VPOS="406" WIDTH="643" HEIGHT="40">
+            <String CONTENT="D’après" CC="0000000" HPOS="35" VPOS="412" WIDTH="114" HEIGHT="33" />
+            <SP />
+            <String CONTENT="ce" CC="00" HPOS="160" VPOS="420" WIDTH="27" HEIGHT="18" />
+            <SP />
+            <String CONTENT="qu’on" CC="00000" HPOS="201" VPOS="412" WIDTH="78" HEIGHT="33" />
+            <SP />
+            <String CONTENT="mande" CC="00000" HPOS="303" VPOS="411" WIDTH="94" HEIGHT="27" />
+            <SP />
+            <String CONTENT="de" CC="00" HPOS="413" VPOS="410" WIDTH="32" HEIGHT="26" />
+            <SP />
+            <String CONTENT="Vienne" CC="000000" HPOS="464" VPOS="409" WIDTH="100" HEIGHT="27" />
+            <SP />
+            <String CONTENT="à" CC="0" HPOS="580" VPOS="407" WIDTH="16" HEIGHT="27" />
+            <SP />
+            <String CONTENT="l’In-" CC="00000" HPOS="616" VPOS="407" WIDTH="61" HEIGHT="27" />
+          </TextLine>
+          <TextLine ID="TL_0012" HPOS="0" VPOS="449" WIDTH="676" HEIGHT="39">
+            <String CONTENT="dépendance" CC="0000000000" HPOS="1" VPOS="453" WIDTH="160" HEIGHT="33" />
+            <SP />
+            <String CONTENT="belge," CC="000000" HPOS="182" VPOS="453" WIDTH="78" HEIGHT="33" />
+            <SP />
+            <String CONTENT="la" CC="00" HPOS="279" VPOS="453" WIDTH="27" HEIGHT="26" />
+            <SP />
+            <String CONTENT="cour" CC="0000" HPOS="328" VPOS="460" WIDTH="65" HEIGHT="20" />
+            <SP />
+            <String CONTENT="de" CC="00" HPOS="414" VPOS="451" WIDTH="32" HEIGHT="27" />
+            <SP />
+            <String CONTENT="Russie" CC="000000" HPOS="468" VPOS="450" WIDTH="98" HEIGHT="27" />
+            <SP />
+            <String CONTENT="aurait" CC="000000" HPOS="589" VPOS="451" WIDTH="87" HEIGHT="25" />
+          </TextLine>
+          <TextLine ID="TL_0013" HPOS="0" VPOS="490" WIDTH="676" HEIGHT="38">
+            <String CONTENT="acquis" CC="000000" HPOS="1" VPOS="493" WIDTH="92" HEIGHT="34" />
+            <SP />
+            <String CONTENT="des" CC="000" HPOS="105" VPOS="494" WIDTH="45" HEIGHT="27" />
+            <SP />
+            <String CONTENT="preuves" CC="0000000" HPOS="164" VPOS="500" WIDTH="114" HEIGHT="27" />
+            <SP />
+            <String CONTENT="que" CC="000" HPOS="293" VPOS="500" WIDTH="50" HEIGHT="26" />
+            <SP />
+            <String CONTENT="toutes" CC="000000" HPOS="358" VPOS="495" WIDTH="88" HEIGHT="23" />
+            <SP />
+            <String CONTENT="les" CC="000" HPOS="458" VPOS="492" WIDTH="38" HEIGHT="26" />
+            <SP />
+            <String CONTENT="démonstra-" CC="0000000000" HPOS="512" VPOS="491" WIDTH="164" HEIGHT="26" />
+          </TextLine>
+          <TextLine ID="TL_0014" HPOS="0" VPOS="529" WIDTH="676" HEIGHT="30">
+            <String CONTENT="tions" CC="00000" HPOS="1" VPOS="533" WIDTH="70" HEIGHT="26" />
+            <SP />
+            <String CONTENT="polonaises" CC="0000000000" HPOS="85" VPOS="533" WIDTH="148" HEIGHT="26" />
+            <SP />
+            <String CONTENT="auraient" CC="00000000" HPOS="249" VPOS="533" WIDTH="122" HEIGHT="25" />
+            <SP />
+            <String CONTENT="été" CC="000" HPOS="385" VPOS="533" WIDTH="43" HEIGHT="25" />
+            <SP />
+            <String CONTENT="tramées" CC="0000000" HPOS="441" VPOS="532" WIDTH="115" HEIGHT="26" />
+            <SP />
+            <String CONTENT="à" CC="0" HPOS="565" VPOS="531" WIDTH="16" HEIGHT="25" />
+            <SP />
+            <String CONTENT="Paris." CC="000000" HPOS="592" VPOS="530" WIDTH="83" HEIGHT="25" />
+          </TextLine>
+        </TextBlock>
+      </PrintSpace>
+    </Page>
+  </Layout>
+</alto>

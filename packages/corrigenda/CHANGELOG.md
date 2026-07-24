@@ -9,6 +9,249 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Real VLMs behind the vision seam + a terminal runner
+  (`scripts/providers_multimodal.py`, `scripts/run_vision.py`).**
+  `AnthropicMultimodalClient` (Claude, official SDK) and
+  `MistralMultimodalClient` (Pixtral / multimodal Mistral, raw HTTP —
+  images as `image_url` data URIs, `response_format: json_schema` with the
+  backend's `json_object` fallback, plus `list_models` so a model ID is
+  discovered with the caller's key rather than guessed) both implement
+  `MultimodalStructuredClient`, so `VisionEditProducer` can drive an actual
+  model instead of the benchmark's oracle. `run_vision.py --provider
+  anthropic|mistral` corrects an ALTO/PAGE document end to end from the CLI
+  — **no demo web app, no server** — in `vision` mode (every line) or
+  `--hybrid` (QE routes: skip clean, escalate risky), paired with
+  `GuardConfig.vision()`. **API keys are read from the environment and are
+  never a CLI flag** (a flag lands in shell history and the process list),
+  never printed, and never placed in a request body — only in the
+  `Authorization` header; the pipeline additionally routes provider errors
+  through `sanitize_error`. Two API details the adapters exist to
+  get right: structured output uses `output_config.format` (schema enforced
+  server-side, no forced-tool-call trick), and **`temperature` is rejected
+  with HTTP 400 on current models** (Opus 5, Opus 4.8/4.7, Sonnet 5,
+  Fable/Mythos) — so the engine's retry ramp (0.0 → 0.3 → 0.5) cannot be
+  forwarded. The adapter drops it for those models and *records* that it
+  did, rather than 400-ing every retry or pretending the ramp took effect;
+  on such a model a retry is byte-identical to the attempt before it, which
+  is a real limitation of the ramp, made visible. A safety refusal
+  (`stop_reason: "refusal"`) returns no lines so the chunk falls back to OCR
+  text instead of crashing. Tooling, not library API: vendor specifics stay
+  out of the pixel-blind core (promoting provider adapters into
+  `corrigenda[anthropic|…]` remains a Phase-5 item). Tests stub the SDK, so
+  the request shape is asserted with no network call and no API key.
+
+### Fixed
+
+- **A hyphen unit now escalates as a WHOLE unit (ROADMAP V3 Phase 4).**
+  Escalation previously refused hyphen units outright: no member could
+  reach the vision producer, so every hyphenated line stayed with the
+  primary text producer. Measured on real 19th-c. press OCR, that was the
+  hybrid's **entire** residual error — predicted from those lines' own
+  raw-OCR CER at 0.0079, measured at 0.0083. Now, when any member routes to
+  ESCALATE, every member of its unit goes, so the pair still reaches ONE
+  producer in ONE call and reconciles exactly as before: atomicity is
+  preserved, not traded away. A unit whose links leave the page (or dangle)
+  cannot be gathered from a single page's plan and keeps the conservative
+  behaviour — it stays with the primary producer. A hyphen member is still
+  never SKIPped. On the real corpus the hybrid drops from CER 0.0083 to
+  **0.0021**, matching vision-on-every-line exactly.
+
+### Added
+
+- **Real raw OCR beside the ground truth (`scripts/ocr_corpus.py`).**
+  Removes the last synthetic ingredient from the vision benchmark: it runs
+  a real OCR engine (Tesseract) over a GT corpus's own line images and
+  pairs each reading with its GT line. The pairing is exact by
+  construction — rather than OCR-ing the page and aligning two different
+  segmentations, it OCRs **one crop per GT line**, cut with the library's
+  own `crop_region` from the GT geometry (`--psm 7`), so every reading
+  belongs to a known `(file, line_id)`. Two tiers, both genuine engine
+  output: `--lang fra` (correct engine, CER 0.102) and `--lang spa` (a
+  deliberately wrong language model on French — CER 0.105, 78/522 exact
+  lines), which degrades the way bad OCR degrades (`l'entente` →
+  `Ventente`) rather than the way a substitution table does. Real OCR
+  merges words, invents characters and drifts apostrophes; no scripted
+  table reproduces that. `vision_benchmark.py --ocr <sidecar>` consumes it,
+  and the report's new `input` block always states whether the run used
+  real OCR or scripted degradation. Measured on 37 real pages (real OCR
+  input, oracle VLM): baseline 0.1018, text 0.1018, vision 0.0021, hybrid
+  0.0083 escalating 316/522 lines. Two honest findings: the rules producer
+  corrects **nothing** on 19th-c. press OCR (its table targets early-modern
+  typography — a safe no-op, zero false positives), and the hybrid's entire
+  residual error is the **hyphen units it refuses to escalate** (predicted
+  0.0079 from their raw-OCR CER, measured 0.0083), which quantifies the
+  atomicity trade-off and points at escalating a hyphen unit as a unit.
+  Tesseract is not a project dependency: the sidecar is generated offline
+  and its tests self-skip when the engine is absent.
+- **Real-corpus extractor for QE calibration
+  (`scripts/extract_press19_corpus.py`).** Derives the clean
+  target-register text `fit_qe_calibration.py` needs from a **ground-truth
+  ALTO corpus**, replacing the 18-line hand-written press pastiche the
+  19th-c. constants were fit on. Four filters, each measured against a
+  37-page BNL Luxembourg press GT set (522 lines → 178 French kept):
+  **language** (heritage press is often bilingual — 312 French / 140
+  German there; fitting a French model on German text inflates its
+  surprisal on clean input and corrupts the Platt midpoint; `--lang de`
+  extracts the German side for a German bundle), **hyphenation** (127
+  hyphen-unit members are word fragments — a masked LM would score the
+  truncation, not the language; dropped, never joined), **length** and
+  **digits** (`Wiltz;`, `19694 74` carry no linguistic signal). Text is
+  taken verbatim: period orthography is never normalised (rule 3), and the
+  extracted units are OCR *lines*, matching what the scorer sees at
+  runtime. Language detection is a dependency-free function-word vote plus
+  German orthographic markers. This removes the *pastiche* half of the
+  provisional-calibration caveat; the degradations remain scripted.
+- **Vision benchmark harness (ROADMAP V3 Phase 4).**
+  `scripts/vision_benchmark.py` measures text vs vision vs hybrid on a
+  paired image+ALTO ground-truth corpus: it degrades each GT line into a
+  plausible OCR reading with the Phase-2 deterministic scripted degrader
+  (no RNG), runs the three configurations, and reports aggregate CER
+  alongside the real call cost (`producer_calls`, `escalated_lines`).
+  Validated on the **BNL** 19th-c. French press GT (37 pages / 522 lines,
+  ALTO v4 `mm10` + 300 DPI PNGs): the XML→pixel mapping is the uniform
+  `dpi/254` ≈ 1.1811 scale `ImageAsset.transform` exists for, verified by
+  cropping lines and reading them back. **The images and the reference are
+  real; only the OCR errors are synthetic** — the harness scores against
+  human GT. Plumbing run with deterministic oracle producers (offline, 522
+  real crops): baseline CER 0.0463 → text 0.0321, vision 0.0005, hybrid
+  0.0073 while escalating only 326/522 lines — the cost/quality trade-off
+  a real-provider run must reproduce. Measurement logic (CER, degradation,
+  config comparison) is importable and unit-tested offline.
+- **Per-line producer selection — the escalation tier (ROADMAP V3 Phase 4,
+  §5.2 bis).** `CorrectionPipeline(..., escalation_producer=…)` routes each
+  non-hyphen line the QE scorer + RoutingPolicy send to ESCALATE to a
+  second producer (a VLM) instead of the primary text producer, on a
+  per-line basis — the vision model routed only to the lines that earn its
+  cost, the mechanism that makes the hybrid real rather than "one producer
+  for the whole run". Routing stays entirely in the engine (where SKIP
+  already lives): a chunk's targets are partitioned by tier into sibling
+  chunks (shared context `line_ids`, disjoint targets), each carried by its
+  producer through the retry/granularity-descent path. A hyphen unit is
+  never escalated (atomicity — a pair split across producers could not
+  reconcile), so its members stay with the primary producer. The escalation
+  producer is preflighted like the primary (`require_page_images` /
+  `require_capabilities`), so a run that will escalate to an image-less VLM
+  fails at start-up. `CorrectionResult.escalated_lines` counts the routed
+  lines and `RunProvenance.escalation_producer` records the second
+  producer's identity; `producer_calls` stays honest (each routed chunk is
+  one real call). Fully opt-in: without an `escalation_producer`, ESCALATE
+  lines go to the primary producer exactly as before — a byte-identical
+  run.
+- **`ModelCapabilities` — the routing descriptor (ROADMAP V3 Phase 4,
+  §5.2 bis).** A declarative descriptor (`text` / `vision` /
+  `structured_output` / `max_images` / `context`) the Router reads to send
+  each line only to a producer that can serve it — the mechanism by which
+  a VLM is "just another producer", routed to the lines where it earns its
+  cost rather than hardwired for the whole run. The brain is
+  `can_serve(needs_image=…, needs_structured_output=…, image_count=…)`
+  (and `reason_cannot_serve`, which explains an exclusion): it INFORMS the
+  Router, it does not decide. Producers declare their own via a
+  `capabilities` attribute (the same optional-attribute convention as
+  `metadata`): `LLMEditProducer` a text-only descriptor, `VisionEditProducer`
+  a vision-capable one (both injectable for a model's real context window /
+  image cap). The pipeline preflights it with `require_capabilities` — a
+  producer that wants images but declares `vision=False` is refused at
+  start-up (like `require_page_images`), never a mid-run surprise. Frozen
+  and additive; a producer that declares nothing is unconstrained
+  (back-compatible). `ModelInfo` stays the catalog face of a model; this is
+  the routing face. Per-line producer SELECTION in the pipeline (routing a
+  chunk to a vision producer, honouring `max_images`) is the remaining
+  Router-integration step; the descriptor and `can_serve` are the seam it
+  will consume.
+- **Per-page image digests in the run provenance (ROADMAP V3 Phase 4).**
+  ``RunProvenance.image_digests`` (page_id → ``sha256:<hex>``) records the
+  exact scan bytes a vision run saw — the mirror of ``source_digests`` for
+  pixels. The pipeline copies the digest each structured ``ImageAsset``
+  already carries; the pixel-blind core opens no image to compute one (I4),
+  so bare ``ImageRef`` strings and digest-less assets contribute nothing.
+  Together with the source digest, the per-line coords, the asset's
+  transform and the producer's ``configuration_fingerprint`` (which folds
+  in the crop margin / polygon-mask knobs), this makes every crop
+  REPRODUCIBLE without storing N per-line crop hashes — the same
+  digest-level contract ``source_digests`` gives for the XML (the report
+  stores the digest, not the bytes; the caller re-supplies the inputs).
+  Additive and optional: empty on text runs, no ``report_version`` bump.
+- **`GuardConfig.vision()` — the VLM guard profile (ROADMAP V3 Phase 4,
+  §5.2 bis).** A preset a host passes alongside a `VisionEditProducer`:
+  it relaxes ONLY the Stage-C source-similarity floor
+  (`min_source_similarity` 0.35 → 0.15) because a VLM reads the image, not
+  the OCR, so a correct reading of a badly-garbled line diverges further
+  from the source than a text model's would and the text default would
+  reject it. Every inter-line migration guard — neighbour proximity,
+  absorption, hyphen-pair drift, duplication — keeps its text default: a
+  VLM must no more merge or move lines than a text model. The relaxed
+  floor is not 0.0 (a producer that ignores the image and invents an
+  unrelated line is still caught) and is **provisional** until the Phase-4
+  vision benchmark refits it; an explicit override always wins
+  (`GuardConfig.vision(min_source_similarity=0.22)`). Like every
+  `GuardConfig`, it carries its values into the composite fingerprint, so
+  choosing the profile is a structurally recorded decision, not a hidden
+  mode. The library default is unchanged (opt-in), so runs without it stay
+  byte-identical.
+- **`VisionEditProducer` — the `corrigenda[vision]` extra, part 2 (ROADMAP
+  V3 Phase 4).** ``integrations.vision.VisionEditProducer`` adapts a
+  multimodal provider to the ``EditProducer`` contract: for each target
+  line it crops the region from the page image (the pure
+  ``crop_region``), hands the crops + OCR text to a
+  ``MultimodalStructuredClient``, and shapes the reply into a
+  ``replace_line`` ``EditScript`` — through the SAME response parser the
+  text ``LLMEditProducer`` uses, so the guard matrix, validator and
+  uncertainty channel behave identically downstream; only payload assembly
+  differs. ``wants_image``/``wants_geometry`` are ``True``, so the pipeline
+  copies each line's geometry and the page image into the §4.1 envelope;
+  the image MUST be a structured ``ImageAsset`` (a bare ``ImageRef`` string
+  cannot be cropped and is refused with a clear error). Each crop travels
+  as an ``ImagePart`` carrying its own SHA-256 (the crop hash, tied to its
+  ``line_id``), and the ImageAsset carries the image hash — the provenance
+  a reproducible decision records. A new multimodal seam
+  (``MultimodalStructuredClient``) keeps the text producer's lean,
+  image-free ``complete_structured`` contract untouched. The core stays
+  pixel-blind: it forwards the opaque asset and never opens it; every pixel
+  goes through ``crop_region``. The shared LLM response parser and
+  configuration-fingerprint helper were extracted to ``integrations.llm``
+  (``edit_ops_from_response``, ``prompt_schema_fingerprint``) with the text
+  producer's behaviour byte-identical (fingerprint pin unchanged).
+- **Pixel-pure vision cropper — the `corrigenda[vision]` extra, part 1
+  (ROADMAP V3 Phase 4).** ``integrations.vision`` is the deterministic
+  half of the vision chain: ``build_image_asset(page_id, path)`` decodes a
+  file into the populated ``ImageAsset`` the core carries (SHA-256 of the
+  exact bytes, real decoded MIME, **visual** pixel dimensions, multipage
+  TIFF ``frame_index``, EXIF orientation), and ``crop_region(asset,
+  coords)`` maps an XML bbox to pixels via the asset's ``ImageTransform``,
+  normalizes EXIF orientation, grows the box by an optional
+  ``margin_ratio``, optionally masks to a PAGE polygon (RGBA), clamps to
+  the image, and returns an encoded ``Crop`` with its own SHA-256 — the
+  crop-hash the audit trail records (acceptance criterion 5). Pure and
+  deterministic: identical inputs yield an identical crop hash, so every
+  geometry decision is tested with a Pillow-drawn fixture and **no
+  network, no API key** (the non-deterministic VLM call is a separate,
+  forthcoming seam). **Pillow is the only image dependency and is imported
+  lazily inside each function** — importing the module never pays the
+  image runtime, and the pixel-blind core never pulls it. I4 is restated
+  accordingly: the pixel-blind zone (core, formats, text producers) is
+  image-lib-free by static scan AND by a runtime import contract
+  (``import corrigenda`` loads no image lib into ``sys.modules``), while
+  the sanctioned ``integrations/vision.py`` may import Pillow function-
+  locally — the same pattern as the qe extra. New extra
+  ``corrigenda[vision] = ["pillow"]``.
+- **Structured `ImageAsset` — the recommended page-image contract
+  (ROADMAP V3 Phase 4).** ``run(page_images=…)`` now accepts, per page,
+  either the historical opaque ``ImageRef`` (str) or the richer
+  ``ImageAsset`` (the new ``PageImage = ImageRef | ImageAsset`` union):
+  ``page_id``, opaque ``uri``, ``sha256`` of the exact bytes, decoded
+  ``media_type`` and pixel dimensions, multipage ``frame_index``,
+  ``exif_orientation``, and an ``ImageTransform`` (XML-coordinate →
+  pixel scale/offset) a crop needs. The asset rides the existing §4.1
+  vision envelope unchanged — the compiler copies it into
+  ``CorrectionRequest.image_ref`` only when the producer asks
+  (``wants_image``) and forwards it **verbatim**; the pixel-blind core
+  still opens **no** pixel (invariant I4). ``require_page_images`` now
+  also rejects an ``ImageAsset`` filed under a mapping key that
+  disagrees with its own ``page_id`` — the silent wrong-image bug the
+  per-page contract exists to catch. Fully additive and opt-in: a bare
+  ``ImageRef`` behaves exactly as before, and the decoding builder that
+  *populates* an ``ImageAsset`` from a file is the forthcoming
+  ``corrigenda[vision]`` extra (Phase 4), never the core.
 - **Zero-shot D'AlemBERT QE scorer — the `corrigenda[qe]` extra
   (ROADMAP V3 Phase 3).** ``integrations.qe.MaskedLMQEScorer`` implements
   the pure-core ``QEScorer`` protocol with the masked pseudo-perplexity

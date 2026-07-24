@@ -18,7 +18,13 @@ from corrigenda import CorrectionPipeline
 from corrigenda.errors import ConfigurationError
 from corrigenda.core.editing import EditScript, ReplaceSpan, apply_edit_script
 from corrigenda.core.protocols import ProducerOptions
-from corrigenda.core.schemas import CorrectionRequest, RetryPolicy, Usage
+from corrigenda.core.schemas import (
+    CorrectionRequest,
+    ImageAsset,
+    ImageTransform,
+    RetryPolicy,
+    Usage,
+)
 from corrigenda.formats.alto.parser import build_document_manifest
 from corrigenda.producers.rules import RulesProducer, SubstitutionRule
 
@@ -137,6 +143,30 @@ async def test_programming_error_propagates_not_masked_as_ocr_fallback():
 
 
 @pytest.mark.asyncio
+async def test_misdeclared_capabilities_fail_at_startup():
+    """Phase 4 — a producer that wants images but declares vision=False is a
+    start-up ConfigurationError, even when images are supplied (the caps
+    gate runs after require_page_images)."""
+    from corrigenda.core.schemas import ImageAsset, ModelCapabilities
+
+    class _Misdeclared(_VisionProducer):
+        capabilities = ModelCapabilities(vision=False)  # contradicts wants_image
+
+    doc = build_document_manifest([(_SAMPLE, _SAMPLE.name)])
+    pipeline = CorrectionPipeline(producer=_Misdeclared(), observer=_Null())
+    assets = {
+        page.page_id: ImageAsset(page_id=page.page_id, uri="scan://x")
+        for page in doc.pages
+    }
+    with pytest.raises(ConfigurationError, match="vision"):
+        await pipeline.run(
+            document_manifest=doc,
+            source_files={_SAMPLE.name: _SAMPLE},
+            page_images=assets,
+        )
+
+
+@pytest.mark.asyncio
 async def test_vision_producer_without_images_fails_at_startup():
     doc = build_document_manifest([(_SAMPLE, _SAMPLE.name)])
     pipeline = CorrectionPipeline(producer=_VisionProducer(), observer=_Null())
@@ -165,6 +195,38 @@ async def test_vision_envelope_reaches_the_producer():
     assert all(ln.geometry is not None for ln in payload.lines)
     geo = payload.lines[0].geometry
     assert geo.page_width > 0 and geo.page_height > 0
+
+
+@pytest.mark.asyncio
+async def test_vision_producer_receives_image_asset_verbatim():
+    """ROADMAP V3 Phase 4 — a structured ImageAsset rides the §4.1 envelope
+    exactly where the bare ref did, forwarded as the very object passed to
+    run() (still no pixel opened, I4). Before Phase 4 the envelope was typed
+    ``str | None`` and the run raised a validation error on the asset."""
+    doc = build_document_manifest([(_SAMPLE, _SAMPLE.name)])
+    producer = _VisionProducer()
+    pipeline = CorrectionPipeline(producer=producer, observer=_Null())
+    assets = {
+        page.page_id: ImageAsset(
+            page_id=page.page_id,
+            uri=f"scan://{page.page_id}",
+            sha256="cd" * 32,
+            media_type="image/tiff",
+            pixel_width=page.page_width,
+            pixel_height=page.page_height,
+            transform=ImageTransform(scale_x=1.0, scale_y=1.0),
+        )
+        for page in doc.pages
+    }
+    await pipeline.run(
+        document_manifest=doc,
+        source_files={_SAMPLE.name: _SAMPLE},
+        page_images=assets,
+    )
+    ref = producer.seen_payload.image_ref
+    assert isinstance(ref, ImageAsset)
+    assert ref is assets[ref.page_id]  # forwarded verbatim, not a copy
+    assert ref.media_type == "image/tiff" and ref.sha256 == "cd" * 32
 
 
 _MULTIPAGE_ALTO = """<?xml version="1.0" encoding="UTF-8"?>

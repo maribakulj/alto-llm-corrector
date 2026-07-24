@@ -237,25 +237,120 @@ que le tout-LLM pour un coût par page inférieur, mesuré et publié.
 
 Le grand chantier de la revue, enfin outillé. Dépend de la Phase 2.
 
-- [ ] **`ImageAsset` structuré** (page_id, uri, sha256, MIME réel, dimensions
-      pixels, index de frame, orientation EXIF, transformation XML→pixels).
-      `ImageRef = str` reste accepté ; `ImageAsset` devient le contrat
-      recommandé.
-- [ ] **Extra `corrigenda[vision]`** : décodage/validation d'images (Pillow),
+- [x] **`ImageAsset` structuré** (page_id, uri, sha256, MIME réel, dimensions
+      pixels, index de frame, orientation EXIF, transformation XML→pixels via
+      `ImageTransform`). `ImageRef = str` reste accepté ; `ImageAsset` devient
+      le contrat recommandé — `run(page_images=…)` accepte l'union
+      `PageImage = ImageRef | ImageAsset`, l'asset voyage sur l'enveloppe §4.1
+      **verbatim** (le cœur n'ouvre aucun pixel, I4), et `require_page_images`
+      refuse un `ImageAsset` déposé sous une clé ≠ son `page_id`. Additif,
+      opt-in, byte-identique sans vision. *Reste* : le builder qui **peuple**
+      un `ImageAsset` depuis un fichier = extra `[vision]` (item suivant).
+- [~] **Extra `corrigenda[vision]`** : décodage/validation d'images (Pillow),
       TIFF multipage, crops ligne/bloc/page avec marge configurable, polygones
       PAGE et rotation, association page→image robuste avec préflight
       (« 100 % des pages ont une image ou une erreur claire »).
-- [ ] **`VisionEditProducer` officiel** : encode le crop, appelle le
+      *Livré (part 1, couture déterministe)* : `integrations.vision` pixel-pur
+      — `build_image_asset` (peuple l'`ImageAsset` : sha256, MIME réel,
+      dimensions visuelles, frame TIFF, orientation EXIF) et `crop_region`
+      (bbox XML→pixels via `ImageTransform`, EXIF normalisé, marge, masque
+      polygone PAGE RGBA, clamp, hash du crop). Testé sans réseau ni clé.
+      Pillow paresseux ; I4 reformulé en contrat d'import (zone pixel-aveugle
+      prouvée pixel-free au runtime, `vision.py` seule surface sanctionnée).
+      *Reste* : préflight d'association page→image en lot.
+- [x] **`VisionEditProducer` officiel** : encode le crop, appelle le
       fournisseur multimodal, trace hash de l'image et du crop. Le cœur reste
-      pixel-blind — l'enveloppe §4.1 existante est la couture.
-- [ ] **Gardes vision** (profil `GuardConfig.vision()` réservé dans le code) :
-      anti-hallucination visuelle, repli vers OCR ou revue si image
-      absente/ambiguë.
-- [ ] **Registre `ModelCapabilities`** (text/vision/structured_output/
+      pixel-blind — l'enveloppe §4.1 existante est la couture. *Livré* :
+      `integrations.vision.VisionEditProducer` (`wants_image/geometry`) croppe
+      chaque ligne via `crop_region`, envoie crops+texte à un
+      `MultimodalStructuredClient` (nouveau seam, le contrat texte
+      `complete_structured` reste inchangé), et repasse par le MÊME parseur de
+      réponse que le producteur texte (`edit_ops_from_response`, factorisé dans
+      `integrations.llm`) — gardes/validateur/canal d'incertitude identiques en
+      aval. Exige un `ImageAsset` (refus explicite d'un `ImageRef` nu). Chaque
+      crop voyage en `ImagePart` avec son sha256 (hash du crop lié au
+      `line_id`) ; l'image porte son sha256. Provenance : `RunProvenance.
+      image_digests` (page_id → `sha256:hex`, miroir de `source_digests`)
+      estampe les octets image exacts par page ; combiné aux coords par ligne,
+      au transform de l'asset et au `configuration_fingerprint` du producteur
+      (qui plie marge + masque polygone), le crop est REPRODUCTIBLE sans
+      stocker N hashes de crop — même contrat au niveau digest que pour l'XML.
+- [~] **Gardes vision** (profil `GuardConfig.vision()`) : anti-hallucination
+      visuelle, repli vers OCR ou revue si image absente/ambiguë.
+      *Livré* : `GuardConfig.vision()` relâche la SEULE étape de
+      similarité-source (0.35→0.15, un VLM lit l'image donc une correction
+      légitime diverge plus de l'OCR) en gardant intactes toutes les gardes
+      anti-migration inter-lignes ; plancher ≠ 0 (un VLM qui invente une ligne
+      sans rapport reste attrapé), PROVISOIRE avant le benchmark vision,
+      override explicite possible, fingerprinté (décision structurelle). Défaut
+      inchangé (opt-in). *Reste* : repli image-absente/ambiguë côté producteur
+      (le prompt impose déjà « en cas d'image illisible, conserve l'OCR ») et
+      calibration du plancher sur le benchmark.
+- [~] **Registre `ModelCapabilities`** (text/vision/structured_output/
       max_images/context) alimentant le router — le VLM n'est qu'un producteur
       de plus, routé vers les seules lignes où il vaut son coût.
-- [ ] **Benchmark texte vs vision vs hybride** : le VLM doit battre le texte
+      *Livré* : descripteur `ModelCapabilities` (frozen, additif) + cerveau pur
+      `can_serve`/`reason_cannot_serve` (informe le router, ne décide pas) ;
+      chaque producteur déclare ses `capabilities` (LLM texte-seul, vision
+      text+vision, injectables) ; préflight `require_capabilities` au démarrage
+      (wants_image ⟹ vision, sinon `ConfigurationError`). `ModelInfo` reste la
+      face catalogue, ceci la face routage.
+- [x] **Sélection per-ligne du producteur** (`escalation_producer=`) : le
+      pipeline route chaque ligne non-césure ESCALATE vers un 2ᵉ producteur
+      (VLM) au lieu du texte, par partition des targets d'un chunk en chunks
+      frères (contexte partagé, targets disjointes), chacun porté par son
+      producteur à travers retry/descente. Césure jamais escaladée
+      (atomicité). Producteur d'escalade préflighté comme le primaire.
+      `escalated_lines` + `RunProvenance.escalation_producer` ; `producer_calls`
+      reste honnête (le routage vit dans le moteur, une seule couche décide).
+      Opt-in : sans `escalation_producer`, run byte-identique. *Reste
+      (optionnel)* : respect de `max_images` par découpe de chunk côté router.
+- [~] **Benchmark texte vs vision vs hybride** : le VLM doit battre le texte
       seul sur le corpus gelé pour mériter sa place par défaut.
+      *Livré (outillage)* : `scripts/vision_benchmark.py` — dégradation
+      déterministe du GT en input OCR (`qe_data.degrade_token`), CER agrégé,
+      3 configs (texte / vision / hybride avec `escalation_producer`), coût réel
+      (`producer_calls`, `escalated_lines`). Validé sur le **GT BNL** (presse
+      19e, 37 pages / 522 lignes, ALTO v4 mm10 + PNG 300 DPI → transform
+      `dpi/254` ≈ 1.1811 vérifié en croppant) : images et référence RÉELLES,
+      seules les erreurs OCR sont synthétiques. Run de plomberie (oracles,
+      hors-ligne, 522 crops réels) : baseline CER 0.0463, texte 0.0321, vision
+      0.0005, hybride 0.0073 en n'escaladant que 326/522 lignes.
+      *OCR RÉELLE (dernier ingrédient synthétique éliminé)* :
+      `scripts/ocr_corpus.py` fait tourner un VRAI moteur (Tesseract) sur les
+      crops de ligne du GT — appariement exact par construction (un crop par
+      ligne GT via notre propre `crop_region`, `--psm 7`), donc aucun
+      alignement. Deux qualités : `fra` (CER 0.102, 121/522 lignes exactes) et
+      `spa` volontairement faux (CER 0.105, 78/522) — de vraies erreurs
+      (`Oume`, `Ventente`, `Qw'il`) qu'aucune table de substitution ne
+      reproduit. `vision_benchmark.py --ocr` consomme le sidecar : **plus rien
+      n'est synthétique** (scans réels, OCR réelle, référence humaine).
+      Mesuré (OCR fra réelle, VLM oracle) : baseline 0.1018, texte 0.1018
+      (les règles ne corrigent RIEN sur ce matériau — cohérent avec OCR17+),
+      vision 0.0021, hybride **0.0021** (= vision) en escaladant 421/522.
+      **La mesure a trouvé un vrai bug de conception** : l'hybride plafonnait
+      à 0.0083 parce que l'escalade refusait les unités de césure en bloc, les
+      laissant au producteur texte inefficace — résidu prédit 0.0079 / mesuré
+      0.0083. Corrigé en escaladant l'unité de césure EN BLOC (atomicité
+      préservée : la paire atteint UN producteur en un appel et se réconcilie).
+      *Constat de coût honnête* : ici l'hybride n'est PAS moins cher (58 appels
+      vs 37 pour tout-vision — scinder un chunk en frères coûte un appel de
+      plus, et 421/522 lignes vont quand même au VLM). Avec une OCR aussi
+      dégradée (121/522 lignes déjà correctes) il y a peu à économiser :
+      l'hybride paie sur de l'OCR MAJORITAIREMENT PROPRE, où le tier SKIP
+      travaille — c'est cette configuration qu'il faut mesurer pour la thèse
+      de coût. *VRAI VLM câblé* : `scripts/providers_multimodal.py`
+      (`AnthropicMultimodalClient` implémente `MultimodalStructuredClient` —
+      sortie structurée via `output_config.format`, crops en blocs image
+      base64 étiquetés par `line_id`, refus `stop_reason:"refusal"` → repli
+      OCR) + `scripts/run_vision.py`, CLI de bout en bout **sans serveur**
+      (mode vision ou `--hybrid`, avec `GuardConfig.vision()`).
+      **Piège API traité** : `temperature` est REJETÉ (400) sur les modèles
+      actuels (Opus 5, Opus 4.8/4.7, Sonnet 5, Fable/Mythos) — la rampe de
+      retry du moteur (0.0/0.3/0.5) ne peut pas être transmise ; l'adaptateur
+      la retire ET le signale (sur ces modèles un retry est byte-identique :
+      limite réelle de la rampe, rendue visible). *Reste* : le run facturé
+      avec une vraie clé (coût/latence réels).
 - [ ] `CandidateSet` émergera ici, du besoin concret de candidats concurrents
       (règles/texte/vision) — pas avant.
 

@@ -56,6 +56,87 @@ IDs.
   the hyphen-dense Descartes page (the guards arbitrate its proposals)
   — the guard-calibration ceiling Phase 2 exists to study.
 
+## Vision corpus (ROADMAP V3 Phase 4)
+
+The vision benchmark (`scripts/vision_benchmark.py`) needs something this
+directory deliberately does NOT hold: **paired page images**. It therefore
+takes a corpus directory as an argument instead of committing scans (a few
+hundred MB of PNG has no place in the repo).
+
+Validated against the **BNL ground truth** (Bibliothèque nationale du
+Luxembourg, 19th-c. French press): 37 paired `NNNN.xml` (ALTO v4) +
+`NNNN.png`, 522 lines. Two properties make it a good fit, both verified
+on the data:
+
+- the ALTO declares `MeasurementUnit mm10`, so XML coordinates are NOT
+  pixels — exactly what `ImageAsset.transform` exists for. The scans are
+  300 DPI, so the mapping is the uniform scale `dpi / 254` ≈ **1.1811**
+  (`px = mm10 × dpi / 254`), confirmed by cropping lines and reading them
+  back;
+- the ALTO `CONTENT` is the human GT (`CC="00"`), i.e. the **reference**,
+  not raw OCR — so the INPUT side has to come from somewhere.
+
+### Real OCR instead of scripted degradation
+
+`scripts/ocr_corpus.py` closes that gap: it runs a real OCR engine
+(Tesseract) over the corpus's own line images and pairs each reading with
+its GT line. The pairing is exact by construction — instead of OCR-ing the
+page and aligning two different segmentations, it OCRs **one crop per GT
+line**, cut with the library's own `crop_region` from the GT geometry
+(`--psm 7`). Every reading belongs to a known `(file, line_id)`.
+
+Two quality tiers, both genuine engine output:
+
+- `--lang fra` — correct engine on French: **CER 0.102**, 121/522 lines
+  exact;
+- `--lang spa` — a deliberately WRONG language model on French text:
+  **CER 0.105**, only 78/522 exact. Still a real engine making real
+  decisions with the wrong lexicon, so it degrades the way bad OCR
+  degrades (`l'entente` → `Ventente`, `qu'il` → `Qw'il`), not the way a
+  substitution table does.
+
+Real OCR fails in ways no substitution table reproduces: merged words
+(`On me` → `Oume`), invented characters (`aujourd'hui` → `aujourd'hut`),
+apostrophe drift (`’`/`'`), hallucinated leading glyphs. With this
+sidecar, **nothing in the measurement is synthetic**: real scans, real OCR
+errors, human reference.
+
+### Measured (37 pages / 522 lines, real tesseract/fra input, oracle VLM)
+
+| config | CER | producer calls | escalated |
+|---|---|---|---|
+| baseline (raw OCR) | 0.1018 | — | — |
+| text (`default_french_ocr_rules`) | 0.1018 | 37 | 0 |
+| vision (every line) | 0.0021 | 37 | 0 |
+| hybrid (QE-routed) | **0.0021** | 58 | 421 |
+
+Three honest readings of that table:
+
+- the **rules producer corrects nothing** on this material (CER
+  unchanged, zero false positives) — consistent with the OCR17+ finding
+  above. Its table targets early-modern typography (long-s, ligatures);
+  19th-c. press OCR fails differently. The rules are a safe no-op here,
+  not a fix.
+- the hybrid now **matches vision exactly** (0.0021). It did not at first:
+  escalation refused hyphen units wholesale, leaving them to the
+  ineffective text producer, and that was the hybrid's *entire* residual
+  error — predicted from those lines' own raw-OCR CER at 0.0079, measured
+  at 0.0083. The fix was to escalate a hyphen unit **as a unit** (both
+  members to one producer), which preserves atomicity — the pair still
+  reaches one producer in one call and reconciles normally — while
+  removing the residual. A measurement that found a real design bug.
+- **the hybrid is not cheaper here, and that is expected.** It makes MORE
+  calls than all-vision (58 vs 37) because splitting a chunk into
+  primary/escalation siblings costs an extra call, while still sending
+  421/522 lines to the expensive model. With OCR this poor (only 121/522
+  lines are already correct) most lines genuinely need the good model, so
+  there is little to save. The hybrid pays off on *mostly clean* OCR,
+  where the SKIP tier does the work — that is the configuration the cost
+  claim should be measured on, not this one.
+
+Scans are not committed (hundreds of MB); both scripts take a corpus
+directory.
+
 ## Manifest
 
 `manifest.json`: `corpus_version` (bump on ANY case change — reports

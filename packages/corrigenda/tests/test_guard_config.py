@@ -72,3 +72,60 @@ def test_stricter_source_similarity_threads_through_check_line():
     assert not strict.accepted
     assert strict.reason == "too_different_from_source"
     assert strict.text == source  # falls back to OCR
+
+
+# ---------------------------------------------------------------------------
+# GuardConfig.vision() — the VLM profile (§5.2 bis, ROADMAP V3 Phase 4)
+# ---------------------------------------------------------------------------
+
+
+def test_vision_relaxes_only_source_similarity():
+    v = GuardConfig.vision()
+    d = GuardConfig()
+    # Source-similarity floor is relaxed …
+    assert v.min_source_similarity < d.min_source_similarity
+    # … but every inter-line migration guard keeps the text default.
+    assert v.neighbour_margin == d.neighbour_margin
+    assert v.absorption_length_ratio == d.absorption_length_ratio
+    assert v.absorption_concat_similarity == d.absorption_concat_similarity
+    assert v.duplicate_threshold == d.duplicate_threshold
+    assert v.part1_max_word_growth == d.part1_max_word_growth
+    assert v.part2_collapse_ratio == d.part2_collapse_ratio
+    assert v.pair_drift_part1_word_growth == d.pair_drift_part1_word_growth
+
+
+def test_vision_override_wins():
+    assert GuardConfig.vision(min_source_similarity=0.22).min_source_similarity == 0.22
+    # An unrelated override still applies on top of the vision floor.
+    v = GuardConfig.vision(neighbour_margin=0.05)
+    assert v.neighbour_margin == 0.05
+    assert v.min_source_similarity == GuardConfig.vision().min_source_similarity
+
+
+def test_vision_is_fingerprinted_distinctly():
+    """Choosing the vision profile is a structurally recorded decision."""
+    assert (
+        GuardConfig.vision().policy_fingerprint() != GuardConfig().policy_fingerprint()
+    )
+
+
+def test_vision_accepts_a_heavy_correction_the_text_default_rejects():
+    """A VLM reading a badly-garbled line legitimately diverges far from the
+    OCR source; the text default rejects it, the vision profile keeps it."""
+    source = "Rcs~ırc"  # heavily garbled OCR (source similarity ~0.29)
+    corrected = "Messire"
+    assert not check_line(source, corrected).accepted  # text default rejects
+    accepted = check_line(source, corrected, config=GuardConfig.vision())
+    assert accepted.accepted and accepted.text == corrected
+
+
+def test_vision_still_blocks_inter_line_migration():
+    """Relaxing source-similarity must NOT open the door to a correction
+    that absorbs its neighbour — the migration guards stay intact."""
+    source = "the cat"
+    nxt = "sat down"
+    corrected = "the cat sat down"  # absorbs the next line
+    res = check_line(source, corrected, next_ocr=nxt, config=GuardConfig.vision())
+    assert not res.accepted
+    assert res.reason in {"absorbs_next_line", "closer_to_next_line"}
+    assert res.text == source

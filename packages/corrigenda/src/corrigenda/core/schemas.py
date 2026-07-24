@@ -4,7 +4,7 @@ import hashlib
 import json
 import uuid
 from enum import Enum
-from typing import Literal
+from typing import Any, ClassVar, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validator
 
@@ -309,10 +309,13 @@ class GuardConfig(FrozenPolicy):
     Every default equals the pre-F13 constant, so ``GuardConfig()`` is
     byte-for-byte compatible with the historical behaviour.
 
-    A future ``GuardConfig.vision()`` profile (spec §5.2 bis / v2.x) will
-    relax the *source-similarity* stage for VLM producers while keeping
-    the inter-line migration guards intact — not shipped until a vision
-    producer benchmarks it.
+    The ``GuardConfig.vision()`` profile (spec §5.2 bis, ROADMAP V3 Phase 4)
+    relaxes the *source-similarity* stage for VLM producers while keeping
+    every inter-line migration guard intact — a VLM reads the image, not
+    the OCR, so a legitimate correction of a badly-garbled line diverges
+    far more from the source than a text model's would, and the text
+    default (0.35) would reject it. Its relaxed threshold is PROVISIONAL
+    until the Phase-4 vision benchmark refits it on real image data.
     """
 
     # --- Stage C: line-level acceptance (line_acceptance.check_line) ---
@@ -387,6 +390,37 @@ class GuardConfig(FrozenPolicy):
     #: rewrite costs its real size, not 0. Generous by default; a rules
     #: pre-pass makes small, local edits well under it.
     edit_line_max_changed_chars: int = Field(default=200, ge=0)
+
+    #: Provisional relaxed source-similarity floor for the vision profile
+    #: (spec §5.2 bis). Lower than the text default (0.35) because a VLM
+    #: correction of a badly-garbled line legitimately diverges further
+    #: from the OCR source; NOT 0.0, so a producer that ignores the image
+    #: and invents an unrelated line is still caught. To be refit on the
+    #: Phase-4 vision benchmark (roadmap) — until then it is a safe default,
+    #: not a calibrated one.
+    _VISION_MIN_SOURCE_SIMILARITY: ClassVar[float] = 0.15
+
+    @classmethod
+    def vision(cls, **overrides: Any) -> "GuardConfig":
+        """The VLM guard profile (§5.2 bis, ROADMAP V3 Phase 4).
+
+        Relaxes ONLY the Stage-C source-similarity floor
+        (:attr:`min_source_similarity`); every inter-line migration guard
+        — neighbour proximity, absorption, hyphen-pair drift, duplication
+        — keeps its text default, because a VLM must no more merge or move
+        lines than a text model. An explicit override always wins, so a
+        host that has run the vision benchmark can pin its own calibrated
+        floor: ``GuardConfig.vision(min_source_similarity=0.22)``.
+
+        Like every :class:`GuardConfig`, the result carries its values into
+        the composite fingerprint (§8.2) — choosing the vision profile is a
+        structurally recorded decision, not a hidden mode.
+        """
+        params: dict[str, Any] = {
+            "min_source_similarity": cls._VISION_MIN_SOURCE_SIMILARITY
+        }
+        params.update(overrides)
+        return cls(**params)
 
 
 #: Module-level default reused wherever a caller passes no GuardConfig, so
@@ -761,6 +795,95 @@ class ChunkPlan(BaseModel):
 ImageRef = str
 
 
+class ImageTransform(BaseModel):
+    """XML-coordinate-space → image-pixel mapping (ROADMAP V3 Phase 4).
+
+    ALTO/PAGE geometry is expressed in the coordinate system the OCR
+    engine used, which is not always the scan's native pixel grid: an
+    ALTO ``MeasurementUnit`` may be ``mm10``/``inch1200`` rather than
+    ``pixel``, or the page may have been downscaled before OCR. To crop a
+    line/block from the image a vision producer must map ``(hpos, vpos,
+    width, height)`` from XML space into pixels; this value object carries
+    the axis-aligned part of that map — scale then offset, applied as
+    ``px = scale * xml + offset`` on each axis.
+
+    The core only *carries* the transform (invariant I4 — it never opens a
+    pixel); the ``corrigenda[vision]`` producer applies it. Rotation
+    beyond EXIF orientation (see :attr:`ImageAsset.exif_orientation`) is
+    out of scope for v1: the common mismatch is a pure resolution scale.
+    Identity (all defaults) means the OCR ran at the image's native
+    resolution — the overwhelmingly common case.
+    """
+
+    scale_x: float = Field(default=1.0, gt=0.0)
+    scale_y: float = Field(default=1.0, gt=0.0)
+    offset_x: float = 0.0
+    offset_y: float = 0.0
+
+
+class ImageAsset(BaseModel):
+    """Structured page-image descriptor (§4.1 / ROADMAP V3 Phase 4).
+
+    The RECOMMENDED value for ``run(page_images=…)``: a bare
+    :data:`ImageRef` (str) is still accepted, but an ``ImageAsset`` carries
+    the provenance the audit trail wants — the SHA-256 of the exact bytes,
+    the real decoded MIME type and pixel dimensions, the frame index inside
+    a multipage container, the EXIF orientation — plus the XML→pixel
+    :class:`ImageTransform` a crop needs. It rides the §4.1 envelope exactly
+    where the bare ref did: the compiler copies it into
+    :attr:`CorrectionRequest.image_ref` only when the producer asks
+    (``wants_image``), and forwards it verbatim.
+
+    The core stays pixel-blind (invariant I4): it NEVER opens
+    :attr:`uri` to populate these fields — it only carries them. The opt-in
+    ``corrigenda[vision]`` builder decodes the image and fills them in; a
+    caller may also construct one by hand from metadata it already holds.
+    Only :attr:`page_id` and :attr:`uri` are required; every decoded field
+    is ``None`` until something that actually read the bytes sets it, so a
+    metadata-poor asset degrades to "a ref that also knows its page".
+    """
+
+    #: The page this scan belongs to — matches a ``PageManifest.page_id``.
+    #: When an asset is used as a ``page_images`` value, this MUST equal
+    #: its mapping key (``require_page_images`` enforces it): a scan filed
+    #: under the wrong page is exactly the silent wrong-image bug the
+    #: per-page contract exists to prevent.
+    page_id: str
+    #: Opaque locator the vision producer resolves (path, URL, handle),
+    #: forwarded verbatim; the core never opens it (I4) — same contract as
+    #: a bare :data:`ImageRef`.
+    uri: str
+    #: SHA-256 of the exact image bytes, lowercase hex — the provenance
+    #: anchor stamped alongside the crop hash (acceptance criterion 5).
+    #: ``None`` when the caller has not hashed the bytes.
+    sha256: str | None = None
+    #: Decoded MIME type (``image/tiff``, ``image/jpeg``, …), determined
+    #: from the bytes rather than guessed from the extension. ``None`` when
+    #: unknown.
+    media_type: str | None = None
+    #: Decoded pixel dimensions of the frame this asset points at. These
+    #: are the IMAGE's pixels — the XML page dimensions may differ (see
+    #: :attr:`transform`). ``None`` when unknown.
+    pixel_width: int | None = Field(default=None, gt=0)
+    pixel_height: int | None = Field(default=None, gt=0)
+    #: 0-based frame index inside a multi-frame container (multipage TIFF);
+    #: ``0`` for a single-image file.
+    frame_index: int = Field(default=0, ge=0)
+    #: EXIF orientation tag (1–8) as stored in the file; the vision builder
+    #: applies it when cropping. ``None`` when the file carries none.
+    exif_orientation: int | None = Field(default=None, ge=1, le=8)
+    #: How to map XML coordinates onto image pixels. ``None`` is read as
+    #: identity (native-resolution OCR).
+    transform: ImageTransform | None = None
+
+
+#: What ``run(page_images=…)`` accepts per page: the historical opaque
+#: :data:`ImageRef` (str) OR the richer, recommended :class:`ImageAsset`.
+#: Both ride the §4.1 envelope identically; the core forwards either
+#: verbatim and opens neither (I4).
+PageImage = ImageRef | ImageAsset
+
+
 class LineGeometry(BaseModel):
     """Physical anchor for a line, copied verbatim by the compiler for
     vision producers (§4.1): the line ``coords`` (ALTO bbox or PAGE polygon)
@@ -798,9 +921,11 @@ class CorrectionRequest(BaseModel):
     page_id: str
     block_id: str | None = None
     lines: list[LineContext]
-    # Vision envelope (§4.1) — opaque page image reference, populated by the
-    # compiler only when the producer asks (``wants_image``); never opened.
-    image_ref: ImageRef | None = None
+    # Vision envelope (§4.1) — page image, populated by the compiler only
+    # when the producer asks (``wants_image``); never opened. Either the
+    # historical opaque :data:`ImageRef` (str) or the richer, recommended
+    # :class:`ImageAsset` (:data:`PageImage`), forwarded verbatim.
+    image_ref: PageImage | None = None
 
 
 class LineProposal(BaseModel):
@@ -826,6 +951,83 @@ class ModelInfo(BaseModel):
     label: str
     supports_structured_output: bool = True
     context_window: int | None = None
+
+
+class ModelCapabilities(BaseModel):
+    """What a producer's model can do (ROADMAP V3 Phase 4, §5.2 bis).
+
+    The declarative descriptor the Router reads to send each line only to a
+    producer that can actually serve it — the mechanism by which a VLM is
+    "just another producer", routed to the lines where it earns its cost
+    rather than hardwired for the whole run. A producer MAY declare its own
+    via a ``capabilities`` attribute (the same optional-attribute
+    convention as ``metadata`` / ``requires_full_coverage``); absent means
+    "undeclared, no constraint" (back-compatible).
+
+    ``ModelInfo`` is the CATALOG face of a model (what ``list_models``
+    lists, a host concern); this is the ROUTING face (what the brain
+    checks per line). They overlap on ``structured_output`` / ``context``
+    by design — a host can build one from the other.
+
+    Frozen so a chosen model's capabilities are a stable fact a run can
+    record. The brain is :meth:`can_serve`; it INFORMS the Router, it does
+    not decide (the app decides).
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    #: Can correct from text (OCR + neighbours). Almost always True.
+    text: bool = True
+    #: Can consume page images — the gate a vision producer needs.
+    vision: bool = False
+    #: Supports structured JSON output (the shape every LLM producer here
+    #: asks for). A model without it cannot serve the structured contract.
+    structured_output: bool = True
+    #: Maximum images the model accepts per call; ``None`` = unbounded.
+    #: A vision chunk that would send more crops than this cannot be served
+    #: as one call — the Router/planner must split it (or route elsewhere).
+    max_images: int | None = Field(default=None, ge=0)
+    #: Context window in tokens, when known; ``None`` = unspecified.
+    context: int | None = Field(default=None, gt=0)
+
+    def reason_cannot_serve(
+        self,
+        *,
+        needs_image: bool = False,
+        needs_structured_output: bool = False,
+        image_count: int = 0,
+    ) -> str | None:
+        """Why this model cannot serve a request, or ``None`` when it can.
+
+        A short human-readable reason (the same string a preflight error
+        or a routing log would carry), so the Router can both DECIDE
+        (``can_serve``) and EXPLAIN the exclusion in one call.
+        """
+        if needs_image and not self.vision:
+            return "model has no vision capability"
+        if needs_structured_output and not self.structured_output:
+            return "model does not support structured output"
+        if self.max_images is not None and image_count > self.max_images:
+            return f"needs {image_count} images but model caps at {self.max_images}"
+        return None
+
+    def can_serve(
+        self,
+        *,
+        needs_image: bool = False,
+        needs_structured_output: bool = False,
+        image_count: int = 0,
+    ) -> bool:
+        """True when the model can serve the described request (see
+        :meth:`reason_cannot_serve`)."""
+        return (
+            self.reason_cannot_serve(
+                needs_image=needs_image,
+                needs_structured_output=needs_structured_output,
+                image_count=image_count,
+            )
+            is None
+        )
 
 
 class Usage(BaseModel):
@@ -1072,10 +1274,28 @@ class RunProvenance(BaseModel):
     config_fingerprint: str
     #: Who produced the edits (generic identity, P3.7-4).
     producer: ProducerProvenance
+    #: Phase 4 — the ESCALATE tier's producer identity, when a run was
+    #: configured with an ``escalation_producer`` (a VLM). ``None`` when the
+    #: run had a single producer, so a text-only run's provenance is
+    #: unchanged. Additive.
+    escalation_producer: ProducerProvenance | None = None
     #: source file name → ``sha256:<hex>`` of the INPUT bytes, so the
     #: report is verifiably tied to the exact document it corrected.
     #: Empty on dry runs (no source files given).
     source_digests: dict[str, str] = Field(default_factory=dict)
+    #: ROADMAP V3 Phase 4 — page_id → ``sha256:<hex>`` of the page IMAGE
+    #: bytes, for every page whose ``run(page_images=…)`` value is a
+    #: structured :class:`ImageAsset` carrying its digest. The mirror of
+    #: ``source_digests`` for pixels: it ties the report to the exact scans
+    #: a vision producer saw, and — together with the source digest, the
+    #: per-line coords, and the producer's ``configuration_fingerprint``
+    #: (which folds in the crop margin / polygon-mask knobs) — makes every
+    #: crop REPRODUCIBLE without storing N crop hashes. The core never opens
+    #: an image to fill this: it copies the digest the asset already
+    #: carries (I4). Empty when no images were given, when they were bare
+    #: ``ImageRef`` strings (opaque — no known digest), or when the assets
+    #: carried none. Additive; no ``report_version`` bump.
+    image_digests: dict[str, str] = Field(default_factory=dict)
     #: The manifest's stamped source format ("alto" / "page"), None for
     #: hand-built manifests that never went through a parser.
     source_format: str | None = None

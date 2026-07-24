@@ -83,6 +83,7 @@ from corrigenda.core.protocols import (
     StructuredCompletionClient,
     ProviderPermanentError,
     ProviderTransientError,
+    require_capabilities,
     require_page_images,
 )
 from corrigenda.core.alignment import align_tokens
@@ -112,7 +113,8 @@ from corrigenda.core.schemas import (
     DocumentManifest,
     GuardConfig,
     HyphenRole,
-    ImageRef,
+    ImageAsset,
+    PageImage,
     LineManifest,
     LineStatus,
     LineTrace,
@@ -485,6 +487,42 @@ def _resolve_partner(
     return cross_page_partners.get(LineRef(page_id=partner_page, line_id=partner_id))
 
 
+def _page_local_hyphen_unit(
+    seed: LineManifest, line_by_id: dict[str, LineManifest]
+) -> set[str] | None:
+    """The line_ids of ``seed``'s hyphen unit, or ``None`` when the unit is
+    not wholly resolvable on this page (ROADMAP V3 Phase 4).
+
+    Used by the router to move a hyphen unit to the escalation producer
+    **as a unit**: escalating one member and leaving its partner behind
+    would split the pair across producers, which is exactly what hyphen
+    atomicity forbids. A unit whose link crosses a page boundary — or
+    dangles — cannot be gathered from one page's plan, so it is left to the
+    primary producer (the conservative pre-Phase-4 behaviour).
+    """
+    members: set[str] = set()
+    seen: set[str] = {seed.line_id}
+    worklist = [seed]
+    while worklist:
+        lm = worklist.pop()
+        members.add(lm.line_id)
+        for partner_id, partner_page in (
+            (lm.hyphen_pair_line_id, lm.hyphen_pair_page_id),
+            (lm.hyphen_forward_pair_id, lm.hyphen_forward_pair_page_id),
+        ):
+            if not partner_id:
+                continue
+            if partner_page is not None and partner_page != lm.page_id:
+                return None  # the unit leaves this page
+            partner = line_by_id.get(partner_id)
+            if partner is None:
+                return None  # dangling link — not ours to move
+            if partner.line_id not in seen:
+                seen.add(partner.line_id)
+                worklist.append(partner)
+    return members
+
+
 def _hyphen_closure(
     seeds: list[LineManifest],
     line_by_id: dict[str, LineManifest],
@@ -640,6 +678,11 @@ class CorrectionResult:
     #: (confirmed as-is, no producer call). 0 when routing is off. The
     #: economics signal: each skip is one LLM call not spent.
     lines_skipped: int = 0
+    #: Phase 4 — non-hyphen lines the QE router sent to ESCALATE and that
+    #: were routed to the ``escalation_producer`` (a VLM) instead of the
+    #: primary producer. 0 when no escalation producer is set. Each one is
+    #: a line the hybrid judged worth the heavier (vision) call.
+    escalated_lines: int = 0
     #: Phase 3 — total ``producer.produce`` invocations (retries included):
     #: the run's real call cost. Falls when routing drops whole chunks —
     #: routing-on vs routing-off on one document is the cheaper-hybrid proof.
@@ -704,6 +747,9 @@ class RunContext:
     #: Phase 3 — lines the QE router SKIPPED (confirmed clean, no producer
     #: call). 0 when routing is off.
     lines_skipped: int = 0
+    #: Phase 4 — non-hyphen lines routed to the ``escalation_producer``
+    #: (a VLM) instead of the primary producer. 0 when none is set.
+    escalated_lines: int = 0
     #: Phase 3 — number of ``producer.produce`` invocations across the run,
     #: retries INCLUDED (the real per-call cost driver for an LLM API).
     #: Routing lowers it by dropping whole all-skipped chunks; comparing
@@ -727,7 +773,7 @@ class RunContext:
     #: via :class:`ProducerOptions` (P3.7) so long I/O can be abandoned.
     should_abort: Callable[[], bool] | None = None
     #: §4.1 vision envelope — resolved once per run from run(page_images=…).
-    image_ref_by_page_id: dict[str, ImageRef] = field(default_factory=dict)
+    image_ref_by_page_id: dict[str, PageImage] = field(default_factory=dict)
     page_dims: dict[str, tuple[int, int]] = field(default_factory=dict)
 
 
@@ -765,6 +811,7 @@ class CorrectionPipeline:
         confidence_scorers: tuple[ConfidenceScorer, ...] | None = None,
         qe_scorer: QEScorer | None = None,
         routing_policy: RoutingPolicy | None = None,
+        escalation_producer: EditProducer | None = None,
     ) -> None:
         self.producer = producer
         self.observer = observer
@@ -806,6 +853,17 @@ class CorrectionPipeline:
         # skips (same rule that held ConfidencePolicy out until write_wc).
         self.qe_scorer = qe_scorer
         self.routing_policy = routing_policy or DEFAULT_ROUTING_POLICY
+        # Phase 4 (ROADMAP V3, §5.2 bis) — the ESCALATE tier's producer.
+        # When set AND routing is on, a non-hyphen line the QE scorer +
+        # RoutingPolicy send to ESCALATE is corrected by THIS producer (a
+        # VLM) instead of the primary text producer, on a per-line basis —
+        # the VLM routed only to the lines that earn its cost. None (the
+        # default) keeps the historical behaviour: ESCALATE lines go to the
+        # primary producer exactly as before, so a default run is
+        # byte-identical. A hyphen unit is NEVER escalated (atomicity — a
+        # pair split across two producers could not reconcile), so its
+        # members always route to the primary producer.
+        self.escalation_producer = escalation_producer
         # §3 format seam — None derives the adapter from the MANIFEST's
         # stamped source_format at write time (_adapter_for_format); an
         # injected adapter that contradicts that format is refused at
@@ -962,7 +1020,7 @@ class CorrectionPipeline:
         source_files: dict[str, Path],
         run_id: str | None = None,
         should_abort: Callable[[], bool] | None = None,
-        page_images: dict[str, ImageRef] | None = None,
+        page_images: dict[str, PageImage] | None = None,
     ) -> CorrectionResult:
         """Run the full pipeline. The input manifest is never modified.
 
@@ -985,7 +1043,9 @@ class CorrectionPipeline:
         provenance labels are constructor state.
 
         ``page_images`` (§5.1) — optional mapping of **page_id** (document-
-        unique, ADR-007) to an opaque :data:`ImageRef` — one image per
+        unique, ADR-007) to a :data:`PageImage`: the historical opaque
+        :data:`ImageRef` (str) or the richer, recommended
+        :class:`~corrigenda.core.schemas.ImageAsset` — one image per
         physical page, so a multipage XML carries one ref per scan. The
         library forwards each page's ref verbatim into the producer payload
         when the producer asks (``wants_image``) and NEVER opens it (I4).
@@ -1031,7 +1091,7 @@ class CorrectionPipeline:
         source_files: dict[str, Path],
         run_id: str | None,
         should_abort: Callable[[], bool] | None,
-        page_images: dict[str, ImageRef] | None,
+        page_images: dict[str, PageImage] | None,
     ) -> CorrectionResult:
         """Body of :meth:`run`, working on the run's private manifest copy."""
         run_id = run_id or str(uuid.uuid4())
@@ -1042,6 +1102,18 @@ class CorrectionPipeline:
         # §5.1 — a vision producer without its images is a start-up error,
         # never a silent image-less call.
         require_page_images(self.producer, document_manifest.pages, page_images)
+        # §5.2 bis (Phase 4) — a producer whose declared capabilities
+        # contradict its wiring (wants images but vision=False) is a
+        # start-up error, not a mid-run surprise.
+        require_capabilities(self.producer)
+        # Phase 4 — the escalation (vision) producer is the one that needs
+        # images: preflight it too, so a run that WILL escalate fails at
+        # start-up if its VLM lacks a scan, never mid-run.
+        if self.escalation_producer is not None:
+            require_page_images(
+                self.escalation_producer, document_manifest.pages, page_images
+            )
+            require_capabilities(self.escalation_producer)
 
         # §3 — the format travels with the document. An injected adapter
         # that contradicts the format the manifest was parsed as would
@@ -1234,7 +1306,9 @@ class CorrectionPipeline:
             format_losses=format_losses or None,
             # P3.9 (§11) — the run's full provenance record.
             provenance=self._build_provenance(
-                document_manifest=document_manifest, source_digests=source_digests
+                document_manifest=document_manifest,
+                source_digests=source_digests,
+                image_assets=ctx.image_ref_by_page_id,
             ),
             # F14/§11 — the aggregated usage is part of the persisted
             # artefact, not just the transient result. None when nothing
@@ -1301,6 +1375,8 @@ class CorrectionPipeline:
             # Phase 3 — routing economics: lines skipped (no producer
             # call) and the run's total producer-call count.
             lines_skipped=ctx.lines_skipped,
+            # Phase 4 — lines routed to the escalation (vision) producer.
+            escalated_lines=ctx.escalated_lines,
             producer_calls=ctx.producer_calls,
         )
 
@@ -1309,15 +1385,40 @@ class CorrectionPipeline:
         *,
         document_manifest: DocumentManifest,
         source_digests: dict[str, str],
+        image_assets: dict[str, PageImage],
     ) -> RunProvenance:
         """The run's §11 provenance record (P3.9): library + producer
         identity, policy fingerprint, per-file digests of the INPUT
         bytes (computed once in :meth:`run` via ``_digest_sources`` and
-        shared with the edit script's preconditions), and critical
-        dependency versions."""
+        shared with the edit script's preconditions), per-page image
+        digests (Phase 4), and critical dependency versions."""
         from corrigenda import __version__ as _lib_version
 
         md = self.producer_metadata
+        # Phase 4 — copy the digest each structured ImageAsset already
+        # carries; the core never opens an image (I4). Bare ImageRef
+        # strings and digest-less assets contribute nothing.
+        image_digests = {
+            page_id: f"sha256:{asset.sha256}"
+            for page_id, asset in image_assets.items()
+            if isinstance(asset, ImageAsset) and asset.sha256
+        }
+        # Phase 4 — record the escalation (vision) producer's identity too,
+        # from its own declared metadata (the same optional-attribute
+        # convention as the primary producer's). None for a single-producer
+        # run, so text-only provenance is unchanged.
+        escalation_prov: ProducerProvenance | None = None
+        if self.escalation_producer is not None:
+            emd = (
+                getattr(self.escalation_producer, "metadata", None)
+                or ProducerMetadata()
+            )
+            escalation_prov = ProducerProvenance(
+                name=emd.name,
+                version=emd.version,
+                implementation=emd.implementation,
+                configuration_fingerprint=emd.configuration_fingerprint,
+            )
         return RunProvenance(
             lib_version=_lib_version,
             config_fingerprint=self.config_fingerprint(),
@@ -1327,7 +1428,9 @@ class CorrectionPipeline:
                 implementation=md.implementation,
                 configuration_fingerprint=md.configuration_fingerprint,
             ),
+            escalation_producer=escalation_prov,
             source_digests=source_digests,
+            image_digests=image_digests,
             source_format=document_manifest.source_format,
             dependencies=_dependency_versions(),
         )
@@ -1416,7 +1519,7 @@ class CorrectionPipeline:
         source_files: dict[str, Path],
         run_id: str | None = None,
         should_abort: Callable[[], bool] | None = None,
-        page_images: dict[str, ImageRef] | None = None,
+        page_images: dict[str, PageImage] | None = None,
     ) -> CorrectionResult:
         """Synchronous façade over :meth:`run` (§8.1).
 
@@ -1456,35 +1559,61 @@ class CorrectionPipeline:
         line_by_id: dict[str, LineManifest],
         ctx: RunContext,
         traces: dict[LineRef, LineTrace],
-    ) -> list[ChunkRequest]:
-        """Pre-decide SKIP lines and drop them from chunk targets.
+    ) -> list[tuple[ChunkRequest, EditProducer]]:
+        """Route each chunk's target lines by QE tier, returning per-chunk
+        ``(chunk, producer)`` work items.
 
-        A line the QE scorer + RoutingPolicy route to SKIP is confirmed
-        clean: its final text is its OCR text, its status is CORRECTED,
-        and — the auditable signature of a skip vs an LLM identity pass —
-        it never reaches the producer, so its trace's ``model_input_text``
-        stays ``None``. It remains in each chunk's ``line_ids`` (context
-        for its neighbours) but leaves ``target_line_ids``; a chunk with
-        no targets left is dropped entirely (no producer call). A hyphen
-        unit is NEVER skipped (atomicity — a half-skipped pair could not
-        reconcile), so its members always route to the producer.
+        SKIP (Phase 3): a line the QE scorer + RoutingPolicy route to SKIP
+        is confirmed clean — its final text is its OCR text, its status is
+        CORRECTED, and (the auditable signature of a skip vs an LLM
+        identity pass) it never reaches a producer, so its trace's
+        ``model_input_text`` stays ``None``. It remains in each chunk's
+        ``line_ids`` (context for its neighbours) but leaves
+        ``target_line_ids``.
 
-        Returns the chunk list unchanged when routing is off.
+        ESCALATE (Phase 4): when an ``escalation_producer`` is set, a
+        non-hyphen line routed to ESCALATE is split out of the chunk into a
+        sibling chunk (same context ``line_ids``, disjoint targets) carried
+        by the escalation producer — the VLM corrects only those lines. The
+        remaining targets stay with the primary producer. A chunk with no
+        targets left after SKIP is dropped (no producer call at all).
+
+        A hyphen unit is NEVER skipped (atomicity — a half-skipped pair
+        could not reconcile). It MAY escalate, but only as a whole unit:
+        when any member routes to ESCALATE, every member goes, so the pair
+        reaches one producer together and reconciles normally. A unit whose
+        links leave the page (or dangle) cannot be gathered from this
+        page's plan and stays with the primary producer.
+
+        When routing is off (default), returns every chunk paired with the
+        primary producer unchanged — a byte-identical run.
         """
         if not self._routing_enabled():
-            return chunks
+            return [(chunk, self.producer) for chunk in chunks]
         assert self.qe_scorer is not None  # _routing_enabled guarantees it
 
+        can_escalate = self.escalation_producer is not None
         skip: set[str] = set()
+        escalate: set[str] = set()
         for lm in page.lines:
+            decision = route_line(
+                self.qe_scorer.needs_correction(lm.ocr_text), self.routing_policy
+            )
             if lm.hyphen_role is not HyphenRole.NONE:
-                continue  # atomicity — never skip a hyphen-unit member
-            score = self.qe_scorer.needs_correction(lm.ocr_text)
-            if route_line(score, self.routing_policy) is RoutingDecision.SKIP:
+                # Atomicity: a hyphen member is NEVER skipped (a half-skipped
+                # pair could not reconcile). It may still escalate — but only
+                # with its whole unit, so the pair reaches one producer
+                # together. Measured on real 19th-c. press OCR, leaving units
+                # behind was the hybrid's entire residual error.
+                if decision is RoutingDecision.ESCALATE and can_escalate:
+                    unit = _page_local_hyphen_unit(lm, line_by_id)
+                    if unit is not None:
+                        escalate |= unit
+                continue
+            if decision is RoutingDecision.SKIP:
                 skip.add(lm.line_id)
-
-        if not skip:
-            return chunks
+            elif decision is RoutingDecision.ESCALATE and can_escalate:
+                escalate.add(lm.line_id)
 
         for line_id in skip:
             lm = line_by_id[line_id]
@@ -1497,19 +1626,41 @@ class CorrectionPipeline:
                 validation_status=LineStatus.CORRECTED.value,
             )
         ctx.lines_skipped += len(skip)
+        ctx.escalated_lines += len(escalate)
 
-        filtered: list[ChunkRequest] = []
+        routed: list[tuple[ChunkRequest, EditProducer]] = []
         for chunk in chunks:
-            new_targets = [t for t in chunk.targets() if t not in skip]
-            if not new_targets:
+            targets = [t for t in chunk.targets() if t not in skip]
+            if not targets:
                 continue  # every target skipped — no producer call at all
-            if new_targets == chunk.targets():
-                filtered.append(chunk)  # nothing skipped here
-            else:
-                filtered.append(
-                    chunk.model_copy(update={"target_line_ids": new_targets})
+            primary_targets = [t for t in targets if t not in escalate]
+            escalate_targets = [t for t in targets if t in escalate]
+            if primary_targets:
+                if primary_targets == chunk.targets():
+                    routed.append((chunk, self.producer))  # untouched
+                else:
+                    routed.append(
+                        (
+                            chunk.model_copy(
+                                update={"target_line_ids": primary_targets}
+                            ),
+                            self.producer,
+                        )
+                    )
+            if escalate_targets:
+                assert self.escalation_producer is not None  # can_escalate
+                routed.append(
+                    (
+                        chunk.model_copy(
+                            update={
+                                "target_line_ids": escalate_targets,
+                                "chunk_id": f"{chunk.chunk_id}#esc",
+                            }
+                        ),
+                        self.escalation_producer,
+                    )
                 )
-        return filtered
+        return routed
 
     async def _process_page(
         self,
@@ -1539,18 +1690,20 @@ class CorrectionPipeline:
 
         plan = plan_page(page, document_id, self.config)
 
-        # Phase 3 — hybrid-selective routing: pre-decide SKIP lines
-        # (confirmed clean, no producer call) and drop them from chunk
-        # targets. A no-op when routing is off (default), so the chunk
-        # list is untouched and every existing run is byte-identical.
-        chunks = self._route_and_filter_chunks(
+        # Phase 3/4 — hybrid-selective routing: pre-decide SKIP lines
+        # (confirmed clean, no producer call) and route ESCALATE lines to
+        # the vision producer, returning each chunk paired with the
+        # producer that owns it. A no-op when routing is off (default), so
+        # every chunk pairs with the primary producer and every existing
+        # run is byte-identical.
+        routed_chunks = self._route_and_filter_chunks(
             page=page, chunks=plan.chunks, line_by_id=line_by_id, ctx=ctx, traces=traces
         )
 
         self._emit(
             ev.ChunkPlanned(
                 page_id=page.page_id,
-                chunk_count=len(chunks),
+                chunk_count=len(routed_chunks),
                 granularity=plan.granularity.value,
             )
         )
@@ -1558,7 +1711,7 @@ class CorrectionPipeline:
         page_reconciled = 0
         page_chunks = 0
 
-        for chunk in chunks:
+        for chunk, producer in routed_chunks:
             # F10 — cooperative cancellation between chunks. Checked before
             # the per-chunk try/except so CorrectionAborted propagates out
             # instead of being swallowed as a chunk error.
@@ -1573,6 +1726,7 @@ class CorrectionPipeline:
                 n = await self._run_chunk(
                     ctx=ctx,
                     chunk=chunk,
+                    producer=producer,
                     page=page,
                     line_by_id=line_by_id,
                     traces=traces,
@@ -1668,6 +1822,7 @@ class CorrectionPipeline:
         *,
         ctx: RunContext,
         chunk: ChunkRequest,
+        producer: EditProducer,
         page: PageManifest,
         line_by_id: dict[str, LineManifest],
         traces: dict[LineRef, LineTrace] | None = None,
@@ -1724,6 +1879,7 @@ class CorrectionPipeline:
         ) = await self._attempt_chunk(
             ctx=ctx,
             chunk=chunk,
+            producer=producer,
             chunk_lines=chunk_lines,
             hyphen_pairs=hyphen_pairs,
             all_lines_by_id=line_by_id,
@@ -1797,6 +1953,7 @@ class CorrectionPipeline:
                 total += await self._run_chunk(
                     ctx=ctx,
                     chunk=sub,
+                    producer=producer,
                     page=page,
                     line_by_id=line_by_id,
                     traces=traces,
@@ -1948,6 +2105,7 @@ class CorrectionPipeline:
         *,
         ctx: RunContext,
         chunk: ChunkRequest,
+        producer: EditProducer,
         chunk_lines: list[LineManifest],
         hyphen_pairs: dict[str, str],
         all_lines_by_id: dict[str, LineManifest],
@@ -2004,7 +2162,7 @@ class CorrectionPipeline:
             enriched = enrich_chunk_lines(
                 chunk_lines,
                 all_lines_by_id,
-                include_geometry=getattr(self.producer, "wants_geometry", False),
+                include_geometry=getattr(producer, "wants_geometry", False),
                 page_dims=ctx.page_dims,
             )
 
@@ -2022,7 +2180,7 @@ class CorrectionPipeline:
                 lines=enriched,
                 image_ref=(
                     ctx.image_ref_by_page_id.get(chunk.page_id)
-                    if getattr(self.producer, "wants_image", False)
+                    if getattr(producer, "wants_image", False)
                     else None
                 ),
             )
@@ -2035,7 +2193,7 @@ class CorrectionPipeline:
                 # Phase 3 — count every invocation (this attempt hits the
                 # producer whether or not it succeeds): the real cost.
                 ctx.producer_calls += 1
-                script, usage = await self.producer.produce(
+                script, usage = await producer.produce(
                     payload,
                     options=ProducerOptions(
                         attempt=attempt,
@@ -2043,7 +2201,7 @@ class CorrectionPipeline:
                         should_abort=ctx.should_abort,
                     ),
                 )
-                raw = self._script_to_raw(script, chunk_lines)
+                raw = self._script_to_raw(script, chunk_lines, producer=producer)
                 if usage is not None:
                     ctx.usage = ctx.usage + usage
                     chunk_usage = chunk_usage + usage
@@ -2165,7 +2323,11 @@ class CorrectionPipeline:
         return None, attempts_used, False, last_msg, None
 
     def _script_to_raw(
-        self, script: EditScript, chunk_lines: list[LineManifest]
+        self,
+        script: EditScript,
+        chunk_lines: list[LineManifest],
+        *,
+        producer: EditProducer,
     ) -> dict[str, Any]:
         """Normalise a producer's EditScript into the validator's raw shape.
 
@@ -2199,7 +2361,7 @@ class CorrectionPipeline:
             for lid, txt in span_result.text_by_id.items():
                 entries.append({"line_id": lid, "corrected_text": txt})
 
-        if not getattr(self.producer, "requires_full_coverage", True):
+        if not getattr(producer, "requires_full_coverage", True):
             covered = {e["line_id"] for e in entries}
             for lid, txt in canonical.items():
                 if lid not in covered:
