@@ -108,23 +108,31 @@ errors, human reference.
 | baseline (raw OCR) | 0.1018 | — | — |
 | text (`default_french_ocr_rules`) | 0.1018 | 37 | 0 |
 | vision (every line) | 0.0021 | 37 | 0 |
-| hybrid (QE-routed) | 0.0083 | 56 | 316 |
+| hybrid (QE-routed) | **0.0021** | 58 | 421 |
 
-Two honest readings of that table:
+Three honest readings of that table:
 
 - the **rules producer corrects nothing** on this material (CER
   unchanged, zero false positives) — consistent with the OCR17+ finding
   above. Its table targets early-modern typography (long-s, ligatures);
   19th-c. press OCR fails differently. The rules are a safe no-op here,
   not a fix.
-- the hybrid's residual error is **exactly the hyphen units it refuses to
-  escalate**. Hyphen-unit members are never escalated (atomicity — a pair
-  split across producers could not reconcile), so they stay with the
-  ineffective text producer. Predicted from the hyphen lines' own raw-OCR
-  CER: 0.0079; measured: 0.0083. That quantifies the atomicity trade-off
-  and points at the fix — escalate a hyphen unit **as a unit**, both
-  members to the vision producer together, which preserves atomicity and
-  removes the residual.
+- the hybrid now **matches vision exactly** (0.0021). It did not at first:
+  escalation refused hyphen units wholesale, leaving them to the
+  ineffective text producer, and that was the hybrid's *entire* residual
+  error — predicted from those lines' own raw-OCR CER at 0.0079, measured
+  at 0.0083. The fix was to escalate a hyphen unit **as a unit** (both
+  members to one producer), which preserves atomicity — the pair still
+  reaches one producer in one call and reconciles normally — while
+  removing the residual. A measurement that found a real design bug.
+- **the hybrid is not cheaper here, and that is expected.** It makes MORE
+  calls than all-vision (58 vs 37) because splitting a chunk into
+  primary/escalation siblings costs an extra call, while still sending
+  421/522 lines to the expensive model. With OCR this poor (only 121/522
+  lines are already correct) most lines genuinely need the good model, so
+  there is little to save. The hybrid pays off on *mostly clean* OCR,
+  where the SKIP tier does the work — that is the configuration the cost
+  claim should be measured on, not this one.
 
 Scans are not committed (hundreds of MB); both scripts take a corpus
 directory.

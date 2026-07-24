@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **A hyphen unit now escalates as a WHOLE unit (ROADMAP V3 Phase 4).**
+  Escalation previously refused hyphen units outright: no member could
+  reach the vision producer, so every hyphenated line stayed with the
+  primary text producer. Measured on real 19th-c. press OCR, that was the
+  hybrid's **entire** residual error — predicted from those lines' own
+  raw-OCR CER at 0.0079, measured at 0.0083. Now, when any member routes to
+  ESCALATE, every member of its unit goes, so the pair still reaches ONE
+  producer in ONE call and reconciles exactly as before: atomicity is
+  preserved, not traded away. A unit whose links leave the page (or dangle)
+  cannot be gathered from a single page's plan and keeps the conservative
+  behaviour — it stays with the primary producer. A hyphen member is still
+  never SKIPped. On the real corpus the hybrid drops from CER 0.0083 to
+  **0.0021**, matching vision-on-every-line exactly.
+
 ### Added
 
 - **Real raw OCR beside the ground truth (`scripts/ocr_corpus.py`).**

@@ -327,12 +327,19 @@ Le grand chantier de la revue, enfin outillé. Dépend de la Phase 2.
       n'est synthétique** (scans réels, OCR réelle, référence humaine).
       Mesuré (OCR fra réelle, VLM oracle) : baseline 0.1018, texte 0.1018
       (les règles ne corrigent RIEN sur ce matériau — cohérent avec OCR17+),
-      vision 0.0021, hybride 0.0083 en escaladant 316/522.
-      **Découverte** : tout le résidu de l'hybride EST les unités de césure
-      jamais escaladées (prédit 0.0079 / mesuré 0.0083) → escalader une unité
-      de césure EN BLOC (les deux membres au VLM) préserverait l'atomicité et
-      supprimerait le résidu. *Reste* : le run avec de VRAIS fournisseurs
-      LLM/VLM (coût réel, cassette).
+      vision 0.0021, hybride **0.0021** (= vision) en escaladant 421/522.
+      **La mesure a trouvé un vrai bug de conception** : l'hybride plafonnait
+      à 0.0083 parce que l'escalade refusait les unités de césure en bloc, les
+      laissant au producteur texte inefficace — résidu prédit 0.0079 / mesuré
+      0.0083. Corrigé en escaladant l'unité de césure EN BLOC (atomicité
+      préservée : la paire atteint UN producteur en un appel et se réconcilie).
+      *Constat de coût honnête* : ici l'hybride n'est PAS moins cher (58 appels
+      vs 37 pour tout-vision — scinder un chunk en frères coûte un appel de
+      plus, et 421/522 lignes vont quand même au VLM). Avec une OCR aussi
+      dégradée (121/522 lignes déjà correctes) il y a peu à économiser :
+      l'hybride paie sur de l'OCR MAJORITAIREMENT PROPRE, où le tier SKIP
+      travaille — c'est cette configuration qu'il faut mesurer pour la thèse
+      de coût. *Reste* : le run avec de VRAIS fournisseurs LLM/VLM.
 - [ ] `CandidateSet` émergera ici, du besoin concret de candidats concurrents
       (règles/texte/vision) — pas avant.
 

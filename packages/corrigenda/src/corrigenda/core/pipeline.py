@@ -487,6 +487,42 @@ def _resolve_partner(
     return cross_page_partners.get(LineRef(page_id=partner_page, line_id=partner_id))
 
 
+def _page_local_hyphen_unit(
+    seed: LineManifest, line_by_id: dict[str, LineManifest]
+) -> set[str] | None:
+    """The line_ids of ``seed``'s hyphen unit, or ``None`` when the unit is
+    not wholly resolvable on this page (ROADMAP V3 Phase 4).
+
+    Used by the router to move a hyphen unit to the escalation producer
+    **as a unit**: escalating one member and leaving its partner behind
+    would split the pair across producers, which is exactly what hyphen
+    atomicity forbids. A unit whose link crosses a page boundary — or
+    dangles — cannot be gathered from one page's plan, so it is left to the
+    primary producer (the conservative pre-Phase-4 behaviour).
+    """
+    members: set[str] = set()
+    seen: set[str] = {seed.line_id}
+    worklist = [seed]
+    while worklist:
+        lm = worklist.pop()
+        members.add(lm.line_id)
+        for partner_id, partner_page in (
+            (lm.hyphen_pair_line_id, lm.hyphen_pair_page_id),
+            (lm.hyphen_forward_pair_id, lm.hyphen_forward_pair_page_id),
+        ):
+            if not partner_id:
+                continue
+            if partner_page is not None and partner_page != lm.page_id:
+                return None  # the unit leaves this page
+            partner = line_by_id.get(partner_id)
+            if partner is None:
+                return None  # dangling link — not ours to move
+            if partner.line_id not in seen:
+                seen.add(partner.line_id)
+                worklist.append(partner)
+    return members
+
+
 def _hyphen_closure(
     seeds: list[LineManifest],
     line_by_id: dict[str, LineManifest],
@@ -1542,9 +1578,12 @@ class CorrectionPipeline:
         remaining targets stay with the primary producer. A chunk with no
         targets left after SKIP is dropped (no producer call at all).
 
-        A hyphen unit is NEVER skipped OR escalated (atomicity — a pair
-        split across tiers/producers could not reconcile), so its members
-        always route to the primary producer.
+        A hyphen unit is NEVER skipped (atomicity — a half-skipped pair
+        could not reconcile). It MAY escalate, but only as a whole unit:
+        when any member routes to ESCALATE, every member goes, so the pair
+        reaches one producer together and reconciles normally. A unit whose
+        links leave the page (or dangle) cannot be gathered from this
+        page's plan and stays with the primary producer.
 
         When routing is off (default), returns every chunk paired with the
         primary producer unchanged — a byte-identical run.
@@ -1557,11 +1596,20 @@ class CorrectionPipeline:
         skip: set[str] = set()
         escalate: set[str] = set()
         for lm in page.lines:
-            if lm.hyphen_role is not HyphenRole.NONE:
-                continue  # atomicity — never skip OR escalate a hyphen member
             decision = route_line(
                 self.qe_scorer.needs_correction(lm.ocr_text), self.routing_policy
             )
+            if lm.hyphen_role is not HyphenRole.NONE:
+                # Atomicity: a hyphen member is NEVER skipped (a half-skipped
+                # pair could not reconcile). It may still escalate — but only
+                # with its whole unit, so the pair reaches one producer
+                # together. Measured on real 19th-c. press OCR, leaving units
+                # behind was the hybrid's entire residual error.
+                if decision is RoutingDecision.ESCALATE and can_escalate:
+                    unit = _page_local_hyphen_unit(lm, line_by_id)
+                    if unit is not None:
+                        escalate |= unit
+                continue
             if decision is RoutingDecision.SKIP:
                 skip.add(lm.line_id)
             elif decision is RoutingDecision.ESCALATE and can_escalate:

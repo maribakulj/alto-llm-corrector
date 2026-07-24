@@ -83,7 +83,9 @@ class _Text:
     metadata = ProducerMetadata(name="text", implementation="identity")
 
     async def produce(self, payload, *, options):
-        ops = [ReplaceLine(line_id=ln.line_id, text=ln.ocr_text) for ln in payload.lines]
+        ops = [
+            ReplaceLine(line_id=ln.line_id, text=ln.ocr_text) for ln in payload.lines
+        ]
         return EditScript(ops=ops), None
 
 
