@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Real VLM behind the vision seam + a terminal runner
+  (`scripts/providers_multimodal.py`, `scripts/run_vision.py`).**
+  `AnthropicMultimodalClient` implements `MultimodalStructuredClient`, so
+  `VisionEditProducer` can drive an actual Claude model instead of the
+  benchmark's oracle. `run_vision.py` corrects an ALTO/PAGE document end to
+  end from the CLI — **no demo web app, no server** — in `vision` mode
+  (every line) or `--hybrid` (QE routes: skip clean, escalate risky),
+  paired with `GuardConfig.vision()`. Two API details the adapter exists to
+  get right: structured output uses `output_config.format` (schema enforced
+  server-side, no forced-tool-call trick), and **`temperature` is rejected
+  with HTTP 400 on current models** (Opus 5, Opus 4.8/4.7, Sonnet 5,
+  Fable/Mythos) — so the engine's retry ramp (0.0 → 0.3 → 0.5) cannot be
+  forwarded. The adapter drops it for those models and *records* that it
+  did, rather than 400-ing every retry or pretending the ramp took effect;
+  on such a model a retry is byte-identical to the attempt before it, which
+  is a real limitation of the ramp, made visible. A safety refusal
+  (`stop_reason: "refusal"`) returns no lines so the chunk falls back to OCR
+  text instead of crashing. Tooling, not library API: vendor specifics stay
+  out of the pixel-blind core (promoting provider adapters into
+  `corrigenda[anthropic|…]` remains a Phase-5 item). Tests stub the SDK, so
+  the request shape is asserted with no network call and no API key.
+
 ### Fixed
 
 - **A hyphen unit now escalates as a WHOLE unit (ROADMAP V3 Phase 4).**

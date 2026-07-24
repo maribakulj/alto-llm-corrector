@@ -339,7 +339,18 @@ Le grand chantier de la revue, enfin outillé. Dépend de la Phase 2.
       dégradée (121/522 lignes déjà correctes) il y a peu à économiser :
       l'hybride paie sur de l'OCR MAJORITAIREMENT PROPRE, où le tier SKIP
       travaille — c'est cette configuration qu'il faut mesurer pour la thèse
-      de coût. *Reste* : le run avec de VRAIS fournisseurs LLM/VLM.
+      de coût. *VRAI VLM câblé* : `scripts/providers_multimodal.py`
+      (`AnthropicMultimodalClient` implémente `MultimodalStructuredClient` —
+      sortie structurée via `output_config.format`, crops en blocs image
+      base64 étiquetés par `line_id`, refus `stop_reason:"refusal"` → repli
+      OCR) + `scripts/run_vision.py`, CLI de bout en bout **sans serveur**
+      (mode vision ou `--hybrid`, avec `GuardConfig.vision()`).
+      **Piège API traité** : `temperature` est REJETÉ (400) sur les modèles
+      actuels (Opus 5, Opus 4.8/4.7, Sonnet 5, Fable/Mythos) — la rampe de
+      retry du moteur (0.0/0.3/0.5) ne peut pas être transmise ; l'adaptateur
+      la retire ET le signale (sur ces modèles un retry est byte-identique :
+      limite réelle de la rampe, rendue visible). *Reste* : le run facturé
+      avec une vraie clé (coût/latence réels).
 - [ ] `CandidateSet` émergera ici, du besoin concret de candidats concurrents
       (règles/texte/vision) — pas avant.
 
