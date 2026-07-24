@@ -9,6 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Real-corpus extractor for QE calibration
+  (`scripts/extract_press19_corpus.py`).** Derives the clean
+  target-register text `fit_qe_calibration.py` needs from a **ground-truth
+  ALTO corpus**, replacing the 18-line hand-written press pastiche the
+  19th-c. constants were fit on. Four filters, each measured against a
+  37-page BNL Luxembourg press GT set (522 lines → 178 French kept):
+  **language** (heritage press is often bilingual — 312 French / 140
+  German there; fitting a French model on German text inflates its
+  surprisal on clean input and corrupts the Platt midpoint; `--lang de`
+  extracts the German side for a German bundle), **hyphenation** (127
+  hyphen-unit members are word fragments — a masked LM would score the
+  truncation, not the language; dropped, never joined), **length** and
+  **digits** (`Wiltz;`, `19694 74` carry no linguistic signal). Text is
+  taken verbatim: period orthography is never normalised (rule 3), and the
+  extracted units are OCR *lines*, matching what the scorer sees at
+  runtime. Language detection is a dependency-free function-word vote plus
+  German orthographic markers. This removes the *pastiche* half of the
+  provisional-calibration caveat; the degradations remain scripted.
 - **Vision benchmark harness (ROADMAP V3 Phase 4).**
   `scripts/vision_benchmark.py` measures text vs vision vs hybrid on a
   paired image+ALTO ground-truth corpus: it degrades each GT line into a

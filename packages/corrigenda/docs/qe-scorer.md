@@ -100,13 +100,48 @@ fp tolerance, identical argmax).
 The D'AlemBERT (16–18th c.) constants are the module defaults, so its
 bundle needs no `calibration` block.
 
+### Getting a real clean corpus for step 3
+
+`fit_qe_calibration.py --sentences` wants clean target-register text, one
+line per line. `extract_press19_corpus.py` derives exactly that from a
+**ground-truth ALTO corpus** (human transcription, not OCR), so the fit
+sees genuine period press instead of pastiche:
+
+```bash
+python scripts/extract_press19_corpus.py \
+    --corpus /path/to/gt-corpus --lang fr --out scripts/data/press19_real.txt
+python scripts/fit_qe_calibration.py \
+    --model-dir ~/.cache/corrigenda/camembert-onnx \
+    --sentences scripts/data/press19_real.txt --reducer max --write
+```
+
+It applies four filters, each mattering for calibration (counts from a
+37-page BNL Luxembourg press GT set, 522 lines → 178 kept):
+
+- **language** — heritage press is often BILINGUAL (that set: 312 French /
+  140 German lines). Fitting a *French* model on German text inflates its
+  surprisal on clean input and corrupts the Platt midpoint. `--lang de`
+  extracts the other side (130 lines there) for a German bundle.
+- **hyphenation** — line-final hyphen units are word fragments
+  (`contradic-`); a masked LM would score the truncation, not the
+  language. Dropped, never joined (tooling does not merge lines either).
+- **length** / **digits** — `Wiltz;`, `19694 74`: no linguistic signal.
+
+Text is taken verbatim — period orthography is never normalised (rule 3),
+so the fit sees what the scorer sees at runtime. The units are OCR
+*lines*, which is the right shape: the scorer scores lines too.
+
 ## Honest limitations
 
 - Calibration constants shipped for 19th-c. press are **provisional**: fit
   on scripted OCR degradations of hand-written press pastiche, not a real
   labelled corpus. Token AUC (ranking) is meaningful; the absolute
-  thresholds should be refit on real Gallica/BnF press (ROADMAP Phase 2)
-  before trusting SKIP/ESCALATE bounds in production.
+  thresholds should be refit before trusting SKIP/ESCALATE bounds in
+  production. `extract_press19_corpus.py` (above) now removes the *pastiche*
+  half of that caveat — point it at a GT press corpus and refit. What stays
+  provisional either way: the degradations are still **scripted**, not real
+  OCR errors, so a corpus shipping raw OCR beside its GT would be the last
+  upgrade.
 - Pseudo-perplexity costs one masked forward pass per subword (batched per
   line). It is a QE gate that *saves* expensive LLM calls, but it is not
   free; batch across lines for throughput.
