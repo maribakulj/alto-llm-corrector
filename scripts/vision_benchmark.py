@@ -1,18 +1,25 @@
 """Vision benchmark harness — text vs vision vs hybrid (ROADMAP V3 Phase 4, 7).
 
 Measures whether a vision producer earns its cost on a REAL image+ALTO
-ground-truth corpus. The method is honest about what is synthetic and what
-is real:
+ground-truth corpus. The scans and the reference are always real (the ALTO
+``CONTENT`` of a GT corpus is a human transcription); what varies is where
+the INPUT text comes from:
 
-  * REAL: the page images (scans) and the ground-truth transcription
-    (the ALTO ``CONTENT``), from a paired ``NNNN.xml`` / ``NNNN.png``
-    corpus (e.g. the BNL 19th-c. press GT: ALTO v4, ``MeasurementUnit
-    mm10``, scans at 300 DPI so the XML→pixel transform is a uniform
-    ``dpi/254`` ≈ 1.1811 scale — verified on the corpus).
-  * SYNTHETIC: the OCR *errors*. Each GT line is degraded into a plausible
-    OCR reading by the same deterministic, RNG-free scripted degrader the
-    Phase-2 QE data uses (``scripts/qe_data.degrade_token``); the degraded
-    text is the pipeline INPUT, the GT is the reference.
+  * ``--ocr sidecar.json`` (**preferred**) — REAL OCR of the corpus's own
+    line images, produced by ``scripts/ocr_corpus.py`` (Tesseract, one crop
+    per GT line). Nothing in the measurement is synthetic then: real scans,
+    real OCR errors, human reference. Real OCR fails in ways no
+    substitution table reproduces — merged words, dropped characters,
+    apostrophe drift, hallucinated glyphs.
+  * default — SYNTHETIC errors: each GT line is degraded by the
+    deterministic, RNG-free scripted degrader the Phase-2 QE data uses
+    (``scripts/qe_data.degrade_token``). Useful when no OCR engine is
+    available; the report's ``input`` block always says which was used.
+
+The corpus is a paired ``NNNN.xml`` / ``NNNN.png`` set (e.g. the BNL
+19th-c. press GT: ALTO v4, ``MeasurementUnit mm10``, scans at 300 DPI so
+the XML→pixel transform is a uniform ``dpi/254`` ≈ 1.1811 scale — verified
+on the corpus).
 
 Three configurations correct the degraded input and are scored by
 character error rate (CER) against the GT, alongside the real call cost
@@ -32,7 +39,8 @@ swap in real LLM/VLM providers for a production benchmark.
 
 Usage::
 
-    python scripts/vision_benchmark.py --corpus /path/to/"37 GT BNL" --dpi 300
+    python scripts/ocr_corpus.py --corpus /path/to/GT --lang fra --out ocr.json
+    python scripts/vision_benchmark.py --corpus /path/to/GT --ocr ocr.json
 """
 
 from __future__ import annotations
@@ -102,6 +110,31 @@ def corpus_cer(pairs: list[tuple[str, str]]) -> float:
 # ---------------------------------------------------------------------------
 # Degradation: GT manifest -> degraded-input manifest (+ GT reference)
 # ---------------------------------------------------------------------------
+
+
+def apply_ocr_manifest(
+    doc: DocumentManifest, readings: dict[str, str]
+) -> tuple[DocumentManifest, dict[tuple[str, str], str]]:
+    """Same contract as :func:`degrade_manifest`, but the input text comes
+    from a REAL OCR engine (``scripts/ocr_corpus.py``) instead of scripted
+    degradation — the last synthetic ingredient removed.
+
+    ``readings`` maps ``line_id -> raw OCR text`` for THIS file (line_ids
+    are unique per source file). A line the engine returned nothing for
+    keeps its GT text and is reported by the caller: an empty reading is a
+    real OCR outcome, but silently treating it as a correct line would
+    flatter every configuration equally.
+    """
+    gt_by_line: dict[tuple[str, str], str] = {}
+    ocred = doc.model_copy(deep=True)
+    doc_id = ocred.document_id
+    for page in ocred.pages:
+        for line in page.lines:
+            gt_by_line[(doc_id, line.line_id)] = line.ocr_text
+            raw = readings.get(line.line_id)
+            if raw:
+                line.ocr_text = raw
+    return ocred, gt_by_line
 
 
 def degrade_manifest(
@@ -262,12 +295,35 @@ async def run_config(
 # ---------------------------------------------------------------------------
 
 
-def benchmark(corpus_dir: Path, *, dpi: float, seed: int, rate_percent: int) -> dict:
-    """Run the three configurations over the corpus and return the report."""
+def benchmark(
+    corpus_dir: Path,
+    *,
+    dpi: float,
+    seed: int,
+    rate_percent: int,
+    ocr_sidecar: Path | None = None,
+) -> dict:
+    """Run the three configurations over the corpus and return the report.
+
+    ``ocr_sidecar`` (from ``scripts/ocr_corpus.py``) makes the INPUT real
+    OCR instead of scripted degradation — with it, nothing in the
+    measurement is synthetic: real scans, real OCR errors, human reference.
+    """
     xmls = sorted(p for p in corpus_dir.glob("*.xml"))
     docs: list[tuple[DocumentManifest, dict[str, Path], dict[str, ImageAsset]]] = []
     gt: dict[tuple[str, str], str] = {}
     baseline_pairs: list[tuple[str, str]] = []
+
+    ocr_by_file: dict[str, dict[str, str]] = {}
+    ocr_meta: dict = {}
+    if ocr_sidecar is not None:
+        payload = json.loads(ocr_sidecar.read_text(encoding="utf-8"))
+        ocr_by_file = payload.get("ocr", {})
+        ocr_meta = {
+            "engine": payload.get("engine"),
+            "lang": payload.get("lang"),
+            "lines": payload.get("lines"),
+        }
 
     noisy_texts: set[str] = set()
     scale = dpi / _MM10_PER_INCH
@@ -276,9 +332,12 @@ def benchmark(corpus_dir: Path, *, dpi: float, seed: int, rate_percent: int) -> 
         if not png.exists():
             continue
         clean = build_document_manifest([(xml, xml.name)])
-        degraded, gt_part = degrade_manifest(
-            clean, seed=seed, rate_percent=rate_percent
-        )
+        if ocr_sidecar is not None:
+            degraded, gt_part = apply_ocr_manifest(clean, ocr_by_file.get(xml.name, {}))
+        else:
+            degraded, gt_part = degrade_manifest(
+                clean, seed=seed, rate_percent=rate_percent
+            )
         gt.update(gt_part)
         images = {
             page.page_id: ImageAsset(
@@ -330,8 +389,14 @@ def benchmark(corpus_dir: Path, *, dpi: float, seed: int, rate_percent: int) -> 
         "lines": results[0].lines,
         "dpi": dpi,
         "mm10_to_px_scale": round(scale, 4),
-        "seed": seed,
-        "rate_percent": rate_percent,
+        # What produced the INPUT text: a real OCR engine, or the scripted
+        # degrader (then seed/rate apply). Stated so a report can never be
+        # mistaken for the other kind of measurement.
+        "input": (
+            {"source": "real_ocr", **ocr_meta}
+            if ocr_sidecar is not None
+            else {"source": "scripted_degradation", "seed": seed, "rate": rate_percent}
+        ),
         "baseline_cer": round(corpus_cer(baseline_pairs), 4),
         "configs": [
             {
@@ -364,11 +429,22 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--dpi", type=float, default=300.0)
     parser.add_argument("--seed", type=int, default=1837)
     parser.add_argument("--rate", type=int, default=30, help="degradation %%")
+    parser.add_argument(
+        "--ocr",
+        type=Path,
+        default=None,
+        help="sidecar from scripts/ocr_corpus.py — use REAL OCR as the input "
+        "instead of scripted degradation",
+    )
     parser.add_argument("--out", type=Path, default=None)
     args = parser.parse_args(argv)
 
     report = benchmark(
-        args.corpus, dpi=args.dpi, seed=args.seed, rate_percent=args.rate
+        args.corpus,
+        dpi=args.dpi,
+        seed=args.seed,
+        rate_percent=args.rate,
+        ocr_sidecar=args.ocr,
     )
     payload = json.dumps(report, indent=2, ensure_ascii=False)
     if args.out:

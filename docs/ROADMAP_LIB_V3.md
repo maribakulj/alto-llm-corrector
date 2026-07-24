@@ -316,9 +316,23 @@ Le grand chantier de la revue, enfin outillé. Dépend de la Phase 2.
       seules les erreurs OCR sont synthétiques. Run de plomberie (oracles,
       hors-ligne, 522 crops réels) : baseline CER 0.0463, texte 0.0321, vision
       0.0005, hybride 0.0073 en n'escaladant que 326/522 lignes.
-      *Reste* : le run avec de VRAIS fournisseurs LLM/VLM (coût réel, cassette),
-      et idéalement un corpus livrant l'OCR brut à côté du GT (dernier
-      ingrédient synthétique éliminé).
+      *OCR RÉELLE (dernier ingrédient synthétique éliminé)* :
+      `scripts/ocr_corpus.py` fait tourner un VRAI moteur (Tesseract) sur les
+      crops de ligne du GT — appariement exact par construction (un crop par
+      ligne GT via notre propre `crop_region`, `--psm 7`), donc aucun
+      alignement. Deux qualités : `fra` (CER 0.102, 121/522 lignes exactes) et
+      `spa` volontairement faux (CER 0.105, 78/522) — de vraies erreurs
+      (`Oume`, `Ventente`, `Qw'il`) qu'aucune table de substitution ne
+      reproduit. `vision_benchmark.py --ocr` consomme le sidecar : **plus rien
+      n'est synthétique** (scans réels, OCR réelle, référence humaine).
+      Mesuré (OCR fra réelle, VLM oracle) : baseline 0.1018, texte 0.1018
+      (les règles ne corrigent RIEN sur ce matériau — cohérent avec OCR17+),
+      vision 0.0021, hybride 0.0083 en escaladant 316/522.
+      **Découverte** : tout le résidu de l'hybride EST les unités de césure
+      jamais escaladées (prédit 0.0079 / mesuré 0.0083) → escalader une unité
+      de césure EN BLOC (les deux membres au VLM) préserverait l'atomicité et
+      supprimerait le résidu. *Reste* : le run avec de VRAIS fournisseurs
+      LLM/VLM (coût réel, cassette).
 - [ ] `CandidateSet` émergera ici, du besoin concret de candidats concurrents
       (règles/texte/vision) — pas avant.
 

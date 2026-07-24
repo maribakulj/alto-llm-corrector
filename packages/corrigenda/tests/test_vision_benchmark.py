@@ -122,6 +122,27 @@ def _one_doc(seed=1837, rate=80):
     return docs, gt, noisy
 
 
+def test_apply_ocr_manifest_replaces_input_and_keeps_gt():
+    """Real-OCR mode: the manifest's text becomes the engine's reading, the
+    GT is captured as the reference, geometry is untouched."""
+    doc = build_document_manifest([(_SAMPLE, _SAMPLE.name)])
+    first = doc.pages[0].lines[0]
+    ocred, gt = vb.apply_ocr_manifest(doc, {first.line_id: "raw OCR reading"})
+    out_first = ocred.pages[0].lines[0]
+    assert out_first.ocr_text == "raw OCR reading"
+    assert gt[(ocred.document_id, first.line_id)] == first.ocr_text
+    assert out_first.coords == first.coords
+
+
+def test_apply_ocr_manifest_keeps_gt_when_engine_returned_nothing():
+    """An empty reading is a real OCR outcome; the line keeps its GT text
+    rather than becoming an empty line that would flatter every config."""
+    doc = build_document_manifest([(_SAMPLE, _SAMPLE.name)])
+    first = doc.pages[0].lines[0]
+    ocred, _ = vb.apply_ocr_manifest(doc, {first.line_id: ""})
+    assert ocred.pages[0].lines[0].ocr_text == first.ocr_text
+
+
 @pytest.mark.asyncio
 async def test_vision_beats_identity_text():
     docs, gt, _ = _one_doc()

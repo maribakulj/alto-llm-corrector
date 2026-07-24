@@ -9,6 +9,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Real raw OCR beside the ground truth (`scripts/ocr_corpus.py`).**
+  Removes the last synthetic ingredient from the vision benchmark: it runs
+  a real OCR engine (Tesseract) over a GT corpus's own line images and
+  pairs each reading with its GT line. The pairing is exact by
+  construction — rather than OCR-ing the page and aligning two different
+  segmentations, it OCRs **one crop per GT line**, cut with the library's
+  own `crop_region` from the GT geometry (`--psm 7`), so every reading
+  belongs to a known `(file, line_id)`. Two tiers, both genuine engine
+  output: `--lang fra` (correct engine, CER 0.102) and `--lang spa` (a
+  deliberately wrong language model on French — CER 0.105, 78/522 exact
+  lines), which degrades the way bad OCR degrades (`l'entente` →
+  `Ventente`) rather than the way a substitution table does. Real OCR
+  merges words, invents characters and drifts apostrophes; no scripted
+  table reproduces that. `vision_benchmark.py --ocr <sidecar>` consumes it,
+  and the report's new `input` block always states whether the run used
+  real OCR or scripted degradation. Measured on 37 real pages (real OCR
+  input, oracle VLM): baseline 0.1018, text 0.1018, vision 0.0021, hybrid
+  0.0083 escalating 316/522 lines. Two honest findings: the rules producer
+  corrects **nothing** on 19th-c. press OCR (its table targets early-modern
+  typography — a safe no-op, zero false positives), and the hybrid's entire
+  residual error is the **hyphen units it refuses to escalate** (predicted
+  0.0079 from their raw-OCR CER, measured 0.0083), which quantifies the
+  atomicity trade-off and points at escalating a hyphen unit as a unit.
+  Tesseract is not a project dependency: the sidecar is generated offline
+  and its tests self-skip when the engine is absent.
 - **Real-corpus extractor for QE calibration
   (`scripts/extract_press19_corpus.py`).** Derives the clean
   target-register text `fit_qe_calibration.py` needs from a **ground-truth
