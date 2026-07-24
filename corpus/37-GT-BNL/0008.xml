@@ -1,0 +1,63 @@
+<alto xmlns="http://www.loc.gov/standards/alto/ns-v4#" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.loc.gov/standards/alto/ns-v4# http://www.loc.gov/standards/alto/v4/alto-4-1.xsd">
+  <Description>
+    <MeasurementUnit>mm10</MeasurementUnit>
+    <sourceImageInformation>
+      <fileName>./ALTO00002-P2_TB00022.tif</fileName>
+    </sourceImageInformation>
+  </Description>
+  <Layout>
+    <Page ID="P_0001" PHYSICAL_IMG_NR="1">
+      <PrintSpace>
+        <TextBlock ID="TB_0001">
+          <TextLine ID="TL_0001" HPOS="33" VPOS="0" WIDTH="726" HEIGHT="41">
+            <String CONTENT="Oh" CC="00" HPOS="34" VPOS="1" WIDTH="34" HEIGHT="26" />
+            <SP />
+            <String CONTENT="carisima," CC="000000000" HPOS="89" VPOS="3" WIDTH="122" HEIGHT="28" />
+            <SP />
+            <String CONTENT="habt" CC="0000" HPOS="242" VPOS="1" WIDTH="55" HEIGHT="32" />
+            <SP />
+            <String CONTENT="Ihr" CC="000" HPOS="325" VPOS="1" WIDTH="49" HEIGHT="32" />
+            <SP />
+            <String CONTENT="einen" CC="00000" HPOS="407" VPOS="6" WIDTH="65" HEIGHT="26" />
+            <SP />
+            <String CONTENT="alten" CC="00000" HPOS="492" VPOS="7" WIDTH="62" HEIGHT="25" />
+            <SP />
+            <String CONTENT="Bekannten" CC="000000000" HPOS="575" VPOS="7" WIDTH="141" HEIGHT="31" />
+            <SP />
+            <String CONTENT="so" CC="00" HPOS="738" VPOS="12" WIDTH="21" HEIGHT="28" />
+          </TextLine>
+          <TextLine ID="TL_0002" HPOS="0" VPOS="43" WIDTH="760" HEIGHT="41">
+            <String CONTENT="ganz" CC="0000" HPOS="0" VPOS="44" WIDTH="58" HEIGHT="32" />
+            <SP />
+            <String CONTENT="vergessen?" CC="0000000000" HPOS="77" VPOS="46" WIDTH="133" HEIGHT="32" />
+            <SP />
+            <String CONTENT="fragte" CC="000000" HPOS="248" VPOS="47" WIDTH="76" HEIGHT="31" />
+            <SP />
+            <String CONTENT="der" CC="000" HPOS="342" VPOS="52" WIDTH="37" HEIGHT="21" />
+            <SP />
+            <String CONTENT="Fremde" CC="000000" HPOS="397" VPOS="49" WIDTH="94" HEIGHT="32" />
+            <SP />
+            <String CONTENT="kopfschüttelnd" CC="00000000000000" HPOS="513" VPOS="50" WIDTH="179" HEIGHT="33" />
+            <SP />
+            <String CONTENT="und" CC="000" HPOS="711" VPOS="60" WIDTH="49" HEIGHT="23" />
+          </TextLine>
+          <TextLine ID="TL_0003" HPOS="0" VPOS="86" WIDTH="679" HEIGHT="36">
+            <String CONTENT="mit" CC="000" HPOS="1" VPOS="87" WIDTH="38" HEIGHT="25" />
+            <SP />
+            <String CONTENT="einem" CC="00000" HPOS="61" VPOS="88" WIDTH="71" HEIGHT="23" />
+            <SP />
+            <String CONTENT="freundlichen" CC="000000000000" HPOS="152" VPOS="88" WIDTH="155" HEIGHT="28" />
+            <SP />
+            <String CONTENT="Vorwurf" CC="0000000" HPOS="326" VPOS="90" WIDTH="120" HEIGHT="28" />
+            <SP />
+            <String CONTENT="in" CC="00" HPOS="465" VPOS="94" WIDTH="23" HEIGHT="23" />
+            <SP />
+            <String CONTENT="der" CC="000" HPOS="508" VPOS="98" WIDTH="38" HEIGHT="21" />
+            <SP />
+            <String CONTENT="Stimme." CC="0000000" HPOS="567" VPOS="95" WIDTH="111" HEIGHT="27" />
+          </TextLine>
+        </TextBlock>
+      </PrintSpace>
+    </Page>
+  </Layout>
+</alto>
