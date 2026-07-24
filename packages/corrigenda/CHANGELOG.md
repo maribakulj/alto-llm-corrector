@@ -9,6 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`GuardConfig.vision()` — the VLM guard profile (ROADMAP V3 Phase 4,
+  §5.2 bis).** A preset a host passes alongside a `VisionEditProducer`:
+  it relaxes ONLY the Stage-C source-similarity floor
+  (`min_source_similarity` 0.35 → 0.15) because a VLM reads the image, not
+  the OCR, so a correct reading of a badly-garbled line diverges further
+  from the source than a text model's would and the text default would
+  reject it. Every inter-line migration guard — neighbour proximity,
+  absorption, hyphen-pair drift, duplication — keeps its text default: a
+  VLM must no more merge or move lines than a text model. The relaxed
+  floor is not 0.0 (a producer that ignores the image and invents an
+  unrelated line is still caught) and is **provisional** until the Phase-4
+  vision benchmark refits it; an explicit override always wins
+  (`GuardConfig.vision(min_source_similarity=0.22)`). Like every
+  `GuardConfig`, it carries its values into the composite fingerprint, so
+  choosing the profile is a structurally recorded decision, not a hidden
+  mode. The library default is unchanged (opt-in), so runs without it stay
+  byte-identical.
 - **`VisionEditProducer` — the `corrigenda[vision]` extra, part 2 (ROADMAP
   V3 Phase 4).** ``integrations.vision.VisionEditProducer`` adapts a
   multimodal provider to the ``EditProducer`` contract: for each target

@@ -4,7 +4,7 @@ import hashlib
 import json
 import uuid
 from enum import Enum
-from typing import Literal
+from typing import Any, ClassVar, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validator
 
@@ -309,10 +309,13 @@ class GuardConfig(FrozenPolicy):
     Every default equals the pre-F13 constant, so ``GuardConfig()`` is
     byte-for-byte compatible with the historical behaviour.
 
-    A future ``GuardConfig.vision()`` profile (spec §5.2 bis / v2.x) will
-    relax the *source-similarity* stage for VLM producers while keeping
-    the inter-line migration guards intact — not shipped until a vision
-    producer benchmarks it.
+    The ``GuardConfig.vision()`` profile (spec §5.2 bis, ROADMAP V3 Phase 4)
+    relaxes the *source-similarity* stage for VLM producers while keeping
+    every inter-line migration guard intact — a VLM reads the image, not
+    the OCR, so a legitimate correction of a badly-garbled line diverges
+    far more from the source than a text model's would, and the text
+    default (0.35) would reject it. Its relaxed threshold is PROVISIONAL
+    until the Phase-4 vision benchmark refits it on real image data.
     """
 
     # --- Stage C: line-level acceptance (line_acceptance.check_line) ---
@@ -387,6 +390,37 @@ class GuardConfig(FrozenPolicy):
     #: rewrite costs its real size, not 0. Generous by default; a rules
     #: pre-pass makes small, local edits well under it.
     edit_line_max_changed_chars: int = Field(default=200, ge=0)
+
+    #: Provisional relaxed source-similarity floor for the vision profile
+    #: (spec §5.2 bis). Lower than the text default (0.35) because a VLM
+    #: correction of a badly-garbled line legitimately diverges further
+    #: from the OCR source; NOT 0.0, so a producer that ignores the image
+    #: and invents an unrelated line is still caught. To be refit on the
+    #: Phase-4 vision benchmark (roadmap) — until then it is a safe default,
+    #: not a calibrated one.
+    _VISION_MIN_SOURCE_SIMILARITY: ClassVar[float] = 0.15
+
+    @classmethod
+    def vision(cls, **overrides: Any) -> "GuardConfig":
+        """The VLM guard profile (§5.2 bis, ROADMAP V3 Phase 4).
+
+        Relaxes ONLY the Stage-C source-similarity floor
+        (:attr:`min_source_similarity`); every inter-line migration guard
+        — neighbour proximity, absorption, hyphen-pair drift, duplication
+        — keeps its text default, because a VLM must no more merge or move
+        lines than a text model. An explicit override always wins, so a
+        host that has run the vision benchmark can pin its own calibrated
+        floor: ``GuardConfig.vision(min_source_similarity=0.22)``.
+
+        Like every :class:`GuardConfig`, the result carries its values into
+        the composite fingerprint (§8.2) — choosing the vision profile is a
+        structurally recorded decision, not a hidden mode.
+        """
+        params: dict[str, Any] = {
+            "min_source_similarity": cls._VISION_MIN_SOURCE_SIMILARITY
+        }
+        params.update(overrides)
+        return cls(**params)
 
 
 #: Module-level default reused wherever a caller passes no GuardConfig, so

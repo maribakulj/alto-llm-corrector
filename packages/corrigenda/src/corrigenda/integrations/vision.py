@@ -357,6 +357,13 @@ class VisionEditProducer:
 
     The core stays pixel-blind: it forwards an opaque asset and never opens
     it; every pixel touched here goes through :func:`crop_region`.
+
+    Pair it with the VLM guard profile — a VLM reads the image, not the
+    OCR, so a correct reading of a badly-garbled line diverges further from
+    the source than the text guard tolerates::
+
+        CorrectionPipeline(producer=VisionEditProducer(...),
+                           guard_config=GuardConfig.vision())
     """
 
     wants_geometry: bool = True

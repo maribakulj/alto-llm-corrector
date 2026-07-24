@@ -271,9 +271,17 @@ Le grand chantier de la revue, enfin outillé. Dépend de la Phase 2.
       crop voyage en `ImagePart` avec son sha256 (hash du crop lié au
       `line_id`) ; l'image porte son sha256. *Reste* : estamper ces hashes dans
       le `CorrectionReport` (nouveau champ de provenance additif).
-- [ ] **Gardes vision** (profil `GuardConfig.vision()` réservé dans le code) :
-      anti-hallucination visuelle, repli vers OCR ou revue si image
-      absente/ambiguë.
+- [~] **Gardes vision** (profil `GuardConfig.vision()`) : anti-hallucination
+      visuelle, repli vers OCR ou revue si image absente/ambiguë.
+      *Livré* : `GuardConfig.vision()` relâche la SEULE étape de
+      similarité-source (0.35→0.15, un VLM lit l'image donc une correction
+      légitime diverge plus de l'OCR) en gardant intactes toutes les gardes
+      anti-migration inter-lignes ; plancher ≠ 0 (un VLM qui invente une ligne
+      sans rapport reste attrapé), PROVISOIRE avant le benchmark vision,
+      override explicite possible, fingerprinté (décision structurelle). Défaut
+      inchangé (opt-in). *Reste* : repli image-absente/ambiguë côté producteur
+      (le prompt impose déjà « en cas d'image illisible, conserve l'OCR ») et
+      calibration du plancher sur le benchmark.
 - [ ] **Registre `ModelCapabilities`** (text/vision/structured_output/
       max_images/context) alimentant le router — le VLM n'est qu'un producteur
       de plus, routé vers les seules lignes où il vaut son coût.
