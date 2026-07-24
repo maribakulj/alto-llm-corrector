@@ -1,9 +1,11 @@
-"""Anthropic multimodal client (scripts/providers_multimodal.py).
+"""Multimodal clients (scripts/providers_multimodal.py).
 
-Offline: a stub stands in for the SDK client, so the request the adapter
-BUILDS is asserted without a network call or an API key. The behaviour that
-matters here is the wire shape — image blocks, structured-output config,
-and the temperature gate that keeps current models from 400-ing.
+Offline: a stub SDK (Anthropic) and a mock transport (Mistral) stand in for
+the network, so the request each adapter BUILDS is asserted without a call
+or an API key. What matters here is the wire shape — image blocks,
+structured-output config, the temperature gate that keeps current Claude
+models from 400-ing, and the invariant that a key never leaves the
+Authorization header.
 """
 
 from __future__ import annotations
@@ -201,3 +203,129 @@ def test_refusal_returns_no_lines_rather_than_crashing():
     parsed, usage = _call(client)
     assert parsed == {"lines": []}
     assert usage is None
+
+
+# ---------------------------------------------------------------------------
+# Mistral (Pixtral) — same seam, different wire shape
+# ---------------------------------------------------------------------------
+
+httpx = pytest.importorskip("httpx")
+
+_OK_BODY = {
+    "id": "cmpl-1",
+    "usage": {"prompt_tokens": 50, "completion_tokens": 9},
+    "choices": [
+        {
+            "message": {
+                "content": json.dumps(
+                    {"lines": [{"line_id": "l1", "corrected_text": "Bonjour"}]}
+                )
+            }
+        }
+    ],
+}
+
+
+def _mistral(handler):
+    return pm.MistralMultimodalClient(transport=httpx.MockTransport(handler))
+
+
+def _call_mistral(client, *, model="pixtral-12b-2409", temperature=0.0, api_key="K"):
+    return asyncio.run(
+        client.complete_structured_multimodal(
+            api_key=api_key,
+            model=model,
+            system_prompt="sys",
+            user_payload={"lines": [{"line_id": "l1", "ocr_text": "Bonjovr"}]},
+            images=[_part("l1", b"\x89PNG!")],
+            json_schema={"name": "x", "schema": {"type": "object"}},
+            temperature=temperature,
+        )
+    )
+
+
+def test_mistral_key_rides_only_the_auth_header():
+    """The key must never reach the request BODY (bodies get logged and
+    echoed far more casually than headers)."""
+    seen: dict = {}
+
+    def handler(request):
+        seen["auth"] = request.headers.get("Authorization")
+        seen["body"] = request.content.decode()
+        return httpx.Response(200, json=_OK_BODY)
+
+    _call_mistral(_mistral(handler), api_key="SECRET-abc123")
+    assert seen["auth"] == "Bearer SECRET-abc123"
+    assert "SECRET-abc123" not in seen["body"]
+
+
+def test_mistral_sends_images_as_data_uri_blocks():
+    seen: dict = {}
+
+    def handler(request):
+        seen["body"] = json.loads(request.content)
+        return httpx.Response(200, json=_OK_BODY)
+
+    _call_mistral(_mistral(handler))
+    blocks = seen["body"]["messages"][1]["content"]
+    image = next(b for b in blocks if b["type"] == "image_url")
+    prefix = "data:image/png;base64,"
+    assert image["image_url"].startswith(prefix)
+    assert base64.standard_b64decode(image["image_url"][len(prefix) :]) == b"\x89PNG!"
+    # System prompt is its own message, OCR payload is the last text block.
+    assert seen["body"]["messages"][0]["role"] == "system"
+    assert json.loads(blocks[-1]["text"])["lines"][0]["line_id"] == "l1"
+
+
+def test_mistral_forwards_temperature():
+    """Unlike current Claude models, Mistral accepts it — so the engine's
+    retry ramp actually applies here."""
+    seen: dict = {}
+
+    def handler(request):
+        seen["body"] = json.loads(request.content)
+        return httpx.Response(200, json=_OK_BODY)
+
+    client = _mistral(handler)
+    _call_mistral(client, temperature=0.3)
+    assert seen["body"]["temperature"] == 0.3
+    assert client.dropped_temperature is False
+
+
+def test_mistral_falls_back_to_json_object_on_400():
+    """A model that rejects the strict schema still gets a usable request —
+    the same two-step the demo backend's text path uses."""
+    attempts: list[str] = []
+
+    def handler(request):
+        body = json.loads(request.content)
+        attempts.append(body["response_format"]["type"])
+        if len(attempts) == 1:
+            return httpx.Response(400, json={"message": "schema unsupported"})
+        return httpx.Response(200, json=_OK_BODY)
+
+    parsed, _ = _call_mistral(_mistral(handler))
+    assert attempts == ["json_schema", "json_object"]
+    assert parsed["lines"][0]["corrected_text"] == "Bonjour"
+
+
+def test_mistral_parses_usage():
+    parsed, usage = _call_mistral(
+        _mistral(lambda r: httpx.Response(200, json=_OK_BODY))
+    )
+    assert parsed["lines"][0]["corrected_text"] == "Bonjour"
+    assert usage.input_tokens == 50 and usage.output_tokens == 9
+    assert usage.response_ids == ["cmpl-1"]
+
+
+def test_mistral_lists_live_models():
+    """Model IDs are discovered with the caller's own key, not guessed."""
+
+    def handler(request):
+        assert request.url.path == "/v1/models"
+        return httpx.Response(
+            200, json={"data": [{"id": "pixtral-12b-2409"}, {"id": "mistral-small"}]}
+        )
+
+    ids = asyncio.run(_mistral(handler).list_models("K"))
+    assert ids == ["pixtral-12b-2409", "mistral-small"]

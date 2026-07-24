@@ -9,14 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Real VLM behind the vision seam + a terminal runner
+- **Real VLMs behind the vision seam + a terminal runner
   (`scripts/providers_multimodal.py`, `scripts/run_vision.py`).**
-  `AnthropicMultimodalClient` implements `MultimodalStructuredClient`, so
-  `VisionEditProducer` can drive an actual Claude model instead of the
-  benchmark's oracle. `run_vision.py` corrects an ALTO/PAGE document end to
-  end from the CLI — **no demo web app, no server** — in `vision` mode
-  (every line) or `--hybrid` (QE routes: skip clean, escalate risky),
-  paired with `GuardConfig.vision()`. Two API details the adapter exists to
+  `AnthropicMultimodalClient` (Claude, official SDK) and
+  `MistralMultimodalClient` (Pixtral / multimodal Mistral, raw HTTP —
+  images as `image_url` data URIs, `response_format: json_schema` with the
+  backend's `json_object` fallback, plus `list_models` so a model ID is
+  discovered with the caller's key rather than guessed) both implement
+  `MultimodalStructuredClient`, so `VisionEditProducer` can drive an actual
+  model instead of the benchmark's oracle. `run_vision.py --provider
+  anthropic|mistral` corrects an ALTO/PAGE document end to end from the CLI
+  — **no demo web app, no server** — in `vision` mode (every line) or
+  `--hybrid` (QE routes: skip clean, escalate risky), paired with
+  `GuardConfig.vision()`. **API keys are read from the environment and are
+  never a CLI flag** (a flag lands in shell history and the process list),
+  never printed, and never placed in a request body — only in the
+  `Authorization` header; the pipeline additionally routes provider errors
+  through `sanitize_error`. Two API details the adapters exist to
   get right: structured output uses `output_config.format` (schema enforced
   server-side, no forced-tool-call trick), and **`temperature` is rejected
   with HTTP 400 on current models** (Opus 5, Opus 4.8/4.7, Sonnet 5,

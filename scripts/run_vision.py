@@ -22,10 +22,17 @@ Pair the run with ``GuardConfig.vision()``: a VLM reads the image, so a
 correct reading of a badly-garbled line diverges further from the OCR text
 than the text-tuned guard tolerates.
 
+The API key is read from the environment (``ANTHROPIC_API_KEY`` /
+``MISTRAL_API_KEY``) and is **never** a command-line flag — a flag would
+land in shell history and in the process list, readable by any other
+process on the machine.
+
 Usage::
 
-    export ANTHROPIC_API_KEY=...
-    python scripts/run_vision.py --xml page.xml --image page.png --out ./corrected
+    export MISTRAL_API_KEY=...            # or ANTHROPIC_API_KEY
+    python scripts/run_vision.py --provider mistral --list-models
+    python scripts/run_vision.py --provider mistral --model pixtral-12b-2409 \\
+        --xml page.xml --image page.png --dpi 300 --out ./corrected
 
 The XML→pixel scale defaults to 1.0 (OCR ran at the scan's resolution).
 For ALTO in ``mm10`` units, pass the scan's DPI with ``--dpi`` — the
@@ -46,6 +53,7 @@ sys.path.insert(0, str(_REPO))
 
 from scripts.providers_multimodal import (  # noqa: E402
     AnthropicMultimodalClient,
+    MistralMultimodalClient,
     supports_temperature,
 )
 
@@ -62,7 +70,18 @@ from corrigenda.producers.rules import (  # noqa: E402
 )
 
 _MM10_PER_INCH = 254.0
-DEFAULT_MODEL = "claude-opus-5"
+
+#: provider → (client class, env var holding the key, default model).
+#: The key ALWAYS comes from the environment: passing it as a CLI flag
+#: would put it in shell history and in the process list.
+PROVIDERS: dict[str, tuple[type, str, str]] = {
+    "anthropic": (AnthropicMultimodalClient, "ANTHROPIC_API_KEY", "claude-opus-5"),
+    "mistral": (
+        MistralMultimodalClient,
+        "MISTRAL_API_KEY",
+        MistralMultimodalClient.DEFAULT_MODEL,
+    ),
+}
 
 
 class _Progress:
@@ -101,8 +120,9 @@ async def main_async(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
 
-    client = AnthropicMultimodalClient()
-    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    client_cls, key_env, _default = PROVIDERS[args.provider]
+    client = client_cls()
+    api_key = os.environ.get(key_env, "")
     vision = VisionEditProducer(
         client,
         api_key,
@@ -133,7 +153,10 @@ async def main_async(args: argparse.Namespace) -> int:
         **kwargs,
     )
 
-    print(f"model={args.model}  mode={'hybrid' if args.hybrid else 'vision'}")
+    print(
+        f"provider={args.provider}  model={args.model}  "
+        f"mode={'hybrid' if args.hybrid else 'vision'}"
+    )
     result = await pipeline.run(
         document_manifest=doc.manifest,
         source_files=doc.source_paths,
@@ -161,10 +184,18 @@ async def main_async(args: argparse.Namespace) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--xml", required=True, help="ALTO or PAGE XML file")
-    parser.add_argument("--image", required=True, help="the page scan")
+    parser.add_argument("--xml", help="ALTO or PAGE XML file")
+    parser.add_argument("--image", help="the page scan")
     parser.add_argument("--out", default="./vision_out", help="output directory")
-    parser.add_argument("--model", default=DEFAULT_MODEL)
+    parser.add_argument("--provider", choices=sorted(PROVIDERS), default="anthropic")
+    parser.add_argument(
+        "--model", default=None, help="defaults to the provider's vision model"
+    )
+    parser.add_argument(
+        "--list-models",
+        action="store_true",
+        help="list the models this key can reach, then exit (Mistral only)",
+    )
     parser.add_argument(
         "--dpi",
         type=float,
@@ -184,10 +215,29 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--escalate-above", type=float, default=0.3)
     args = parser.parse_args(argv)
 
-    if not os.environ.get("ANTHROPIC_API_KEY"):
+    client_cls, key_env, default_model = PROVIDERS[args.provider]
+    if args.model is None:
+        args.model = default_model
+    key = os.environ.get(key_env, "")
+
+    if args.list_models:
+        lister = getattr(client_cls(), "list_models", None)
+        if lister is None:
+            parser.error(f"--list-models is not supported for {args.provider}")
+        if not key:
+            parser.error(f"--list-models needs {key_env} in the environment")
+        for model_id in asyncio.run(lister(key)):
+            print(model_id)
+        return 0
+
+    if not args.xml or not args.image:
+        parser.error("--xml and --image are required (unless --list-models)")
+
+    if not key:
         print(
-            "note: ANTHROPIC_API_KEY is unset — the SDK will try its own "
-            "credential resolution (`ant auth login` profile).",
+            f"note: {key_env} is unset. Export it in your shell — do NOT pass a "
+            "key as a command-line flag (it would land in shell history and in "
+            "the process list).",
             file=sys.stderr,
         )
     if not supports_temperature(args.model):
