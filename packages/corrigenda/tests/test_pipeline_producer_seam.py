@@ -143,6 +143,30 @@ async def test_programming_error_propagates_not_masked_as_ocr_fallback():
 
 
 @pytest.mark.asyncio
+async def test_misdeclared_capabilities_fail_at_startup():
+    """Phase 4 — a producer that wants images but declares vision=False is a
+    start-up ConfigurationError, even when images are supplied (the caps
+    gate runs after require_page_images)."""
+    from corrigenda.core.schemas import ImageAsset, ModelCapabilities
+
+    class _Misdeclared(_VisionProducer):
+        capabilities = ModelCapabilities(vision=False)  # contradicts wants_image
+
+    doc = build_document_manifest([(_SAMPLE, _SAMPLE.name)])
+    pipeline = CorrectionPipeline(producer=_Misdeclared(), observer=_Null())
+    assets = {
+        page.page_id: ImageAsset(page_id=page.page_id, uri="scan://x")
+        for page in doc.pages
+    }
+    with pytest.raises(ConfigurationError, match="vision"):
+        await pipeline.run(
+            document_manifest=doc,
+            source_files={_SAMPLE.name: _SAMPLE},
+            page_images=assets,
+        )
+
+
+@pytest.mark.asyncio
 async def test_vision_producer_without_images_fails_at_startup():
     doc = build_document_manifest([(_SAMPLE, _SAMPLE.name)])
     pipeline = CorrectionPipeline(producer=_VisionProducer(), observer=_Null())

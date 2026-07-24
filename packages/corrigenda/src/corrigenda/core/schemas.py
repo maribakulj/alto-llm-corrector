@@ -953,6 +953,83 @@ class ModelInfo(BaseModel):
     context_window: int | None = None
 
 
+class ModelCapabilities(BaseModel):
+    """What a producer's model can do (ROADMAP V3 Phase 4, §5.2 bis).
+
+    The declarative descriptor the Router reads to send each line only to a
+    producer that can actually serve it — the mechanism by which a VLM is
+    "just another producer", routed to the lines where it earns its cost
+    rather than hardwired for the whole run. A producer MAY declare its own
+    via a ``capabilities`` attribute (the same optional-attribute
+    convention as ``metadata`` / ``requires_full_coverage``); absent means
+    "undeclared, no constraint" (back-compatible).
+
+    ``ModelInfo`` is the CATALOG face of a model (what ``list_models``
+    lists, a host concern); this is the ROUTING face (what the brain
+    checks per line). They overlap on ``structured_output`` / ``context``
+    by design — a host can build one from the other.
+
+    Frozen so a chosen model's capabilities are a stable fact a run can
+    record. The brain is :meth:`can_serve`; it INFORMS the Router, it does
+    not decide (the app decides).
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    #: Can correct from text (OCR + neighbours). Almost always True.
+    text: bool = True
+    #: Can consume page images — the gate a vision producer needs.
+    vision: bool = False
+    #: Supports structured JSON output (the shape every LLM producer here
+    #: asks for). A model without it cannot serve the structured contract.
+    structured_output: bool = True
+    #: Maximum images the model accepts per call; ``None`` = unbounded.
+    #: A vision chunk that would send more crops than this cannot be served
+    #: as one call — the Router/planner must split it (or route elsewhere).
+    max_images: int | None = Field(default=None, ge=0)
+    #: Context window in tokens, when known; ``None`` = unspecified.
+    context: int | None = Field(default=None, gt=0)
+
+    def reason_cannot_serve(
+        self,
+        *,
+        needs_image: bool = False,
+        needs_structured_output: bool = False,
+        image_count: int = 0,
+    ) -> str | None:
+        """Why this model cannot serve a request, or ``None`` when it can.
+
+        A short human-readable reason (the same string a preflight error
+        or a routing log would carry), so the Router can both DECIDE
+        (``can_serve``) and EXPLAIN the exclusion in one call.
+        """
+        if needs_image and not self.vision:
+            return "model has no vision capability"
+        if needs_structured_output and not self.structured_output:
+            return "model does not support structured output"
+        if self.max_images is not None and image_count > self.max_images:
+            return f"needs {image_count} images but model caps at {self.max_images}"
+        return None
+
+    def can_serve(
+        self,
+        *,
+        needs_image: bool = False,
+        needs_structured_output: bool = False,
+        image_count: int = 0,
+    ) -> bool:
+        """True when the model can serve the described request (see
+        :meth:`reason_cannot_serve`)."""
+        return (
+            self.reason_cannot_serve(
+                needs_image=needs_image,
+                needs_structured_output=needs_structured_output,
+                image_count=image_count,
+            )
+            is None
+        )
+
+
 class Usage(BaseModel):
     """Token consumption reported by a producer call (F14, §5.1).
 

@@ -30,7 +30,7 @@ from corrigenda.core.protocols import (
     ProducerOptions,
     StructuredCompletionClient,
 )
-from corrigenda.core.schemas import CorrectionRequest, Usage
+from corrigenda.core.schemas import CorrectionRequest, ModelCapabilities, Usage
 from corrigenda.integrations.llm import (
     OUTPUT_JSON_SCHEMA,
     SYSTEM_PROMPT,
@@ -66,10 +66,17 @@ class LLMEditProducer:
         uncertainty_channel: bool = False,
         lexicon: set[str] | None = None,
         confusions: tuple[tuple[str, str], ...] = DEFAULT_CONFUSIONS,
+        capabilities: ModelCapabilities | None = None,
     ) -> None:
         self._provider = provider
         self._api_key = api_key
         self._model = model
+        #: Phase 4 routing descriptor — a text LLM: structured output, no
+        #: vision. The default is the plain text profile; a host that knows
+        #: the model's real context window can inject a richer one.
+        self.capabilities = capabilities or ModelCapabilities(
+            text=True, vision=False, structured_output=True
+        )
         # Phase 1 uncertainty channel (opt-in): the contract variant asks
         # the model for a per-line status and per-token reason-coded
         # edits; produce() VERIFIES those claims (confusion table /

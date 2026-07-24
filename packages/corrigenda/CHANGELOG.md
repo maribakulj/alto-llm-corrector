@@ -9,6 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`ModelCapabilities` — the routing descriptor (ROADMAP V3 Phase 4,
+  §5.2 bis).** A declarative descriptor (`text` / `vision` /
+  `structured_output` / `max_images` / `context`) the Router reads to send
+  each line only to a producer that can serve it — the mechanism by which
+  a VLM is "just another producer", routed to the lines where it earns its
+  cost rather than hardwired for the whole run. The brain is
+  `can_serve(needs_image=…, needs_structured_output=…, image_count=…)`
+  (and `reason_cannot_serve`, which explains an exclusion): it INFORMS the
+  Router, it does not decide. Producers declare their own via a
+  `capabilities` attribute (the same optional-attribute convention as
+  `metadata`): `LLMEditProducer` a text-only descriptor, `VisionEditProducer`
+  a vision-capable one (both injectable for a model's real context window /
+  image cap). The pipeline preflights it with `require_capabilities` — a
+  producer that wants images but declares `vision=False` is refused at
+  start-up (like `require_page_images`), never a mid-run surprise. Frozen
+  and additive; a producer that declares nothing is unconstrained
+  (back-compatible). `ModelInfo` stays the catalog face of a model; this is
+  the routing face. Per-line producer SELECTION in the pipeline (routing a
+  chunk to a vision producer, honouring `max_images`) is the remaining
+  Router-integration step; the descriptor and `can_serve` are the seam it
+  will consume.
 - **Per-page image digests in the run provenance (ROADMAP V3 Phase 4).**
   ``RunProvenance.image_digests`` (page_id → ``sha256:<hex>``) records the
   exact scan bytes a vision run saw — the mirror of ``source_digests`` for

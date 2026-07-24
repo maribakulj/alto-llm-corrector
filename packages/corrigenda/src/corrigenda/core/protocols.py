@@ -217,8 +217,10 @@ class EditProducer(Protocol):
     Optional declared surfaces (read via ``getattr``, absent is fine —
     deliberately NOT protocol members so third-party producers and the
     ``isinstance`` check stay unaffected): ``requires_full_coverage``
-    (bool, default ``True``) and ``metadata``
-    (:class:`ProducerMetadata` — the producer's provenance identity).
+    (bool, default ``True``), ``metadata``
+    (:class:`ProducerMetadata` — the producer's provenance identity) and
+    ``capabilities`` (:class:`~corrigenda.core.schemas.ModelCapabilities`
+    — what the model can do, read by the Router; absent = unconstrained).
     """
 
     wants_geometry: bool
@@ -277,6 +279,35 @@ def require_page_images(
         raise ConfigurationError(
             "producer requires page images but page_images (keyed by "
             f"page_id) is missing entries for: {missing}"
+        )
+
+
+def require_capabilities(producer: EditProducer) -> None:
+    """Refuse a producer whose declared capabilities contradict its wiring
+    (ROADMAP V3 Phase 4, §5.2 bis).
+
+    A ``capabilities`` declaration is optional (``getattr``, absent = no
+    constraint, back-compatible). When present it must be internally
+    consistent with the producer's edit-protocol flags: a producer that
+    asks for page images (``wants_image=True``) but declares
+    :attr:`~corrigenda.core.schemas.ModelCapabilities.vision` ``= False``
+    is misconfigured — it would crop and send pixels its own model says it
+    cannot read. Caught at start-up, like ``require_page_images``, never as
+    a confusing mid-run provider rejection.
+
+    Per-line producer SELECTION by capability (routing a chunk to a
+    vision-capable producer, honouring ``max_images``/``context``) is the
+    Router's job and consumes :meth:`ModelCapabilities.can_serve`; this is
+    only the consistency gate the engine owns for its single producer.
+    """
+    caps = getattr(producer, "capabilities", None)
+    if caps is None:
+        return
+    if getattr(producer, "wants_image", False) and not caps.vision:
+        raise ConfigurationError(
+            "producer wants page images (wants_image=True) but its declared "
+            "capabilities say vision=False — a vision producer must declare "
+            "ModelCapabilities(vision=True)"
         )
 
 
@@ -379,5 +410,6 @@ __all__ = [
     "ProviderPermanentError",
     "RewriteMetrics",
     "RewriteResult",
+    "require_capabilities",
     "require_page_images",
 ]

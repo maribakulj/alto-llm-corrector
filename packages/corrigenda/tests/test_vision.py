@@ -268,6 +268,8 @@ def test_vision_producer_crops_each_line_and_produces_ops(tmp_path: Path) -> Non
     prod = VisionEditProducer(vlm, "key", "vlm-1")
     assert isinstance(prod, EditProducer)  # structural
     assert prod.wants_image and prod.wants_geometry
+    # Phase 4 — declares a vision-capable descriptor (passes require_capabilities).
+    assert prod.capabilities.vision is True and prod.capabilities.text is True
 
     import asyncio
 

@@ -83,6 +83,7 @@ from corrigenda.core.protocols import (
     StructuredCompletionClient,
     ProviderPermanentError,
     ProviderTransientError,
+    require_capabilities,
     require_page_images,
 )
 from corrigenda.core.alignment import align_tokens
@@ -1045,6 +1046,10 @@ class CorrectionPipeline:
         # §5.1 — a vision producer without its images is a start-up error,
         # never a silent image-less call.
         require_page_images(self.producer, document_manifest.pages, page_images)
+        # §5.2 bis (Phase 4) — a producer whose declared capabilities
+        # contradict its wiring (wants images but vision=False) is a
+        # start-up error, not a mid-run surprise.
+        require_capabilities(self.producer)
 
         # §3 — the format travels with the document. An injected adapter
         # that contradicts the format the manifest was parsed as would

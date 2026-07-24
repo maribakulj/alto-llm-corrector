@@ -277,6 +277,14 @@ def test_llm_adapter_produces_replace_line_script_and_usage():
     assert provider.last_temperature == 0.0  # attempt-1 temperature
 
 
+def test_llm_producer_declares_text_only_capabilities():
+    """Phase 4 — the text LLM producer declares a no-vision capability."""
+    prod = LLMEditProducer(_FakeProvider(), "key", "model")
+    assert prod.capabilities.text is True
+    assert prod.capabilities.vision is False
+    assert prod.capabilities.structured_output is True
+
+
 # ---------------------------------------------------------------------------
 # I4 — pixel-blindness (restated, ROADMAP V3 Phase 4)
 #

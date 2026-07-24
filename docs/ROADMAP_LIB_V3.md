@@ -286,9 +286,17 @@ Le grand chantier de la revue, enfin outillé. Dépend de la Phase 2.
       inchangé (opt-in). *Reste* : repli image-absente/ambiguë côté producteur
       (le prompt impose déjà « en cas d'image illisible, conserve l'OCR ») et
       calibration du plancher sur le benchmark.
-- [ ] **Registre `ModelCapabilities`** (text/vision/structured_output/
+- [~] **Registre `ModelCapabilities`** (text/vision/structured_output/
       max_images/context) alimentant le router — le VLM n'est qu'un producteur
       de plus, routé vers les seules lignes où il vaut son coût.
+      *Livré* : descripteur `ModelCapabilities` (frozen, additif) + cerveau pur
+      `can_serve`/`reason_cannot_serve` (informe le router, ne décide pas) ;
+      chaque producteur déclare ses `capabilities` (LLM texte-seul, vision
+      text+vision, injectables) ; préflight `require_capabilities` au démarrage
+      (wants_image ⟹ vision, sinon `ConfigurationError`). `ModelInfo` reste la
+      face catalogue, ceci la face routage. *Reste* : la SÉLECTION per-ligne du
+      producteur dans le pipeline (router un chunk vers le VLM en respectant
+      `max_images`), qui consomme `can_serve` — l'intégration router complète.
 - [ ] **Benchmark texte vs vision vs hybride** : le VLM doit battre le texte
       seul sur le corpus gelé pour mériter sa place par défaut.
 - [ ] `CandidateSet` émergera ici, du besoin concret de candidats concurrents

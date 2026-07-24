@@ -63,6 +63,7 @@ from corrigenda.core.protocols import (
     ProducerMetadata,
     ProducerOptions,
     StructuredCompletionClient,
+    require_capabilities,
     require_page_images,
 )
 from corrigenda.core.schemas import (
@@ -88,6 +89,7 @@ from corrigenda.core.schemas import (
     ConfidencePolicy,
     LineConfidence,
     LossPolicy,
+    ModelCapabilities,
     ModelInfo,
     PageManifest,
     PairingPolicy,
@@ -237,6 +239,7 @@ __all__ = [
     "EditProducer",
     "ProducerMetadata",
     "ProducerOptions",
+    "require_capabilities",
     "require_page_images",
     "RulesProducer",
     "SubstitutionRule",
@@ -288,6 +291,7 @@ __all__ = [
     "route_line",
     "LineConfidence",
     "LossPolicy",
+    "ModelCapabilities",
     "ModelInfo",
     "PageManifest",
     "PairingPolicy",

@@ -42,6 +42,7 @@ from corrigenda.core.schemas import (
     CorrectionRequest,
     ImageAsset,
     ImageTransform,
+    ModelCapabilities,
     Usage,
 )
 from corrigenda.errors import ConfigurationError
@@ -386,6 +387,7 @@ class VisionEditProducer:
         confusions: tuple[tuple[str, str], ...] = DEFAULT_CONFUSIONS,
         margin_ratio: float = 0.05,
         mask_polygon: bool = False,
+        capabilities: ModelCapabilities | None = None,
     ) -> None:
         self._provider = provider
         self._api_key = api_key
@@ -395,6 +397,14 @@ class VisionEditProducer:
         self._confusions = confusions
         self._margin_ratio = margin_ratio
         self._mask_polygon = mask_polygon
+        #: Phase 4 routing descriptor — a vision model: structured output
+        #: AND vision. The default declares vision=True (so it passes the
+        #: require_capabilities consistency gate); a host that knows its
+        #: VLM's per-call image cap injects ``max_images`` so the Router can
+        #: keep a chunk's crops within it.
+        self.capabilities = capabilities or ModelCapabilities(
+            text=True, vision=True, structured_output=True
+        )
         default_prompt = (
             uncertainty_system_prompt() if uncertainty_channel else VISION_SYSTEM_PROMPT
         )
