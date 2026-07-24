@@ -1201,6 +1201,19 @@ class RunProvenance(BaseModel):
     #: report is verifiably tied to the exact document it corrected.
     #: Empty on dry runs (no source files given).
     source_digests: dict[str, str] = Field(default_factory=dict)
+    #: ROADMAP V3 Phase 4 — page_id → ``sha256:<hex>`` of the page IMAGE
+    #: bytes, for every page whose ``run(page_images=…)`` value is a
+    #: structured :class:`ImageAsset` carrying its digest. The mirror of
+    #: ``source_digests`` for pixels: it ties the report to the exact scans
+    #: a vision producer saw, and — together with the source digest, the
+    #: per-line coords, and the producer's ``configuration_fingerprint``
+    #: (which folds in the crop margin / polygon-mask knobs) — makes every
+    #: crop REPRODUCIBLE without storing N crop hashes. The core never opens
+    #: an image to fill this: it copies the digest the asset already
+    #: carries (I4). Empty when no images were given, when they were bare
+    #: ``ImageRef`` strings (opaque — no known digest), or when the assets
+    #: carried none. Additive; no ``report_version`` bump.
+    image_digests: dict[str, str] = Field(default_factory=dict)
     #: The manifest's stamped source format ("alto" / "page"), None for
     #: hand-built manifests that never went through a parser.
     source_format: str | None = None

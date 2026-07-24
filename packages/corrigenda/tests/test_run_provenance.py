@@ -73,6 +73,14 @@ def test_dry_run_still_carries_provenance():
     assert prov.lib_version == __version__
 
 
+def test_image_digests_empty_without_images():
+    """A text run records no image digests (Phase 4, additive)."""
+    result = _run()
+    prov = result.report.provenance
+    assert prov is not None
+    assert prov.image_digests == {}
+
+
 def test_rules_producer_provenance_has_no_artificial_model():
     """Generic vocabulary end to end: a rules run's report says WHO
     (name) + its configuration digest — never a fabricated model."""

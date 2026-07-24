@@ -342,3 +342,56 @@ def test_vision_producer_drives_the_full_pipeline(tmp_path: Path) -> None:
     # Identity reply → no line degraded, run succeeds through the vision seam.
     assert result.fallback_chunks == 0
     assert result.producer_calls >= 1
+    # Phase 4 provenance: the report records the exact image bytes per page,
+    # copied from the ImageAsset digest (the core opened no pixel).
+    prov = result.report.provenance
+    assert prov is not None
+    assert prov.image_digests == {
+        page_id: f"sha256:{asset.sha256}" for page_id, asset in assets.items()
+    }
+
+
+def test_digestless_asset_records_no_image_digest(tmp_path: Path) -> None:
+    """Only a digest the asset already carries is recorded — an ImageAsset
+    built by hand without a sha256 contributes none (the core never opens
+    the file to compute one, I4)."""
+    from corrigenda import CorrectionPipeline
+    from corrigenda.formats.alto.parser import build_document_manifest
+
+    sample = Path(__file__).parent.parent.parent.parent / "examples" / "sample.xml"
+    doc = build_document_manifest([(sample, sample.name)])
+
+    class _Null:
+        def on_event(self, *a, **k):
+            pass
+
+    prod = VisionEditProducer(_EchoVLM(), "key", "vlm-1")
+    # Real image files (so cropping works) but hand-built assets with no
+    # sha256 → nothing to record.
+    assets = {
+        page.page_id: ImageAsset(
+            page_id=page.page_id,
+            uri=str(
+                _png(
+                    tmp_path / f"{page.page_id}.png",
+                    (page.page_width, page.page_height),
+                    (255, 255, 255),
+                )
+            ),
+        )
+        for page in doc.pages
+    }
+    pipeline = CorrectionPipeline(producer=prod, observer=_Null())
+
+    import asyncio
+
+    result = asyncio.run(
+        pipeline.run(
+            document_manifest=doc,
+            source_files={sample.name: sample},
+            page_images=assets,
+        )
+    )
+    prov = result.report.provenance
+    assert prov is not None
+    assert prov.image_digests == {}  # assets carried no sha256

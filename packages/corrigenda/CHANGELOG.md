@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Per-page image digests in the run provenance (ROADMAP V3 Phase 4).**
+  ``RunProvenance.image_digests`` (page_id → ``sha256:<hex>``) records the
+  exact scan bytes a vision run saw — the mirror of ``source_digests`` for
+  pixels. The pipeline copies the digest each structured ``ImageAsset``
+  already carries; the pixel-blind core opens no image to compute one (I4),
+  so bare ``ImageRef`` strings and digest-less assets contribute nothing.
+  Together with the source digest, the per-line coords, the asset's
+  transform and the producer's ``configuration_fingerprint`` (which folds
+  in the crop margin / polygon-mask knobs), this makes every crop
+  REPRODUCIBLE without storing N per-line crop hashes — the same
+  digest-level contract ``source_digests`` gives for the XML (the report
+  stores the digest, not the bytes; the caller re-supplies the inputs).
+  Additive and optional: empty on text runs, no ``report_version`` bump.
 - **`GuardConfig.vision()` — the VLM guard profile (ROADMAP V3 Phase 4,
   §5.2 bis).** A preset a host passes alongside a `VisionEditProducer`:
   it relaxes ONLY the Stage-C source-similarity floor

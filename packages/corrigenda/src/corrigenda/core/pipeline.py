@@ -112,6 +112,7 @@ from corrigenda.core.schemas import (
     DocumentManifest,
     GuardConfig,
     HyphenRole,
+    ImageAsset,
     PageImage,
     LineManifest,
     LineStatus,
@@ -1236,7 +1237,9 @@ class CorrectionPipeline:
             format_losses=format_losses or None,
             # P3.9 (§11) — the run's full provenance record.
             provenance=self._build_provenance(
-                document_manifest=document_manifest, source_digests=source_digests
+                document_manifest=document_manifest,
+                source_digests=source_digests,
+                image_assets=ctx.image_ref_by_page_id,
             ),
             # F14/§11 — the aggregated usage is part of the persisted
             # artefact, not just the transient result. None when nothing
@@ -1311,15 +1314,24 @@ class CorrectionPipeline:
         *,
         document_manifest: DocumentManifest,
         source_digests: dict[str, str],
+        image_assets: dict[str, PageImage],
     ) -> RunProvenance:
         """The run's §11 provenance record (P3.9): library + producer
         identity, policy fingerprint, per-file digests of the INPUT
         bytes (computed once in :meth:`run` via ``_digest_sources`` and
-        shared with the edit script's preconditions), and critical
-        dependency versions."""
+        shared with the edit script's preconditions), per-page image
+        digests (Phase 4), and critical dependency versions."""
         from corrigenda import __version__ as _lib_version
 
         md = self.producer_metadata
+        # Phase 4 — copy the digest each structured ImageAsset already
+        # carries; the core never opens an image (I4). Bare ImageRef
+        # strings and digest-less assets contribute nothing.
+        image_digests = {
+            page_id: f"sha256:{asset.sha256}"
+            for page_id, asset in image_assets.items()
+            if isinstance(asset, ImageAsset) and asset.sha256
+        }
         return RunProvenance(
             lib_version=_lib_version,
             config_fingerprint=self.config_fingerprint(),
@@ -1330,6 +1342,7 @@ class CorrectionPipeline:
                 configuration_fingerprint=md.configuration_fingerprint,
             ),
             source_digests=source_digests,
+            image_digests=image_digests,
             source_format=document_manifest.source_format,
             dependencies=_dependency_versions(),
         )

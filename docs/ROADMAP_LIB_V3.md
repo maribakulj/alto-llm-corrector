@@ -269,8 +269,12 @@ Le grand chantier de la revue, enfin outillé. Dépend de la Phase 2.
       `integrations.llm`) — gardes/validateur/canal d'incertitude identiques en
       aval. Exige un `ImageAsset` (refus explicite d'un `ImageRef` nu). Chaque
       crop voyage en `ImagePart` avec son sha256 (hash du crop lié au
-      `line_id`) ; l'image porte son sha256. *Reste* : estamper ces hashes dans
-      le `CorrectionReport` (nouveau champ de provenance additif).
+      `line_id`) ; l'image porte son sha256. Provenance : `RunProvenance.
+      image_digests` (page_id → `sha256:hex`, miroir de `source_digests`)
+      estampe les octets image exacts par page ; combiné aux coords par ligne,
+      au transform de l'asset et au `configuration_fingerprint` du producteur
+      (qui plie marge + masque polygone), le crop est REPRODUCTIBLE sans
+      stocker N hashes de crop — même contrat au niveau digest que pour l'XML.
 - [~] **Gardes vision** (profil `GuardConfig.vision()`) : anti-hallucination
       visuelle, repli vers OCR ou revue si image absente/ambiguë.
       *Livré* : `GuardConfig.vision()` relâche la SEULE étape de
