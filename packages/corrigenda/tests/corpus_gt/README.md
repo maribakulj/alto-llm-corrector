@@ -56,6 +56,38 @@ IDs.
   the hyphen-dense Descartes page (the guards arbitrate its proposals)
   — the guard-calibration ceiling Phase 2 exists to study.
 
+## Vision corpus (ROADMAP V3 Phase 4)
+
+The vision benchmark (`scripts/vision_benchmark.py`) needs something this
+directory deliberately does NOT hold: **paired page images**. It therefore
+takes a corpus directory as an argument instead of committing scans (a few
+hundred MB of PNG has no place in the repo).
+
+Validated against the **BNL ground truth** (Bibliothèque nationale du
+Luxembourg, 19th-c. French press): 37 paired `NNNN.xml` (ALTO v4) +
+`NNNN.png`, 522 lines. Two properties make it a good fit, both verified
+on the data:
+
+- the ALTO declares `MeasurementUnit mm10`, so XML coordinates are NOT
+  pixels — exactly what `ImageAsset.transform` exists for. The scans are
+  300 DPI, so the mapping is the uniform scale `dpi / 254` ≈ **1.1811**
+  (`px = mm10 × dpi / 254`), confirmed by cropping lines and reading them
+  back;
+- the ALTO `CONTENT` is the human GT (`CC="00"`), i.e. the **reference**,
+  not raw OCR. So the harness derives its INPUT by scripted degradation
+  (`scripts/qe_data.degrade_token`, deterministic, no RNG) and scores
+  against the GT: **the images and the reference are real, only the OCR
+  errors are synthetic** — the same honesty rule as the `synthetic-`
+  cases above, but with real pixels. A corpus shipping raw OCR alongside
+  its GT would remove the last synthetic ingredient; that is the next
+  upgrade.
+
+Plumbing run on this corpus (37 pages / 522 lines, seed 1837, rate 30%,
+oracle producers — measures the HARNESS, not a model): baseline CER
+0.0463; text-only (rules) 0.0321; vision-on-every-line 0.0005 (522 real
+crops); hybrid 0.0073 while escalating 326/522 lines — the cost/quality
+trade-off the real benchmark must reproduce with actual providers.
+
 ## Manifest
 
 `manifest.json`: `corpus_version` (bump on ANY case change — reports

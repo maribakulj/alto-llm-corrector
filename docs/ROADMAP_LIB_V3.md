@@ -305,8 +305,20 @@ Le grand chantier de la revue, enfin outillé. Dépend de la Phase 2.
       reste honnête (le routage vit dans le moteur, une seule couche décide).
       Opt-in : sans `escalation_producer`, run byte-identique. *Reste
       (optionnel)* : respect de `max_images` par découpe de chunk côté router.
-- [ ] **Benchmark texte vs vision vs hybride** : le VLM doit battre le texte
+- [~] **Benchmark texte vs vision vs hybride** : le VLM doit battre le texte
       seul sur le corpus gelé pour mériter sa place par défaut.
+      *Livré (outillage)* : `scripts/vision_benchmark.py` — dégradation
+      déterministe du GT en input OCR (`qe_data.degrade_token`), CER agrégé,
+      3 configs (texte / vision / hybride avec `escalation_producer`), coût réel
+      (`producer_calls`, `escalated_lines`). Validé sur le **GT BNL** (presse
+      19e, 37 pages / 522 lignes, ALTO v4 mm10 + PNG 300 DPI → transform
+      `dpi/254` ≈ 1.1811 vérifié en croppant) : images et référence RÉELLES,
+      seules les erreurs OCR sont synthétiques. Run de plomberie (oracles,
+      hors-ligne, 522 crops réels) : baseline CER 0.0463, texte 0.0321, vision
+      0.0005, hybride 0.0073 en n'escaladant que 326/522 lignes.
+      *Reste* : le run avec de VRAIS fournisseurs LLM/VLM (coût réel, cassette),
+      et idéalement un corpus livrant l'OCR brut à côté du GT (dernier
+      ingrédient synthétique éliminé).
 - [ ] `CandidateSet` émergera ici, du besoin concret de candidats concurrents
       (règles/texte/vision) — pas avant.
 

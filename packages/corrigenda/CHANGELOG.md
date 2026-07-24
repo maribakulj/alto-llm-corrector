@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Vision benchmark harness (ROADMAP V3 Phase 4).**
+  `scripts/vision_benchmark.py` measures text vs vision vs hybrid on a
+  paired image+ALTO ground-truth corpus: it degrades each GT line into a
+  plausible OCR reading with the Phase-2 deterministic scripted degrader
+  (no RNG), runs the three configurations, and reports aggregate CER
+  alongside the real call cost (`producer_calls`, `escalated_lines`).
+  Validated on the **BNL** 19th-c. French press GT (37 pages / 522 lines,
+  ALTO v4 `mm10` + 300 DPI PNGs): the XML→pixel mapping is the uniform
+  `dpi/254` ≈ 1.1811 scale `ImageAsset.transform` exists for, verified by
+  cropping lines and reading them back. **The images and the reference are
+  real; only the OCR errors are synthetic** — the harness scores against
+  human GT. Plumbing run with deterministic oracle producers (offline, 522
+  real crops): baseline CER 0.0463 → text 0.0321, vision 0.0005, hybrid
+  0.0073 while escalating only 326/522 lines — the cost/quality trade-off
+  a real-provider run must reproduce. Measurement logic (CER, degradation,
+  config comparison) is importable and unit-tested offline.
 - **Per-line producer selection — the escalation tier (ROADMAP V3 Phase 4,
   §5.2 bis).** `CorrectionPipeline(..., escalation_producer=…)` routes each
   non-hyphen line the QE scorer + RoutingPolicy send to ESCALATE to a
