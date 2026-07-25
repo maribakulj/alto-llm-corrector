@@ -18,6 +18,7 @@ from corrigenda.core.identity import (
     ensure_unique_identities,
 )
 from corrigenda.core.pairing import (
+    HYPHEN_CHARS,
     disambiguate_page_ids as _disambiguate_page_ids,
     link_cross_page_hyphens as _link_cross_page_hyphens,
     link_hyphen_pairs as _link_hyphen_pairs,
@@ -111,16 +112,25 @@ def _parse_textline_hyphen_info(
                     forward_subs = sc
 
     # Heuristic: a genuine word-break hyphen is the last non-space token
-    # ending in "-" with an ALPHABETIC character immediately before it.
-    # This narrowing rejects pure-numeric forms ("1789-", "n°5-")
-    # and dialog em-dashes that would otherwise mark a phantom PART1 and
-    # make the rewriter emit a spurious HYP on output. The rule now lives
-    # in ``core.pairing.trailing_hyphen_char`` (shared with the PAGE parser,
-    # which passes the wider HYPHEN_CHARS repertoire); ALTO restricts it to
-    # the plain hyphen-minus. The explicit SUBS_TYPE="HypPart1" path above
-    # still catches every hyphen pair the OCR engine itself flagged.
+    # ending in a HYPHEN_CHARS member with an ALPHABETIC character
+    # immediately before it. That alpha rule — not the repertoire — is what
+    # rejects pure-numeric forms ("1789-", "n°5-") and dialogue em-dashes
+    # that would otherwise mark a phantom PART1 and make the rewriter emit
+    # a spurious HYP on output.
+    #
+    # ALTO used to pass only ``("-",)`` while the PAGE parser passed the
+    # full repertoire. The asymmetry silently disabled hyphen handling on
+    # Fraktur: a line ending in ``⸗`` got role NONE, and no role means no
+    # pair, which means neither the Stage-A integrity check nor the
+    # Stage-B drift guards ever run — the line reaches the model with
+    # nothing watching its boundary. Measured on corpus/37-GT-BNL (19th-c.
+    # Luxembourg press, no SUBS_TYPE anywhere): 24 of 94 break lines,
+    # 25.5%, every one of them ``⸗``.
+    #
+    # The rewriter's own _drop_structural_break_hyphen already accepted the
+    # whole repertoire, so this also removes a parser/rewriter asymmetry.
     if not is_part1:
-        if trailing_hyphen_char(line.ocr_text, ("-",)) is not None:
+        if trailing_hyphen_char(line.ocr_text, HYPHEN_CHARS) is not None:
             is_part1 = True
             forward_explicit = False
 
