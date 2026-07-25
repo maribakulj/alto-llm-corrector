@@ -357,7 +357,24 @@ def _apply_subs(
 # cannot re-attach it to a re-segmented word without guessing, so it is
 # dropped, but it must be REPORTED, not lost silently ("lossless" was a lie).
 _SLOW_PATH_RETAINED_OR_JUSTIFIED = frozenset(
-    {"ID", "STYLEREFS", "STYLE", "WC", "CC", "HPOS", "VPOS", "WIDTH", "HEIGHT"}
+    {
+        # CONTENT is the payload the run exists to change: a rebuild REPLACES
+        # the source reading with the correction, it does not lose it.
+        # Counting it produced a phantom loss on every rebuilt String — 239 of
+        # them on a real 566-line page whose corrections were sound — and a
+        # report that counts a non-loss misleads an auditor exactly as much as
+        # one that misses a real loss.
+        "CONTENT",
+        "ID",
+        "STYLEREFS",
+        "STYLE",
+        "WC",
+        "CC",
+        "HPOS",
+        "VPOS",
+        "WIDTH",
+        "HEIGHT",
+    }
 )
 
 
