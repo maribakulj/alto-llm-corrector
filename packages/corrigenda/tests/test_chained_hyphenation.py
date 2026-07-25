@@ -500,3 +500,87 @@ class TestDiagnosticTraces:
             print(f"    model_corrected:{t.model_corrected_text!r}")
             print(f"    projected:      {t.projected_text!r}")
             print(f"    output_alto:    {t.output_alto_text!r}")
+
+
+# ===========================================================================
+# Test 8: Chained hyphenation detected HEURISTICALLY (no SUBS_TYPE)
+# ===========================================================================
+
+#: The same three-line chain as ``CHAINED_XML``, but with NOTHING the engine
+#: asserted: no ``SUBS_TYPE``, no ``<HYP>``. Only a trailing dash in the
+#: CONTENT, which is all a great many real ALTO files carry — the whole
+#: 37-page BNL ground-truth corpus is in this mode, and so is any export
+#: whose OCR engine did not mark hyphenation.
+#:
+#: Transcribed from the real regression: corpus/37-GT-BNL/0020.xml lines
+#: TL_0003..TL_0005 ("d'impor-" / "tantes ... l'orga-" / "nisation ...").
+HEURISTIC_CHAINED_XML = _alto_xml("""\
+          <TextLine ID="TL1" HPOS="100" VPOS="100" WIDTH="2000" HEIGHT="60">
+            <String ID="S1" CONTENT="tous" HPOS="100" VPOS="100" WIDTH="140" HEIGHT="50"/>
+            <SP WIDTH="20"/>
+            <String ID="S2" CONTENT="d'impor-" HPOS="260" VPOS="100" WIDTH="220" HEIGHT="50"/>
+          </TextLine>
+          <TextLine ID="TL2" HPOS="100" VPOS="180" WIDTH="2000" HEIGHT="60">
+            <String ID="S3" CONTENT="tantes" HPOS="100" VPOS="180" WIDTH="180" HEIGHT="50"/>
+            <SP WIDTH="20"/>
+            <String ID="S4" CONTENT="dans" HPOS="300" VPOS="180" WIDTH="140" HEIGHT="50"/>
+            <SP WIDTH="20"/>
+            <String ID="S5" CONTENT="l'orga-" HPOS="460" VPOS="180" WIDTH="200" HEIGHT="50"/>
+          </TextLine>
+          <TextLine ID="TL3" HPOS="100" VPOS="260" WIDTH="2000" HEIGHT="60">
+            <String ID="S6" CONTENT="nisation" HPOS="100" VPOS="260" WIDTH="220" HEIGHT="50"/>
+            <SP WIDTH="20"/>
+            <String ID="S7" CONTENT="des" HPOS="340" VPOS="260" WIDTH="90" HEIGHT="50"/>
+          </TextLine>""")
+
+
+class TestHeuristicChainedDetection:
+    """A hyphen chain must pair even when no SUBS_TYPE marks it.
+
+    Regression: ``is_part2`` was only ever set from an explicit
+    ``SUBS_TYPE="HypPart2"``, so ``BOTH`` was unreachable heuristically.
+    ``link_hyphen_pairs`` then refused a PART1 candidate as a forward
+    partner, and every link of a chain but the LAST was left unpaired.
+
+    An unpaired PART1 is not a cosmetic defect: the hyphen reconciler
+    never runs on it, so the Stage-B pair-drift guards never run either,
+    and the line loses its atomicity guarantee in the chunk planner.
+    Measured consequence on the BNL corpus — 13 of 70 PART1 lines were
+    orphaned and BOTH was assigned zero times across 37 pages — a real
+    VLM re-split ``l'orga-``/``nisation`` into ``l'organi-``/``sation``
+    with nothing to stop it, moving text across a line boundary and
+    raising that page's CER from 0.0402 to 0.0513.
+    """
+
+    def test_middle_of_chain_is_BOTH(self, tmp_path):
+        path = _write_fixture(tmp_path, "heur.xml", HEURISTIC_CHAINED_XML)
+        pages, _ = parse_alto_file(path, "heur.xml")
+        lines = {lm.line_id: lm for lm in pages[0].lines}
+
+        assert lines["TL1"].hyphen_role == HyphenRole.PART1
+        assert lines["TL2"].hyphen_role == HyphenRole.BOTH
+        assert lines["TL3"].hyphen_role == HyphenRole.PART2
+
+    def test_no_link_is_left_dangling(self, tmp_path):
+        path = _write_fixture(tmp_path, "heur.xml", HEURISTIC_CHAINED_XML)
+        pages, _ = parse_alto_file(path, "heur.xml")
+        lines = {lm.line_id: lm for lm in pages[0].lines}
+
+        # First link: TL1 -> TL2 (this is the one that used to vanish)
+        assert lines["TL1"].hyphen_pair_line_id == "TL2"
+        assert lines["TL2"].hyphen_pair_line_id == "TL1"
+        # Second link: TL2 -> TL3, carried on the BOTH line's forward fields
+        assert lines["TL2"].hyphen_forward_pair_id == "TL3"
+        assert lines["TL3"].hyphen_pair_line_id == "TL2"
+
+    def test_heuristic_chain_invents_no_subs_content(self, tmp_path):
+        """Conservative heuristic mode still holds: pairing a chain must
+        not make the parser guess the dehyphenated word."""
+        path = _write_fixture(tmp_path, "heur.xml", HEURISTIC_CHAINED_XML)
+        pages, _ = parse_alto_file(path, "heur.xml")
+        lines = {lm.line_id: lm for lm in pages[0].lines}
+
+        for lid in ("TL1", "TL2", "TL3"):
+            assert lines[lid].hyphen_source_explicit is False
+            assert lines[lid].hyphen_subs_content is None
+        assert lines["TL2"].hyphen_forward_subs_content is None

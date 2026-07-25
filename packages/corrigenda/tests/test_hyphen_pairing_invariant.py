@@ -63,7 +63,9 @@ def test_pipeline_reconciles_exactly_the_parser_linked_pairs():
     partner-resolution regression (wrong field for a role) would drop or
     duplicate pairs and break this equality."""
     expected = _expected_forward_pairs()
-    assert expected == 125  # 99 PART1 + 26 BOTH — corpus invariant
+    # 99 PART1 + 29 BOTH. Was 125/26: the chain-pairing fix recovered 3
+    # links that a chain of consecutive hyphenated lines used to drop.
+    assert expected == 128
 
     run = run_pipeline("X0000002.xml")
     assert run.result.reconcile_metrics.total == expected
