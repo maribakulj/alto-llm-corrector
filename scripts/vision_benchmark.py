@@ -30,17 +30,30 @@ character error rate (CER) against the GT, alongside the real call cost
   * ``hybrid`` — text producer + a QE router escalating the risky lines to
     the vision producer (``escalation_producer=``).
 
-The core measurement lives in importable functions (tested offline in
-``tests/test_vision_benchmark.py``). ``main`` runs a ``plumbing`` mode with
-DETERMINISTIC oracle producers — no network, no API key — which validates
-the whole harness end to end (it really crops every escalated line from the
-real scans) and shows the cost/quality trade-off the numbers must exhibit;
-swap in real LLM/VLM providers for a production benchmark.
+Who plays the VLM is the other axis, and confusing it with the one above
+has already misled readers of this repo — so the report always carries a
+``producer`` block naming it:
+
+  * default — DETERMINISTIC oracle producers: no network, no API key. The
+    oracle is handed the GT and returns it, so its CER is the **plumbing
+    floor** (what survives the guards and the reconciler when the answer is
+    already perfect), NOT a model score. This mode validates the harness
+    end to end and really crops every escalated line from the real scans.
+  * ``--provider mistral|anthropic`` — a REAL VLM over the network. Only
+    this answers "does a model improve the text", and only this costs money.
+
+An aggregate CER hides a heterogeneous corpus (the BNL GT is 71% French,
+29% German fraktur), so every report also breaks the score down per source
+file under ``per_file``.
 
 Usage::
 
     python scripts/ocr_corpus.py --corpus /path/to/GT --lang fra --out ocr.json
+    # plumbing floor (offline, free)
     python scripts/vision_benchmark.py --corpus /path/to/GT --ocr ocr.json
+    # real model (costs API calls; --limit N first to smoke-test the wiring)
+    python scripts/vision_benchmark.py --corpus /path/to/GT --ocr ocr.json \\
+        --provider mistral --only text,vision
 """
 
 from __future__ import annotations
@@ -238,6 +251,13 @@ class ConfigResult:
     lines: int = 0
     crops: int = 0
     pairs: list[tuple[str, str]] = field(default_factory=list)
+    #: source file name → that file's own (output, reference) pairs. A
+    #: corpus is rarely homogeneous — the BNL GT is 71% French and 29%
+    #: German fraktur — and one aggregate CER averages regimes that can
+    #: differ by an order of magnitude. Per-file scores let a reader
+    #: regroup by whatever property matters (language, script, date)
+    #: without re-running the model.
+    by_file: dict[str, list[tuple[str, str]]] = field(default_factory=dict)
 
 
 class _Null:
@@ -254,14 +274,28 @@ async def run_config(
     escalation_producer=None,
     qe_scorer=None,
     routing_policy: RoutingPolicy | None = None,
+    guard_config=None,
 ) -> ConfigResult:
-    """Correct every degraded document with one configuration and score it."""
+    """Correct every degraded document with one configuration and score it.
+
+    ``guard_config`` is the Stage-C/B guard profile. It is left ``None``
+    (engine default, ``min_source_similarity=0.35``) for the oracle
+    plumbing run, and set to ``GuardConfig.vision()`` for a real VLM: a
+    model that reads the image can legitimately return text far from a
+    badly-garbled OCR line, which the text floor would reject. Since the
+    floor decides which proposals survive, it is part of what the CER
+    measures — the report records it.
+    """
+    kwargs: dict = {}
+    if guard_config is not None:
+        kwargs["guard_config"] = guard_config
     pipeline = CorrectionPipeline(
         producer=producer,
         observer=_Null(),
         qe_scorer=qe_scorer,
         routing_policy=routing_policy or RoutingPolicy(),
         escalation_producer=escalation_producer,
+        **kwargs,
     )
     res = ConfigResult(name=name, cer=0.0)
     for doc, source_files, images in docs:
@@ -278,11 +312,14 @@ async def run_config(
         final = {
             (o.page_id, o.line_id): o.decision.final_text for o in result.report.lines
         }
+        fname = next(iter(source_files), doc.document_id)
+        bucket = res.by_file.setdefault(fname, [])
         for page in doc.pages:
             for line in page.lines:
                 out = final.get((page.page_id, line.line_id), line.ocr_text)
                 ref = gt[(doc.document_id, line.line_id)]
                 res.pairs.append((out, ref))
+                bucket.append((out, ref))
     res.lines = len(res.pairs)
     res.cer = corpus_cer(res.pairs)
     for p in (producer, escalation_producer):
@@ -302,17 +339,38 @@ def benchmark(
     seed: int,
     rate_percent: int,
     ocr_sidecar: Path | None = None,
+    provider: str | None = None,
+    model: str | None = None,
+    limit: int | None = None,
+    only: tuple[str, ...] = ("text", "vision", "hybrid"),
 ) -> dict:
-    """Run the three configurations over the corpus and return the report.
+    """Run the selected configurations over the corpus and return the report.
 
     ``ocr_sidecar`` (from ``scripts/ocr_corpus.py``) makes the INPUT real
     OCR instead of scripted degradation — with it, nothing in the
     measurement is synthetic: real scans, real OCR errors, human reference.
+
+    ``provider`` decides what plays the VLM, and it is the difference
+    between two measurements that must never be confused:
+
+    * ``None`` — :class:`OracleVisionProducer`, which ignores the pixels
+      and returns the GT. Its CER is the **plumbing floor**: what survives
+      the guards and the reconciler when the answer is already perfect. It
+      is NOT a model score, and reading it as one has already misled
+      readers of this repo.
+    * ``"mistral"`` / ``"anthropic"`` — a real VLM over the network. Only
+      this answers "does a model improve the text".
+
+    The returned report always carries a ``producer`` block naming which
+    one ran, so no downstream table can lose that distinction.
     """
     xmls = sorted(p for p in corpus_dir.glob("*.xml"))
+    if limit is not None:
+        xmls = xmls[:limit]
     docs: list[tuple[DocumentManifest, dict[str, Path], dict[str, ImageAsset]]] = []
     gt: dict[tuple[str, str], str] = {}
     baseline_pairs: list[tuple[str, str]] = []
+    baseline_by_file: dict[str, list[tuple[str, str]]] = {}
 
     ocr_by_file: dict[str, dict[str, str]] = {}
     ocr_meta: dict = {}
@@ -351,6 +409,7 @@ def benchmark(
         for page in degraded.pages:
             for line in page.lines:
                 ref = gt_part[(degraded.document_id, line.line_id)]
+                baseline_by_file.setdefault(xml.name, []).append((line.ocr_text, ref))
                 baseline_pairs.append((line.ocr_text, ref))
                 if line.ocr_text != ref:
                     noisy_texts.add(line.ocr_text)
@@ -360,27 +419,89 @@ def benchmark(
 
     import asyncio
 
-    text = RulesProducer(default_french_ocr_rules())
-    vision = OracleVisionProducer(gt)
-    hybrid_text = RulesProducer(default_french_ocr_rules())
-    hybrid_vision = OracleVisionProducer(gt)
+    # A real VLM reads the image, so a correct reading of a badly-garbled
+    # line lands far from the OCR source and the text floor (0.35) would
+    # reject it. The oracle path keeps the engine default so the existing
+    # plumbing numbers stay comparable to their published selves.
+    guard_config = None
+    if provider is not None:
+        from corrigenda.core.schemas import GuardConfig
 
-    configs = [
-        run_config("text", docs=docs, gt=gt, producer=text),
-        run_config("vision", docs=docs, gt=gt, producer=vision),
-        run_config(
+        guard_config = GuardConfig.vision()
+
+    # Resolve the model id ONCE, here, so the report can name what actually
+    # ran rather than what was typed: `--provider mistral` with no --model
+    # would otherwise be recorded as `model: null`, and a run you cannot
+    # attribute to a model is not a measurement.
+    resolved_model = model
+    if provider is not None:
+        from scripts.run_vision import PROVIDERS
+
+        resolved_model = model or PROVIDERS[provider][2]
+
+    def _make_vision():
+        """The VLM slot: an oracle, or an actual model over the network."""
+        if provider is None:
+            return OracleVisionProducer(gt)
+        import os
+
+        from corrigenda.core.schemas import ModelCapabilities
+        from corrigenda.integrations.vision import VisionEditProducer
+
+        from scripts.run_vision import PROVIDERS
+
+        client_cls, key_env, _default, max_images = PROVIDERS[provider]
+        api_key = os.environ.get(key_env, "")
+        if not api_key:
+            raise SystemExit(
+                f"{key_env} is unset — export it in your shell (never pass a "
+                "key as a flag: it lands in shell history and the process list)"
+            )
+        return VisionEditProducer(
+            client_cls(),
+            api_key,
+            resolved_model,
+            capabilities=ModelCapabilities(
+                text=True,
+                vision=True,
+                structured_output=True,
+                max_images=max_images,
+            ),
+        )
+
+    text = RulesProducer(default_french_ocr_rules())
+    hybrid_text = RulesProducer(default_french_ocr_rules())
+
+    planned = [
+        ("text", lambda: run_config("text", docs=docs, gt=gt, producer=text)),
+        (
+            "vision",
+            lambda: run_config(
+                "vision",
+                docs=docs,
+                gt=gt,
+                producer=_make_vision(),
+                guard_config=guard_config,
+            ),
+        ),
+        (
             "hybrid",
-            docs=docs,
-            gt=gt,
-            producer=hybrid_text,
-            escalation_producer=hybrid_vision,
-            # Plumbing mode: an oracle QE escalates exactly the degraded
-            # lines. A real benchmark swaps in HeuristicQEScorer or the
-            # corrigenda[qe] MaskedLMQEScorer and tunes the bound.
-            qe_scorer=OracleQEScorer(noisy_texts),
-            routing_policy=RoutingPolicy(escalate_at_or_above=0.5),
+            lambda: run_config(
+                "hybrid",
+                docs=docs,
+                gt=gt,
+                producer=hybrid_text,
+                escalation_producer=_make_vision(),
+                # Plumbing mode: an oracle QE escalates exactly the degraded
+                # lines. A real benchmark swaps in HeuristicQEScorer or the
+                # corrigenda[qe] MaskedLMQEScorer and tunes the bound.
+                qe_scorer=OracleQEScorer(noisy_texts),
+                routing_policy=RoutingPolicy(escalate_at_or_above=0.5),
+                guard_config=guard_config,
+            ),
         ),
     ]
+    configs = [build() for name, build in planned if name in only]
     results = asyncio.run(_gather(configs))
 
     return {
@@ -397,6 +518,22 @@ def benchmark(
             if ocr_sidecar is not None
             else {"source": "scripted_degradation", "seed": seed, "rate": rate_percent}
         ),
+        # What played the VLM. The `input` block above says where the text
+        # came from; this one says who corrected it, and the two are
+        # independent: real OCR corrected by an oracle is still an oracle
+        # measurement. `kind: oracle` means the producer was handed the GT,
+        # so its CER is the plumbing floor and NOT a model score. Any table
+        # quoting a CER from this report must carry this field with it.
+        "producer": (
+            {"kind": "oracle", "implementation": "gt", "guard_profile": "default"}
+            if provider is None
+            else {
+                "kind": "real_vlm",
+                "provider": provider,
+                "model": resolved_model,
+                "guard_profile": "vision",
+            }
+        ),
         "baseline_cer": round(corpus_cer(baseline_pairs), 4),
         "configs": [
             {
@@ -408,6 +545,23 @@ def benchmark(
             }
             for r in results
         ],
+        # Per-source-file scores. A corpus is rarely one population: the
+        # BNL GT is 71% French and 29% German fraktur, and an aggregate CER
+        # silently averages the two. Emitting the breakdown costs nothing
+        # and lets a reader regroup by language, script or date — and see
+        # a config that wins on average while losing on a subset.
+        "per_file": {
+            name: {
+                "lines": len(pairs),
+                "baseline_cer": round(corpus_cer(pairs), 4),
+                **{
+                    r.name: round(corpus_cer(r.by_file.get(name, [])), 4)
+                    for r in results
+                    if r.by_file.get(name)
+                },
+            }
+            for name, pairs in sorted(baseline_by_file.items())
+        },
     }
 
 
@@ -437,6 +591,23 @@ def main(argv: list[str] | None = None) -> int:
         "instead of scripted degradation",
     )
     parser.add_argument("--out", type=Path, default=None)
+    parser.add_argument(
+        "--provider",
+        choices=("mistral", "anthropic"),
+        default=None,
+        help="run a REAL VLM instead of the GT oracle — this is what turns "
+        "the plumbing run into a model measurement (costs API calls)",
+    )
+    parser.add_argument("--model", default=None, help="model id (provider default)")
+    parser.add_argument(
+        "--limit", type=int, default=None, help="first N pages only (smoke test)"
+    )
+    parser.add_argument(
+        "--only",
+        default="text,vision,hybrid",
+        help="comma-separated configs to run — with --provider, `vision` "
+        "alone keeps the bill to one pass",
+    )
     args = parser.parse_args(argv)
 
     report = benchmark(
@@ -445,6 +616,10 @@ def main(argv: list[str] | None = None) -> int:
         seed=args.seed,
         rate_percent=args.rate,
         ocr_sidecar=args.ocr,
+        provider=args.provider,
+        model=args.model,
+        limit=args.limit,
+        only=tuple(c.strip() for c in args.only.split(",") if c.strip()),
     )
     payload = json.dumps(report, indent=2, ensure_ascii=False)
     if args.out:
