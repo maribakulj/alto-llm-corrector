@@ -39,3 +39,9 @@ coverage.xml
 
 # vitest / v8 coverage (frontend)
 frontend/coverage/
+
+# Run output from scripts/run_vision.py (--out defaults to ./vision_out).
+# Corrected XML plus a report.json carrying token usage and response ids:
+# a run artifact, never a source file.
+/vision_out*/
+/corrected/
