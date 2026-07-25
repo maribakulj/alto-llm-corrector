@@ -397,3 +397,56 @@ def test_digestless_asset_records_no_image_digest(tmp_path: Path) -> None:
     prov = result.report.provenance
     assert prov is not None
     assert prov.image_digests == {}  # assets carried no sha256
+
+
+async def _produce(producer: VisionEditProducer, req: CorrectionRequest):
+    return await producer.produce(req, options=ProducerOptions(temperature=0.0))
+
+
+@pytest.mark.asyncio
+async def test_vision_producer_refuses_a_payload_with_no_croppable_line(
+    tmp_path: Path,
+) -> None:
+    """A vision producer that receives no geometry must NOT quietly correct
+    from text alone.
+
+    Insurance, not a bug fix: driven by the pipeline this cannot happen —
+    ``LineManifest.coords`` is required, ``page_width``/``page_height`` are
+    required ints, and ``page_dims`` is built for every page, so every
+    enriched line carries geometry. The guard exists because the failure it
+    prevents is the worst one this library could have: a run that LOOKS like
+    a vision run, reports vision provenance, and never sent a single image.
+    Silent degradation is exactly what "no silent fallback" forbids.
+    """
+    asset = build_image_asset(
+        "P1", _png(tmp_path / "pg.png", (1000, 800), (250, 250, 250))
+    )
+    req = CorrectionRequest(
+        granularity=ChunkGranularity.LINE,
+        document_id="d",
+        page_id="P1",
+        # Geometry omitted — the degenerate payload.
+        lines=[LineContext(line_id="l1", ocr_text="Bonjovr")],
+        image_ref=asset,
+    )
+    producer = VisionEditProducer(_EchoVLM(), "k", "m")
+
+    with pytest.raises(ConfigurationError, match="no line geometry"):
+        await _produce(producer, req)
+
+
+@pytest.mark.asyncio
+async def test_vision_producer_still_accepts_a_partially_cropped_payload(
+    tmp_path: Path,
+) -> None:
+    """One line without geometry among several is not fatal — the others are
+    still cropped. Only a payload with NOTHING to crop is refused."""
+    asset = build_image_asset(
+        "P1", _png(tmp_path / "pg.png", (1000, 800), (250, 250, 250))
+    )
+    req = _request_with_geometry(asset)
+    req.lines.append(LineContext(line_id="l3", ocr_text="sans geometrie"))
+    producer = VisionEditProducer(_EchoVLM(), "k", "m")
+
+    script, _ = await _produce(producer, req)
+    assert {op.line_id for op in script.ops} == {"l1", "l2", "l3"}

@@ -459,6 +459,23 @@ class VisionEditProducer:
                     sha256=crop.sha256,
                 )
             )
+        if payload.lines and not images:
+            # Nothing to crop: this call would reach a VISION model carrying
+            # only text, produce corrections, and report vision provenance —
+            # a run that LOOKS like a vision run and never sent an image.
+            # Unreachable through the pipeline (LineManifest.coords is
+            # required, page dimensions are required ints, and page_dims
+            # covers every page), so this guards a direct caller against the
+            # worst silent degradation available here. A payload where only
+            # SOME lines lack geometry is still served: the rest are cropped.
+            raise ConfigurationError(
+                "VisionEditProducer received no line geometry for page "
+                f"{payload.page_id!r}: none of its {len(payload.lines)} lines "
+                "could be cropped, so the model would be asked to correct "
+                "from text alone while the run reports a vision producer. "
+                "Enrich the chunk with geometry (include_geometry=True and "
+                "page dimensions) or route these lines to a text producer."
+            )
         raw, usage = await self._provider.complete_structured_multimodal(
             api_key=self._api_key,
             model=self._model,
