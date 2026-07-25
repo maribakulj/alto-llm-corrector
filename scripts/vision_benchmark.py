@@ -242,6 +242,32 @@ class OracleQEScorer:
 # ---------------------------------------------------------------------------
 
 
+def _line_deltas(triples: list[tuple[str, str, str, str, str]]) -> dict[str, int]:
+    """Per-line verdicts for one config: did each line get better or worse?
+
+    ``false_positives`` are the worst kind — the line was ALREADY correct
+    and the model broke it. On clean OCR that is the whole risk, and it is
+    exactly what the SKIP tier of the hybrid router exists to avoid.
+    """
+    improved = degraded = unchanged = false_positives = 0
+    for _f, _lid, ocr, out, ref in triples:
+        before, after = levenshtein(ocr, ref), levenshtein(out, ref)
+        if after < before:
+            improved += 1
+        elif after > before:
+            degraded += 1
+            if before == 0:
+                false_positives += 1
+        else:
+            unchanged += 1
+    return {
+        "lines_improved": improved,
+        "lines_degraded": degraded,
+        "lines_unchanged": unchanged,
+        "false_positives": false_positives,
+    }
+
+
 @dataclass
 class ConfigResult:
     name: str
@@ -258,6 +284,13 @@ class ConfigResult:
     #: regroup by whatever property matters (language, script, date)
     #: without re-running the model.
     by_file: dict[str, list[tuple[str, str]]] = field(default_factory=dict)
+    #: (file, line_id, input OCR, output, reference) for EVERY line. An
+    #: aggregate CER can fall while individual lines are wrecked — on this
+    #: corpus one page went from CER 0.0402 to 0.0513 while the corpus
+    #: average improved, and nothing in the report said so. Keeping the
+    #: triples lets the report count improved/degraded lines and lets an
+    #: audit look for the damage a mean hides.
+    triples: list[tuple[str, str, str, str, str]] = field(default_factory=list)
 
 
 class _Null:
@@ -320,6 +353,7 @@ async def run_config(
                 ref = gt[(doc.document_id, line.line_id)]
                 res.pairs.append((out, ref))
                 bucket.append((out, ref))
+                res.triples.append((fname, line.line_id, line.ocr_text, out, ref))
     res.lines = len(res.pairs)
     res.cer = corpus_cer(res.pairs)
     for p in (producer, escalation_producer):
@@ -343,6 +377,7 @@ def benchmark(
     model: str | None = None,
     limit: int | None = None,
     only: tuple[str, ...] = ("text", "vision", "hybrid"),
+    dump_lines: Path | None = None,
 ) -> dict:
     """Run the selected configurations over the corpus and return the report.
 
@@ -504,6 +539,29 @@ def benchmark(
     configs = [build() for name, build in planned if name in only]
     results = asyncio.run(_gather(configs))
 
+    if dump_lines is not None:
+        dump_lines.write_text(
+            json.dumps(
+                {
+                    r.name: [
+                        {
+                            "file": f,
+                            "line_id": lid,
+                            "ocr": ocr,
+                            "out": out,
+                            "ref": ref,
+                        }
+                        for f, lid, ocr, out, ref in r.triples
+                    ]
+                    for r in results
+                },
+                indent=2,
+                ensure_ascii=False,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
     return {
         "corpus_dir": str(corpus_dir),
         "pages": len(docs),
@@ -542,6 +600,12 @@ def benchmark(
                 "producer_calls": r.producer_calls,
                 "escalated_lines": r.escalated_lines,
                 "crops": r.crops,
+                # A falling mean is not the same as "nothing got worse".
+                # `scripts/benchmark.py` has reported these since Phase 2;
+                # this harness did not, so a page that went from CER 0.0402
+                # to 0.0513 hid inside a corpus average that improved.
+                # `degraded` is the number that must be READ, not the mean.
+                **_line_deltas(r.triples),
             }
             for r in results
         ],
@@ -608,6 +672,14 @@ def main(argv: list[str] | None = None) -> int:
         help="comma-separated configs to run — with --provider, `vision` "
         "alone keeps the bill to one pass",
     )
+    parser.add_argument(
+        "--dump-lines",
+        type=Path,
+        default=None,
+        help="write every (file, line_id, ocr, output, reference) tuple as "
+        "JSON — a real run is expensive, so keep its per-line evidence for "
+        "audits the aggregate cannot answer",
+    )
     args = parser.parse_args(argv)
 
     report = benchmark(
@@ -620,6 +692,7 @@ def main(argv: list[str] | None = None) -> int:
         model=args.model,
         limit=args.limit,
         only=tuple(c.strip() for c in args.only.split(",") if c.strip()),
+        dump_lines=args.dump_lines,
     )
     payload = json.dumps(report, indent=2, ensure_ascii=False)
     if args.out:
