@@ -68,6 +68,56 @@ def _max_tokens_for(user_payload: dict[str, Any]) -> int:
     return min(_MAX_TOKENS_CAP, max(_MAX_TOKENS_FLOOR, count * _MAX_TOKENS_PER_LINE))
 
 
+#: Substrings that mark a 400 as a quarrel with `response_format` — the only
+#: kind worth retrying in the looser `json_object` mode. Anything else (an
+#: over-cap image count, an unknown model, a malformed block) is a different
+#: complaint, and retrying it identically just burns a second call and hides
+#: the real message.
+_SCHEMA_REJECTION_MARKERS = ("response_format", "json_schema", "schema")
+
+
+def _api_message(resp: Any) -> str:
+    """The provider's own explanation of a failure, or the raw body."""
+    try:
+        body = resp.json()
+    except Exception:  # noqa: BLE001 - a non-JSON error body is still useful
+        return str(resp.text)[:400]
+    if isinstance(body, dict):
+        message = body.get("message") or body.get("error")
+        if isinstance(message, dict):
+            message = message.get("message")
+        if message:
+            return str(message)
+    return str(resp.text)[:400]
+
+
+def _raise_for_status(resp: Any, api_key: str) -> None:
+    """Turn a failed HTTP response into the taxonomy the engine routes on.
+
+    The engine's retry ladder reacts to malformed OUTPUT; a request the API
+    refuses outright never produces output, so it must surface as a
+    provider error carrying the API's OWN message. Swallowing that message
+    (the previous behaviour) turned a precise, actionable complaint —
+    ``"Total number of images exceeds the maximum allowed of 8"`` — into a
+    bare ``400 Bad Request``.
+    """
+    # Lazy, like every other corrigenda import here: this module is loaded
+    # by scripts that put the package on sys.path just before importing it.
+    from corrigenda import sanitize_error
+    from corrigenda.core.protocols import (
+        ProviderPermanentError,
+        ProviderTransientError,
+    )
+
+    if resp.status_code < 400:
+        return
+    detail = sanitize_error(_api_message(resp), api_key)
+    label = f"Mistral HTTP {resp.status_code}: {detail}"
+    if resp.status_code == 429 or resp.status_code >= 500:
+        raise ProviderTransientError(label)
+    raise ProviderPermanentError(label)
+
+
 class AnthropicMultimodalClient:
     """A ``MultimodalStructuredClient`` backed by the Anthropic Messages API.
 
@@ -211,7 +261,19 @@ class MistralMultimodalClient:
     #: Model IDs are NOT hardcoded beyond this default — Mistral's catalog
     #: moves, and guessing an ID yields a 404. ``list_models`` (below)
     #: queries the live catalog with the caller's own key.
-    DEFAULT_MODEL = "pixtral-12b-2409"
+    #:
+    #: The previous default (``pixtral-12b-2409``) is GONE from the live
+    #: catalog as of 2026-07-25 — a default that 404s. Pinned rather than
+    #: floating (``-latest``) because provenance records the model that ran;
+    #: re-check with ``--list-models`` when it deprecates in turn.
+    DEFAULT_MODEL = "mistral-medium-2604"
+
+    #: Images accepted per request. MEASURED against the live API, not read
+    #: off a doc page: a 9th image is refused with HTTP 400 ``"Total number
+    #: of images exceeds the maximum allowed of 8."`` (error code 3051).
+    #: Injected into the producer's ``ModelCapabilities`` so the engine
+    #: splits a chunk instead of sending a request that cannot succeed.
+    MAX_IMAGES_PER_CALL = 8
 
     _BASE = "https://api.mistral.ai"
 
@@ -295,14 +357,19 @@ class MistralMultimodalClient:
             resp = await http.post(
                 f"{self._BASE}/v1/chat/completions", json=body, headers=headers
             )
-            if resp.status_code == 400:
-                # Model rejected the strict schema — retry with the looser
-                # json_object mode, exactly as the backend's text path does.
+            if resp.status_code == 400 and any(
+                marker in _api_message(resp).lower()
+                for marker in _SCHEMA_REJECTION_MARKERS
+            ):
+                # The model quarrelled with the STRICT schema specifically —
+                # retry in the looser json_object mode, as the backend's text
+                # path does. Any other 400 falls through to _raise_for_status
+                # with its message intact.
                 loose = {**body, "response_format": {"type": "json_object"}}
                 resp = await http.post(
                     f"{self._BASE}/v1/chat/completions", json=loose, headers=headers
                 )
-            resp.raise_for_status()
+            _raise_for_status(resp, api_key)
             data = resp.json()
 
         choices = data.get("choices") or []

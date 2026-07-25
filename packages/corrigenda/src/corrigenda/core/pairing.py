@@ -138,17 +138,42 @@ def link_hyphen_pairs(
 
         candidate = lines[i + 1]
 
-        # Accept PART2, BOTH, or NONE as forward partner
-        if candidate.hyphen_role not in (
-            HyphenRole.PART2,
-            HyphenRole.BOTH,
-            HyphenRole.NONE,
-        ):
-            continue
+        # Every role can be a forward partner. PART2/BOTH already carry a
+        # backward side; NONE is promoted to PART2 below; and a PART1
+        # candidate is the MIDDLE of a chain — it ends with its own hyphen
+        # AND continues this line's word.
+        #
+        # That last case used to be rejected, and only heuristically: a
+        # PART2 role is set at parse time solely from an explicit
+        # SUBS_TYPE="HypPart2", so in a file with no SUBS_TYPE (the common
+        # case — the whole BNL ground-truth corpus, any engine that does
+        # not mark hyphenation) BOTH was unreachable and every link of a
+        # chain but the last was dropped. An unpaired PART1 is not
+        # cosmetic: the hyphen reconciler never runs on it, so neither do
+        # the Stage-B pair-drift guards, and it loses its atomicity
+        # guarantee in the chunk planner. A real VLM duly re-split
+        # `l'orga-`/`nisation` into `l'organi-`/`sation`, moving text
+        # across a line boundary with nothing to stop it.
 
         # F7 — injectable pairing seam. Default policy always accepts.
         if not pairing_policy.can_pair(line, candidate):
             continue
+
+        if candidate.hyphen_role == HyphenRole.PART1:
+            # Promote to BOTH. The candidate's own PART1 detection lives in
+            # the pair fields (see the parser's `elif is_part1` branch), so
+            # it must MOVE to the forward fields before the backward fields
+            # are claimed by the link being made here — otherwise this
+            # line's trailing hyphen would be silently overwritten.
+            candidate.hyphen_forward_explicit = candidate.hyphen_source_explicit
+            candidate.hyphen_forward_subs_content = candidate.hyphen_subs_content
+            candidate.hyphen_subs_content = None
+            candidate.hyphen_role = HyphenRole.BOTH
+            candidate.hyphen_source_explicit = (
+                line.hyphen_forward_explicit
+                if line.hyphen_role == HyphenRole.BOTH
+                else line.hyphen_source_explicit
+            )
 
         # Mark NONE candidate as PART2
         if candidate.hyphen_role == HyphenRole.NONE:

@@ -5,6 +5,7 @@ from __future__ import annotations
 import textwrap
 from pathlib import Path
 
+import pytest
 from corrigenda.formats.alto.parser import build_document_manifest, parse_alto_file
 
 from corrigenda.core.schemas import HyphenRole
@@ -293,6 +294,71 @@ def test_hyphen_heuristic(tmp_path):
     assert lines[0].hyphen_role == HyphenRole.PART1
     assert lines[0].hyphen_source_explicit is False
     assert lines[0].hyphen_subs_content is None
+
+
+@pytest.mark.parametrize(
+    ("break_char", "name"),
+    [("¬", "U+00AC negation sign"), ("⸗", "U+2E17 Fraktur double oblique")],
+)
+def test_hyphen_heuristic_accepts_the_whole_repertoire(tmp_path, break_char, name):
+    """A Fraktur break character must pair like a hyphen-minus.
+
+    ``core.pairing.HYPHEN_CHARS`` is the shared word-break repertoire and
+    the PAGE parser passes it whole; ALTO passed only ``("-",)``, so a
+    German line ending in ``⸗`` got ``hyphen_role = NONE``. No role means
+    no pair, and no pair means neither the Stage-A integrity check nor the
+    Stage-B drift guards ever run on it — the line is handed to the model
+    with nothing watching its boundary.
+
+    Measured on corpus/37-GT-BNL (19th-c. Luxembourg press, Fraktur, not
+    one SUBS_TYPE in the whole corpus): 24 of 94 break lines, 25.5%, all
+    of them ``⸗``.
+
+    The narrowing this replaces was aimed at numeric forms and dialogue
+    em-dashes — but those are rejected by the alpha-before-break rule in
+    ``trailing_hyphen_char``, not by the repertoire, so widening it here
+    costs none of that protection (see the em-dash case below).
+    """
+    body = f"""\
+<TextBlock ID="TB1" HPOS="0" VPOS="0" WIDTH="200" HEIGHT="100">
+  <TextLine ID="TL1" HPOS="0" VPOS="0" WIDTH="200" HEIGHT="20">
+    <String ID="S1" CONTENT="entgegen{break_char}" HPOS="0" VPOS="0" WIDTH="80" HEIGHT="20"/>
+  </TextLine>
+  <TextLine ID="TL2" HPOS="0" VPOS="25" WIDTH="200" HEIGHT="20">
+    <String ID="S2" CONTENT="stellen" HPOS="0" VPOS="25" WIDTH="60" HEIGHT="20"/>
+  </TextLine>
+</TextBlock>"""
+    xml_path = write_alto(tmp_path, alto_v3(body))
+    pages, _ = parse_alto_file(xml_path, "test.xml")
+    lines = pages[0].lines
+
+    assert lines[0].hyphen_role == HyphenRole.PART1, f"{name} not detected"
+    assert lines[0].hyphen_pair_line_id == "TL2"
+    assert lines[1].hyphen_role == HyphenRole.PART2
+    # Conservative heuristic mode still holds: nothing is invented.
+    assert lines[0].hyphen_source_explicit is False
+    assert lines[0].hyphen_subs_content is None
+
+
+def test_em_dash_is_still_not_a_word_break(tmp_path):
+    """Widening the repertoire must not swallow dialogue em-dashes.
+
+    19th-c. press ends lines with ``—`` constantly (dialogue, separators);
+    treating one as PART1 would pair two unrelated lines and make the
+    rewriter emit a spurious HYP.
+    """
+    body = """\
+<TextBlock ID="TB1" HPOS="0" VPOS="0" WIDTH="200" HEIGHT="100">
+  <TextLine ID="TL1" HPOS="0" VPOS="0" WIDTH="200" HEIGHT="20">
+    <String ID="S1" CONTENT="dit-il —" HPOS="0" VPOS="0" WIDTH="80" HEIGHT="20"/>
+  </TextLine>
+  <TextLine ID="TL2" HPOS="0" VPOS="25" WIDTH="200" HEIGHT="20">
+    <String ID="S2" CONTENT="Bonjour" HPOS="0" VPOS="25" WIDTH="60" HEIGHT="20"/>
+  </TextLine>
+</TextBlock>"""
+    xml_path = write_alto(tmp_path, alto_v3(body))
+    pages, _ = parse_alto_file(xml_path, "test.xml")
+    assert pages[0].lines[0].hyphen_role == HyphenRole.NONE
 
 
 # ---------------------------------------------------------------------------

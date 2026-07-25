@@ -84,6 +84,9 @@ async def _anthropic_body_for(model: str) -> dict:
         "claude-mythos-5",
         "claude-opus-4-7",
         "claude-opus-4-8",
+        # Opus 5 (released 2026-07-24) postdates the original marker list;
+        # without it the demo sends `temperature` and the run dies on a 400.
+        "claude-opus-5",
         "claude-sonnet-5",
     ],
 )

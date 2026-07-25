@@ -75,7 +75,17 @@ def _model_output_cap(model: str) -> int:
 # Substring notes: "sonnet-5" does not occur in "claude-3-5-sonnet-…"
 # or "claude-sonnet-4-5". Unknown FUTURE families are covered by the
 # generic strip-param-on-400 fallback in base.call_llm.
-_NO_TEMPERATURE_MARKERS = ("fable", "mythos", "opus-4-7", "opus-4-8", "sonnet-5")
+_NO_TEMPERATURE_MARKERS = (
+    "fable",
+    "mythos",
+    "opus-4-7",
+    "opus-4-8",
+    # Opus 5 (2026-07-24) postdates this list and rejects the parameter the
+    # same way. "opus-5" does not occur in "claude-opus-4-5", and it also
+    # covers a later "claude-opus-5-x".
+    "opus-5",
+    "sonnet-5",
+)
 
 
 def _supports_temperature(model: str) -> bool:

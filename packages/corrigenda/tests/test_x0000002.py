@@ -67,11 +67,20 @@ class TestX0000002Structure:
         # "alpha-before-dash" tightening eliminated one OCR-garbage
         # line that had a non-alpha char before its trailing dash
         # (was being detected as a phantom hyphen pair).
-        assert len(p1) == 103
-        assert len(explicit) == 90
-        assert len(heuristic) == 13
+        #
+        # Chain-pairing fix — 3 lines moved PART1 → BOTH (103→100, 26→29;
+        # the total, 129, is unchanged). These were middles of a chain
+        # whose forward neighbour was itself a PART1: `link_hyphen_pairs`
+        # refused a PART1 candidate, so the chain's earlier link was
+        # dropped and the middle line never became BOTH. Verified by hand
+        # on all three: `oph-`/`talmique` + `Ajac-`/`cio` (TL000189),
+        # `maiiite-`/`nues` + `tri-`/`ple` (TL000482), `haut-`/`connétable`
+        # + `l'ar-`/`chevêque` (TL000545). The old numbers pinned the bug.
+        assert len(p1) == 100
+        assert len(explicit) == 88
+        assert len(heuristic) == 12
         assert len(p2) == 99  # was 125, 25 moved to BOTH, 1 dropped by L10/B6
-        assert len(both) == 26  # chained hyphenation lines
+        assert len(both) == 29  # chained hyphenation lines
 
     def test_linked_pairs(self):
         """All PART1/BOTH lines with forward links have matching partners."""
@@ -102,7 +111,8 @@ class TestX0000002Structure:
             for lm in lines.values()
             if lm.hyphen_role == HyphenRole.BOTH and lm.hyphen_forward_pair_id
         ]
-        assert len(linked_both) == 26
+        # 26 → 29 with the chain-pairing fix (see test_hyphen_pair_counts).
+        assert len(linked_both) == 29
 
         for lm in linked_both:
             partner = lines.get(lm.hyphen_forward_pair_id)
@@ -356,10 +366,19 @@ class TestX0000002ReconcileInvariant:
         run = run_pipeline("X0000002.xml")
         rm = run.result.reconcile_metrics
         assert rm.fallback == 0
-        assert rm.total == 125  # 99 PART1 + 26 BOTH forward pairs
+        # 99 PART1 + 29 BOTH forward pairs. Was 125 (26 BOTH): the
+        # chain-pairing fix recovered 3 links a chain used to drop. What
+        # this test actually guards is the line above — fallback == 0 —
+        # and it still holds, on 3 MORE pairs than before.
+        assert rm.total == 128
         assert rm.coherent == 115
-        assert rm.neutralised == 10
-        assert run.result.total_reconciled == 125
+        # 10 → 13: the 3 recovered chain links are HEURISTIC pairs, and a
+        # heuristic pair is neutralised by design — accepted, with
+        # subs_content left None rather than a dehyphenated word invented
+        # for it. `coherent` is unchanged at 115, so the fix added exactly
+        # 3 conservative reconciliations and altered no existing one.
+        assert rm.neutralised == 13
+        assert run.result.total_reconciled == 128
         # Every same-page partner resolved (guards audit Problem 1).
         assert run.observer.count("hyphen_partner_missing") == 0
         assert self._pairs_not_mixed(run)
@@ -471,6 +490,6 @@ def test_x0000002_diagnostic_report(tmp_path, capsys):
     assert total_lines == 566
     assert len(soft_hyp) == 0, "Soft-hyphen not fully normalized"
     assert len(unpaired_p2) == 0, "Orphan PART2 still present"
-    assert len(both_all) == 26, "Chained lines not detected"
+    assert len(both_all) == 29, "Chained lines not detected"
     assert rw.untouched == 566
     assert rec.fallback == 0

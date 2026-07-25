@@ -68,6 +68,15 @@ def test_slow_path_reports_dropped_semantic_attrs(tmp_path: Path):
     assert "hpos_dropped" not in result.losses
     assert "id_dropped" not in result.losses
 
+    # Nor is CONTENT. The source reading is not LOST by a rebuild — it is
+    # REPLACED by the correction, which is the entire point of the run.
+    # Counting it inflated the loss report with a phantom: 239 "losses" on a
+    # real 566-line page whose corrections were sound. A loss report that
+    # counts a non-loss misleads an auditor exactly as much as one that
+    # misses a real loss.
+    assert "content_dropped" not in result.losses
+    assert "content_dropped" not in (result.losses_by_line.get("L1") or {})
+
     # The behaviour itself is unchanged: the attrs really are gone from output
     # (we report, we don't invent a re-attachment).
     root = etree.fromstring(result.xml_bytes)
