@@ -59,7 +59,7 @@ from scripts.providers_multimodal import (  # noqa: E402
 
 import corrigenda  # noqa: E402
 from corrigenda.core.quality import HeuristicQEScorer, RoutingPolicy  # noqa: E402
-from corrigenda.core.schemas import GuardConfig  # noqa: E402
+from corrigenda.core.schemas import GuardConfig, ModelCapabilities  # noqa: E402
 from corrigenda.integrations.vision import (  # noqa: E402
     VisionEditProducer,
     build_image_asset,
@@ -71,15 +71,29 @@ from corrigenda.producers.rules import (  # noqa: E402
 
 _MM10_PER_INCH = 254.0
 
-#: provider → (client class, env var holding the key, default model).
+#: provider → (client class, env var holding the key, default model,
+#: images accepted per call).
 #: The key ALWAYS comes from the environment: passing it as a CLI flag
 #: would put it in shell history and in the process list.
-PROVIDERS: dict[str, tuple[type, str, str]] = {
-    "anthropic": (AnthropicMultimodalClient, "ANTHROPIC_API_KEY", "claude-opus-5"),
+#:
+#: The image cap is the host's job to declare: the library ships the
+#: ``max_images`` descriptor and the chunk split, but only the caller knows
+#: which vendor is on the wire. ``None`` means "not measured here, assume
+#: unbounded" — Mistral's 8 was measured against the live API (a 9th image
+#: is a hard 400), Anthropic's has not been, so it stays undeclared rather
+#: than guessed.
+PROVIDERS: dict[str, tuple[type, str, str, int | None]] = {
+    "anthropic": (
+        AnthropicMultimodalClient,
+        "ANTHROPIC_API_KEY",
+        "claude-opus-5",
+        None,
+    ),
     "mistral": (
         MistralMultimodalClient,
         "MISTRAL_API_KEY",
         MistralMultimodalClient.DEFAULT_MODEL,
+        MistralMultimodalClient.MAX_IMAGES_PER_CALL,
     ),
 }
 
@@ -120,7 +134,7 @@ async def main_async(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
 
-    client_cls, key_env, _default = PROVIDERS[args.provider]
+    client_cls, key_env, _default, max_images = PROVIDERS[args.provider]
     client = client_cls()
     api_key = os.environ.get(key_env, "")
     vision = VisionEditProducer(
@@ -129,6 +143,15 @@ async def main_async(args: argparse.Namespace) -> int:
         args.model,
         margin_ratio=args.margin,
         mask_polygon=args.mask_polygon,
+        # The engine keeps each call within this many crops; without it a
+        # dense page (566 lines is a real BnF page) is one impossible
+        # request the provider refuses outright.
+        capabilities=ModelCapabilities(
+            text=True,
+            vision=True,
+            structured_output=True,
+            max_images=max_images,
+        ),
     )
 
     kwargs: dict = {}
@@ -215,7 +238,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--escalate-above", type=float, default=0.3)
     args = parser.parse_args(argv)
 
-    client_cls, key_env, default_model = PROVIDERS[args.provider]
+    client_cls, key_env, default_model, _max_images = PROVIDERS[args.provider]
     if args.model is None:
         args.model = default_model
     key = os.environ.get(key_env, "")
