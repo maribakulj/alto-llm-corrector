@@ -840,7 +840,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `Beta`.** Nothing was ever published to an index under `1.0.0` (the
   tag was never created — the release plan requires an independent
   external API review first, and the core refactor planned in
-  `docs/audit/PLAN-1.0-2026-07-15.md` will deliberately break the API
+  `docs/history/PLAN-1.0-2026-07-15.md` will deliberately break the API
   beforehand). A version that promises a frozen surface while breaks are
   planned is dishonest; the 0.9.x series says what it is. The section
   below keeps its original date and content — it describes the same
@@ -867,7 +867,7 @@ policies; byte-parity golden gates over a real BnF/Transkribus corpus.
 ### Audit remediation — 37 findings + per-wave adversarial reviews (2026-07-12 → 15)
 
 The exhaustive audit (`docs/audit/AUDIT-2026-07-13.md`) and its
-wave-by-wave remediation (`docs/audit/PLAN-CORRECTIONS.md`) landed as part
+wave-by-wave remediation (`docs/history/PLAN-CORRECTIONS.md`) landed as part
 of 1.0 — each fix reproduced by a failing test first, each wave reviewed
 adversarially with its findings treated before the next.
 
