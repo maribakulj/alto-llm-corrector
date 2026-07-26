@@ -2,8 +2,9 @@
 
 > **Statut** : proposition v2, issue de la revue de code complète d'`alto-core`
 > (commit courant de `alto-llm-corrector`) + pesée du protocole d'édition par
-> spans (« C »). Ce document est la **cible** ; le plan de livraison (§13)
-> découpe le chemin en tranches dont chacune laisse la lib publiable.
+> spans (« C »). Ce document est la **cible** : ce que la bibliothèque doit
+> être. Il ne porte plus de calendrier — le plan unique est `docs/PLAN.md`
+> (§13 ci-dessous est conservé comme trace historique et **remplacé** par lui).
 
 ---
 
@@ -595,7 +596,17 @@ ici doivent citer ce paragraphe et argumenter contre.
 
 ---
 
-## 13. Plan de livraison
+## 13. Plan de livraison — REMPLACÉ
+
+> **Ce tableau n'est plus le plan.** Il est conservé pour la provenance des
+> tranches v1.0 → v2.x. Le plan unique et vivant est **`docs/PLAN.md`**, qui a
+> consolidé ce §13 avec `PLAN-1.0` et `ROADMAP_LIB_V3` le 2026-07-25.
+>
+> État réel à cette date : le **contenu** de v1.0 à v2.0 est dans le code
+> (F1–F14 : 14/14 ; PAGE P1–P7 : 7/7, P6 partiel par conception ; protocole §4
+> E1–E6 complet), mais **rien n'a jamais été publié** (0 tag git), la DoD de
+> v1.1 n'est pas tenue (aucun export eScriptorium, parité §6.3 partielle,
+> byte-parity ALTO seulement), et v2.1/v2.x ne sont pas commencées.
 
 Chaque tranche laisse la lib **publiable et verte** ; pas de branche longue.
 

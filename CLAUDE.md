@@ -6,7 +6,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Corrigenda is a post-OCR text-correction **library** (`packages/corrigenda/`, supports ALTO and PAGE XML) plus a demo **web app** (FastAPI backend + React frontend) around it, using LLM providers (OpenAI, Anthropic, Mistral, Google Gemini). Users upload ALTO/PAGE XML, pick a provider/model, and get corrected XML back. It does NOT do OCR, resegmentation, line merging/splitting, translation, or text modernization.
 
-Normative docs: `README.md`, `SPECS_LIB_V2.md`, `packages/corrigenda/docs/`, `docs/API.md`, `SECURITY.md`, `CONTRIBUTING.md`. Everything under `docs/history/` is frozen history — never trust it for current module locations, and never update it to match code.
+Normative docs: `README.md`, `SPECS_LIB_V2.md` (the contract — what the library must be), `docs/PLAN.md` (**the single live plan** — what remains and in what order), `packages/corrigenda/docs/`, `docs/API.md`, `SECURITY.md`, `CONTRIBUTING.md`. Findings live in `docs/audit/` and carry no plan. Everything under `docs/history/` is frozen history — never trust it for current module locations, and never update it to match code.
+
+There is exactly ONE plan. Three competing, unratified ones were consolidated into `docs/PLAN.md` on 2026-07-25 and the originals moved to `docs/history/`; do not write a second, and do not revive the old ones.
 
 ## Tech Stack
 

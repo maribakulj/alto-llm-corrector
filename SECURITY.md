@@ -46,7 +46,7 @@ What it is: a public demonstration. Treat it accordingly.
 What it asserts: the app runs **behind an authenticating reverse
 proxy**; the app itself still has no user accounts (job ownership,
 quotas and durable persistence are roadmap items — see
-`docs/audit/PLAN-REMEDIATION-2026-07-15.md`, Vague 5).
+`docs/history/PLAN-REMEDIATION-2026-07-15.md`, Vague 5).
 
 Enforced by the app in this profile:
 
