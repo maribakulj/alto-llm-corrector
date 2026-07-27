@@ -101,11 +101,11 @@ listés comme quatre correctifs indépendants. Ce sont quatre symptômes de deux
 absences de modèle. Les traiter séparément recrée le mécanisme d'enlisement
 décrit en `S` : quatre correctifs, quatre chemins de plus.
 
-**État : `L0`, `L1`, `L2` faits ; `L4` retiré.** Les deux défauts qui
+**État : `L0`, `L1`, `L2`, `L3`, `L9` faits ; `L4` retiré.** Les deux défauts qui
 altéraient le texte livré sans laisser **aucune** trace — ni compteur, ni
 erreur — sont fermés. `L4` s'est révélé faux à la vérification (§4.5 de
-l'audit du 27) et laisse à sa place `L8`. Restent `L3` (après `S1`), `L5`,
-`L6`, `L7`, `L8`.
+l'audit du 27) et laisse à sa place `L8`. `L3` est fermé, et l'a fait tomber
+`L9`. Restent `L5`, `L6`, `L7`, `L8`.
 
 ### L0 — Échelle de fidélité de projection — **fait** *(prérequis de L1, L4)*
 
@@ -233,16 +233,55 @@ Porter le signe comme **donnée** dans l'unité de césure (codepoint source,
 rôle logique, forme rendue, balisage explicite ou non) reste la bonne
 structure, et appartient à `S1`.
 
-### L3 — Membre inter-pages gelé sur son OCR
+### L3 — Membre inter-pages gelé sur son OCR — **fait**
 
-**Figé** en `xfail(strict)` (`test_cross_page_hyphen_decision.py`). La première
-ligne de toute page qui continue un mot coupé n'est jamais corrigée, l'appel
-modèle est facturé, et le statut `CORRECTED` la rend invisible aux compteurs de
-fallback.
+Le réconciliateur possédait un join depuis sa **queue** : il réconciliait si la
+queue était une cible du chunk. Pour une paire intra-page, très bien — les deux
+membres sont en portée ensemble. Pour une paire **inter-pages**, c'était
+inatteignable : la queue est toujours sur la page antérieure et décidée avant
+que la tête n'existe, donc la passe de la queue lisait le texte de la tête dans
+une réponse qui ne la mentionnait pas, retombait sur l'OCR brut, et écrivait ça
+comme décision de la tête avec `status = CORRECTED`. La page suivante sautait
+alors la ligne (`corrected_text is not None`) et jetait la correction qu'elle
+venait de payer.
 
-**À faire APRÈS `S1`** — le défaut vient de l'ambiguïté de propriété d'une unité
-répartie sur deux pages, pas d'une erreur locale. Il doit tomber presque seul ;
-basculer le test en normal au XPASS.
+Correctif : **un join qui quitte la page appartient à sa tête** — le seul point
+où les deux côtés existent.
+
+Ce qui a rendu ça possible : `pairing.backward_partner_ref`, le miroir de
+`forward_partner_ref`. Que cette direction n'ait **jamais eu de nom** est la
+cause, pas un détail : sans arête entrante nommée, un join ne pouvait
+appartenir qu'à sa queue. Les deux `xfail(strict)` sont passés en XPASS et sont
+devenus des tests ordinaires.
+
+Effet de bord requis : `_reconcile_one_pair` préfère désormais
+`corrected_text` du côté queue — une queue inter-pages porte sa décision sur le
+manifeste, pas dans la réponse du chunk courant.
+
+### L9 — Une paire révoquée était rapportée `corrected` — **fait**
+
+Trouvé en écrivant le test de la paire inter-pages incohérente, et **pas
+limité à l'inter-pages** : `_reconcile_one_pair` posait `status = CORRECTED`
+inconditionnellement, y compris quand `reconcile_hyphen_pair` avait fait
+retomber **les deux** côtés sur leur OCR faute de cohérence. Deux lignes
+gardaient donc leur texte source en se déclarant corrigées : aucun compteur de
+fallback, aucun motif. Exactement la forme silencieuse de `L3`, sur un autre
+chemin.
+
+Le statut suit maintenant l'issue. `classify_reconcile_outcome` ne dit
+« fallback » que si quelque chose a été proposé **et** jeté, donc une
+correction identité reste `CORRECTED`.
+
+**Deux tests épinglaient ce défaut** et affirmaient qu'un « clean run »
+rapportait zéro fallback. Vérifié : sur ces fixtures la substitution casse le
+mot joint, la paire est légitimement révoquée, et les deux lignes gardaient
+bien leur OCR. Ils disent maintenant la vérité, et un vrai baseline
+« ne change rien » a été ajouté à côté.
+
+Les traces des deux membres sont rafraîchies par le réconciliateur : une queue
+révoquée dont la page est déjà close n'a plus rien en aval pour corriger sa
+trace, et `derive_decision_set` **lit le motif sur la trace** — sans ça, le
+rapport montrait un fallback au motif vide.
 
 ### L5 — Cas restants de détection
 

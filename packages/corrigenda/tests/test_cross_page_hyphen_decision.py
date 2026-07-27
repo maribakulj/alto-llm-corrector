@@ -1,34 +1,33 @@
-"""A cross-page hyphen pair must not freeze its second member (A2).
+"""A cross-page hyphen pair must not freeze its second member (L3).
 
-`_reconcile_chunk_hyphens` documents that "a join is owned by its TAIL:
-it reconciles here iff the tail is one of this chunk's targets". For an
-intra-page pair that is fine — both members are in scope together.
+The engine's reconciler owned a join from its TAIL: it reconciled iff the
+tail was one of the chunk's targets. For an intra-page pair that is fine —
+both members are in scope together.
 
-For a CROSS-PAGE pair it is not. The tail (PART1) always sits on the
-EARLIER page, which is processed first, while the head (PART2) opens the
-next page and has not been corrected yet. `_reconcile_one_pair` then reads
+For a CROSS-PAGE pair it was unreachable. The tail (PART1) always sits on
+the EARLIER page, which is processed first, while the head (PART2) opens the
+next page and has not been corrected yet. `_reconcile_one_pair` read
 ``corrected_p2 = text_by_id.get(part2.line_id, part2.ocr_text)`` — the head
-is not in this chunk, so it falls back to raw OCR — and writes that as the
-head's decision with ``status = CORRECTED``. When the later page runs,
-`_apply_line_acceptance` skips the line (``corrected_text is not None``)
-and the correction actually produced for it is discarded.
+is not in this chunk, so it fell back to raw OCR — and wrote that as the
+head's decision with ``status = CORRECTED``. When the later page ran,
+`_apply_line_acceptance` skipped the line (``corrected_text is not None``)
+and the correction actually produced for it was discarded.
 
-Net effect: **the first line of every page that continues a hyphenated
-word is never corrected**, the model call for it is billed anyway, and
-because the status is CORRECTED rather than FALLBACK the loss appears in
-no fallback counter.
+Net effect: **the first line of every page that continued a hyphenated word
+was never corrected**, the model call for it was billed anyway, and because
+the status was CORRECTED rather than FALLBACK the loss appeared in no
+fallback counter.
 
-The fix is to move ownership of a cross-page join to the HEAD, the only
-point at which both sides exist. That is a change to the most
-load-bearing invariant in the engine, so this test lands first, as the
-executable statement of the defect.
+Fixed by moving ownership of a cross-page join to the HEAD — the only point
+at which both sides exist. The two tests below landed first as
+``xfail(strict)``, as the executable statement of the defect; they XPASSed
+once ownership moved, and are now ordinary tests guarding the fix.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
 from corrigenda.core.pipeline import CorrectionPipeline
 from corrigenda.core.schemas import HyphenRole
 from corrigenda.formats.alto.parser import build_document_manifest
@@ -136,30 +135,86 @@ def test_the_tail_of_the_cross_page_pair_is_corrected(tmp_path):
     assert out[("PAGE1", "P1L2")].decision.final_text == "a vote le budget administra-"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="A2 — a cross-page join is owned by its tail, which is decided "
-    "one page before the head exists; the head is frozen on raw OCR and "
-    "marked CORRECTED. Fix is to move ownership of cross-page joins to the "
-    "head. Landed as xfail so the defect is executable while the design "
-    "change is made.",
-)
 def test_the_head_of_the_cross_page_pair_receives_its_correction(tmp_path):
-    """THE defect: the first line of page 2 keeps its raw OCR text."""
+    """THE defect, now closed: the first line of page 2 used to keep its raw
+    OCR text. The head owns the join, so it is corrected like any line."""
     _, out = _run(tmp_path)
     assert out[("PAGE2", "P2L1")].decision.final_text == "tif pour l exercice"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="A2 — the frozen head is marked CORRECTED, so the loss shows up "
-    "in no fallback counter. Even before the freeze is fixed, a line that "
-    "kept its OCR text must not be reported as corrected.",
-)
 def test_a_frozen_head_is_not_reported_as_corrected(tmp_path):
-    """Silence is the aggravating factor: no counter records this."""
+    """Silence was the aggravating factor: a line that kept its OCR text must
+    never be reported as corrected, whatever else is true."""
     _, out = _run(tmp_path)
     o = out[("PAGE2", "P2L1")]
     assert not (
         o.decision.final_text == o.source_text and o.decision.status == "corrected"
     )
+
+
+def _run_with(tmp_path: Path, corrections: dict[str, str]):
+    """Same two pages, but the caller dictates every correction."""
+    f1, f2 = _two_pages(tmp_path)
+    doc = build_document_manifest([(f1, "p1.xml"), (f2, "p2.xml")])
+    full = {
+        lm.line_id: corrections.get(lm.line_id, lm.ocr_text)
+        for page in doc.pages
+        for lm in page.lines
+    }
+    pipeline = CorrectionPipeline.for_provider(
+        DictProvider(full), api_key="k", model="m", observer=_Null()
+    )
+    result = pipeline.run_sync(
+        document_manifest=doc, source_files={"p1.xml": f1, "p2.xml": f2}
+    )
+    return result, {(o.page_id, o.line_id): o for o in result.report.lines}
+
+
+# The head's OCR is "tif p0ur l exercice" — four tokens. Answering with five
+# grows the physical line, which the PART2 absorption guard refuses: a merged
+# line would violate "lines never merge". Chosen deliberately over a wrong
+# WORD, because a wrong word of three letters does not move a similarity
+# ratio — the guards' semantic blindness is a documented design property
+# (docs/PLAN.md, section G), not something to test around.
+_ABSORBING_HEAD = {"P2L1": "tif pour l exercice complet"}
+
+
+def test_an_incoherent_cross_page_pair_takes_BOTH_sides_down(tmp_path):
+    """Unit atomicity across the page break.
+
+    A pair may not survive half corrected, so both members keep their OCR —
+    including the tail, whose page had already closed WITH a correction.
+    That revert is the whole reason ownership had to move to the head: on
+    the tail's own page there was nothing to check the join against.
+    """
+    _, out = _run_with(tmp_path, _ABSORBING_HEAD)
+
+    tail = out[("PAGE1", "P1L2")]
+    head = out[("PAGE2", "P2L1")]
+    assert tail.decision.final_text == tail.source_text
+    assert head.decision.final_text == head.source_text
+    assert tail.decision.status == "fallback"
+    assert head.decision.status == "fallback"
+
+
+def test_a_reverted_cross_page_tail_carries_a_reason(tmp_path):
+    """A fallback with no reason is a fallback nobody can audit.
+
+    ``derive_decision_set`` reads the reason off the line's TRACE, and the
+    tail's trace was finalized a page earlier — so the reconciler has to
+    refresh it or the report shows a fallback with a blank motive.
+    """
+    _, out = _run_with(tmp_path, _ABSORBING_HEAD)
+
+    tail = out[("PAGE1", "P1L2")]
+    assert tail.decision.status == "fallback"
+    assert tail.decision.reason is not None
+    assert tail.decision.reason.code
+
+
+def test_the_run_counts_the_reverted_tail_as_a_fallback_line(tmp_path):
+    """It must reach the aggregate too: "completed with fallbacks" is
+    exactly ``fallback_lines > 0``, and a silent revert is the defect this
+    whole file exists about."""
+    result, _ = _run_with(tmp_path, _ABSORBING_HEAD)
+    assert result.fallback_lines >= 2

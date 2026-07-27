@@ -9,6 +9,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A cross-page hyphen pair no longer freezes its second member.** The
+  reconciler owned a join from its TAIL, which is unreachable across a page
+  break: the tail always sits on the earlier page and is decided before the
+  head exists, so the tail's pass read the head's text out of a response that
+  never mentioned it, fell back to raw OCR, and wrote that as the head's
+  decision with `status = CORRECTED`. The later page then skipped the line
+  (`corrected_text is not None`) and discarded the correction it had just paid
+  for — **the first line of every page continuing a hyphenated word was never
+  corrected**, and because the status was CORRECTED the loss reached no
+  fallback counter. A join that leaves the page is now owned by its HEAD, the
+  only point at which both sides exist. New `pairing.backward_partner_ref` is
+  what made that expressible: the incoming direction had never been named,
+  which is precisely why ownership could only ever sit on the tail.
+
+- **A rejected hyphen pair is no longer reported as corrected.**
+  Independently of the above and not limited to cross-page pairs: when
+  `reconcile_hyphen_pair` reverted BOTH sides to their OCR text for
+  incoherence, the members were still marked CORRECTED. Two lines kept their
+  source text while reporting as corrections, so the revert appeared in no
+  fallback counter and carried no reason. The status now follows the outcome;
+  an identity correction still lands as CORRECTED, since nothing was proposed
+  and thrown away. Both members' traces are refreshed by the reconciler, so a
+  reverted tail whose page already closed still reports a reason (the decision
+  set reads the reason from the trace).
+
 - **A break mark is no longer doubled when the source renders it twice
   (ALTO).** Some producers write the end-of-line hyphen into the `String`
   CONTENT *and* emit a `<HYP>` for it; that is one mark rendered once, and

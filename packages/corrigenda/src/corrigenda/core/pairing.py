@@ -155,6 +155,25 @@ def forward_partner_ref(lm: LineManifest) -> LineRef | None:
     return None
 
 
+def backward_partner_ref(lm: LineManifest) -> LineRef | None:
+    """The line whose word continues ONTO this one, page-qualified.
+
+    The mirror of :func:`forward_partner_ref`: ``PART2`` and ``BOTH`` are
+    continued into, through their PAIR slot; ``PART1``/``NONE`` are not.
+
+    That this direction had no name until now is not a detail — it is why
+    a join could only ever be owned by its TAIL. An intra-page pair does
+    not care: both members are in scope together. A CROSS-PAGE pair does,
+    because the tail always sits on the earlier page and is decided
+    before the head exists, so tail-ownership froze the head on raw OCR
+    (`docs/PLAN.md` L3). Naming the incoming edge is what lets the head —
+    the only point at which both sides exist — own that join instead.
+    """
+    if lm.hyphen_role in (HyphenRole.PART2, HyphenRole.BOTH):
+        return pair_ref(lm)
+    return None
+
+
 def forward_partner_id(lm: LineManifest) -> str | None:
     """Bare line_id of :func:`forward_partner_ref` — for lookups already
     scoped to one page (the LINE-chain planner, the same-chunk predicate).
@@ -354,6 +373,7 @@ __all__ = [
     "pair_ref",
     "forward_ref",
     "forward_partner_ref",
+    "backward_partner_ref",
     "forward_partner_id",
     "link_hyphen_pairs",
     "disambiguate_page_ids",

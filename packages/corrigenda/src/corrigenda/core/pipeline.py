@@ -96,6 +96,7 @@ from corrigenda.core.protocols import (
 )
 from corrigenda.core.alignment import align_tokens
 from corrigenda.core.pairing import (
+    backward_partner_ref,
     forward_partner_ref,
     forward_ref,
     pair_ref,
@@ -605,7 +606,12 @@ def _reconcile_one_pair(
             config=config,
         )
     else:
-        corrected_p1 = text_by_id.get(lm.line_id, lm.ocr_text)
+        # ``corrected_text`` first, exactly as the forward branch does. It
+        # is what a CROSS-PAGE tail carries: its page ran earlier, so its
+        # decision is on the manifest and not in this chunk's response,
+        # and reading the response would silently substitute raw OCR for
+        # the correction it already earned (L3).
+        corrected_p1 = lm.corrected_text or text_by_id.get(lm.line_id, lm.ocr_text)
         final_p1, final_p2, subs = reconcile_hyphen_pair(
             lm,
             part2,
@@ -624,10 +630,21 @@ def _reconcile_one_pair(
         subs,
     )
 
+    # The status follows the OUTCOME. It used to be CORRECTED
+    # unconditionally — including when ``reconcile_hyphen_pair`` had
+    # reverted BOTH sides to their OCR text because the pair was
+    # incoherent. Two lines then kept their source text while reporting
+    # as corrected, so the revert reached no fallback counter and no
+    # reason: the same silent shape as the cross-page freeze (L3), and
+    # not limited to cross-page pairs — any rejected intra-page pair had
+    # it too. ``classify_reconcile_outcome`` only says "fallback" when
+    # something was actually proposed and thrown away, so an identity
+    # correction still lands as CORRECTED, which is what it is.
+    status = LineStatus.FALLBACK if outcome == "fallback" else LineStatus.CORRECTED
     lm.corrected_text = final_p1
-    lm.status = LineStatus.CORRECTED
+    lm.status = status
     part2.corrected_text = final_p2
-    part2.status = LineStatus.CORRECTED
+    part2.status = status
     part2.hyphen_subs_content = subs
 
     if is_forward:
@@ -2144,6 +2161,7 @@ class CorrectionPipeline:
             text_by_id=text_by_id,
             line_by_id=line_by_id,
             cross_page_partners=cross_page_partners,
+            traces=traces,
         )
         self._apply_line_acceptance(
             chunk_lines=target_lines,
@@ -2515,6 +2533,7 @@ class CorrectionPipeline:
         text_by_id: dict[str, str],
         line_by_id: dict[str, LineManifest],
         cross_page_partners: dict[LineRef, LineManifest] | None,
+        traces: dict[LineRef, LineTrace] | None = None,
     ) -> int:
         """Unit-driven hyphen reconciliation (ADR-010).
 
@@ -2529,43 +2548,88 @@ class CorrectionPipeline:
         so the derived groups are the unit AS THIS CHUNK SEES IT — a
         member two hops away contributes nothing and is simply absent.
 
+        **A join that leaves the page is owned by its HEAD instead** (L3).
+        Tail-ownership is unreachable there: the tail always sits on the
+        earlier page and is decided before the head exists, so the tail's
+        pass read the head's text out of a response that never mentioned
+        it, fell back to raw OCR, and wrote that as the head's decision
+        with ``status = CORRECTED``. The later page then skipped the line
+        (``corrected_text is not None``) and threw away the correction it
+        had just paid for. The head is the only point at which both sides
+        exist, so the head claims it.
+
         Returns the number of joins successfully reconciled. Emits a
         ``hyphen_partner_missing`` event for each unresolvable partner
-        (likely cross-page) so observers can surface the diagnostic.
+        so observers can surface the diagnostic.
         """
-        # 1. Resolve every target's outgoing join through the same scope
-        #    as ever: page-wide ids, then cross-page partners.
+        # 1. Collect the joins this chunk owns. Outgoing ones (this line
+        #    continues onto another) unless they leave the page; incoming
+        #    ones (another line continues onto this one) only when they
+        #    do. Every join is therefore owned exactly once, by whichever
+        #    side can see both members.
         joins: dict[LineRef, tuple[LineManifest, LineManifest, bool]] = {}
         pool: dict[LineRef, LineManifest] = {line_ref(lm): lm for lm in chunk_lines}
+
+        def _claim(tail: LineManifest, head: LineManifest) -> None:
+            pool[line_ref(tail)] = tail
+            pool[line_ref(head)] = head
+            # ``is_forward`` names the SLOT the tail links through, and
+            # only a BOTH tail uses its FORWARD slot (see pairing.py).
+            joins[line_ref(tail)] = (
+                tail,
+                head,
+                tail.hyphen_role == HyphenRole.BOTH,
+            )
+
         for lm in chunk_lines:
             # The role→slot map is NOT re-derived here. It used to be, in
             # a ternary two lines long, sitting beside a helper that
             # already owned it — and "forward" naming the SLOT rather
             # than the direction is exactly the kind of thing a second
             # copy gets subtly wrong (ADR-010).
-            ref = forward_partner_ref(lm)
-            if ref is None:
-                continue
-            is_forward = lm.hyphen_role == HyphenRole.BOTH
-            partner_id = ref.line_id
-            partner = _lookup_ref(
-                ref,
-                page_id=lm.page_id,
-                line_by_id=line_by_id,
-                cross_page_partners=cross_page_partners,
-            )
-            if partner is None:
-                self._emit(
-                    ev.HyphenPartnerMissing(
-                        chunk_id=chunk_id,
-                        line_id=lm.line_id,
-                        missing_partner_id=partner_id,
-                        direction="forward" if is_forward else "backward",
-                    )
+            out_ref = forward_partner_ref(lm)
+            if out_ref is not None and out_ref.page_id == lm.page_id:
+                head = _lookup_ref(
+                    out_ref,
+                    page_id=lm.page_id,
+                    line_by_id=line_by_id,
+                    cross_page_partners=cross_page_partners,
                 )
-                continue
-            pool[line_ref(partner)] = partner
-            joins[line_ref(lm)] = (lm, partner, is_forward)
+                if head is None:
+                    self._emit(
+                        ev.HyphenPartnerMissing(
+                            chunk_id=chunk_id,
+                            line_id=lm.line_id,
+                            missing_partner_id=out_ref.line_id,
+                            direction=(
+                                "forward"
+                                if lm.hyphen_role == HyphenRole.BOTH
+                                else "backward"
+                            ),
+                        )
+                    )
+                else:
+                    _claim(lm, head)
+
+            in_ref = backward_partner_ref(lm)
+            if in_ref is not None and in_ref.page_id != lm.page_id:
+                tail = _lookup_ref(
+                    in_ref,
+                    page_id=lm.page_id,
+                    line_by_id=line_by_id,
+                    cross_page_partners=cross_page_partners,
+                )
+                if tail is None:
+                    self._emit(
+                        ev.HyphenPartnerMissing(
+                            chunk_id=chunk_id,
+                            line_id=lm.line_id,
+                            missing_partner_id=in_ref.line_id,
+                            direction="backward",
+                        )
+                    )
+                else:
+                    _claim(tail, lm)
 
         # 2. One walk per unit, members in reading order. Every join's
         #    tail and partner are both in the pool, so the derivation
@@ -2589,6 +2653,30 @@ class CorrectionPipeline:
                     config=self.guard_config,
                 )
                 self._record_reconcile_outcome(ctx, outcome)
+                # Both members' traces are refreshed here, not only the
+                # chunk's own. A cross-page join is decided on the HEAD's
+                # page, and an incoherent pair reverts the TAIL — whose
+                # page closed already, so nothing downstream would fix
+                # its trace. A FALLBACK with no reason on the trace
+                # surfaces as a decision with no reason at all
+                # (derive_decision_set reads the reason from there).
+                # NB ``side``, not ``member``: the enclosing loop's
+                # ``member`` is a LineRef, and shadowing it here type-checks
+                # as a conflict for good reason — it is read at the top of
+                # this loop body.
+                for side in (tail, head):
+                    fell = side.status is LineStatus.FALLBACK
+                    _set_trace(
+                        traces,
+                        side,
+                        projected_text=side.corrected_text,
+                        validation_status="fallback" if fell else "corrected",
+                    )
+                    if not fell:
+                        continue
+                    trace = traces.get(line_ref(side)) if traces is not None else None
+                    if trace is not None and not trace.fallback_reason:
+                        trace.fallback_reason = f"hyphen_pair_{outcome}"
                 written_heads.add(head_ref)
                 reconciled_count += 1
 

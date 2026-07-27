@@ -132,10 +132,43 @@ async def test_guard_rejection_is_a_line_fallback_without_chunk_failure() -> Non
 
 
 @pytest.mark.asyncio
-async def test_clean_run_reports_zero_everywhere() -> None:
+async def test_a_run_with_no_chunk_failure_reports_no_chunk_fallback() -> None:
+    """No producer call fails, so ``fallback_chunks`` stays 0 — but LINE-level
+    fallbacks are a different counter and may be non-zero.
+
+    ``e``→``3`` breaks the joined word of the sample's hyphen pair
+    (``SUBS_CONTENT`` no longer matches the boundary join), so the reconciler
+    reverts that pair to OCR. That is a real rejection and both members are
+    FALLBACK. This test used to assert ``fallback_lines == 0``, which passed
+    only because a reverted pair was mislabelled CORRECTED — the lines kept
+    their OCR text and no counter said so.
+    """
     doc = build_document_manifest([(_SAMPLE, _SAMPLE.name)])
     pipeline = CorrectionPipeline(
         producer=RulesProducer([SubstitutionRule("e", "3")]),
+        observer=_Null(),
+        producer_metadata=ProducerMetadata(name="rules", implementation="v1"),
+    )
+    result = await pipeline.run(
+        document_manifest=doc, source_files={_SAMPLE.name: _SAMPLE}
+    )
+    assert result.fallback_chunks == 0
+
+    # Every fallen line really did keep its source text, and every one of
+    # them is a hyphen-pair member — nothing else was rejected.
+    fallen = [d for d in result.decisions.decisions if d.status is LineStatus.FALLBACK]
+    assert len(fallen) == result.fallback_lines
+    assert all(d.final_text == d.source_text for d in fallen)
+    assert set(result.fallback_reasons) == {"hyphen_pair_fallback"}
+
+
+@pytest.mark.asyncio
+async def test_a_run_that_changes_nothing_reports_zero_everywhere() -> None:
+    """The genuine clean-run baseline: a producer that proposes the source
+    text back cannot trip any guard, so all three counters are 0."""
+    doc = build_document_manifest([(_SAMPLE, _SAMPLE.name)])
+    pipeline = CorrectionPipeline(
+        producer=RulesProducer([]),
         observer=_Null(),
         producer_metadata=ProducerMetadata(name="rules", implementation="v1"),
     )
