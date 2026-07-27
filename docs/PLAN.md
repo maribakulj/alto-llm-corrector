@@ -101,11 +101,12 @@ listés comme quatre correctifs indépendants. Ce sont quatre symptômes de deux
 absences de modèle. Les traiter séparément recrée le mécanisme d'enlisement
 décrit en `S` : quatre correctifs, quatre chemins de plus.
 
-**État : `L0`, `L1`, `L2`, `L3`, `L9` faits ; `L4` retiré.** Les deux défauts qui
+**État : `L0`, `L1`, `L2`, `L3`, `L9`, `L10` faits ; `L4` retiré.** Les deux défauts qui
 altéraient le texte livré sans laisser **aucune** trace — ni compteur, ni
 erreur — sont fermés. `L4` s'est révélé faux à la vérification (§4.5 de
-l'audit du 27) et laisse à sa place `L8`. `L3` est fermé, et l'a fait tomber
-`L9`. Restent `L5`, `L6`, `L7`, `L8`.
+l'audit du 27) et laisse à sa place `L8`. `L3` est fermé ; il a fait tomber `L9`, et
+l'invariant écrit pour couvrir cette famille a trouvé `L10`. Restent `L5`,
+`L6`, `L7`, `L8`.
 
 ### L0 — Échelle de fidélité de projection — **fait** *(prérequis de L1, L4)*
 
@@ -257,6 +258,24 @@ devenus des tests ordinaires.
 Effet de bord requis : `_reconcile_one_pair` préfère désormais
 `corrected_text` du côté queue — une queue inter-pages porte sa décision sur le
 manifeste, pas dans la réponse du chunk courant.
+
+### L10 — Coupure avant perdue sur une ligne à rôle mixte — **fait**
+
+**Trouvé par un test, pas par une lecture** — le premier de la session.
+
+`PAG_00000002_TL000454` de `examples/X0000002.xml` est `BOTH` : elle ouvre sur
+un `SUBS_TYPE="HypPart2"` explicite et finit sur un simple tiret heuristique,
+sans `<HYP>`. Lien arrière explicite, coupure avant heuristique, sur une seule
+ligne.
+
+Le réécrivain décidait de retirer le tiret du `String` en lisant
+`hyphen_source_explicit` — qui décrit le lien **arrière**. Réponse
+« explicite », donc il retirait le tiret en supposant qu'un `<HYP>` le rendrait.
+Il n'y en a pas : **le signe disparaissait du fichier livré.**
+
+Correctif : `pairing.forward_break_is_explicit`, la carte rôle→slot appliquée
+au bon drapeau. Diff classé par TextLine sur le corpus réel : **1 sur 566**,
+`Wal` → `Wal-`, rien d'autre. Le hash d'or épinglait le défaut.
 
 ### L9 — Une paire révoquée était rapportée `corrected` — **fait**
 
@@ -438,7 +457,7 @@ Ajouter des tests unitaires ne referme pas cet écart. Trois familles :
 |---|---|
 | T1 | **Métamorphiques** — même document découpé autrement → même décision (seul cas existant, `fcd7804`) ; mêmes pages regroupées autrement → même décision ; même césure intra-page ou inter-pages → même résultat logique ; page vide ajoutée → aucune autre décision ne bouge ; signe de coupure substitué par un équivalent autorisé → unité conservée |
 | T2 | **Corpus adversarial** — le corpus de formes qui n'existe pas : U+00A0 et U+202F, gamme complète des tirets, chaînes de 3-4 membres, césure inter-pages réelle, lignes sans `SUBS_TYPE`, lignes vides et éléments non textuels intercalés, ALTO de plusieurs producteurs, PAGE Transkribus et eScriptorium réels |
-| T3 | **Différentiels** — comparer décision logique, texte réextrait, octets XML, attributs conservés, géométrie, compteurs de perte et statut de ligne. « Le XML est valide » n'est pas le résultat attendu |
+| T3 | **Différentiels** — comparer décision logique, texte réextrait, octets XML, attributs conservés, géométrie, compteurs de perte et statut de ligne. « Le XML est valide » n'est pas le résultat attendu. **Entamé** : `test_status_truthfulness.py` croise statut × texte source × proposition sur le corpus généré et les fixtures réelles. Rentabilité immédiate — il a trouvé `L10`, inconnu, sur le fichier BnF |
 
 `T2` alimente `M5` (le corpus épinglé bloquant) : c'est le même corpus.
 

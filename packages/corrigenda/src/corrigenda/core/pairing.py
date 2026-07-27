@@ -155,6 +155,28 @@ def forward_partner_ref(lm: LineManifest) -> LineRef | None:
     return None
 
 
+def forward_break_is_explicit(lm: LineManifest) -> bool:
+    """Is THIS line's end-of-line break marked up in the source?
+
+    The same role→slot map as :func:`forward_partner_ref`, applied to the
+    explicitness flags: ``PART1`` reads ``hyphen_source_explicit`` (its
+    forward link is the PAIR slot), ``BOTH`` reads
+    ``hyphen_forward_explicit``.
+
+    The distinction is load-bearing and a real BnF line depends on it.
+    ``PAG_00000002_TL000454`` of ``examples/X0000002.xml`` opens with an
+    explicit ``SUBS_TYPE="HypPart2"`` and ends on a bare heuristic dash
+    (``Wal-``) with no ``<HYP>``: backward explicit, forward heuristic, on
+    one line. Reading ``hyphen_source_explicit`` to decide about the
+    FORWARD break answered "explicit", so the writer dropped the dash from
+    the String expecting a HYP element to render it — and there is none.
+    The mark vanished from the artefact.
+    """
+    if lm.hyphen_role == HyphenRole.BOTH:
+        return lm.hyphen_forward_explicit
+    return lm.hyphen_source_explicit
+
+
 def backward_partner_ref(lm: LineManifest) -> LineRef | None:
     """The line whose word continues ONTO this one, page-qualified.
 
@@ -374,6 +396,7 @@ __all__ = [
     "forward_ref",
     "forward_partner_ref",
     "backward_partner_ref",
+    "forward_break_is_explicit",
     "forward_partner_id",
     "link_hyphen_pairs",
     "disambiguate_page_ids",

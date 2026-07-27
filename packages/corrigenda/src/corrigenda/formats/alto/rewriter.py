@@ -11,7 +11,7 @@ from corrigenda.core._norm import clean_content, nfc
 from corrigenda.core._parse import parse_int_tolerant
 from corrigenda.core.alignment import align_tokens
 from corrigenda.core.identity import ensure_unique_identities
-from corrigenda.core.pairing import HYPHEN_CHARS
+from corrigenda.core.pairing import HYPHEN_CHARS, forward_break_is_explicit
 from corrigenda.errors import DuplicateIdError
 from corrigenda.formats.alto._ns import (
     _detect_namespace,
@@ -900,10 +900,10 @@ def rewrite_alto_file(
         # A HEURISTIC PART1 (no HYP/SUBS markup) has no structural hyphen and
         # keeps its trailing dash in CONTENT — untouched by this branch.
         write_text = corrected
-        if (
-            lm.hyphen_role in (HyphenRole.PART1, HyphenRole.BOTH)
-            and lm.hyphen_source_explicit
-        ):
+        if lm.hyphen_role in (
+            HyphenRole.PART1,
+            HyphenRole.BOTH,
+        ) and forward_break_is_explicit(lm):
             write_text = _drop_structural_break_hyphen(corrected)
 
         # --- Path 3: FAST PATH (word count same) ---

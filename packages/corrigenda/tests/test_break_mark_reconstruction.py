@@ -27,6 +27,8 @@ not "fix" it.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 from lxml import etree
 
@@ -98,3 +100,63 @@ class TestUnrelatedReconstructionIsUnchanged:
     def test_a_trailing_mark_with_no_hyp_element(self) -> None:
         # Heuristic PART1: the mark lives in CONTENT and there is no HYP.
         assert _rebuild('<String CONTENT="Ober⸗"/>') == "Ober⸗"
+
+
+# ---------------------------------------------------------------------------
+# Mixed-role lines: backward explicit, forward heuristic, on ONE line
+# ---------------------------------------------------------------------------
+
+
+class TestAMixedRoleLineKeepsItsForwardMark:
+    """``PAG_00000002_TL000454`` of the real BnF fixture is BOTH: it opens
+    with an explicit ``SUBS_TYPE="HypPart2"`` and ends on a bare heuristic
+    dash with no ``<HYP>``.
+
+    The writer decided whether to strip that trailing mark from the String
+    by reading ``hyphen_source_explicit`` — which describes the BACKWARD
+    link. It answered "explicit", so the dash was dropped on the assumption
+    a ``<HYP>`` would render it. There is none: the mark vanished from the
+    delivered file. Found by the status-truthfulness invariant
+    (``test_status_truthfulness.py``), not by reading.
+    """
+
+    def test_the_two_explicitness_flags_can_disagree(self) -> None:
+        from corrigenda.core.pairing import forward_break_is_explicit
+        from corrigenda.core.schemas import HyphenRole
+        from corrigenda.formats.alto.parser import parse_alto_file
+
+        path = Path(__file__).parent.parent.parent.parent / "examples" / "X0000002.xml"
+        pages, _ = parse_alto_file(path, path.name)
+        line = next(
+            lm
+            for page in pages
+            for lm in page.lines
+            if lm.line_id == "PAG_00000002_TL000454"
+        )
+        assert line.hyphen_role is HyphenRole.BOTH
+        assert line.hyphen_source_explicit is True  # the backward link
+        assert line.hyphen_forward_explicit is False  # the forward break
+        # The role→slot map must read the forward one.
+        assert forward_break_is_explicit(line) is False
+
+    def test_the_forward_mark_survives_the_rewrite(self) -> None:
+        from corrigenda.core.schemas import LineStatus
+        from corrigenda.formats.alto.parser import parse_alto_file
+        from corrigenda.formats.alto.rewriter import rewrite_alto_file
+
+        path = Path(__file__).parent.parent.parent.parent / "examples" / "X0000002.xml"
+        pages, _ = parse_alto_file(path, path.name)
+        target = "PAG_00000002_TL000454"
+        for page in pages:
+            for lm in page.lines:
+                # Uppercase the first word: a real change, so the line takes
+                # a write path rather than UNTOUCHED, with the word count
+                # and the trailing mark both preserved.
+                head, sep, rest = lm.ocr_text.partition(" ")
+                lm.corrected_text = head.upper() + sep + rest
+                lm.status = LineStatus.CORRECTED
+
+        result = rewrite_alto_file(path, pages, "test", "mock")
+        assert result.texts[target].endswith("-"), (
+            f"the forward break mark was dropped: {result.texts[target]!r}"
+        )

@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A mixed-role line no longer loses its forward break mark (ALTO).** A line
+  can be BOTH with an explicit backward link and a HEURISTIC forward break —
+  `PAG_00000002_TL000454` of `examples/X0000002.xml` opens on
+  `SUBS_TYPE="HypPart2"` and ends on a bare dash with no `<HYP>`. The writer
+  chose whether to strip that trailing mark from the String by reading
+  `hyphen_source_explicit`, which describes the *backward* link; it answered
+  "explicit", so the dash was dropped on the assumption a `<HYP>` element
+  would render it. There is none, and the mark was gone from the delivered
+  file. New `pairing.forward_break_is_explicit` applies the same role→slot map
+  as `forward_partner_ref` to the explicitness flags. Byte diff on the real
+  corpus, classified per TextLine: exactly 1 of 566, `Wal` → `Wal-`.
+
 - **A cross-page hyphen pair no longer freezes its second member.** The
   reconciler owned a join from its TAIL, which is unreachable across a page
   break: the tail always sits on the earlier page and is decided before the
