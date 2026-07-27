@@ -159,6 +159,47 @@ def hyphen_group_by_line(
     return index
 
 
+def units_containing(
+    seeds: Iterable[LineManifest],
+    pool: Iterable[LineManifest],
+) -> list[LineManifest]:
+    """``seeds`` plus every line sharing a hyphen unit with one of them.
+
+    THE traversal behind every "…and its partners, atomically" operation:
+    a chunk whose error was absorbed drags its units down with it, an
+    exhausted chunk's fallback takes the members that sit outside it.
+    Both need the transitive set, not the direct partners — a mixed
+    PART1→BOTH→PART2 chain where one member kept a correction and the
+    others fell back is a word rewritten on one line and verbatim on the
+    next.
+
+    ``pool`` bounds what is reachable, exactly as the caller's lookup
+    maps used to: pass one page's lines plus the known cross-page
+    partners and a link out of that set simply does not resolve. Order
+    is the pool's reading order, and seeds are always included — even a
+    seed in no unit at all.
+
+    Lives here, beside the derivation, because it *is* the derivation:
+    the pipeline used to carry a second fixed-point walk over the
+    pointer fields that could disagree with this one. Two encodings of
+    "which lines travel together" is one too many (ADR-010).
+    """
+    seed_list = list(seeds)
+    seed_refs = {line_ref(lm) for lm in seed_list}
+    index = hyphen_group_by_line(derive_hyphen_groups(pool))
+
+    wanted = set(seed_refs)
+    for ref in seed_refs:
+        group = index.get(ref)
+        if group is not None:
+            wanted.update(group.members)
+
+    by_ref = {line_ref(lm): lm for lm in seed_list}
+    for lm in pool:
+        by_ref.setdefault(line_ref(lm), lm)
+    return [by_ref[ref] for ref in by_ref if ref in wanted]
+
+
 def split_forward_link(tail: LineManifest, head: LineManifest) -> HyphenSplit:
     """Sever the forward hyphen link ``tail`` → ``head`` — THE unit
     SPLIT operation (ADR-010).
@@ -223,4 +264,5 @@ __all__ = [
     "derive_hyphen_groups",
     "hyphen_group_by_line",
     "split_forward_link",
+    "units_containing",
 ]

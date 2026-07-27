@@ -45,7 +45,7 @@ propriétés tenables. Critères de sortie, à ne pas négocier à la baisse :
 |---|---|---|
 | V1 | Aucune altération du texte livré qui ne soit **déclarée et comptée** | `L*` fermés, échelle de fidélité au rapport |
 | V2 | La comptabilité des pertes ne produit **ni fantôme ni angle mort** | `R*` fermés, matrice versionnée |
-| V3 | Une **seule** définition de l'unité de césure dans tout le code | `S1` fermé, 1 résolveur |
+| V3 | Une **seule** définition de l'unité de césure dans tout le code | `S1` fermé : 1 primitive dirigée + 1 dérivation d'unité |
 | V4 | Ce que le système **ne peut pas** établir est signalé, pas décidé | `review_required` livré (`G*`) |
 | V5 | La surface publique est la clôture de ce que la façade retourne | `S3` fermé |
 | V6 | Toute revendication chiffrée est un **intervalle**, sur ≥2 familles de modèles, dont le chemin inter-pages | `M*` fermés |
@@ -307,17 +307,54 @@ L'unification a atterri en ajout — cinq chemins au lieu de quatre.
 - Effet de bord : la dérivation est faite une fois par page, plus une fois par
   ligne — l'ancienne marche était quadratique en densité de césures.
 
-Restent `_resolve_partner` + `_hyphen_closure` (pipeline) et
-`should_stay_in_same_chunk` (hyphenation). Le blocage pour la suite est nommé :
-`_hyphen_closure` travaille « sur les pointeurs **courants** » et
-`split_forward_link` les mute pendant la planification, donc un index mis en
-cache serait périmé. Les fermer suppose de rendre l'unité **autoritaire** et les
-pointeurs dérivés — le cœur de `S1`, pas une tranche.
+**Deuxième tranche faite (2026-07-27).** `pipeline._hyphen_closure` supprimé,
+remplacé par `units.units_containing` : la seconde marche à point fixe sur les
+pointeurs a disparu. **5 résolveurs → 2.** Personne n'a rien vu passer — la
+suite entière est restée verte au moment de l'échange, ce qui montrait
+justement qu'aucun test n'exerçait la différence entre les deux encodages.
+Sept tests l'épinglent désormais.
+
+### Correction de la cible de `S1`
+
+Le plan visait « **1** résolveur ». C'est faux, et une mauvaise cible produit
+un mauvais refactor. La cartographie montre **deux notions distinctes**, à
+garder distinctes :
+
+| notion | question | primitive |
+|---|---|---|
+| arête **dirigée** | « sur quelle ligne mon mot continue-t-il ? » | `forward_partner_id` |
+| **unité** non dirigée | « quelles lignes voyagent ensemble ? » | `derive_hyphen_groups` |
+
+Les confondre est ce qui a produit les encodages parallèles. La bonne cible est
+**une primitive dirigée + une dérivation d'unité**, pas une seule fonction.
+
+Restent, et ce sont les bons restants :
+
+- `_resolve_partner` (pipeline) — même notion **dirigée** que
+  `forward_partner_id`, mais qualifiée par page et rendant un manifeste. Vrai
+  doublon, à fusionner : deux encodages d'une arête dirigée.
+- `should_stay_in_same_chunk` (hyphenation) — prédicat mince bâti sur
+  `forward_partner_id`. Une troisième formulation ; à absorber ou à assumer.
+
+Le blocage du **cœur** de `S1` est nommé, et il est plus favorable qu'attendu :
+`split_forward_link` est le **seul** mutateur de pointeur après le parsing
+(vérifié — tous les autres sites sont dans les parseurs et
+`link_hyphen_pairs`), et il est appelé par le planificateur. Une fois une page
+planifiée, ses pointeurs sont figés pour l'exécution. Rendre l'unité
+autoritaire revient donc à dériver l'index **après chaque (re)planification**
+— y compris après une descente de granularité — et non à traquer des mutations
+dispersées.
+
+Attention en fermant `_resolve_partner` : le site « un partenaire est-il tombé
+en fallback ? » n'interroge aujourd'hui que les partenaires **directs**, pas la
+chaîne transitive. Passer au groupe élargit le comportement — défendable au
+titre de l'atomicité, mais c'est un changement de comportement à mesurer, pas à
+glisser.
 
 | id | item | mesure actuelle | cible |
 |---|---|---|---|
-| S1 | Queue de l'ADR-010 : **unité de césure de première classe** — membres ordonnés, pages, type explicite/heuristique, autorité `SUBS_CONTENT`, signe physique, état, décision atomique, projection par format. Pointeurs dérivés, jamais mutables séparément. Retrait des résolveurs obsolètes | **3** résolveurs (était 5) ; 18 lectures de pointeur dans `pipeline.py` | **1** résolveur, 0 pointeur mutable |
-| S2 | Scinder `core/pipeline.py` en composants nommés — préflight, planification, routage, exécution de chunk, validation, acceptation, réconciliation d'unités, projection, assemblage du rapport. Le pipeline public **orchestre**, il ne réimplémente pas | **3061** lignes (3015 le 25/07 : `L0` en a ajouté ~50, `S1` en a rendu 3) ; `_run_impl` 294/imbr. 4 ; `_attempt_chunk` 220/imbr. 5 | fichier principal < 800 l., aucune méthode > 100 l., assemblage du rapport indépendant du contrôle d'exécution |
+| S1 | Queue de l'ADR-010 : **unité de césure de première classe** — membres ordonnés, pages, type explicite/heuristique, autorité `SUBS_CONTENT`, signe physique, état, décision atomique, projection par format. Pointeurs dérivés, jamais mutables séparément. Retrait des résolveurs obsolètes | **2** résolveurs (était 5) ; 18 lectures de pointeur dans `pipeline.py` | 1 primitive dirigée + 1 dérivation d'unité, 0 pointeur mutable |
+| S2 | Scinder `core/pipeline.py` en composants nommés — préflight, planification, routage, exécution de chunk, validation, acceptation, réconciliation d'unités, projection, assemblage du rapport. Le pipeline public **orchestre**, il ne réimplémente pas | **3052** lignes (3015 le 25/07 : `L0` en a ajouté ~50, `S1` en a rendu ~12) ; `_run_impl` 294/imbr. 4 ; `_attempt_chunk` 220/imbr. 5 | fichier principal < 800 l., aucune méthode > 100 l., assemblage du rapport indépendant du contrôle d'exécution |
 | S3 | Réduire la surface publique. **La cible n'est pas « 8 » mais la clôture transitive de ce que la façade retourne** : `load`/`correct`/`correct_sync` + `LoadedDocument`, `CorrectionResult`, `CorrectionReport`, `DecisionSet`, `LineDecision`, `LineRef`, `EditProducer`, les policies injectables, `CorrigendaError`, `CORRECTION_REPORT_VERSION`, `__version__`. Le reste reste importable depuis son module, sans être façade | **95** exports | clôture arrêtée et gelée |
 | S4 | Queue de l'ADR-011 : geler les types `Source*` (l'immuabilité repose sur une copie défensive, pas sur le type) | — | — |
 | S5 | Écrire `docs/adr/012-*.md` : cité par le code, inexistant ; `docs/adr/README.md` s'arrête à 008 alors que 009-011 existent | — | — |

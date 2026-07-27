@@ -11,7 +11,11 @@ from __future__ import annotations
 from hypothesis import given, settings
 
 from corrigenda.core.identity import LineRef
-from corrigenda.core.units import derive_hyphen_groups, hyphen_group_by_line
+from corrigenda.core.units import (
+    derive_hyphen_groups,
+    hyphen_group_by_line,
+    units_containing,
+)
 from corrigenda.formats.alto.parser import build_document_manifest
 
 from tests._alto_gen import rich_alto_documents
@@ -270,3 +274,82 @@ def test_completeness_is_a_property_of_the_derivation_set() -> None:
         "but the unit continues off-page, so what this page can see is not "
         "the whole unit — the router must not move it"
     )
+
+
+# ---------------------------------------------------------------------------
+# `units_containing` — "…and its partners, atomically"
+# ---------------------------------------------------------------------------
+#
+# Replaces a second fixed-point walk the pipeline carried over the pointer
+# fields. Both encodings answered "which lines travel together"; two answers
+# to that question is one too many, and the pipeline's could drift from the
+# reconciler's view without any test noticing (none did — the whole suite
+# passed unchanged when the walk was swapped out, which is why these exist).
+
+
+def test_a_seed_drags_its_whole_chain() -> None:
+    lines = _chain_lines()
+    l0, l1, l2 = lines
+    got = units_containing([l1], lines)
+    assert {lm.line_id for lm in got} == {l0.line_id, l1.line_id, l2.line_id}
+
+
+def test_seeding_from_either_end_yields_the_same_unit() -> None:
+    lines = _chain_lines()
+    from_head = {lm.line_id for lm in units_containing([lines[0]], lines)}
+    from_tail = {lm.line_id for lm in units_containing([lines[-1]], lines)}
+    assert from_head == from_tail
+
+
+def test_an_ungrouped_seed_comes_back_alone_not_dropped() -> None:
+    """The caller is falling these lines back; losing one would leave it
+    PENDING and fail the run's terminality backstop."""
+    lines = _chain_lines()
+    loner = lines[0].model_copy(
+        update={
+            "line_id": "SOLO",
+            "hyphen_role": HyphenRole.NONE,
+            "hyphen_pair_line_id": None,
+            "hyphen_pair_page_id": None,
+            "hyphen_forward_pair_id": None,
+            "hyphen_forward_pair_page_id": None,
+        }
+    )
+    got = units_containing([loner], [*lines, loner])
+    assert [lm.line_id for lm in got] == ["SOLO"]
+
+
+def test_a_seed_outside_the_pool_is_still_returned() -> None:
+    lines = _chain_lines()
+    stray = lines[0].model_copy(update={"line_id": "OFFPOOL", "page_id": "PZ"})
+    got = units_containing([stray], lines)
+    assert "OFFPOOL" in {lm.line_id for lm in got}
+
+
+def test_the_pool_bounds_what_is_reachable() -> None:
+    """A link out of the pool does not resolve — the same scope the
+    pipeline's lookup maps always had."""
+    lines = _chain_lines()
+    l0, l1, _l2 = lines
+    got = units_containing([l0], [l0, l1])  # l2 withheld
+    assert {lm.line_id for lm in got} == {l0.line_id, l1.line_id}
+
+
+def test_a_cross_page_partner_in_the_pool_is_reached() -> None:
+    """The case the pipeline needed its own walk for: a member on another
+    page, supplied alongside this page's lines."""
+    lines = _chain_lines()
+    _l0, l1, l2 = lines
+    l2.page_id = "P2"
+    l1.hyphen_forward_pair_page_id = "P2"
+    l2.hyphen_pair_page_id = "P1"
+
+    got = units_containing([l1], lines)
+    assert l2.line_id in {lm.line_id for lm in got}
+
+
+def test_every_returned_line_appears_once() -> None:
+    lines = _chain_lines()
+    got = units_containing(lines, [*lines, *lines])
+    refs = [(lm.page_id, lm.line_id) for lm in got]
+    assert len(refs) == len(set(refs))

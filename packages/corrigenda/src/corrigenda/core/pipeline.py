@@ -71,7 +71,11 @@ from corrigenda.core.fidelity import (
     classify_projection_fidelity,
 )
 from corrigenda.core.planner import downgrade_granularity, plan_page
-from corrigenda.core.units import derive_hyphen_groups, hyphen_group_by_line
+from corrigenda.core.units import (
+    derive_hyphen_groups,
+    hyphen_group_by_line,
+    units_containing,
+)
 from corrigenda.core.guards import (
     check_adjacent_duplicates,
     check_boundary_migration,
@@ -544,34 +548,22 @@ def _page_local_units(
     return units
 
 
-def _hyphen_closure(
-    seeds: list[LineManifest],
-    line_by_id: dict[str, LineManifest],
+def _unit_pool(
+    line_by_id: dict[str, LineManifest] | None,
     cross_page_partners: dict[LineRef, LineManifest] | None,
-) -> dict[int, LineManifest]:
-    """Fixed-point closure of hyphen links over the CURRENT pointers.
+) -> list[LineManifest]:
+    """Everything a unit query may reach from here: this page's lines plus
+    the cross-page partners the run has resolved.
 
-    The one traversal behind every "atomically with its partners"
-    operation (duplicate reverts, unit fallback): seeds plus every line
-    transitively reachable through pair/forward links, resolved via
-    ``_resolve_partner`` so cross-page members are reached too. Keyed by
-    object identity — bare line_ids legitimately repeat across files.
+    The two maps are the scope the pipeline has always used. Flattening
+    them into one pool lets :func:`~corrigenda.core.units.units_containing`
+    answer "…and its partners" from the shared derivation instead of the
+    pipeline carrying a second fixed-point walk over the pointer fields.
     """
-    closure: dict[int, LineManifest] = {id(lm): lm for lm in seeds}
-    worklist = list(seeds)
-    while worklist:
-        lm = worklist.pop()
-        for is_forward in (False, True):
-            partner = _resolve_partner(
-                lm,
-                is_forward=is_forward,
-                line_by_id=line_by_id,
-                cross_page_partners=cross_page_partners,
-            )
-            if partner is not None and id(partner) not in closure:
-                closure[id(partner)] = partner
-                worklist.append(partner)
-    return closure
+    pool = list(line_by_id.values()) if line_by_id else []
+    if cross_page_partners:
+        pool.extend(cross_page_partners.values())
+    return pool
 
 
 def _reconcile_one_pair(
@@ -1917,10 +1909,9 @@ class CorrectionPipeline:
                     # ADR-010 — the absorbed chunk's unit members on OTHER
                     # pages (already corrected or not yet processed) fall
                     # back too: a mixed pair may not survive the absorb.
-                    closure = _hyphen_closure(
-                        undecided, line_by_id, cross_page_partners
+                    undecided = units_containing(
+                        undecided, _unit_pool(line_by_id, cross_page_partners)
                     )
-                    undecided = list(closure.values())
                     reason = sanitize_error(str(exc))[:120]
                     for lm in undecided:
                         lm.corrected_text = lm.ocr_text
@@ -2223,10 +2214,10 @@ class CorrectionPipeline:
                 validation_status="fallback",
                 fallback_reason=f"all_attempts_exhausted: {sanitised_msg[:120]}",
             )
-        closure = _hyphen_closure(
-            targets, line_by_id if line_by_id is not None else {}, cross_page_partners
+        unit_members = units_containing(
+            targets, _unit_pool(line_by_id, cross_page_partners)
         )
-        for lm in closure.values():
+        for lm in unit_members:
             if lm.line_id in target_ids:
                 continue
             lm.corrected_text = lm.ocr_text
