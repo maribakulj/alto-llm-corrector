@@ -16,7 +16,9 @@ keeps it that way.
 
 from __future__ import annotations
 
-from corrigenda.core.identity import LineRef
+from collections.abc import Iterable
+
+from corrigenda.core.identity import LineRef, line_ref
 from corrigenda.core.schemas import (
     DEFAULT_PAIRING_POLICY,
     HyphenRole,
@@ -205,6 +207,45 @@ def forward_partner_id(lm: LineManifest) -> str | None:
     """
     ref = forward_partner_ref(lm)
     return None if ref is None else ref.line_id
+
+
+def unpaired_break_refs(pages: Iterable[PageManifest]) -> list[LineRef]:
+    """Lines that announce a hyphen break with no partner this run can see.
+
+    A line's ROLE is read off its own text — a trailing break mark makes it
+    PART1 — while the LINK is a second pass that can end up with nobody:
+    the pairing policy refused the candidate (`PairingPolicy.can_pair`
+    returns False and the loop simply moves on), the partner sits on a page
+    this run does not have, the pointer dangles.
+
+    Every one of those was silent. The line still ends mid-word, still gets
+    corrected alone, and never reaches the reconciler — so its Stage-B
+    pair-drift guards never run either. A host reading "0 fallback" had no
+    way to learn that N words were split across a seam nobody sewed.
+
+    Counted here rather than reported at each rejection site, because the
+    causes are several and the consequence is one: this line's word has no
+    continuation in this run. The count belongs on the report next to the
+    other things a run admits it could not do.
+    """
+    known = {line_ref(lm) for page in pages for lm in page.lines}
+    orphans: list[LineRef] = []
+    for page in pages:
+        for lm in page.lines:
+            ref = line_ref(lm)
+            wants_forward = lm.hyphen_role in (HyphenRole.PART1, HyphenRole.BOTH)
+            wants_backward = lm.hyphen_role in (HyphenRole.PART2, HyphenRole.BOTH)
+            forward = forward_partner_ref(lm)
+            backward = backward_partner_ref(lm)
+            missing_forward = wants_forward and (
+                forward is None or forward not in known
+            )
+            missing_backward = wants_backward and (
+                backward is None or backward not in known
+            )
+            if missing_forward or missing_backward:
+                orphans.append(ref)
+    return orphans
 
 
 def link_hyphen_pairs(
@@ -406,6 +447,7 @@ __all__ = [
     "forward_break_is_explicit",
     "forward_partner_id",
     "link_hyphen_pairs",
+    "unpaired_break_refs",
     "disambiguate_page_ids",
     "link_cross_page_hyphens",
 ]

@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`CorrectionReport.unpaired_breaks`** — how many lines announce a hyphen
+  break that this run could find no partner for. Every cause of that was
+  silent: `PairingPolicy.can_pair` returning False simply `continue`s, a
+  partner on an absent page resolves to nothing, a pointer dangles. The line
+  still ends mid-word, is corrected alone, and never reaches the reconciler,
+  so its pair-drift guards never run either — and a host reading "0 fallback"
+  could not learn that N words were split across a seam nobody sewed.
+  Counted once for all causes, because the consequence is one.  Optional and
+  additive — no `report_version` bump.
+
 ### Fixed
 
 - **The payload no longer promises the model a hyphen partner that does not

@@ -98,6 +98,7 @@ from corrigenda.core.alignment import align_tokens
 from corrigenda.core.pairing import (
     backward_partner_ref,
     forward_partner_ref,
+    unpaired_break_refs,
     forward_ref,
     pair_ref,
     preserve_break_char,
@@ -1340,6 +1341,10 @@ class CorrectionPipeline:
             # survive the format — the thing the invariant used to compare
             # away before anyone could count it.
             projection_fidelity=_fidelity_counts(traces) or None,
+            # A break whose partner this run never found: silent until now,
+            # and not the same thing as a fallback — the line WAS corrected,
+            # just alone and without its pair-drift guards.
+            unpaired_breaks=len(unpaired_break_refs(document_manifest.pages)) or None,
             # P3.9 (§11) — the run's full provenance record.
             provenance=self._build_provenance(
                 document_manifest=document_manifest,

@@ -212,6 +212,9 @@ def test_correction_report_json_keys_are_pinned():
         # a v2.0 consumer that ignores unknown keys is unaffected — so it
         # does NOT bump CORRECTION_REPORT_VERSION.
         "projection_fidelity",
+        # Same contract: optional, absent when every break found its
+        # partner, so no CORRECTION_REPORT_VERSION bump.
+        "unpaired_breaks",
         "provenance",  # P3.9 — optional, additive (no version bump)
         "usage",  # ROADMAP V3 Phase 0 — optional, additive (no version bump)
         "sidecar",  # ROADMAP V3 Phase 1 — optional, additive (no version bump)

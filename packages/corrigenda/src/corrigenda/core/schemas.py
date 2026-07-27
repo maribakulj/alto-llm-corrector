@@ -1377,6 +1377,15 @@ class CorrectionReport(BaseModel):
     #: the run rendered no output file. Additive and optional — no
     #: ``report_version`` bump.
     projection_fidelity: dict[str, int] | None = None
+    #: Lines that announce a hyphen break with no partner this run can see —
+    #: the pairing policy refused the candidate, the partner sits on a page
+    #: this run does not have, the pointer dangles. Each was silent: the line
+    #: still ends mid-word, is corrected alone, and never reaches the
+    #: reconciler, so its pair-drift guards never run either. A host reading
+    #: "0 fallback" could not learn that N words were split across a seam
+    #: nobody sewed. ``None`` when every break found its partner. Additive
+    #: and optional — no ``report_version`` bump.
+    unpaired_breaks: int | None = None
     #: P3.9 (§11) — the run's full provenance record. Optional and
     #: additive (no ``report_version`` bump): a v2.0 consumer that
     #: ignores unknown keys keeps working, one that reads it gains the

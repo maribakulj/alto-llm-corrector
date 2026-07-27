@@ -257,3 +257,48 @@ def test_the_invariant_holds_on_the_real_fixtures(name: str) -> None:
         assert_payload_matches_the_manifest(
             enrich_chunk_lines(page.lines, by_id), page.lines
         )
+
+
+# ---------------------------------------------------------------------------
+# The run admits the breaks it could not pair
+# ---------------------------------------------------------------------------
+
+
+def test_the_report_counts_a_break_with_no_partner() -> None:
+    """Refusing to pair is a decision, and it was made in silence.
+
+    ``PairingPolicy.can_pair`` returning False just `continue`s; a partner on
+    an absent page, or a dangling pointer, are equally quiet. The line still
+    ends mid-word, is corrected alone, and never reaches the reconciler — so
+    its pair-drift guards never run. A host reading "0 fallback" had no way
+    to learn any of that happened.
+    """
+    from pathlib import Path
+
+    from corrigenda.core.pairing import unpaired_break_refs
+    from corrigenda.formats.alto.parser import build_document_manifest
+
+    path = Path(__file__).parent.parent.parent.parent / "examples" / "X0000002.xml"
+    doc = build_document_manifest([(path, path.name)])
+
+    orphans = unpaired_break_refs(doc.pages)
+    assert orphans, "the real fixture is expected to carry at least one"
+    assert all(
+        doc_line.hyphen_role is not HyphenRole.NONE
+        for ref in orphans
+        for page in doc.pages
+        for doc_line in page.lines
+        if doc_line.line_id == ref.line_id and doc_line.page_id == ref.page_id
+    ), "only a line announcing a break can be an unpaired break"
+
+
+def test_a_fully_paired_document_reports_nothing() -> None:
+    """The counter must stay quiet when there is nothing to admit."""
+    from pathlib import Path
+
+    from corrigenda.core.pairing import unpaired_break_refs
+    from corrigenda.formats.alto.parser import build_document_manifest
+
+    path = Path(__file__).parent.parent.parent.parent / "examples" / "sample.xml"
+    doc = build_document_manifest([(path, path.name)])
+    assert unpaired_break_refs(doc.pages) == []
