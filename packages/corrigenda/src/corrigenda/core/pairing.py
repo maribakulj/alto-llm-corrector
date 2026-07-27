@@ -16,6 +16,7 @@ keeps it that way.
 
 from __future__ import annotations
 
+from corrigenda.core.identity import LineRef
 from corrigenda.core.schemas import (
     DEFAULT_PAIRING_POLICY,
     HyphenRole,
@@ -82,32 +83,87 @@ def trailing_hyphen_char(text: str, hyphen_chars: tuple[str, ...]) -> str | None
     return None
 
 
-def forward_partner_id(lm: LineManifest) -> str | None:
-    """The line_id this line's word continues ONTO, if any.
+# ---------------------------------------------------------------------------
+# The directed link — ONE place that reads the pointer fields (ADR-010)
+# ---------------------------------------------------------------------------
+#
+# A line carries two link slots, and their names are a trap:
+#
+#   ``hyphen_pair_*``     the PAIR slot
+#   ``hyphen_forward_*``  the FORWARD slot
+#
+# "Forward" names the SLOT, not the reading direction. A PART1 line's word
+# continues onto the line in its PAIR slot; only a BOTH line — tail of one
+# hyphenated word and head of the next — uses the FORWARD slot for that.
+# Every place that re-derived "which slot holds my continuation?" from the
+# role got a chance to get this backwards, and the pipeline's reconciler had
+# it spelled out inline, next to a helper that already knew.
+#
+# So: two functions read a slot, one function maps a role to a slot, and
+# nothing else touches these fields.
 
-    A ``PART1`` line continues to its ``hyphen_pair_line_id``; a ``BOTH``
-    line (tail of one hyphenated word, head of the next) continues to its
-    ``hyphen_forward_pair_id``; ``PART2`` / ``NONE`` continue nowhere.
 
-    Single source of truth for "who is my forward hyphen partner?": the
-    LINE-chain planner and the same-chunk predicate resolve the forward
-    link through here, so the role→field mapping (which field holds the
-    forward id per role) lives in exactly one place instead of being
-    re-encoded at each call site.
+def pair_ref(lm: LineManifest) -> LineRef | None:
+    """The PAIR slot's link, page-qualified — or ``None`` when empty.
 
-    NB this is the strictly *forward* partner, a directed edge. Anything
-    that needs the whole unit — the window-target assignment, the
-    cross-block union-find, the router's escalation set — asks
-    :func:`~corrigenda.core.units.derive_hyphen_groups` instead, which
-    walks both directions and reports whether what it found is the
-    complete unit. The two notions are deliberately distinct; conflating
-    them is what produced the parallel resolvers ADR-010 is retiring.
+    Qualification matters: two ALTO files may declare the same TextLine ID,
+    so a bare-id lookup finds the wrong manifest for a cross-page link. An
+    unset ``hyphen_pair_page_id`` means "same page as me".
+    """
+    if not lm.hyphen_pair_line_id:
+        return None
+    return LineRef(
+        page_id=lm.hyphen_pair_page_id or lm.page_id,
+        line_id=lm.hyphen_pair_line_id,
+    )
+
+
+def forward_ref(lm: LineManifest) -> LineRef | None:
+    """The FORWARD slot's link, page-qualified — or ``None`` when empty.
+
+    See :func:`pair_ref` on qualification, and the note above on why
+    "forward" here is a slot name and not a direction.
+    """
+    if not lm.hyphen_forward_pair_id:
+        return None
+    return LineRef(
+        page_id=lm.hyphen_forward_pair_page_id or lm.page_id,
+        line_id=lm.hyphen_forward_pair_id,
+    )
+
+
+def forward_partner_ref(lm: LineManifest) -> LineRef | None:
+    """The line this line's word continues ONTO, page-qualified.
+
+    The role→slot map, and the only one: ``PART1`` continues through its
+    PAIR slot, ``BOTH`` through its FORWARD slot, ``PART2``/``NONE``
+    continue nowhere.
+
+    This is the strictly *directed* edge. Anything that needs the whole
+    unit — the window-target assignment, the cross-block union-find, the
+    router's escalation set, a fallback that must take partners with it —
+    asks :func:`~corrigenda.core.units.derive_hyphen_groups` or
+    :func:`~corrigenda.core.units.units_containing` instead: those walk
+    both slots and report whether what they found is the complete unit.
+    The two notions are deliberately distinct, and conflating them is what
+    produced the parallel resolvers ADR-010 is retiring.
     """
     if lm.hyphen_role == HyphenRole.PART1:
-        return lm.hyphen_pair_line_id
+        return pair_ref(lm)
     if lm.hyphen_role == HyphenRole.BOTH:
-        return lm.hyphen_forward_pair_id
+        return forward_ref(lm)
     return None
+
+
+def forward_partner_id(lm: LineManifest) -> str | None:
+    """Bare line_id of :func:`forward_partner_ref` — for lookups already
+    scoped to one page (the LINE-chain planner, the same-chunk predicate).
+
+    Prefer ``forward_partner_ref`` anywhere a document-wide lookup is in
+    play: a bare id is ambiguous across files.
+    """
+    ref = forward_partner_ref(lm)
+    return None if ref is None else ref.line_id
 
 
 def link_hyphen_pairs(
@@ -295,6 +351,9 @@ def link_cross_page_hyphens(
 __all__ = [
     "HYPHEN_CHARS",
     "trailing_hyphen_char",
+    "pair_ref",
+    "forward_ref",
+    "forward_partner_ref",
     "forward_partner_id",
     "link_hyphen_pairs",
     "disambiguate_page_ids",

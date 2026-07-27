@@ -25,7 +25,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 
 from corrigenda.core.identity import LineRef, line_ref
-from corrigenda.core.pairing import forward_partner_id
+from corrigenda.core.pairing import forward_partner_id, forward_ref, pair_ref
 from corrigenda.core.schemas import HyphenRole, HyphenSplit, LineManifest
 
 
@@ -92,24 +92,16 @@ def derive_hyphen_groups(lines: Iterable[LineManifest]) -> tuple[HyphenGroup, ..
     def union(a: LineRef, b: LineRef) -> None:
         parent[find(a)] = find(b)
 
-    def partner_ref(
-        lm: LineManifest, pid: str | None, ppage: str | None
-    ) -> LineRef | None:
-        if not pid:
-            return None
-        return LineRef(page_id=ppage or lm.page_id, line_id=pid)
-
     # Refs carrying a pointer that does not resolve inside ``lines`` —
     # it crosses out of the set, or dangles. Collected on the ONE walk
     # that already reads every pointer, so ``complete`` costs nothing
     # and no caller has to read a pointer field to learn the same thing.
     unresolved: set[LineRef] = set()
 
+    # Both slots, read through the shared primitives — this module no
+    # longer knows which attribute holds what (ADR-010).
     for ref, lm in by_ref.items():
-        for partner in (
-            partner_ref(lm, lm.hyphen_pair_line_id, lm.hyphen_pair_page_id),
-            partner_ref(lm, lm.hyphen_forward_pair_id, lm.hyphen_forward_pair_page_id),
-        ):
+        for partner in (pair_ref(lm), forward_ref(lm)):
             if partner is None:
                 continue
             if partner in parent:

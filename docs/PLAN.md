@@ -328,32 +328,53 @@ garder distinctes :
 Les confondre est ce qui a produit les encodages parallèles. La bonne cible est
 **une primitive dirigée + une dérivation d'unité**, pas une seule fonction.
 
-Restent, et ce sont les bons restants :
+**Troisième tranche faite (2026-07-27) — la primitive dirigée existe.**
+`pipeline._resolve_partner` supprimé. **5 résolveurs → 0 doublon.** Ce qui
+reste est la forme cible :
 
-- `_resolve_partner` (pipeline) — même notion **dirigée** que
-  `forward_partner_id`, mais qualifiée par page et rendant un manifeste. Vrai
-  doublon, à fusionner : deux encodages d'une arête dirigée.
-- `should_stay_in_same_chunk` (hyphenation) — prédicat mince bâti sur
-  `forward_partner_id`. Une troisième formulation ; à absorber ou à assumer.
+| | rôle |
+|---|---|
+| `pairing.pair_ref` / `forward_ref` | lisent **un** créneau, qualifié par page |
+| `pairing.forward_partner_ref` | la carte rôle→créneau, et la seule |
+| `pairing.forward_partner_id` | l'id nu, délègue — pour les recherches déjà limitées à une page |
+| `units.derive_hyphen_groups` / `units_containing` | la dérivation d'unité |
+| `pipeline._lookup_ref` | une **recherche**, pas une résolution : ref → manifeste |
 
-Le blocage du **cœur** de `S1` est nommé, et il est plus favorable qu'attendu :
+**Le piège que ça ferme, et il valait le détour.** Les deux créneaux de liens
+s'appellent `hyphen_pair_*` et `hyphen_forward_*` — et « forward » nomme le
+**créneau**, pas la direction de lecture. Le mot d'une ligne `PART1` continue
+sur la ligne de son créneau **PAIR** ; seule une ligne `BOTH` utilise le
+créneau FORWARD pour ça. Le réconciliateur du pipeline avait cette carte
+épelée **inline**, à deux lignes d'un helper qui la connaissait déjà. Seize
+tests l'épinglent désormais (`tests/test_directed_link.py`), avec des leurres
+dans les deux créneaux.
+
+Lectures de champs pointeurs, par module : `pairing.py` 22 (c'est sa
+fonction), `units.py` 13, `pipeline.py` **8** (était 18), `planner.py` **0**,
+`hyphenation.py` **0**.
+
+Reste `should_stay_in_same_chunk` (hyphenation) — prédicat mince sur
+`forward_partner_id`, troisième formulation. À absorber ou à assumer.
+
+Et reste le **vrai** cœur de `S1` : rendre l'unité **autoritaire**, c'est-à-dire
+que la décision appartienne à l'unité et se projette sur les lignes physiques,
+les pointeurs devenant dérivés. Le blocage est nommé et il est favorable :
 `split_forward_link` est le **seul** mutateur de pointeur après le parsing
-(vérifié — tous les autres sites sont dans les parseurs et
-`link_hyphen_pairs`), et il est appelé par le planificateur. Une fois une page
-planifiée, ses pointeurs sont figés pour l'exécution. Rendre l'unité
-autoritaire revient donc à dériver l'index **après chaque (re)planification**
-— y compris après une descente de granularité — et non à traquer des mutations
-dispersées.
+(vérifié — tous les autres sites sont dans les parseurs et `link_hyphen_pairs`),
+et il est appelé par le planificateur. Une fois une page planifiée, ses
+pointeurs sont figés pour l'exécution. Dériver l'index **après chaque
+(re)planification** — descentes de granularité comprises — suffit ; il n'y a pas
+de mutations dispersées à traquer.
 
-Attention en fermant `_resolve_partner` : le site « un partenaire est-il tombé
-en fallback ? » n'interroge aujourd'hui que les partenaires **directs**, pas la
-chaîne transitive. Passer au groupe élargit le comportement — défendable au
-titre de l'atomicité, mais c'est un changement de comportement à mesurer, pas à
-glisser.
+Attention conservée : le site « un partenaire est-il tombé en fallback ? »
+n'interroge que les partenaires **directs**, pas la chaîne transitive. Passer au
+groupe élargit le comportement sur les chaînes de 3+ — défendable au titre de
+l'atomicité, mais c'est un changement à mesurer, pas à glisser. Le commentaire
+le dit sur place.
 
 | id | item | mesure actuelle | cible |
 |---|---|---|---|
-| S1 | Queue de l'ADR-010 : **unité de césure de première classe** — membres ordonnés, pages, type explicite/heuristique, autorité `SUBS_CONTENT`, signe physique, état, décision atomique, projection par format. Pointeurs dérivés, jamais mutables séparément. Retrait des résolveurs obsolètes | **2** résolveurs (était 5) ; 18 lectures de pointeur dans `pipeline.py` | 1 primitive dirigée + 1 dérivation d'unité, 0 pointeur mutable |
+| S1 | Queue de l'ADR-010 : **unité de césure de première classe** — membres ordonnés, pages, type explicite/heuristique, autorité `SUBS_CONTENT`, signe physique, état, décision atomique, projection par format. Pointeurs dérivés, jamais mutables séparément. Retrait des résolveurs obsolètes | **0** doublon de résolveur (était 5) ; 8 lectures de pointeur dans `pipeline.py` (était 18) ; unité pas encore autoritaire | 1 primitive dirigée + 1 dérivation d'unité, 0 pointeur mutable |
 | S2 | Scinder `core/pipeline.py` en composants nommés — préflight, planification, routage, exécution de chunk, validation, acceptation, réconciliation d'unités, projection, assemblage du rapport. Le pipeline public **orchestre**, il ne réimplémente pas | **3052** lignes (3015 le 25/07 : `L0` en a ajouté ~50, `S1` en a rendu ~12) ; `_run_impl` 294/imbr. 4 ; `_attempt_chunk` 220/imbr. 5 | fichier principal < 800 l., aucune méthode > 100 l., assemblage du rapport indépendant du contrôle d'exécution |
 | S3 | Réduire la surface publique. **La cible n'est pas « 8 » mais la clôture transitive de ce que la façade retourne** : `load`/`correct`/`correct_sync` + `LoadedDocument`, `CorrectionResult`, `CorrectionReport`, `DecisionSet`, `LineDecision`, `LineRef`, `EditProducer`, les policies injectables, `CorrigendaError`, `CORRECTION_REPORT_VERSION`, `__version__`. Le reste reste importable depuis son module, sans être façade | **95** exports | clôture arrêtée et gelée |
 | S4 | Queue de l'ADR-011 : geler les types `Source*` (l'immuabilité repose sur une copie défensive, pas sur le type) | — | — |

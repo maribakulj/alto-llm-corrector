@@ -95,7 +95,12 @@ from corrigenda.core.protocols import (
     require_page_images,
 )
 from corrigenda.core.alignment import align_tokens
-from corrigenda.core.pairing import preserve_break_char
+from corrigenda.core.pairing import (
+    forward_partner_ref,
+    forward_ref,
+    pair_ref,
+    preserve_break_char,
+)
 from corrigenda.core.quality import (
     DEFAULT_ROUTING_POLICY,
     QEScorer,
@@ -481,37 +486,32 @@ def _build_hyphen_pairs(lines: list[LineManifest]) -> dict[str, str]:
     return pairs
 
 
-def _resolve_partner(
-    lm: LineManifest,
+def _lookup_ref(
+    ref: LineRef | None,
     *,
-    is_forward: bool,
+    page_id: str,
     line_by_id: dict[str, LineManifest],
     cross_page_partners: dict[LineRef, LineManifest] | None,
 ) -> LineManifest | None:
-    """Resolve a hyphen partner using a page-qualified lookup.
+    """The manifest ``ref`` names, over the run's two lookup scopes.
 
-    When two ALTO files declare the same TextLine ID, a bare-id lookup
-    against the page-local `line_by_id` returns the wrong manifest for
-    cross-page pairs. Prefer the qualified `(page_id, line_id)` lookup
-    whenever the parser populated `hyphen_pair_page_id`/
-    `hyphen_forward_pair_page_id`.
+    A LOOKUP, not a resolution: which slot the ref came from, and whether
+    the role makes it a continuation, are decided by
+    :mod:`corrigenda.core.pairing`'s primitives before we get here. This
+    function only knows that a same-page ref is found by bare id in the
+    page map and an off-page one needs the qualified map — because two
+    ALTO files may declare the same TextLine ID, and a bare-id lookup
+    would then return the wrong manifest.
     """
-    if is_forward:
-        partner_id = lm.hyphen_forward_pair_id
-        partner_page = lm.hyphen_forward_pair_page_id
-    else:
-        partner_id = lm.hyphen_pair_line_id
-        partner_page = lm.hyphen_pair_page_id
-
-    if not partner_id:
+    if ref is None:
         return None
 
-    if partner_page is None or partner_page == lm.page_id:
-        return line_by_id.get(partner_id)
+    if ref.page_id == page_id:
+        return line_by_id.get(ref.line_id)
 
     if cross_page_partners is None:
         return None
-    return cross_page_partners.get(LineRef(page_id=partner_page, line_id=partner_id))
+    return cross_page_partners.get(ref)
 
 
 def _page_local_units(
@@ -2538,17 +2538,19 @@ class CorrectionPipeline:
         joins: dict[LineRef, tuple[LineManifest, LineManifest, bool]] = {}
         pool: dict[LineRef, LineManifest] = {line_ref(lm): lm for lm in chunk_lines}
         for lm in chunk_lines:
-            if lm.hyphen_role == HyphenRole.PART1 and lm.hyphen_pair_line_id:
-                is_forward = False
-                partner_id = lm.hyphen_pair_line_id
-            elif lm.hyphen_role == HyphenRole.BOTH and lm.hyphen_forward_pair_id:
-                is_forward = True
-                partner_id = lm.hyphen_forward_pair_id
-            else:
+            # The role→slot map is NOT re-derived here. It used to be, in
+            # a ternary two lines long, sitting beside a helper that
+            # already owned it — and "forward" naming the SLOT rather
+            # than the direction is exactly the kind of thing a second
+            # copy gets subtly wrong (ADR-010).
+            ref = forward_partner_ref(lm)
+            if ref is None:
                 continue
-            partner = _resolve_partner(
-                lm,
-                is_forward=is_forward,
+            is_forward = lm.hyphen_role == HyphenRole.BOTH
+            partner_id = ref.line_id
+            partner = _lookup_ref(
+                ref,
+                page_id=lm.page_id,
                 line_by_id=line_by_id,
                 cross_page_partners=cross_page_partners,
             )
@@ -2633,16 +2635,21 @@ class CorrectionPipeline:
             # cross-page case: this side reaches acceptance because the
             # partner sits in no reconcile pass of THIS chunk) keeps its
             # source text too.
+            # Both slots, DIRECT partners only — deliberately not the
+            # transitive unit. Widening this to the whole chain is
+            # defensible under unit atomicity but changes behaviour on
+            # 3+-member chains, so it belongs behind a measurement, not
+            # inside a refactor (noted in docs/PLAN.md under S1).
             fallen_partner = any(
                 partner is not None and partner.status is LineStatus.FALLBACK
                 for partner in (
-                    _resolve_partner(
-                        lm,
-                        is_forward=is_forward,
+                    _lookup_ref(
+                        ref,
+                        page_id=lm.page_id,
                         line_by_id=all_lines_by_id,
                         cross_page_partners=cross_page_partners,
                     )
-                    for is_forward in (False, True)
+                    for ref in (pair_ref(lm), forward_ref(lm))
                 )
             )
             if fallen_partner:

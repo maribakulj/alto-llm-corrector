@@ -883,13 +883,16 @@ async def test_hyphen_partner_missing_event_emitted_with_direction(
     pipeline emits a structured event with `direction` so observers
     can tell backward (PART1→PART2) from forward (BOTH→next).
 
-    sample.xml contains an explicit PART1 (TL4); we force
-    `_resolve_partner` to return None to exercise the missing-partner
-    code path without needing a contrived multi-file fixture.
+    sample.xml contains an explicit PART1 (TL4); we force the pipeline's
+    ref lookup to return None to exercise the missing-partner code path
+    without needing a contrived multi-file fixture. (Was `_resolve_partner`
+    until ADR-010 split the role→slot mapping out of the lookup: the
+    mapping now lives in `pairing.forward_partner_ref`, and `_lookup_ref`
+    only turns a ref into a manifest.)
     """
     import corrigenda.core.pipeline as cp
 
-    monkeypatch.setattr(cp, "_resolve_partner", lambda *args, **kwargs: None)
+    monkeypatch.setattr(cp, "_lookup_ref", lambda *args, **kwargs: None)
 
     store, job_id = _make_store_and_job()
     queue = store.subscribe(job_id)
