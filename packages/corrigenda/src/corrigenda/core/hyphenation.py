@@ -3,7 +3,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from corrigenda.core._norm import ncfold
-from corrigenda.core.pairing import HYPHEN_CHARS, forward_partner_id
+from corrigenda.core.pairing import (
+    HYPHEN_CHARS,
+    backward_partner_ref,
+    forward_partner_id,
+    forward_partner_ref,
+)
 from corrigenda.core.schemas import (
     DEFAULT_GUARD_CONFIG,
     GuardConfig,
@@ -208,40 +213,30 @@ def enrich_chunk_lines(
                     geometry=geometry,
                 )
             )
-        elif lm.hyphen_role == HyphenRole.BOTH:
-            # Chained: PART2 of previous pair + PART1 of next pair.
-            # Both join candidates exposed symmetrically.
-            result.append(
-                LineContext(
-                    line_id=lm.line_id,
-                    prev_text=prev_text,
-                    ocr_text=lm.ocr_text,
-                    next_text=next_text,
-                    hyphenation_role=lm.hyphen_role.value,
-                    hyphen_candidate=True,
-                    hyphen_join_with_next=True,
-                    hyphen_join_with_prev=True,
-                    backward_join_candidate=lm.hyphen_subs_content or None,
-                    forward_join_candidate=lm.hyphen_forward_subs_content or None,
-                    geometry=geometry,
-                )
-            )
-        elif lm.hyphen_role == HyphenRole.PART1:
-            result.append(
-                LineContext(
-                    line_id=lm.line_id,
-                    prev_text=prev_text,
-                    ocr_text=lm.ocr_text,
-                    next_text=next_text,
-                    hyphenation_role=lm.hyphen_role.value,
-                    hyphen_candidate=True,
-                    hyphen_join_with_next=True,
-                    forward_join_candidate=lm.hyphen_subs_content or None,
-                    geometry=geometry,
-                )
-            )
         else:
-            # PART2
+            # ``join_with_next`` / ``join_with_prev`` are ASSERTIONS about the
+            # document, not hints, so they follow the LINK and not the role.
+            # A role is read off the line's own text — a trailing break mark
+            # makes it PART1 — while the link is established in a second pass
+            # that can legitimately find nobody: the partner is on a page this
+            # run does not have, the pairing policy refused the candidate. The
+            # role then says PART1 and there is no one there.
+            #
+            # Announcing a join anyway asked the model to leave a word
+            # unfinished for a partner that never arrives, and nothing
+            # downstream could notice: no pair means the reconciler that
+            # checks a join never runs, and the payload is compared against
+            # nothing.
+            joins_next = forward_partner_ref(lm) is not None
+            joins_prev = backward_partner_ref(lm) is not None
+            # The SUBS_CONTENT authority travels with the link it belongs to:
+            # PART1's sits in the pair slot, BOTH's forward one in the forward
+            # slot (the same role→slot map as the refs above).
+            forward_subs = (
+                lm.hyphen_forward_subs_content
+                if lm.hyphen_role == HyphenRole.BOTH
+                else lm.hyphen_subs_content
+            )
             result.append(
                 LineContext(
                     line_id=lm.line_id,
@@ -249,9 +244,19 @@ def enrich_chunk_lines(
                     ocr_text=lm.ocr_text,
                     next_text=next_text,
                     hyphenation_role=lm.hyphen_role.value,
+                    # Still a candidate: the line DOES end (or begin) on a
+                    # break mark, and the model must know that so it does not
+                    # read the dash as punctuation and "fix" it. What it no
+                    # longer claims is a partner it does not have.
                     hyphen_candidate=True,
-                    hyphen_join_with_prev=True,
-                    backward_join_candidate=lm.hyphen_subs_content or None,
+                    hyphen_join_with_next=joins_next or None,
+                    hyphen_join_with_prev=joins_prev or None,
+                    backward_join_candidate=(
+                        (lm.hyphen_subs_content or None) if joins_prev else None
+                    ),
+                    forward_join_candidate=(
+                        (forward_subs or None) if joins_next else None
+                    ),
                     geometry=geometry,
                 )
             )

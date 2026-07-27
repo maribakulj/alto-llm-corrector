@@ -307,8 +307,12 @@ rapport montrait un fallback au motif vide.
 ~~Page vide sautée~~ (**fait** — `link_cross_page_hyphens` itère désormais
 sur les pages qui ont des lignes, pas sur les pages adjacentes : une page vide
 laissait un PART1 orphelin de l'autre côté. Trouvé par `T1`) ; garde orphelin
-ASCII-only ; PART1 sans partenaire annoncé
-`join_with_next=True` au modèle ; rejet de `PairingPolicy` silencieux ; chaîne
+ASCII-only ; ~~PART1 sans partenaire annoncé
+`join_with_next=True` au modèle~~ (**fait** — les deux drapeaux suivent désormais
+le **lien** et non le rôle : `enrich_chunk_lines` interroge
+`forward_partner_ref`/`backward_partner_ref`. Charge utile inchangée à l'octet
+pour une paire liée, la clé disparaît simplement pour un orphelin
+(`exclude_none`). Trouvé par un invariant `T3`) ; rejet de `PairingPolicy` silencieux ; chaîne
 mixte jetant l'autorité `SUBS_CONTENT` ; ligne vide intercalée capturant PART2 ;
 cross-bloc en ordre de lecture dégradé ; `link_cross_page_hyphens` ne regardant
 que `lines[-1]`/`lines[0]`.
@@ -460,7 +464,7 @@ Ajouter des tests unitaires ne referme pas cet écart. Trois familles :
 |---|---|
 | T1 | **Métamorphiques** — **entamé** (`test_metamorphic_hyphenation.py`) : page vide insérée → mêmes décisions **et** paire toujours liée (a trouvé le cas `L5` de la page vide) ; même coupure intra-page ou inter-pages → même texte ; tout signe du répertoire apparie pareil. Même document découpé autrement → même décision (`fcd7804`) ; mêmes pages regroupées autrement → même décision ; même césure intra-page ou inter-pages → même résultat logique ; page vide ajoutée → aucune autre décision ne bouge ; signe de coupure substitué par un équivalent autorisé → unité conservée |
 | T2 | **Corpus adversarial** — le corpus de formes qui n'existe pas : U+00A0 et U+202F, gamme complète des tirets, chaînes de 3-4 membres, césure inter-pages réelle, lignes sans `SUBS_TYPE`, lignes vides et éléments non textuels intercalés, ALTO de plusieurs producteurs, PAGE Transkribus et eScriptorium réels |
-| T3 | **Différentiels** — comparer décision logique, texte réextrait, octets XML, attributs conservés, géométrie, compteurs de perte et statut de ligne. « Le XML est valide » n'est pas le résultat attendu. **Entamé** : `test_status_truthfulness.py` croise statut × texte source × proposition sur le corpus généré et les fixtures réelles. Rentabilité immédiate — il a trouvé `L10`, inconnu, sur le fichier BnF |
+| T3 | **Différentiels** — comparer décision logique, texte réextrait, octets XML, attributs conservés, géométrie, compteurs de perte et statut de ligne. « Le XML est valide » n'est pas le résultat attendu. **Entamé, deux invariants** : `test_status_truthfulness.py` (statut × texte source × proposition) a trouvé `L10` sur le fichier BnF ; `test_payload_truthfulness.py` (ce qu'on dit au modèle × ce que porte le manifeste) a trouvé la promesse de jointure fausse |
 
 `T2` alimente `M5` (le corpus épinglé bloquant) : c'est le même corpus.
 

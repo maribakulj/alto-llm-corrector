@@ -9,6 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The payload no longer promises the model a hyphen partner that does not
+  exist.** `hyphen_join_with_next` / `hyphen_join_with_prev` are assertions
+  about the document, not hints, and they were set from the line's ROLE. A
+  role is read off the line's own text — a trailing break mark makes it PART1
+  — while the LINK is established in a second pass that can legitimately find
+  nobody (the partner is on a page this run does not have, the pairing policy
+  refused the candidate). The engine then told the model "this word continues
+  onto the next line" about a line whose continuation does not exist, asking
+  it to leave a word unfinished for a partner that never arrives — and nothing
+  downstream could notice, since no pair means the reconciler never runs and
+  the payload is compared against nothing. Both flags now follow the link,
+  via `forward_partner_ref` / `backward_partner_ref`. A `SUBS_CONTENT`
+  authority no longer travels without its link either. A linked pair's payload
+  is byte-identical to before; for an orphan the key is simply absent
+  (`exclude_none`), so the model is not told a continuation exists and is not
+  told one is impossible — it is not told.
+
 - **An empty page no longer severs a word broken across it.**
   `link_cross_page_hyphens` compared ADJACENT pages and skipped a page with no
   lines, so a word broken from page 1 onto page 3 was never linked when page 2
