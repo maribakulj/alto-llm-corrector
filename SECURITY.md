@@ -44,9 +44,12 @@ What it is: a public demonstration. Treat it accordingly.
 ### `institutional` (behind your SSO / reverse proxy)
 
 What it asserts: the app runs **behind an authenticating reverse
-proxy**; the app itself still has no user accounts (job ownership,
-quotas and durable persistence are roadmap items — see
-`docs/history/PLAN-REMEDIATION-2026-07-15.md`, Vague 5).
+proxy** — and nothing more. The name is broader than the guarantee: the
+app itself still has **no user accounts, no job ownership, no per-user
+quotas, no database and no durable persistence**, and is single-worker
+by design. Behind an SSO it can serve as a single-node internal pilot;
+it is not yet a durable institutional service. Those capabilities are
+open plan items, not shipped ones — see `docs/PLAN.md`.
 
 Enforced by the app in this profile:
 
