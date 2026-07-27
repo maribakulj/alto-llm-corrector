@@ -410,6 +410,16 @@ _SLOW_PATH_RETAINED_OR_JUSTIFIED = frozenset(
         "VPOS",
         "WIDTH",
         "HEIGHT",
+        # The hyphenation attributes are RE-WRITTEN, not lost: ``_apply_subs``
+        # runs on every write path (subs-only, fast, slow) and re-establishes
+        # both from the manifest's own hyphen state. Counting them here made
+        # the report claim up to 229 dropped SUBS_CONTENT on a single real
+        # 566-line page where the output file carries exactly as many as the
+        # source did. A phantom loss misleads an auditor as much as a missed
+        # one — arguably more, since it invites a hunt for damage that is not
+        # there.
+        "SUBS_TYPE",
+        "SUBS_CONTENT",
     }
 )
 

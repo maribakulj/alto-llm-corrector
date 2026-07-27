@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **The report no longer claims hyphenation attributes it did not lose (ALTO).**
+  A slow-path rebuild counted `SUBS_TYPE` and `SUBS_CONTENT` as dropped from
+  every String it rebuilt — while `_apply_subs`, which runs on every write
+  path, re-established both from the manifest on the same pass. On one real
+  566-line page the report claimed **229 dropped SUBS_CONTENT** for a file
+  whose output carries exactly as many as the source. A phantom loss misleads
+  an auditor as much as a missed one, arguably more: it invites a hunt for
+  damage that is not there.
+
 ### Added
 
 - **`CorrectionReport.unpaired_breaks`** — how many lines announce a hyphen

@@ -337,11 +337,11 @@ garantie.
 
 | id | item |
 |---|---|
-| R0 | **Matrice versionnée** : pour chaque format × attribut, dire s'il est conservé, invalidé, recalculé, supprimé ; comment la suppression est comptée ; ce que fait `strict`. Les compteurs actuels sont apparus au fil des correctifs — la matrice précède `R1`-`R7`, elle ne les résume pas |
-| R1 | `SUBS_TYPE`/`SUBS_CONTENT` comptés perdus alors que `_apply_subs` les réécrit — **18 des 23** pertes « genuine » restantes sont fantômes |
+| R0 | **Matrice versionnée** — l'invariant différentiel (`test_loss_accounting_is_real.py`) est l'outil qui la remplit : il compare, par ligne, le compteur du rapport à ce qui a réellement disparu du fichier, **dans les deux sens**. Il a déjà fermé `R1` et chiffré `R4`/`R2`. : pour chaque format × attribut, dire s'il est conservé, invalidé, recalculé, supprimé ; comment la suppression est comptée ; ce que fait `strict`. Les compteurs actuels sont apparus au fil des correctifs — la matrice précède `R1`-`R7`, elle ne les résume pas |
+| ~~R1~~ | **fait** — `SUBS_TYPE`/`SUBS_CONTENT` étaient comptés perdus alors que `_apply_subs` les réécrit sur les **trois** chemins d'écriture. Mesuré avant correctif : **229 de chaque** revendiqués sur une seule page réelle de 566 lignes dont le fichier de sortie en porte exactement autant que la source. Trouvé par l'invariant différentiel `R0-test` |
 | R2 | Ligne vidée : `STYLE`/`STYLEREFS` réellement perdus, non comptés |
 | R3 | `<HYP>` d'une PART2 supprimé sans compteur |
-| R4 | `WC`/`CC` jamais comptés en ALTO alors que PAGE compte `conf_dropped` |
+| R4 | `WC`/`CC` jamais comptés en ALTO alors que PAGE compte `conf_dropped`. **Quantifié** : sur `examples/X0000002.xml`, **520 `WC` disparus / 0 comptés par le seul chemin rapide**, 3339 par le chemin lent. Épinglé en `xfail(strict)` — dire si c'est une *perte*, une *invalidation* ou un *recalcul* est précisément ce que `R0` doit trancher, et le test l'énonce sans deviner la réponse |
 | R5 | `word_order_suspected` n'est pas une perte, sortir de `format_losses` |
 | R6 | `hyphen_splits` lu par personne : la seule opération destructrice assumée est invisible pour l'hôte |
 | R7 | `LossPolicy(strict=True)` inopérant en ALTO (`word_count` PAGE-only) : l'armer ou documenter la restriction |
