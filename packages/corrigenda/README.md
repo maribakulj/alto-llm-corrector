@@ -33,8 +33,10 @@ independent external API review first; see
 - `corrigenda.core.editing` + `corrigenda.producers` — the **span edit
   protocol**: `EditScript` / `ReplaceLine` / `ReplaceSpan` with
   `RangeAnchor` and `MatchAnchor`, a deterministic `RulesProducer`, the
-  `EditProducer` contract and a vision envelope (the library forwards an
-  opaque image reference and touches no pixel). See
+  `EditProducer` contract and a vision envelope (**the core** forwards an
+  opaque image reference and touches no pixel — decoding and cropping is the
+  producer's job, in the `corrigenda[vision]` extra; the base install pulls
+  no image dependency at all). See
   [`docs/edit-protocol.md`](docs/edit-protocol.md).
 - `corrigenda.core` — chunk planning, LLM-response validation,
   per-line acceptance policy, and the pure `CorrectionPipeline` that

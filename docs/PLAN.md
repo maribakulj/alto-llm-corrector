@@ -283,7 +283,7 @@ Le 25 juillet a consolidé `docs/` ; **les documents d'entrée n'ont pas suivi**
 
 | id | item |
 |---|---|
-| D1 | `SPECS_LIB_V2 §12` interdit tout pixel dans la lib ; `integrations/vision.py` fait 497 lignes avec Pillow. Amender le spec : le **cœur** est aveugle aux pixels, la **distribution de base** n'importe pas Pillow, l'extra `corrigenda[vision]` traite effectivement les pixels. Corriger la même phrase dans `packages/corrigenda/README.md:36` |
+| D1 | **Défaut de portée dans les mots, pas de conception.** L'architecture visée — cœur aveugle aux pixels, distribution de base sans Pillow, extra `corrigenda[vision]` qui traite les pixels — **est déjà implémentée et vérifiée mécaniquement** (`pyproject.toml:43-53` : Pillow hors des `dependencies`, import paresseux `# lazy — I4`, scan statique I4 + `tests/test_import_contract.py`). Le corps de I4 (`SPECS:37`) et la ligne rouge de §12 (`SPECS:585-591`) sont **déjà** portés sur `core` et exacts. Seuls le **titre** de I4 (`SPECS:36`) et un rappel (`SPECS:307`) disent « la lib » là où le texte veut dire « le cœur » ; `packages/corrigenda/README.md:36` a recopié la version large. Remplacement de mots à trois endroits — aucun arbitrage |
 | D2 | `SPECS_LIB_V2 §3` : `integrations/` absent de l'arbre cible ; `§5.1` : signature `produce()` périmée |
 | D3 | `CHANGELOG.md` cite `0.0021` sans le mot « oracle » à l'entrée la plus récente. Mettre le vrai chiffre en face |
 | D4 | **827 lignes** sous `[Unreleased]` pour **0 tag git** : le seul récit continu des ruptures d'API est dans une section que SemVer déclare non engageante |
@@ -330,17 +330,22 @@ Ce sont des décisions, pas des oublis. Détail et justification dans
 ## Répartition
 
 **Claude Code CLI** — dépôt, tests, mesures : `L*`, `R*`, `S*`, `T*`, `G1`-`G2`,
-`M1`-`M5`, `M7`, `D3`-`D5`, `D7`-`D11`, `P1`-`P2`.
+`M1`-`M5`, `M7`, `D1`, `D3`-`D5`, `D7`-`D11`, `P1`-`P2`.
 
-**Claude Desktop** — recherche, décision, documents : `Gate 0`, `M6`, `D1`, `D2`,
+**Claude Desktop** — recherche, décision, documents : `Gate 0`, `M6`, `D2`,
 `D6`, `D12`, `G3`, `P3`.
 
 ### Ordre
 
-**Lot 0 — vérité documentaire, sans risque, immédiat.** `D8`, `D9`, `D10`
-ferment trois mensonges de façade en quelques lignes et ne dépendent de rien.
-`D11` suit. À faire avant le reste, parce que chaque jour où ils restent est un
-lecteur trompé.
+**Lot 0 — vérité documentaire, sans risque, immédiat.** `D8`, `D9`, `D10`, puis
+`D11` et `D1`. Ils ferment quatre mensonges de façade en quelques lignes et ne
+dépendent de rien. À faire avant le reste, parce que chaque jour où ils restent
+est un lecteur trompé.
+
+`D1` était assigné à Desktop tant qu'on le croyait porteur d'un arbitrage de
+conception. Il n'en porte aucun — l'architecture est déjà celle qu'il faut et
+elle est testée ; il ne reste qu'un mot à corriger à trois endroits. Il revient
+donc ici, en Lot 0.
 
 **Lot 1 — intégrité (bloquant `0.10`).** `L0` → `L1` → `S1`+`L2` ensemble →
 `L3` (doit tomber presque seul) → `L5`, `L7`.

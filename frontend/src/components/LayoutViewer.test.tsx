@@ -57,7 +57,7 @@ describe('LayoutViewer', () => {
     const p = page([], { page_width: 0, page_height: 0 })
     render(<LayoutViewer data={data([p])} />)
     // Both panels (OCR + corrected) fall back to the explanatory message.
-    expect(screen.getAllByText(/coordonnées alto absentes/i)).toHaveLength(2)
+    expect(screen.getAllByText(/coordonnées de ligne absentes/i)).toHaveLength(2)
   })
 
   it('renders OCR text on the left panel and corrected text on the right', () => {

@@ -33,12 +33,30 @@ Trois invariants fondateurs, hérités de l'existant et non négociables :
 - **I3 — La structure d'origine est intouchable.** IDs, géométrie ligne,
   ordre XML, attributs non textuels : préservés à l'octet quand rien ne
   change (stratégie 4 chemins), modifiés au minimum quand le texte change.
-- **I4 — La lib est aveugle aux pixels.** Le cœur ne charge, ne découpe et
+- **I4 — Le cœur est aveugle aux pixels.** Le cœur ne charge, ne découpe et
   n'encode jamais d'image. La correction *guidée par l'image* (VLM) est un
   **producteur** qui reçoit une **référence** d'image opaque ; charger et
   cropper les pixels est la responsabilité de l'implémentation du producteur,
   hors du cœur (§5.2 bis). C'est le corollaire vision de « zéro I/O dans
   `core` ».
+
+  **Portée exacte, en trois niveaux** — I4 contraint le cœur, pas la
+  distribution entière :
+  1. `core/` et les formats ne touchent jamais un pixel, et n'importent
+     jamais de bibliothèque d'image. Ligne rouge (§12), vérifiée par le scan
+     statique I4.
+  2. L'installation de base (`pip install corrigenda`) n'embarque **aucune**
+     dépendance image : `dependencies` se limite à Pydantic et lxml.
+  3. L'extra `corrigenda[vision]` — `integrations/vision.py`, le producteur
+     de référence — **décode, oriente et crope effectivement des pixels**,
+     avec Pillow pour seule dépendance image, importée **paresseusement à
+     l'intérieur des fonctions** pour que le chemin d'installation de base ne
+     la charge jamais. C'est un producteur, donc hors du cœur : I4 tient.
+
+  Le point 3 est ce que le titre de cet invariant a longtemps laissé croire
+  interdit. Il ne l'est pas — il est la raison d'être du seam. Ce qui reste
+  interdit est de faire entrer un pixel ou une dépendance image **dans le
+  cœur**. `tests/test_import_contract.py` tient les trois niveaux.
 
 Corollaire transverse : **le cœur est agnostique de la modalité**. Validation
 1:1, gardes, réconciliation et rewriter ne voient jamais que du texte-in /
@@ -304,7 +322,8 @@ Ce qui appartient au **consommateur** (le producteur concret, hors lib) :
   encoder, construire le message multimodal, appeler le VLM, renvoyer le même
   JSON `{lines:[{line_id, corrected_text}]}`.
 - C'est une **implémentation de producteur** — par définition hors du cœur,
-  comme tout provider concret (I4 : la lib ne touche aucun pixel).
+  comme tout provider concret (I4 : le *cœur* ne touche aucun pixel ; un
+  producteur vision, lui, en traite — c'est son travail).
 
 **Prototypage sans changement de lib** : un producteur *stateful par document*
 qui se construit avec le `DocumentManifest` + l'image, résout `coords[line_id]`
