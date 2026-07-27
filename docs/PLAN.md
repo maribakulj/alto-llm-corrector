@@ -101,9 +101,11 @@ listés comme quatre correctifs indépendants. Ce sont quatre symptômes de deux
 absences de modèle. Les traiter séparément recrée le mécanisme d'enlisement
 décrit en `S` : quatre correctifs, quatre chemins de plus.
 
-**État : `L0` et `L1` faits.** Des deux défauts qui altéraient le texte livré
-sans laisser **aucune** trace — ni compteur, ni erreur — il n'en reste qu'un,
-`L2`, priorité absolue du lot. Il tombe avec `S1`.
+**État : `L0`, `L1`, `L2` faits ; `L4` retiré.** Les deux défauts qui
+altéraient le texte livré sans laisser **aucune** trace — ni compteur, ni
+erreur — sont fermés. `L4` s'est révélé faux à la vérification (§4.5 de
+l'audit du 27) et laisse à sa place `L8`. Restent `L3` (après `S1`), `L5`,
+`L6`, `L7`, `L8`.
 
 ### L0 — Échelle de fidélité de projection — **fait** *(prérequis de L1, L4)*
 
@@ -169,20 +171,67 @@ pas été audité pour cette classe ; PAGE porte son texte dans un nœud
 `Unicode`, donc le mode de perte n'est pas le même et peut très bien ne pas
 exister. À vérifier, pas à supposer.
 
-### L2 — Signe de coupure comme donnée *(remplace « L2 + L4 + L6 »)*
+### L2 — Signe de coupure doublé — **fait**
 
-Tant que le signe est redécouvert tardivement par `endswith(...)`, chaque
-caractère ajouté au répertoire est un nouveau site de bug. Les trois défauts
-connus **sont** ce bug :
+La déduplication qui empêche `String "Ober-"` + `HYP "-"` de rendre `Ober--` ne
+testait que le tiret ASCII. Tous les autres signes du répertoire doublaient :
+`Ober⸗` + `HYP "⸗"` se relisait `Ober⸗⸗`, `Ober¬` en `Ober¬¬`.
 
-- tiret fraktur doublé — `alto/_text.py:49` ne déduplique que sur `"-"` ;
-- `<HYP CONTENT="­"/>` → `"-"` — décision ≠ octets du fichier (`_text.py:47`) ;
-- `HYPHEN_CHARS` = `("-", "¬", "⸗", "­")` — manquent `=`, U+2010, U+2011, U+2013.
+Silencieux parce que `reconstruct_textline` alimente **les deux côtés** de
+l'invariant de projection — le `ocr_text` du parseur et la comparaison
+UNTOUCHED du réécrivain : une erreur ici est commise identiquement des deux
+côtés et se compare égale à elle-même. Ni `L0` ni aucun compteur ne pouvaient
+la voir.
 
-Porter le signe explicitement — codepoint source, rôle logique, forme rendue,
-présence d'un balisage explicite — les fait tomber **par construction**. Cette
-structure appartient à l'unité de césure de `S1` : `L2` et `S1` se font ensemble
-ou dans cet ordre, jamais en parallèle.
+Correctif : la déduplication porte sur le répertoire (`_DEDUP_MARKS`), pas sur
+`"-"`.
+
+**Portée honnête** : aucun document des corpus du dépôt ne déclenche ce défaut
+— vérifié, `corpus/37-GT-BNL` et `examples/X0000002.xml` n'ont aucune
+combinaison `String`-avec-signe + `HYP`. C'est un chemin de corruption
+silencieuse **latent**, reproduit synthétiquement par l'audit du 25. Réel, à
+fermer, mais il ne faut pas lui prêter un effet mesuré qu'il n'a pas.
+
+### L4 — U+00AD → `-` : **retiré, le constat était faux**
+
+Le plan disait « décision ≠ octets du fichier ». Vérification faite, les octets
+ne divergent pas : la collapse porte sur le texte *logique*, elle est
+délibérée et documentée (`core/_norm.clean_content`, même raison), et les
+chemins de réécriture réémettent le `<HYP>` d'origine avec son propre
+`CONTENT` — le caractère source survit sur le disque.
+
+Et elle est **portante** : 115 lignes de `examples/X0000002.xml` portent leur
+signe dans le `<HYP>` seul, en U+00AD. Sans la collapse elles ne finissent pas
+sur un caractère de coupure et ne s'apparient pas. Tenter de « corriger » ceci
+casse dix tests dont la parité d'octets du seul corpus BnF du dépôt.
+
+Ce qui reste, et qui n'est **pas** ce que disait `L4` : la normalisation n'est
+déclarée nulle part. C'est un événement de classe `normalized` au sens de `L0`,
+sur un caractère qui n'est pas un blanc → nouvel item `L8`.
+
+Preuve et détail : `AUDIT-2026-07-27.md` §4.5.
+
+### L8 — Étendre l'échelle de fidélité aux substitutions hors blancs
+
+`L0` classe les substitutions de **blancs**. Une substitution de caractère
+non-blanc délibérée — la collapse U+00AD (`L4`), et le `preserve_break_char`
+de `pairing.py` — ne remonte nulle part. Même remède, même échelle : déclarer
+plutôt que taire. Prérequis de `R8` (une substitution déclarée est une perte
+comptable).
+
+### L6 — Répertoire de coupure incomplet
+
+`HYPHEN_CHARS` = `("-", "¬", "⸗", "­")` — manquent `=`, U+2010, U+2011, U+2013.
+
+**Ne pas élargir sans mesure.** Ajouter U+2013 (tiret demi-cadratin) fait
+apparier des lignes qui ne le sont peut-être pas ; `trailing_hyphen_char`
+exige déjà un caractère alphabétique avant le signe, ce qui écarte `1789–`,
+mais pas tout. Le répertoire est un paramètre à effet de corpus : il relève de
+`M7` (mesure par classe Unicode), pas d'un ajout de tuple.
+
+Porter le signe comme **donnée** dans l'unité de césure (codepoint source,
+rôle logique, forme rendue, balisage explicite ou non) reste la bonne
+structure, et appartient à `S1`.
 
 ### L3 — Membre inter-pages gelé sur son OCR
 

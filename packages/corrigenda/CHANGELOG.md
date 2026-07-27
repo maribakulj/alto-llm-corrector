@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A break mark is no longer doubled when the source renders it twice
+  (ALTO).** Some producers write the end-of-line hyphen into the `String`
+  CONTENT *and* emit a `<HYP>` for it; that is one mark rendered once, and
+  `reconstruct_textline` de-duplicates it. The de-duplication tested
+  `endswith("-")` — the ASCII hyphen alone — so every other mark in the
+  repertoire doubled: `Ober⸗` + `HYP "⸗"` read back as `Ober⸗⸗`, `Ober¬` as
+  `Ober¬¬`. It now tests the repertoire. Silent until now because this
+  function feeds *both* sides of the projection invariant — the parser's
+  `ocr_text` and the rewriter's UNTOUCHED comparison — so the mistake was
+  made identically on both sides and compared equal to itself. Note the
+  scope: no document in the repo's corpora triggers it (checked), so this
+  closes a latent path rather than a measured one. The U+00AD → `-` collapse
+  is deliberate and unchanged — it is what lets the 115 `<HYP>`-only lines of
+  `examples/X0000002.xml` pair at all, and the bytes keep the source
+  character because the rewrite paths re-emit the original element.
+
 - **A no-break space no longer becomes an ordinary one (ALTO).** The
   rewriter's slow path tokenised on `\s`, which in Python covers U+00A0 and
   U+202F, and re-emitted every gap as an `<SP>` — an element that carries no
