@@ -11,6 +11,7 @@ from corrigenda.core._norm import clean_content, nfc
 from corrigenda.core._parse import parse_int_tolerant
 from corrigenda.core.alignment import align_tokens
 from corrigenda.core.identity import ensure_unique_identities
+from corrigenda.core.losses import is_unconditional_loss
 from corrigenda.core.pairing import HYPHEN_CHARS, forward_break_is_explicit
 from corrigenda.errors import DuplicateIdError
 from corrigenda.formats.alto._ns import (
@@ -392,40 +393,15 @@ def _apply_subs(
 # vendor attributes) is NOT invalidated by a spelling fix — the rebuild still
 # cannot re-attach it to a re-segmented word without guessing, so it is
 # dropped, but it must be REPORTED, not lost silently ("lossless" was a lie).
-_SLOW_PATH_RETAINED_OR_JUSTIFIED = frozenset(
-    {
-        # CONTENT is the payload the run exists to change: a rebuild REPLACES
-        # the source reading with the correction, it does not lose it.
-        # Counting it produced a phantom loss on every rebuilt String — 239 of
-        # them on a real 566-line page whose corrections were sound — and a
-        # report that counts a non-loss misleads an auditor exactly as much as
-        # one that misses a real loss.
-        "CONTENT",
-        "ID",
-        "STYLEREFS",
-        "STYLE",
-        "WC",
-        "CC",
-        "HPOS",
-        "VPOS",
-        "WIDTH",
-        "HEIGHT",
-        # The hyphenation attributes are RE-WRITTEN, not lost: ``_apply_subs``
-        # runs on every write path (subs-only, fast, slow) and re-establishes
-        # both from the manifest's own hyphen state. Counting them here made
-        # the report claim up to 229 dropped SUBS_CONTENT on a single real
-        # 566-line page where the output file carries exactly as many as the
-        # source did. A phantom loss misleads an auditor as much as a missed
-        # one — arguably more, since it invites a hunt for damage that is not
-        # there.
-        "SUBS_TYPE",
-        "SUBS_CONTENT",
-    }
-)
-
-
 def _semantic_attr_losses(orig_string_attribs: list[dict[str, str]]) -> dict[str, int]:
-    """Count semantic String attributes a slow-path rebuild will drop.
+    """Count the attributes a slow-path rebuild really loses.
+
+    "Really" is defined by :mod:`corrigenda.core.losses`, the versioned
+    matrix, and not by a second list kept here — a second list is how this
+    counter came to claim 229 dropped SUBS_CONTENT on a file that kept
+    every one of them (R1). The matrix says which attributes are
+    STRUCTURAL (they follow the tokens and cannot be lost), which are
+    re-established, and which disappearances the report carries.
 
     Keyed ``<attr>_dropped`` (namespace stripped, lower-cased) to match the
     PAGE rewriter's loss vocabulary, e.g. ``TAGREFS`` → ``tagrefs_dropped``.
@@ -434,7 +410,7 @@ def _semantic_attr_losses(orig_string_attribs: list[dict[str, str]]) -> dict[str
     for attribs in orig_string_attribs:
         for key in attribs:
             local = key.rsplit("}", 1)[-1]
-            if local in _SLOW_PATH_RETAINED_OR_JUSTIFIED:
+            if not is_unconditional_loss(local):
                 continue
             loss_key = f"{local.lower()}_dropped"
             losses[loss_key] = losses.get(loss_key, 0) + 1

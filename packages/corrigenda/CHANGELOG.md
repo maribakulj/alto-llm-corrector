@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`corrigenda.core.losses` — the loss matrix (`LOSS_MATRIX_VERSION`).** The
+  loss counters had grown one fix at a time and nothing ever stated what each
+  attribute is *supposed* to do, so "every loss is counted" was a claim with
+  no referent — and false in both directions at once. One versioned table now
+  says, per attribute, which of four things happens to it (`PRESERVED`,
+  `REWRITTEN`, `INVALIDATED`, `DROPPED`) and whether the report counts it. The
+  ALTO rewriter consumes the table instead of keeping its own list. The
+  distinction the counters were missing: `STRUCTURAL` attributes belong to the
+  `String` and follow re-segmentation — a rebuild that writes *more* words has
+  more `HPOS`, not fewer, and neither direction is a loss — while `SEMANTIC`
+  ones carry an assertion about a reading. `WC`/`CC` are `INVALIDATED` (a
+  correction makes the source engine's per-word confidence untrue) and whether
+  that is *counted* is left as an explicit, documented flag rather than
+  settled by silence: ALTO says nothing today, PAGE counts its equivalent as
+  `conf_dropped`, and reconciling the two is a change both formats have to
+  make together.
+
 ### Fixed
 
 - **The report no longer claims hyphenation attributes it did not lose (ALTO).**

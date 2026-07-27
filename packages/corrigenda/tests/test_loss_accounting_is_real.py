@@ -28,6 +28,14 @@ from pathlib import Path
 import pytest
 from lxml import etree
 
+from corrigenda.core.losses import (
+    ALTO_STRING_ATTRIBUTES,
+    COUNTS_INVALIDATION,
+    AttributeClass,
+    AttributeFate,
+    fate_of,
+    is_countable_loss,
+)
 from corrigenda.core.schemas import LineStatus
 from corrigenda.formats.alto._ns import _detect_namespace
 from corrigenda.formats.alto.parser import parse_alto_file
@@ -154,36 +162,119 @@ def test_no_phantom_losses(name: str, path_kind: str) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Direction 2: every real loss is COUNTED.  Open (R4) — pinned as xfail.
+# Direction 2: the rewriter behaves as the MATRIX says (R0)
 # ---------------------------------------------------------------------------
+#
+# The raw "every attribute that disappeared must be counted" statement was
+# too blunt: it flagged CONTENT/ID/HPOS/... whenever a correction changed
+# the token count, which is re-segmentation and not loss. The matrix draws
+# that line — STRUCTURAL attributes follow the tokens, SEMANTIC ones carry
+# an assertion about a reading — so the invariant can now say what it means.
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="R4 — ALTO drops WC (and CC) from every String whose CONTENT it "
-    "rewrites, deliberately: the source engine's per-word confidence does not "
-    "survive a correction. It is counted nowhere, while the PAGE rewriter "
-    "does count its equivalent as conf_dropped. Measured here: 520 WC gone "
-    "and 0 counted on examples/X0000002.xml through the FAST path alone, "
-    "3339 through the slow one. Whether that is a 'loss', an 'invalidation' "
-    "or a 'recalculation' is exactly what the R0 matrix has to settle before "
-    "a counter is added — so this lands as an executable statement of the "
-    "gap, not as a guess at the answer.",
-)
+def assert_the_matrix_holds(
+    source: Path, output: bytes, losses_by_line: dict[str, dict[str, int]]
+) -> None:
+    """Every SEMANTIC attribute's observed fate matches its declared one."""
+    src_lines, src_ns = _lines_by_id(source)
+    out_lines, out_ns = _lines_by_id(output)
+
+    for line_id, src_line in src_lines.items():
+        before = _string_attr_counts(src_line, src_ns)
+        after = _string_attr_counts(out_lines[line_id], out_ns)
+        losses = losses_by_line.get(line_id, {})
+
+        for attr, count in before.items():
+            cls, fate = fate_of(attr)
+            if cls is AttributeClass.STRUCTURAL:
+                continue  # follows re-segmentation; not a loss channel
+            gone = count - after[attr]
+
+            if fate in (AttributeFate.PRESERVED, AttributeFate.REWRITTEN):
+                assert gone <= 0, (
+                    f"{line_id}: {attr.upper()} is declared {fate.value} but "
+                    f"{gone} of {count} disappeared. Either the rewriter "
+                    "regressed or the matrix is wrong — both are bugs."
+                )
+                continue
+
+            if gone <= 0:
+                continue
+            if not is_countable_loss(attr):
+                continue  # INVALIDATED with COUNTS_INVALIDATION off
+            assert losses.get(f"{attr}_dropped", 0) == gone, (
+                f"{line_id}: {gone} × {attr.upper()} disappeared and the "
+                f"report counts {losses.get(f'{attr}_dropped', 0)}. It is "
+                f"declared {fate.value}, which the matrix says is counted."
+            )
+
+
 @pytest.mark.parametrize("name", ["sample.xml", "X0000002.xml"])
-@pytest.mark.parametrize("path_kind", ["fast", "slow"])
-def test_every_real_loss_is_counted(name: str, path_kind: str) -> None:
+@pytest.mark.parametrize("path_kind", sorted(_TRANSFORMS))
+def test_the_rewriter_obeys_the_loss_matrix(name: str, path_kind: str) -> None:
     path, out, losses = _rewrite(name, _TRANSFORMS[path_kind])
-    assert_every_real_loss_is_counted(path, out, losses)
+    assert_the_matrix_holds(path, out, losses)
+
+
+def test_the_matrix_declares_every_attribute_the_fixtures_carry() -> None:
+    """An attribute nobody classified defaults to SEMANTIC/DROPPED, which is
+    the safe answer — but on the repo's own fixtures we should have made the
+    call deliberately rather than fallen back to it."""
+    seen: set[str] = set()
+    for name in ("sample.xml", "X0000002.xml"):
+        lines, ns = _lines_by_id(_EXAMPLES / name)
+        for line in lines.values():
+            seen |= set(_string_attr_counts(line, ns))
+
+    undeclared = {a for a in seen if a.upper() not in ALTO_STRING_ATTRIBUTES}
+    assert not undeclared, (
+        f"{sorted(undeclared)} appear in the fixtures but are not in the "
+        "matrix — they fall through to the DROPPED default, which is safe "
+        "but undecided."
+    )
+
+
+def test_invalidation_counting_is_a_declared_choice_not_an_oversight() -> None:
+    """R4 in one assertion.
+
+    WC leaves the file and nothing counts it. That is currently correct
+    *per the matrix* — and the matrix says so out loud, with both sides of
+    the argument, instead of the report simply being quiet. Flipping
+    ``COUNTS_INVALIDATION`` is the ALTO half of a two-format change; PAGE
+    already counts its equivalent as ``conf_dropped``, and the two
+    disagreeing is its own defect either way.
+    """
+    assert fate_of("WC") == (AttributeClass.SEMANTIC, AttributeFate.INVALIDATED)
+    assert is_countable_loss("WC") is COUNTS_INVALIDATION
+
+    path, out, losses = _rewrite("X0000002.xml", _TRANSFORMS["slow"])
+    src, sns = _lines_by_id(path)
+    dst, dns = _lines_by_id(out)
+    gone = sum(
+        _string_attr_counts(el, sns)["wc"] - _string_attr_counts(dst[lid], dns)["wc"]
+        for lid, el in src.items()
+    )
+    counted = sum(v.get("wc_dropped", 0) for v in losses.values())
+    assert gone > 0, "the fixture must exercise the invalidation at all"
+    assert counted == (gone if COUNTS_INVALIDATION else 0)
+
+
+def test_an_unknown_attribute_defaults_to_a_countable_loss() -> None:
+    """A producer's dialect extension must surface in the report, not
+    vanish on the assumption it did not matter."""
+    cls, fate = fate_of("TAGREFS")
+    assert (cls, fate) == (AttributeClass.SEMANTIC, AttributeFate.DROPPED)
+    assert is_countable_loss("TAGREFS") is True
 
 
 def test_an_identity_rewrite_loses_nothing_at_all() -> None:
-    """The one case where both directions already hold: the UNTOUCHED path
-    does not modify the tree, so neither counter can be wrong."""
+    """The one case where every direction holds trivially: the UNTOUCHED
+    path does not modify the tree."""
     for name in ("sample.xml", "X0000002.xml"):
         path, out, losses = _rewrite(name, _TRANSFORMS["identity"])
         assert_every_count_is_a_real_loss(path, out, losses)
         assert_every_real_loss_is_counted(path, out, losses)
+        assert_the_matrix_holds(path, out, losses)
 
 
 def test_the_invariant_catches_a_phantom() -> None:
@@ -195,23 +286,16 @@ def test_the_invariant_catches_a_phantom() -> None:
         assert_every_count_is_a_real_loss(src, out, {line_id: {"subs_type_dropped": 3}})
 
 
-def test_the_invariant_catches_an_uncounted_loss() -> None:
-    """Guard the other guard: strip an attribute the report says nothing
-    about, and the second direction must complain. WIDTH, because every
-    String in the fixture carries one."""
-    src = _EXAMPLES / "sample.xml"
-    pages, _ = parse_alto_file(src, src.name)
-    for page in pages:
-        for lm in page.lines:
-            lm.corrected_text = lm.ocr_text
-            lm.status = LineStatus.CORRECTED
-    out = rewrite_alto_file(src, pages, "test", "mock").xml_bytes
+def test_the_matrix_check_catches_a_preserved_attribute_going_missing() -> None:
+    """Guard the other guard: strip a PRESERVED attribute and the matrix
+    check must object — that is a regression, not a re-segmentation."""
+    src = _EXAMPLES / "X0000002.xml"
+    _, out, losses = _rewrite("X0000002.xml", _TRANSFORMS["identity"])
 
     root = etree.fromstring(out)
     ns = _detect_namespace(root)
     for string_el in root.iter(f"{{{ns}}}String" if ns else "String"):
-        string_el.attrib.pop("WIDTH", None)
-    stripped = etree.tostring(root)
+        string_el.attrib.pop("STYLEREFS", None)
 
-    with pytest.raises(AssertionError, match="disappeared from the rewritten"):
-        assert_every_real_loss_is_counted(src, stripped, {})
+    with pytest.raises(AssertionError, match="declared preserved"):
+        assert_the_matrix_holds(src, etree.tostring(root), losses)
