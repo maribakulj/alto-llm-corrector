@@ -304,7 +304,10 @@ rapport montrait un fallback au motif vide.
 
 ### L5 — Cas restants de détection
 
-Page vide sautée ; garde orphelin ASCII-only ; PART1 sans partenaire annoncé
+~~Page vide sautée~~ (**fait** — `link_cross_page_hyphens` itère désormais
+sur les pages qui ont des lignes, pas sur les pages adjacentes : une page vide
+laissait un PART1 orphelin de l'autre côté. Trouvé par `T1`) ; garde orphelin
+ASCII-only ; PART1 sans partenaire annoncé
 `join_with_next=True` au modèle ; rejet de `PairingPolicy` silencieux ; chaîne
 mixte jetant l'autorité `SUBS_CONTENT` ; ligne vide intercalée capturant PART2 ;
 cross-bloc en ordre de lecture dégradé ; `link_cross_page_hyphens` ne regardant
@@ -455,7 +458,7 @@ Ajouter des tests unitaires ne referme pas cet écart. Trois familles :
 
 | id | item |
 |---|---|
-| T1 | **Métamorphiques** — même document découpé autrement → même décision (seul cas existant, `fcd7804`) ; mêmes pages regroupées autrement → même décision ; même césure intra-page ou inter-pages → même résultat logique ; page vide ajoutée → aucune autre décision ne bouge ; signe de coupure substitué par un équivalent autorisé → unité conservée |
+| T1 | **Métamorphiques** — **entamé** (`test_metamorphic_hyphenation.py`) : page vide insérée → mêmes décisions **et** paire toujours liée (a trouvé le cas `L5` de la page vide) ; même coupure intra-page ou inter-pages → même texte ; tout signe du répertoire apparie pareil. Même document découpé autrement → même décision (`fcd7804`) ; mêmes pages regroupées autrement → même décision ; même césure intra-page ou inter-pages → même résultat logique ; page vide ajoutée → aucune autre décision ne bouge ; signe de coupure substitué par un équivalent autorisé → unité conservée |
 | T2 | **Corpus adversarial** — le corpus de formes qui n'existe pas : U+00A0 et U+202F, gamme complète des tirets, chaînes de 3-4 membres, césure inter-pages réelle, lignes sans `SUBS_TYPE`, lignes vides et éléments non textuels intercalés, ALTO de plusieurs producteurs, PAGE Transkribus et eScriptorium réels |
 | T3 | **Différentiels** — comparer décision logique, texte réextrait, octets XML, attributs conservés, géométrie, compteurs de perte et statut de ligne. « Le XML est valide » n'est pas le résultat attendu. **Entamé** : `test_status_truthfulness.py` croise statut × texte source × proposition sur le corpus généré et les fixtures réelles. Rentabilité immédiate — il a trouvé `L10`, inconnu, sur le fichier BnF |
 

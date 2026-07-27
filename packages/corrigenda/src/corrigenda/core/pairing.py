@@ -372,12 +372,19 @@ def link_cross_page_hyphens(
     ``link_hyphen_pairs`` works on any list of consecutive lines, so a
     2-element ``[last_line, first_line]`` list is enough. Only fires when
     the last line looks like an unlinked PART1/BOTH.
+
+    Pages with no lines are **skipped over**, not treated as a wall. The
+    walk used to compare adjacent pages and ``continue`` on an empty one,
+    so a word broken from page 1 onto page 3 was never linked when page 2
+    happened to carry no text — the pair was silently lost and both
+    fragments were corrected as unrelated lines. An empty page carries
+    nothing and can say nothing about a word that spans it; it is a fact
+    about the scan, not about the sentence.
     """
-    for i in range(len(all_pages) - 1):
-        if not all_pages[i].lines or not all_pages[i + 1].lines:
-            continue
-        last_line = all_pages[i].lines[-1]
-        first_line = all_pages[i + 1].lines[0]
+    with_lines = [page for page in all_pages if page.lines]
+    for earlier, later in zip(with_lines, with_lines[1:]):
+        last_line = earlier.lines[-1]
+        first_line = later.lines[0]
         needs_forward_link = (
             last_line.hyphen_role == HyphenRole.PART1
             and not last_line.hyphen_pair_line_id

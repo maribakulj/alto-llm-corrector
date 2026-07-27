@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **An empty page no longer severs a word broken across it.**
+  `link_cross_page_hyphens` compared ADJACENT pages and skipped a page with no
+  lines, so a word broken from page 1 onto page 3 was never linked when page 2
+  happened to carry no text: the tail was left an orphan PART1 announcing a
+  continuation to the model with no partner to reconcile against, and both
+  fragments were corrected as unrelated lines. The walk now runs over the
+  pages that have lines. An empty page is a fact about the scan, not about the
+  sentence. Found by a metamorphic property, not by reading.
+
 - **A mixed-role line no longer loses its forward break mark (ALTO).** A line
   can be BOTH with an explicit backward link and a HEURISTIC forward break —
   `PAG_00000002_TL000454` of `examples/X0000002.xml` opens on
