@@ -188,3 +188,85 @@ def test_split_refuses_an_absent_link() -> None:
     l0, l1, l2 = lines
     with pytest.raises(RuntimeError, match="does not continue onto"):
         split_forward_link(l0, l2)
+
+
+# ---------------------------------------------------------------------------
+# `complete` — is the unit I can see the WHOLE unit?
+# ---------------------------------------------------------------------------
+#
+# A consumer that moves a unit as a whole (the router escalating to a second
+# producer, the image-cap batcher) has to distinguish "this is the entire
+# unit" from "this is the part of it that happens to be in front of me".
+# Moving the visible half is precisely the split atomicity forbids. The
+# question is answered by the one derivation that already reads the pointers;
+# a caller re-reading them to ask it again is how the fifth parallel resolver
+# appeared in the first place.
+
+
+def test_a_wholly_resolvable_chain_is_complete() -> None:
+    lines = _chain_lines()
+    groups = derive_hyphen_groups(lines)
+    assert groups, "fixture must produce a group"
+    assert all(g.complete for g in groups)
+
+
+def test_a_dangling_pointer_makes_the_group_incomplete() -> None:
+    lines = _chain_lines()
+    head = next(lm for lm in lines if lm.hyphen_pair_line_id)
+    head.hyphen_pair_line_id = "TL_NOT_HERE"
+
+    groups = derive_hyphen_groups(lines)
+    by_line = hyphen_group_by_line(groups)
+    group = by_line.get(LineRef(page_id=head.page_id, line_id=head.line_id))
+    assert group is None or not group.complete
+
+
+def test_a_page_scoped_derivation_marks_a_cross_page_unit_incomplete() -> None:
+    """The distinction the router depends on: derived over ONE page, a unit
+    that continues onto the next is incomplete — not merely absent, and not
+    silently a smaller unit."""
+    lines = _chain_lines()
+    tail = (
+        next(lm for lm in lines if lm.hyphen_forward_pair_id)
+        if any(lm.hyphen_forward_pair_id for lm in lines)
+        else next(lm for lm in lines if lm.hyphen_pair_line_id)
+    )
+    tail.hyphen_pair_page_id = "NEXT_PAGE"
+    tail.hyphen_forward_pair_page_id = (
+        "NEXT_PAGE" if tail.hyphen_forward_pair_id else None
+    )
+
+    groups = derive_hyphen_groups(lines)
+    by_line = hyphen_group_by_line(groups)
+    group = by_line.get(LineRef(page_id=tail.page_id, line_id=tail.line_id))
+    assert group is None or not group.complete
+
+
+def test_completeness_is_a_property_of_the_derivation_set() -> None:
+    """Derived over the whole document a cross-page unit is complete; over
+    one page it is not. Same pointers, different question — which is why the
+    caller must not answer it from the pointers."""
+    lines = _chain_lines()
+    # Chain L0 -PART1-> L1 -BOTH-> L2. Move the TAIL onto a second page and
+    # qualify both halves of the seam, so the unit is genuinely cross-page
+    # rather than merely broken.
+    _, l1, l2 = lines
+    l2.page_id = "P2"
+    l1.hyphen_forward_pair_page_id = "P2"
+    l2.hyphen_pair_page_id = "P1"
+
+    document_wide = derive_hyphen_groups(lines)
+    spanning = [g for g in document_wide if g.spans_pages]
+    assert spanning, "the seam must produce one cross-page group"
+    assert all(g.complete for g in spanning), (
+        "every pointer resolves when the whole document is in view"
+    )
+
+    page_only = derive_hyphen_groups([lm for lm in lines if lm.page_id == "P1"])
+    by_line = hyphen_group_by_line(page_only)
+    group = by_line.get(LineRef(page_id="P1", line_id=l1.line_id))
+    assert group is not None, "L0-L1 still group on their own page"
+    assert not group.complete, (
+        "but the unit continues off-page, so what this page can see is not "
+        "the whole unit — the router must not move it"
+    )

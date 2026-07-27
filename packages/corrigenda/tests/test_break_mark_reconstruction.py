@@ -10,8 +10,10 @@ no error.
 
 **Doubling (L2).** The de-duplication that stops ``String "Ober-"`` + ``HYP
 "-"`` from yielding ``Ober--`` tested for the ASCII hyphen alone. Every other
-mark in the repertoire doubled: ``Ober⸗⸗``, ``Ober¬¬``. The Fraktur ``⸗`` is
-not exotic here — it is 24 of the 94 break marks in ``corpus/37-GT-BNL``.
+mark in the repertoire doubled: ``Ober⸗⸗``, ``Ober¬¬``. No document in either
+corpus carries a mark in both places, so this pins a latent path rather than a
+measured one — which is exactly why it needs a test: nothing else would catch
+a regression.
 
 **Not a defect: the U+00AD collapse.** A ``HYP CONTENT="\\u00ad"`` still reads
 back as ``-``, and that is deliberate. A soft hyphen is a hyphen *variant* that

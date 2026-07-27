@@ -291,10 +291,33 @@ introduite pour unifier quatre façons de demander « qui est le partenaire », 
 bien utilisée, mais **les quatre anciennes n'ont jamais été retirées**.
 L'unification a atterri en ajout — cinq chemins au lieu de quatre.
 
+**Première tranche faite (2026-07-27) — par soustraction, pas par ajout.**
+
+- `planner._hyphen_partner_id` supprimé : **zéro appelant**. Le mécanisme pris
+  en flagrant délit — `derive_hyphen_groups` avait remplacé son usage, la
+  fonction n'a jamais été retirée. 5 résolveurs → 4.
+- `pipeline._page_local_hyphen_unit` remplacé par `_page_local_units`, qui **ne
+  lit plus aucun champ pointeur** : il interroge la dérivation partagée. 4 → 3.
+- Ce qui a rendu ça possible sans dupliquer la traversée : `HyphenGroup.complete`,
+  calculé **dans la boucle qui lit déjà les pointeurs**. Un consommateur qui doit
+  déplacer une unité entière (routeur, batcher de la limite d'images) doit
+  distinguer « voici toute l'unité » de « voici la part que je vois » ; il pose
+  désormais la question au groupe. La reposer aux pointeurs est exactement
+  comment un résolveur parallèle apparaît.
+- Effet de bord : la dérivation est faite une fois par page, plus une fois par
+  ligne — l'ancienne marche était quadratique en densité de césures.
+
+Restent `_resolve_partner` + `_hyphen_closure` (pipeline) et
+`should_stay_in_same_chunk` (hyphenation). Le blocage pour la suite est nommé :
+`_hyphen_closure` travaille « sur les pointeurs **courants** » et
+`split_forward_link` les mute pendant la planification, donc un index mis en
+cache serait périmé. Les fermer suppose de rendre l'unité **autoritaire** et les
+pointeurs dérivés — le cœur de `S1`, pas une tranche.
+
 | id | item | mesure actuelle | cible |
 |---|---|---|---|
-| S1 | Queue de l'ADR-010 : **unité de césure de première classe** — membres ordonnés, pages, type explicite/heuristique, autorité `SUBS_CONTENT`, signe physique (`L2`), état, décision atomique, projection par format. Pointeurs dérivés, jamais mutables séparément. Retrait des 4 résolveurs obsolètes | 45 usages / 5 modules, **5** résolveurs | **1** résolveur, 0 pointeur mutable |
-| S2 | Scinder `core/pipeline.py` en composants nommés — préflight, planification, routage, exécution de chunk, validation, acceptation, réconciliation d'unités, projection, assemblage du rapport. Le pipeline public **orchestre**, il ne réimplémente pas | **3015** lignes ; `_run_impl` 294/imbr. 4 ; `_attempt_chunk` 220/imbr. 5 | fichier principal < 800 l., aucune méthode > 100 l., assemblage du rapport indépendant du contrôle d'exécution |
+| S1 | Queue de l'ADR-010 : **unité de césure de première classe** — membres ordonnés, pages, type explicite/heuristique, autorité `SUBS_CONTENT`, signe physique, état, décision atomique, projection par format. Pointeurs dérivés, jamais mutables séparément. Retrait des résolveurs obsolètes | **3** résolveurs (était 5) ; 18 lectures de pointeur dans `pipeline.py` | **1** résolveur, 0 pointeur mutable |
+| S2 | Scinder `core/pipeline.py` en composants nommés — préflight, planification, routage, exécution de chunk, validation, acceptation, réconciliation d'unités, projection, assemblage du rapport. Le pipeline public **orchestre**, il ne réimplémente pas | **3009** lignes ; `_run_impl` 294/imbr. 4 ; `_attempt_chunk` 220/imbr. 5 | fichier principal < 800 l., aucune méthode > 100 l., assemblage du rapport indépendant du contrôle d'exécution |
 | S3 | Réduire la surface publique. **La cible n'est pas « 8 » mais la clôture transitive de ce que la façade retourne** : `load`/`correct`/`correct_sync` + `LoadedDocument`, `CorrectionResult`, `CorrectionReport`, `DecisionSet`, `LineDecision`, `LineRef`, `EditProducer`, les policies injectables, `CorrigendaError`, `CORRECTION_REPORT_VERSION`, `__version__`. Le reste reste importable depuis son module, sans être façade | **95** exports | clôture arrêtée et gelée |
 | S4 | Queue de l'ADR-011 : geler les types `Source*` (l'immuabilité repose sur une copie défensive, pas sur le type) | — | — |
 | S5 | Écrire `docs/adr/012-*.md` : cité par le code, inexistant ; `docs/adr/README.md` s'arrête à 008 alors que 009-011 existent | — | — |

@@ -510,40 +510,38 @@ def _resolve_partner(
     return cross_page_partners.get(LineRef(page_id=partner_page, line_id=partner_id))
 
 
-def _page_local_hyphen_unit(
-    seed: LineManifest, line_by_id: dict[str, LineManifest]
-) -> set[str] | None:
-    """The line_ids of ``seed``'s hyphen unit, or ``None`` when the unit is
-    not wholly resolvable on this page (ROADMAP V3 Phase 4).
+def _page_local_units(
+    line_by_id: dict[str, LineManifest],
+) -> dict[str, set[str]]:
+    """Every hyphen unit wholly resolvable on ONE page, by member line_id.
 
     Used by the router to move a hyphen unit to the escalation producer
-    **as a unit**: escalating one member and leaving its partner behind
-    would split the pair across producers, which is exactly what hyphen
-    atomicity forbids. A unit whose link crosses a page boundary — or
-    dangles — cannot be gathered from one page's plan, so it is left to the
-    primary producer (the conservative pre-Phase-4 behaviour).
+    **as a unit**, and by the image-cap batcher to keep one in a single
+    call: escalating or batching one member and leaving its partner
+    behind would split the pair across producers, which is exactly what
+    hyphen atomicity forbids. A unit whose link crosses a page boundary —
+    or dangles — cannot be gathered from one page's plan, so it is absent
+    here and its members are left to the primary producer (the
+    conservative behaviour).
+
+    Reads no pointer field. The grouping AND the "is this the whole
+    unit?" question are both answered by the shared derivation
+    (ADR-010): ``derive_hyphen_groups`` over one page marks a group
+    incomplete exactly when it continues off-page or dangles. Re-reading
+    the pointers here to ask the same thing is how a parallel resolver
+    appears, and five of those are the debt this is paying down.
+
+    Derived once per page rather than once per line — the previous
+    per-line walk was quadratic in a page's hyphen density.
     """
-    members: set[str] = set()
-    seen: set[str] = {seed.line_id}
-    worklist = [seed]
-    while worklist:
-        lm = worklist.pop()
-        members.add(lm.line_id)
-        for partner_id, partner_page in (
-            (lm.hyphen_pair_line_id, lm.hyphen_pair_page_id),
-            (lm.hyphen_forward_pair_id, lm.hyphen_forward_pair_page_id),
-        ):
-            if not partner_id:
-                continue
-            if partner_page is not None and partner_page != lm.page_id:
-                return None  # the unit leaves this page
-            partner = line_by_id.get(partner_id)
-            if partner is None:
-                return None  # dangling link — not ours to move
-            if partner.line_id not in seen:
-                seen.add(partner.line_id)
-                worklist.append(partner)
-    return members
+    units: dict[str, set[str]] = {}
+    for group in derive_hyphen_groups(line_by_id.values()):
+        if not group.complete or group.spans_pages:
+            continue
+        members = {ref.line_id for ref in group.members}
+        for line_id in members:
+            units[line_id] = members
+    return units
 
 
 def _hyphen_closure(
@@ -1624,6 +1622,7 @@ class CorrectionPipeline:
         can_escalate = self.escalation_producer is not None
         skip: set[str] = set()
         escalate: set[str] = set()
+        page_units = _page_local_units(line_by_id)
         for lm in page.lines:
             decision = route_line(
                 self.qe_scorer.needs_correction(lm.ocr_text), self.routing_policy
@@ -1635,7 +1634,7 @@ class CorrectionPipeline:
                 # together. Measured on real 19th-c. press OCR, leaving units
                 # behind was the hybrid's entire residual error.
                 if decision is RoutingDecision.ESCALATE and can_escalate:
-                    unit = _page_local_hyphen_unit(lm, line_by_id)
+                    unit = page_units.get(lm.line_id)
                     if unit is not None:
                         escalate |= unit
                 continue
@@ -1735,11 +1734,17 @@ class CorrectionPipeline:
         undeclared cap leaves every existing run byte-identical.
         """
         out: list[tuple[ChunkRequest, EditProducer]] = []
+        page_units: dict[str, set[str]] | None = None
         for chunk, producer in routed:
             cap = self._image_cap(producer)
             if cap is None or len(chunk.line_ids) <= cap:
                 out.append((chunk, producer))
                 continue
+            # Derived on the first chunk that needs it, then reused: the
+            # units are a property of the page, not of the chunk, and the
+            # common case (no cap declared) must not pay for them at all.
+            if page_units is None:
+                page_units = _page_local_units(line_by_id)
 
             targets = set(chunk.targets())
             in_chunk = set(chunk.line_ids)
@@ -1756,7 +1761,7 @@ class CorrectionPipeline:
                     # Both members ride together — and a member that is
                     # context here (target of an adjacent chunk) still
                     # travels, because the reconciler needs the whole pair.
-                    resolved = _page_local_hyphen_unit(lm, line_by_id)
+                    resolved = page_units.get(line_id)
                     if resolved is not None:
                         unit = (resolved & in_chunk) - assigned
                 members = [lid for lid in chunk.line_ids if lid in unit]

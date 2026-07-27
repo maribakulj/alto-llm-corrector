@@ -27,7 +27,6 @@ from corrigenda.core.schemas import (
     ChunkPlan,
     ChunkPlannerConfig,
     ChunkRequest,
-    HyphenRole,
     HyphenSplit,
     LineManifest,
     PageManifest,
@@ -79,18 +78,6 @@ def _make_chunk(
         line_ids=list(line_ids),
         target_line_ids=None if target_line_ids is None else list(target_line_ids),
     )
-
-
-def _hyphen_partner_id(lm: LineManifest) -> str | None:
-    """Return the forward/backward hyphen partner line_id, if any."""
-    if lm.hyphen_role in (HyphenRole.PART1, HyphenRole.PART2):
-        return lm.hyphen_pair_line_id
-    if lm.hyphen_role == HyphenRole.BOTH:
-        # A BOTH line pairs backward (hyphen_pair_line_id) and forward
-        # (hyphen_forward_pair_id); either partner is enough to keep the
-        # chain in one target window (chains are contiguous).
-        return lm.hyphen_forward_pair_id or lm.hyphen_pair_line_id
-    return None
 
 
 def _assign_window_targets(

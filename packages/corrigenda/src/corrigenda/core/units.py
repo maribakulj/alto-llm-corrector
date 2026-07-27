@@ -43,6 +43,21 @@ class HyphenGroup:
     #: in the document). Conservative heuristic mode hangs off this: a
     #: heuristic group never invents SUBS_CONTENT.
     explicit: bool
+    #: True when every pointer every member carries resolved INSIDE the
+    #: set this group was derived from — no link leaves it, none dangles.
+    #:
+    #: Derived here rather than re-checked by callers, and that is the
+    #: point. A consumer that must move a unit as a whole (the router
+    #: escalating to a second producer, the image-cap batcher) has to
+    #: know whether the unit it can see IS the unit. Asking the group
+    #: keeps that question answered in the one place the pointers are
+    #: read; asking the pointers again is how a fifth resolver appears.
+    #:
+    #: A group derived over ONE page is therefore incomplete exactly when
+    #: it continues onto another page or points at a line that is not
+    #: there. Derived over the whole document, only a genuinely dangling
+    #: link makes it False.
+    complete: bool
 
     def member_ids_on_page(self, page_id: str) -> tuple[str, ...]:
         """The group's bare line ids on ONE page (page-scoped consumers)."""
@@ -84,13 +99,23 @@ def derive_hyphen_groups(lines: Iterable[LineManifest]) -> tuple[HyphenGroup, ..
             return None
         return LineRef(page_id=ppage or lm.page_id, line_id=pid)
 
+    # Refs carrying a pointer that does not resolve inside ``lines`` —
+    # it crosses out of the set, or dangles. Collected on the ONE walk
+    # that already reads every pointer, so ``complete`` costs nothing
+    # and no caller has to read a pointer field to learn the same thing.
+    unresolved: set[LineRef] = set()
+
     for ref, lm in by_ref.items():
         for partner in (
             partner_ref(lm, lm.hyphen_pair_line_id, lm.hyphen_pair_page_id),
             partner_ref(lm, lm.hyphen_forward_pair_id, lm.hyphen_forward_pair_page_id),
         ):
-            if partner is not None and partner in parent:
+            if partner is None:
+                continue
+            if partner in parent:
                 union(ref, partner)
+            else:
+                unresolved.add(ref)
 
     components: dict[LineRef, list[LineRef]] = {}
     for ref in by_ref:
@@ -107,6 +132,7 @@ def derive_hyphen_groups(lines: Iterable[LineManifest]) -> tuple[HyphenGroup, ..
                 members=ordered,
                 spans_pages=len({r.page_id for r in ordered}) > 1,
                 explicit=explicit,
+                complete=not any(r in unresolved for r in ordered),
             )
         )
     groups.sort(key=lambda g: order[g.members[0]])

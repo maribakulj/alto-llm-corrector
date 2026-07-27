@@ -90,15 +90,18 @@ def forward_partner_id(lm: LineManifest) -> str | None:
     ``hyphen_forward_pair_id``; ``PART2`` / ``NONE`` continue nowhere.
 
     Single source of truth for "who is my forward hyphen partner?": the
-    LINE-chain planner, the cross-block union-find, and the same-chunk
-    predicate all resolve the forward link through here, so the
-    role→field mapping (which field holds the forward id per role) lives in
-    exactly one place instead of being re-encoded at each call site.
+    LINE-chain planner and the same-chunk predicate resolve the forward
+    link through here, so the role→field mapping (which field holds the
+    forward id per role) lives in exactly one place instead of being
+    re-encoded at each call site.
 
-    NB this is the strictly *forward* partner. The window-target assignment
-    keeps a chain atomic in either direction and uses its own broader
-    ``planner._hyphen_partner_id`` (backward-inclusive); the two notions are
-    deliberately distinct.
+    NB this is the strictly *forward* partner, a directed edge. Anything
+    that needs the whole unit — the window-target assignment, the
+    cross-block union-find, the router's escalation set — asks
+    :func:`~corrigenda.core.units.derive_hyphen_groups` instead, which
+    walks both directions and reports whether what it found is the
+    complete unit. The two notions are deliberately distinct; conflating
+    them is what produced the parallel resolvers ADR-010 is retiring.
     """
     if lm.hyphen_role == HyphenRole.PART1:
         return lm.hyphen_pair_line_id
