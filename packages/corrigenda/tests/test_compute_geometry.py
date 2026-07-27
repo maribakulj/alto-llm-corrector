@@ -15,7 +15,11 @@ These tests pin the corrected contract:
 
 from __future__ import annotations
 
-from corrigenda.formats.alto.rewriter import _compute_geometry, _tokenize
+from corrigenda.formats.alto.rewriter import (
+    _compute_geometry,
+    _is_space_token,
+    _tokenize,
+)
 
 
 def _widths(text: str, hpos: int, width: int) -> list[int]:
@@ -90,3 +94,59 @@ def test_degenerate_width_below_token_count_pins_floor_behaviour():
     widths2 = _widths("aaaaaaaa b c", hpos=0, width=12)
     assert all(w >= 1 for w in widths2), widths2
     assert sum(widths2) == 12
+
+
+# ---------------------------------------------------------------------------
+# Tokenisation — which whitespace becomes an <SP>, and which does not
+# ---------------------------------------------------------------------------
+
+
+class TestTokenizeSplitsOnBreakingWhitespaceOnly:
+    """A no-break space is a place one does NOT break, so it is not a
+    separator: it belongs inside its String's CONTENT. Routing it through an
+    ``<SP>`` — which carries no content — replaced it with an ordinary space
+    and destroyed the only thing it was there to express."""
+
+    def test_an_ordinary_space_separates(self):
+        assert _tokenize("a b") == ["a", " ", "b"]
+
+    def test_a_tab_separates(self):
+        # A tab IS a break opportunity; it has no ALTO representation and
+        # legitimately becomes an <SP>.
+        assert _tokenize("a\tb") == ["a", "\t", "b"]
+
+    def test_a_no_break_space_stays_inside_its_word(self):
+        assert _tokenize("M. Dupont") == ["M. Dupont"]
+
+    def test_a_narrow_no_break_space_stays_inside_its_word(self):
+        # U+202F — French typography before % ; ! ? :
+        assert _tokenize("12 %") == ["12 %"]
+
+    def test_a_figure_space_stays_inside_its_word(self):
+        assert _tokenize("1 000") == ["1 000"]
+
+    def test_breaking_and_no_break_spaces_in_one_line(self):
+        assert _tokenize("M. Dupont est là") == [
+            "M. Dupont",
+            " ",
+            "est",
+            " ",
+            "là",
+        ]
+
+    def test_a_lone_no_break_space_is_not_a_space_token(self):
+        # str.strip() calls U+00A0 whitespace, so the old classification
+        # would have emitted this as an <SP> and lost it.
+        assert _is_space_token(" ") is False
+        assert _is_space_token(" ") is True
+        assert _is_space_token("\t ") is True
+        assert _is_space_token("a") is False
+
+
+def test_geometry_weighs_a_no_break_space_as_part_of_its_word():
+    """It is glyph-bearing content now, not a 0.6-weighted gap."""
+    tokens = _tokenize("ab cd")
+    assert tokens == ["ab cd"]
+    geo = _compute_geometry(0, 100, tokens)
+    assert [t for t, _h, _w in geo] == ["ab cd"]
+    assert sum(w for _t, _h, w in geo) == 100

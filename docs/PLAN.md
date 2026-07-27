@@ -101,6 +101,10 @@ listés comme quatre correctifs indépendants. Ce sont quatre symptômes de deux
 absences de modèle. Les traiter séparément recrée le mécanisme d'enlisement
 décrit en `S` : quatre correctifs, quatre chemins de plus.
 
+**État : `L0` et `L1` faits.** Des deux défauts qui altéraient le texte livré
+sans laisser **aucune** trace — ni compteur, ni erreur — il n'en reste qu'un,
+`L2`, priorité absolue du lot. Il tombe avec `S1`.
+
 ### L0 — Échelle de fidélité de projection — **fait** *(prérequis de L1, L4)*
 
 `_projection_normal_form` (`pipeline.py:280`) fait `" ".join(text.split())` :
@@ -108,10 +112,10 @@ l'invariant censé détecter une divergence entre décision et XML est aveugle �
 une classe de divergences que le moteur **produit effectivement**. C'est le
 défaut le plus grave du dépôt : il touche le mécanisme de crédibilité lui-même.
 
-Le remède n'est pas de durcir l'invariant — `EXACT_XML_TEXT` est **inatteignable
-en ALTO** (`<SP>` ne porte pas de contenu ; un blanc de bord n'a aucune
-représentation). Le remède est de rendre le niveau atteint **explicite,
-déclaré et journalisé au rapport** :
+Le remède n'était pas de durcir l'invariant — `exact` est **inatteignable en
+ALTO** pour une partie des cas (`<SP>` ne porte pas de contenu ; un blanc de
+bord n'a aucune représentation). Il était de rendre le niveau atteint
+**explicite, déclaré et journalisé au rapport**.
 
 Livré (`core/fidelity.py`, 100 % couvert ; 31 tests) :
 
@@ -134,29 +138,36 @@ Reste ouvert, volontairement :
   inchangé. À rouvrir quand `S3` a arrêté la clôture d'API.
 - **le branchement sur les compteurs de perte** — c'est `R8`, Lot 2.
 
-### L1 — Blancs significatifs écrasés *(L0 fait ; moitié restante)*
+### L1 — Blancs significatifs écrasés — **fait**
 
 U+00A0 et **U+202F** (espace fine insécable — l'espace typographique française
-avant `%`, `;`, `!`, `?`, `:`, le cas le plus fréquent sur le corpus visé) sont
-avalés par `\s` dans `_tokenize` (`alto/rewriter.py:56`) et ré-émis en `<SP>`
-ordinaire.
+avant `%`, `;`, `!`, `?`, `:`, le cas le plus fréquent sur le corpus visé)
+étaient avalés par `\s` dans `_tokenize` (`alto/rewriter.py`) et ré-émis en
+`<SP>` ordinaire, qui ne porte aucun contenu.
 
-**Désormais visible et compté** (`L0`) : ces lignes sortent en `normalized`
-dans le rapport. Ce n'est pas la fin de l'item — c'est la fin du silence.
+Correctif : **le tokeniseur ne scinde plus que sur les blancs sécables.** Un
+blanc insécable est par définition un endroit où l'on ne coupe pas — sa place
+est *à l'intérieur* du `String`, où il traverse l'aller-retour verbatim. Le
+répertoire (`_NO_BREAK_SPACES`) : U+00A0, U+202F, U+2007. La classification
+d'un token « espace » ne passe plus par `str.strip()`, qui considère un
+insécable comme un blanc et le renvoyait donc en `<SP>` — c'était la
+substitution elle-même.
 
-Reste à faire : **ne plus les tokeniser du tout.** Un blanc insécable est par
-définition un endroit où l'on ne coupe pas ; il a sa place *à l'intérieur* du
-`String`, pas dans un `<SP>` entre deux. Scinder sur les blancs **sécables**
-seulement ferait remonter ces lignes de `normalized` à `exact` — et le
-compteur de `L0` est la façon de le prouver, avant/après, sur corpus réel.
-Attention à la redistribution proportionnelle des largeurs de tokens : un
-`String` qui contient un blanc doit garder une géométrie cohérente.
+Mesuré par `L0`, avant/après, sur le même chemin : U+00A0 et U+202F passent de
+`normalized` à `exact`. La tabulation reste `normalized` — c'est une véritable
+occasion de coupure, elle n'a pas de représentation ALTO, et le rapport le dit
+maintenant au lieu de se taire.
 
-Le `.strip()` du chemin lent (`rewriter.py:617`) est **clos** par `L0` : sa
-raison technique (le pavage `HPOS` des enfants de ligne) est valide et
-documentée, et un blanc de bord n'a aucune représentation en ALTO. Il sort
-désormais en `token_equivalent`, déclaré. Ce qui manquait était la
-déclaration, pas le comportement.
+Le `.strip()` du chemin lent est **clos** par `L0` : sa raison technique (le
+pavage `HPOS` des enfants de ligne) est valide et documentée, et un blanc de
+bord n'a aucune représentation en ALTO. Il sort désormais en
+`token_equivalent`, déclaré. Ce qui manquait était la déclaration, pas le
+comportement.
+
+Reste ouvert : **le même travail côté PAGE.** `formats/page/rewriter.py` n'a
+pas été audité pour cette classe ; PAGE porte son texte dans un nœud
+`Unicode`, donc le mode de perte n'est pas le même et peut très bien ne pas
+exister. À vérifier, pas à supposer.
 
 ### L2 — Signe de coupure comme donnée *(remplace « L2 + L4 + L6 »)*
 

@@ -51,9 +51,45 @@ class RewriterMetrics:
 # ---------------------------------------------------------------------------
 
 
+#: Whitespace that ALTO renders as an ``<SP>`` — that is, whitespace where a
+#: line may BREAK. A no-break space is deliberately excluded: U+00A0, U+202F
+#: (French typography's space before ``%``, ``;``, ``!``, ``?``, ``:``) and
+#: U+2007 exist precisely to say "do not break here", and ``<SP>`` carries no
+#: content, so routing one through an SP element replaces it with an ordinary
+#: space and destroys the only thing it was there to express. Splitting on
+#: breaking whitespace only keeps it inside its ``String``'s CONTENT, where it
+#: survives the round-trip verbatim.
+#:
+#: The set: U+00A0 NO-BREAK SPACE, U+202F NARROW NO-BREAK SPACE, U+2007 FIGURE
+#: SPACE. Spelled as escapes on purpose: they are indistinguishable from an
+#: ordinary space in a source listing, and a reviewer has to be able to see
+#: which ones are in here.
+_NO_BREAK_SPACES = "\u00a0\u202f\u2007"
+_BREAKING_WS = re.compile(rf"[^\S{_NO_BREAK_SPACES}]+")
+#: Same class, capturing — ``re.split`` keeps the separators only when the
+#: pattern has a group, and the rewriter needs them to emit its ``<SP>``s.
+_BREAKING_WS_SPLIT = re.compile(rf"([^\S{_NO_BREAK_SPACES}]+)")
+
+
 def _tokenize(text: str) -> list[str]:
-    """Split text into alternating word/space tokens, dropping empty strings."""
-    return [t for t in re.split(r"(\s+)", text) if t]
+    """Split text into alternating word/space tokens, dropping empty strings.
+
+    "Space token" means BREAKING whitespace — see :data:`_BREAKING_WS`. A
+    word token may therefore contain a no-break space, which is what makes
+    ``M.\u00a0Dupont`` one String rather than two joined by a lossy ``<SP>``.
+    """
+    return [t for t in _BREAKING_WS_SPLIT.split(text) if t]
+
+
+def _is_space_token(token: str) -> bool:
+    """True when ``token`` is the whitespace BETWEEN two words — an ``<SP>``.
+
+    Not ``token.strip() == ""``: :meth:`str.strip` treats a no-break space as
+    whitespace, so a lone U+00A0 token would classify as a separator and be
+    written back as an ordinary space — the very substitution this module
+    stopped making.
+    """
+    return _BREAKING_WS.fullmatch(token) is not None
 
 
 # ---------------------------------------------------------------------------
@@ -86,7 +122,7 @@ def _compute_geometry(
         return []
 
     def _weight(t: str) -> float:
-        return len(t) * 0.6 if t.strip() == "" else float(len(t))
+        return len(t) * 0.6 if _is_space_token(t) else float(len(t))
 
     weights = [_weight(t) for t in tokens]
     total_weight = sum(weights)
@@ -423,7 +459,7 @@ def _update_content_in_place(
     HEIGHT, WC, CC, STYLEREFS, etc.) and SP/HYP elements stay untouched.
     """
     orig_strings = _get_string_children(el, ns)
-    words = [t for t in _tokenize(corrected) if t.strip()]
+    words = [t for t in _tokenize(corrected) if not _is_space_token(t)]
     if len(words) != len(orig_strings):
         return False
     for string_el, word in zip(orig_strings, words):
@@ -706,7 +742,7 @@ def _rebuild_line(
                 el.append(h)
         return losses
 
-    word_tokens = [t for t in tokens if t.strip()]
+    word_tokens = [t for t in tokens if not _is_space_token(t)]
     alignment = align_tokens(orig_contents, word_tokens)
     matched_sources = {
         p.source_index
@@ -736,7 +772,7 @@ def _rebuild_line(
     last_word_width = hyp_width
 
     for token, tok_hpos, tok_width in geo:
-        if token.strip() == "":
+        if _is_space_token(token):
             _emit_sp(el, ns, orig_sp_attribs, sp_n, tok_hpos, tok_width, vpos)
             sp_n += 1
         else:

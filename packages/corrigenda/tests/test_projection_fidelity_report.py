@@ -1,15 +1,18 @@
-"""A run must REPORT the whitespace it could not carry (L0/L1).
+"""Significant whitespace must survive the rewrite, and what cannot must be
+reported (L0/L1).
 
-The defect: a producer returns ``"M.\\xa0Dupont"``, the ALTO rewriter's slow
-path tokenises on ``\\s`` — which in Python covers U+00A0 and U+202F — and
-re-emits the gap as a plain ``<SP>``. The no-break space is gone from the
-delivered file. The projection invariant compared the two through
-``" ".join(text.split())``, so it saw no difference; nothing raised, nothing
-counted, and the run reported a clean correction.
+The defect: the ALTO rewriter's slow path tokenised on ``\\s``, which in Python
+covers U+00A0 and U+202F, and re-emitted every gap as a plain ``<SP>``. ``<SP>``
+carries no content, so a no-break space came back as an ordinary one — the
+delivered file no longer said what the run decided. The projection invariant
+compared the two through ``" ".join(text.split())`` and saw no difference, so
+nothing raised, nothing counted, and the run reported a clean correction.
 
-These tests pin the artefact end to end: the level reaches the per-line
-projection stage AND the run-level tally, so a host can find the affected
-lines without diffing bytes itself.
+Both halves are pinned here. A no-break space is by definition a place one does
+NOT break, so it belongs inside its ``String``'s CONTENT and now stays there
+(``exact``). Whitespace that genuinely has no ALTO representation — a tab, a
+doubled space, an edge space — still cannot survive, and the run now says which
+of the two happened instead of saying nothing.
 """
 
 from __future__ import annotations
@@ -25,6 +28,9 @@ from corrigenda.core.protocols import ProducerMetadata
 from corrigenda.formats.alto.parser import build_document_manifest
 
 _SAMPLE = Path(__file__).parent.parent.parent.parent / "examples" / "sample.xml"
+
+NBSP = " "
+NNBSP = " "  # French typography before % ; ! ? :
 
 
 class _Null:
@@ -83,74 +89,77 @@ def _outcome(report, line_id: str):
     return next(ln for ln in report.lines if ln.line_id == line_id)
 
 
+class TestNoBreakSpacesSurvive:
+    """L1 — they are not separators, so they never become an ``<SP>``."""
+
+    @pytest.mark.asyncio
+    async def test_a_no_break_space_reaches_the_artefact_intact(self) -> None:
+        result, target = await _run(NBSP)
+
+        outcome = _outcome(result.report, target)
+        assert NBSP in outcome.decision.final_text
+        assert NBSP in outcome.projection.extracted_text
+        assert outcome.projection.fidelity is ProjectionFidelity.EXACT
+
+    @pytest.mark.asyncio
+    async def test_a_narrow_no_break_space_reaches_the_artefact_intact(self) -> None:
+        # U+202F is the space French typography puts before % ; ! ? : — the
+        # most frequent significant space in the corpus this library targets.
+        result, target = await _run(NNBSP)
+
+        outcome = _outcome(result.report, target)
+        assert NNBSP in outcome.projection.extracted_text
+        assert outcome.projection.fidelity is ProjectionFidelity.EXACT
+
+    @pytest.mark.asyncio
+    async def test_the_run_reports_no_normalized_line(self) -> None:
+        result, _ = await _run(NBSP)
+
+        counts = result.report.projection_fidelity
+        assert counts is not None
+        assert counts.get(ProjectionFidelity.NORMALIZED.value, 0) == 0
+        assert sum(counts.values()) == result.report.total_lines
+
+
+class TestWhatTheFormatStillCosts:
+    """Not everything can survive, and the run must say which is which."""
+
+    @pytest.mark.asyncio
+    async def test_a_tab_is_reported_as_a_substitution(self) -> None:
+        # A tab IS a break opportunity, so it legitimately becomes an <SP>
+        # and comes back as an ordinary space. A real loss — hence reported,
+        # where before it was compared away.
+        result, target = await _run("\t")
+
+        outcome = _outcome(result.report, target)
+        assert "\t" in outcome.decision.final_text
+        assert "\t" not in outcome.projection.extracted_text
+        assert outcome.projection.fidelity is ProjectionFidelity.NORMALIZED
+
+    @pytest.mark.asyncio
+    async def test_a_collapsed_run_of_spaces_is_not_called_a_substitution(self) -> None:
+        # <SP> is one element: a doubled space cannot round-trip, and that is
+        # the format's price, not a corrupted character.
+        result, target = await _run("  ")
+
+        outcome = _outcome(result.report, target)
+        assert outcome.projection.fidelity is ProjectionFidelity.TOKEN_EQUIVALENT
+
+    @pytest.mark.asyncio
+    async def test_an_ordinary_correction_stays_exact(self) -> None:
+        """The scale must not cry wolf: a plain text change loses nothing."""
+        result, target = await _run(" ")
+
+        outcome = _outcome(result.report, target)
+        assert outcome.projection.fidelity is ProjectionFidelity.EXACT
+        counts = result.report.projection_fidelity
+        assert counts.get(ProjectionFidelity.NORMALIZED.value, 0) == 0
+
+
 @pytest.mark.asyncio
-async def test_a_crushed_nbsp_is_reported_not_swallowed() -> None:
-    """The line still says the same words — and the report now says it does
-    not say them the same way."""
-    result, target = await _run("\xa0")
-
-    outcome = _outcome(result.report, target)
-    assert outcome.projection is not None
-    assert outcome.projection.fidelity is ProjectionFidelity.NORMALIZED
-
-    # The bytes really did lose it — a report of a real loss, not a
-    # pessimistic label.
-    assert "\xa0" in outcome.decision.final_text
-    assert "\xa0" not in outcome.projection.extracted_text
-
-
-@pytest.mark.asyncio
-async def test_a_crushed_narrow_nbsp_is_reported() -> None:
-    """U+202F — French typography before % ; ! ? : — same fate, same report."""
-    result, target = await _run("\u202f")
-
-    outcome = _outcome(result.report, target)
-    assert outcome.projection.fidelity is ProjectionFidelity.NORMALIZED
-    assert "\u202f" in outcome.decision.final_text
-    assert "\u202f" not in outcome.projection.extracted_text
-
-
-@pytest.mark.asyncio
-async def test_the_run_tallies_its_normalized_lines() -> None:
-    """One host-visible number: how many lines did not survive intact."""
-    result, target = await _run("\xa0")
-
-    counts = result.report.projection_fidelity
-    assert counts is not None
-    assert counts.get(ProjectionFidelity.NORMALIZED.value) == 1
-    # Every other line was untouched, so nothing else degraded.
-    assert sum(counts.values()) == result.report.total_lines
-    assert counts.get(ProjectionFidelity.EXACT.value, 0) >= 1
-
-
-@pytest.mark.asyncio
-async def test_an_ordinary_correction_stays_exact() -> None:
-    """The scale must not cry wolf: a plain text change loses nothing."""
-    result, target = await _run(" ")
-
-    outcome = _outcome(result.report, target)
-    assert outcome.projection.fidelity is ProjectionFidelity.EXACT
-
-    counts = result.report.projection_fidelity
-    assert counts.get(ProjectionFidelity.NORMALIZED.value, 0) == 0
-
-
-@pytest.mark.asyncio
-async def test_a_collapsed_run_of_spaces_is_not_reported_as_a_substitution() -> None:
-    """``<SP>`` is one element: a doubled space cannot round-trip, and that
-    is the format's price, not a corrupted character."""
-    result, target = await _run("  ")
-
-    outcome = _outcome(result.report, target)
-    assert outcome.projection.fidelity is ProjectionFidelity.TOKEN_EQUIVALENT
-    counts = result.report.projection_fidelity
-    assert counts.get(ProjectionFidelity.NORMALIZED.value, 0) == 0
-
-
-@pytest.mark.asyncio
-async def test_the_tally_survives_the_json_round_trip() -> None:
-    """report.json is the artefact a host reads; the level must be there."""
-    result, target = await _run("\xa0")
+async def test_the_level_survives_the_json_round_trip() -> None:
+    """report.json is the artefact a host reads; the level must be in it."""
+    result, target = await _run("\t")
     payload = result.report.model_dump(mode="json")
 
     assert payload["projection_fidelity"]["normalized"] == 1

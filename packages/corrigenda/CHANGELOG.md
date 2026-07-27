@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **A no-break space no longer becomes an ordinary one (ALTO).** The
+  rewriter's slow path tokenised on `\s`, which in Python covers U+00A0 and
+  U+202F, and re-emitted every gap as an `<SP>` — an element that carries no
+  content. `M.\xa0Dupont` was delivered as `M. Dupont`: the character whose
+  entire job is to say "do not break here" was replaced by one that says the
+  opposite, and the projection invariant compared the two as equal (see
+  *Added*, below). The tokeniser now splits on **breaking** whitespace only,
+  so a no-break space stays inside its `String`'s CONTENT and survives the
+  round-trip verbatim. Repertoire: U+00A0, U+202F (French typography's space
+  before `%`, `;`, `!`, `?`, `:`), U+2007. Token classification no longer
+  goes through `str.strip()`, which calls a no-break space whitespace and was
+  itself the substitution. A tab is unaffected and still normalises: it is a
+  genuine break opportunity with no ALTO representation — and the run now
+  reports that instead of staying silent about it.
+
 ### Added
 
 - **Projection fidelity: the run now says what the format cost it.** The
