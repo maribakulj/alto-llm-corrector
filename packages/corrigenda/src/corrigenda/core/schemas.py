@@ -8,6 +8,8 @@ from typing import Any, ClassVar, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validator
 
+from corrigenda.core.fidelity import ProjectionFidelity
+
 # ---------------------------------------------------------------------------
 # Enums
 # ---------------------------------------------------------------------------
@@ -1103,6 +1105,10 @@ class LineTrace(BaseModel):
     #: (e.g. ``{"words_dropped": 4}``), ``None`` when its rewrite lost
     #: nothing; surfaces on the report's projection stage.
     projection_losses: dict[str, int] | None = None
+    #: The fidelity level the projection invariant measured for this line;
+    #: surfaces on the report's projection stage. ``None`` until the line's
+    #: file has been rewritten (and forever, for a run that writes nothing).
+    projection_fidelity: ProjectionFidelity | None = None
     validation_status: str | None = None  # corrected / fallback / failed
     fallback_reason: str | None = None
 
@@ -1177,6 +1183,16 @@ class ProjectionStage(BaseModel):
     #: when this line's rewrite lost nothing. Additive and optional —
     #: no ``report_version`` bump.
     losses: dict[str, int] | None = None
+    #: How faithfully the artefact carries this line's decision — see
+    #: :class:`~corrigenda.core.fidelity.ProjectionFidelity`. ``exact`` when
+    #: the bytes say the decision character for character;
+    #: ``token_equivalent`` when only what the format cannot represent was
+    #: lost (a collapsed whitespace run, an edge space); ``normalized``
+    #: when a whitespace character was SUBSTITUTED — a no-break space or
+    #: U+202F flattened to an ordinary one. The run fails outright if the
+    #: words diverge, so no worse level can reach a report. Additive and
+    #: optional — no ``report_version`` bump.
+    fidelity: ProjectionFidelity | None = None
 
 
 class LineConfidence(BaseModel):
@@ -1351,6 +1367,16 @@ class CorrectionReport(BaseModel):
     #: ``report_version`` — the field's contract is to bump only on a
     #: *breaking* JSON change, and a new optional key is backward-compatible.
     format_losses: dict[str, int] | None = None
+    #: Per-line projection fidelity, counted by level over the run — e.g.
+    #: ``{"exact": 498, "token_equivalent": 22, "normalized": 2}``. Two
+    #: normalized lines mean two lines where a significant whitespace
+    #: character (U+00A0, U+202F, a tab) was flattened into an ordinary
+    #: space: the artefact still says the same WORDS, and no longer says
+    #: them the same way. Before this existed the invariant compared in
+    #: whitespace normal form and could not see that at all. ``None`` when
+    #: the run rendered no output file. Additive and optional — no
+    #: ``report_version`` bump.
+    projection_fidelity: dict[str, int] | None = None
     #: P3.9 (§11) — the run's full provenance record. Optional and
     #: additive (no ``report_version`` bump): a v2.0 consumer that
     #: ignores unknown keys keeps working, one that reads it gains the
@@ -1410,6 +1436,7 @@ __all__ = [
     "ProposalFeatures",
     "DecisionStage",
     "DecisionReason",
+    "ProjectionFidelity",
     "ProjectionStage",
     "ProducerProvenance",
     "RunProvenance",

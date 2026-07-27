@@ -9,6 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Projection fidelity: the run now says what the format cost it.** The
+  projection invariant compared the decided text against the rewritten
+  artefact in whitespace normal form (`" ".join(text.split())`), so a
+  whitespace *substitution* compared equal to no change at all. A line
+  decided as `M.\xa0Dupont` and written back as `M. Dupont` passed silently:
+  no error, no counter, no trace — the one corruption class the invariant
+  exists to catch was the one class it could not express.
+  `corrigenda.core.fidelity` replaces the boolean with an ordered scale.
+  `exact` (the bytes say the decision character for character),
+  `token_equivalent` (only what ALTO cannot represent was lost — a collapsed
+  whitespace run, an edge space; `<SP>` carries no content) and `normalized`
+  (a whitespace character was **swapped**: U+00A0, U+202F or a tab flattened
+  to an ordinary space). A word-level divergence still fails the run with
+  `ProjectionError`, unchanged. The level rides the report: per line on
+  `ProjectionStage.fidelity`, per run on `CorrectionReport.projection_fidelity`
+  as a count by level. Both fields are optional and additive, so
+  `CORRECTION_REPORT_VERSION` does **not** move. Note U+202F specifically —
+  French typography's space before `%`, `;`, `!`, `?` and `:`, the most
+  frequent significant space in the corpus this library targets, and one that
+  no earlier finding had named.
+
 - **Real VLMs behind the vision seam + a terminal runner
   (`scripts/providers_multimodal.py`, `scripts/run_vision.py`).**
   `AnthropicMultimodalClient` (Claude, official SDK) and

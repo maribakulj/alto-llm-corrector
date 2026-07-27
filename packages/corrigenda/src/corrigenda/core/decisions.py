@@ -175,6 +175,10 @@ def build_line_outcomes(
                     # ADR-012 — per-decision attribution of the rewrite's
                     # granularity losses (None when nothing was lost).
                     losses=trace.projection_losses,
+                    # The level at which this line's bytes carry its
+                    # decision: exact, or what the format cost, or a
+                    # whitespace character that was substituted away.
+                    fidelity=trace.projection_fidelity,
                 )
         outcomes.append(
             LineOutcome(

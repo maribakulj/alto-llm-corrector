@@ -208,6 +208,10 @@ def test_correction_report_json_keys_are_pinned():
         "total_lines",
         "lines",
         "format_losses",
+        # Optional and additive: absent from a run that wrote no file, and
+        # a v2.0 consumer that ignores unknown keys is unaffected — so it
+        # does NOT bump CORRECTION_REPORT_VERSION.
+        "projection_fidelity",
         "provenance",  # P3.9 — optional, additive (no version bump)
         "usage",  # ROADMAP V3 Phase 0 — optional, additive (no version bump)
         "sidecar",  # ROADMAP V3 Phase 1 — optional, additive (no version bump)

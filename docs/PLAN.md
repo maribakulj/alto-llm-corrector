@@ -101,7 +101,7 @@ listés comme quatre correctifs indépendants. Ce sont quatre symptômes de deux
 absences de modèle. Les traiter séparément recrée le mécanisme d'enlisement
 décrit en `S` : quatre correctifs, quatre chemins de plus.
 
-### L0 — Échelle de fidélité de projection *(prérequis de L1, L4)*
+### L0 — Échelle de fidélité de projection — **fait** *(prérequis de L1, L4)*
 
 `_projection_normal_form` (`pipeline.py:280`) fait `" ".join(text.split())` :
 l'invariant censé détecter une divergence entre décision et XML est aveugle à
@@ -113,25 +113,50 @@ en ALTO** (`<SP>` ne porte pas de contenu ; un blanc de bord n'a aucune
 représentation). Le remède est de rendre le niveau atteint **explicite,
 déclaré et journalisé au rapport** :
 
-- une échelle ordonnée, de l'ordre de `EXACT_XML_TEXT` → `TOKEN_EQUIVALENT`
-  → `NORMALIZED_DISPLAY` ;
-- le niveau **visé** est une politique ; le niveau **atteint** est une donnée du
-  rapport, par ligne agrégée par run ;
-- toute descente d'un niveau est **comptée** (elle rejoint `R`) ;
-- `" ".join(split())` cesse d'être l'invariant universel et devient
-  la comparaison d'**un** niveau nommé.
+Livré (`core/fidelity.py`, 100 % couvert ; 31 tests) :
 
-### L1 — Blancs significatifs écrasés *(dépend de L0)*
+- échelle ordonnée `exact` → `token_equivalent` → `normalized`, chaque niveau
+  distinguant ce que le **format coûte** (`<SP>` ne porte pas de contenu : une
+  suite d'espaces et un blanc de bord ne peuvent pas survivre) de ce qui a été
+  **substitué** (U+00A0, U+202F, tabulation aplatis en espace ordinaire) ;
+- le niveau atteint est une donnée du rapport : `ProjectionStage.fidelity` par
+  ligne, `CorrectionReport.projection_fidelity` par run (comptage par niveau).
+  Champs additifs et optionnels — pas de bump de `CORRECTION_REPORT_VERSION` ;
+- `" ".join(split())` a cessé d'être l'invariant universel : la divergence de
+  **mots** lève toujours `ProjectionError`, tout le reste est classé et compté ;
+- U+202F est couvert nommément.
+
+Reste ouvert, volontairement :
+
+- **le niveau *visé* comme politique.** Le plan le prévoyait ; l'ajouter
+  maintenant étendrait la surface publique en pleine réduction (`S3`) et
+  pendant le gel. Le plancher reste « les mots doivent correspondre »,
+  inchangé. À rouvrir quand `S3` a arrêté la clôture d'API.
+- **le branchement sur les compteurs de perte** — c'est `R8`, Lot 2.
+
+### L1 — Blancs significatifs écrasés *(L0 fait ; moitié restante)*
 
 U+00A0 et **U+202F** (espace fine insécable — l'espace typographique française
 avant `%`, `;`, `!`, `?`, `:`, le cas le plus fréquent sur le corpus visé) sont
 avalés par `\s` dans `_tokenize` (`alto/rewriter.py:56`) et ré-émis en `<SP>`
-ordinaire. L'invariant ne le voit pas.
+ordinaire.
 
-Le `.strip()` du chemin lent (`rewriter.py:617`) relève du **même** remède, pas
-d'un correctif propre : sa raison technique (le pavage `HPOS` des enfants de
-ligne) est valide et documentée. Ce qui manque est la déclaration, pas le
-comportement.
+**Désormais visible et compté** (`L0`) : ces lignes sortent en `normalized`
+dans le rapport. Ce n'est pas la fin de l'item — c'est la fin du silence.
+
+Reste à faire : **ne plus les tokeniser du tout.** Un blanc insécable est par
+définition un endroit où l'on ne coupe pas ; il a sa place *à l'intérieur* du
+`String`, pas dans un `<SP>` entre deux. Scinder sur les blancs **sécables**
+seulement ferait remonter ces lignes de `normalized` à `exact` — et le
+compteur de `L0` est la façon de le prouver, avant/après, sur corpus réel.
+Attention à la redistribution proportionnelle des largeurs de tokens : un
+`String` qui contient un blanc doit garder une géométrie cohérente.
+
+Le `.strip()` du chemin lent (`rewriter.py:617`) est **clos** par `L0` : sa
+raison technique (le pavage `HPOS` des enfants de ligne) est valide et
+documentée, et un blanc de bord n'a aucune représentation en ALTO. Il sort
+désormais en `token_equivalent`, déclaré. Ce qui manquait était la
+déclaration, pas le comportement.
 
 ### L2 — Signe de coupure comme donnée *(remplace « L2 + L4 + L6 »)*
 

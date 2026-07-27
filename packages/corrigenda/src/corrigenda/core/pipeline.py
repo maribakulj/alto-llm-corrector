@@ -27,7 +27,7 @@ import hashlib
 import json
 import re
 import uuid
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Any
 from pathlib import Path
@@ -65,6 +65,10 @@ from corrigenda.core.decisions import (
     DecisionSet,
     build_line_outcomes,
     derive_decision_set,
+)
+from corrigenda.core.fidelity import (
+    ProjectionFidelity,
+    classify_projection_fidelity,
 )
 from corrigenda.core.planner import downgrade_granularity, plan_page
 from corrigenda.core.units import derive_hyphen_groups, hyphen_group_by_line
@@ -269,15 +273,20 @@ def sanitize_error(msg: str, api_key: str | None = None) -> str:
     return msg
 
 
-def _projection_normal_form(text: str) -> str:
-    """Whitespace-run normal form for the projection invariant.
+def _fidelity_counts(traces: Mapping[LineRef, LineTrace]) -> dict[str, int]:
+    """Count the run's lines by the fidelity their projection reached.
 
-    ALTO/PAGE tokenize a line into word elements, so runs of consecutive
-    whitespace cannot survive the write→extract round-trip. Word-level
-    equality is the enforceable contract; exact spacing is a property of
-    the formats, not a correctness signal.
+    Keyed by the enum's string value so the report stays plain JSON.
+    Lines whose file was never rewritten carry no level and are absent
+    from the total — an empty dict means "nothing was written", never
+    "everything was exact".
     """
-    return " ".join(text.split())
+    counts: dict[str, int] = {}
+    for trace in traces.values():
+        if trace.projection_fidelity is not None:
+            key = trace.projection_fidelity.value
+            counts[key] = counts.get(key, 0) + 1
+    return counts
 
 
 def _verify_projection(
@@ -285,15 +294,26 @@ def _verify_projection(
     pages: list[PageManifest],
     output_texts: dict[str, str],
     decisions: DecisionSet,
-) -> None:
+) -> dict[str, ProjectionFidelity]:
     """The rewritten file must SAY what the run decided, line for line.
 
     Compares the rewrite's per-line texts against each line's terminal
     decision (ADR-011 — read from the immutable :class:`DecisionSet`,
-    not the mutable manifests) in whitespace normal form. A missing line
-    or a word-level divergence is corruption of the deliverable — the
-    run fails here, before the writer can persist the artefact.
+    not the mutable manifests). A missing line, or one whose WORDS
+    diverge, is corruption of the deliverable — the run fails here,
+    before the writer can persist the artefact.
+
+    A line whose words match but whose whitespace does not is NOT a
+    failure: ``<SP>`` carries no content, so some of this is what the
+    format costs. It is also not nothing — a no-break space flattened
+    into an ordinary one changes what the line says to a typographer.
+    Until now the comparison ran in whitespace normal form and could not
+    tell those two apart, so both vanished. Returns the fidelity level
+    reached per line id (see
+    :class:`~corrigenda.core.fidelity.ProjectionFidelity`) so the caller
+    can put it on the record instead.
     """
+    levels: dict[str, ProjectionFidelity] = {}
     for page in pages:
         for lm in page.lines:
             decided = decisions.by_ref[line_ref(lm)].final_text
@@ -303,13 +323,16 @@ def _verify_projection(
                     f"line {lm.line_id!r} (page {lm.page_id!r}) of "
                     f"{source_name!r} is missing from the rewritten XML"
                 )
-            if _projection_normal_form(extracted) != _projection_normal_form(decided):
+            level = classify_projection_fidelity(decided, extracted)
+            if level is None:
                 raise ProjectionError(
                     f"rewritten XML for {source_name!r} diverges from the "
                     f"run's decision on line {lm.line_id!r} (page "
                     f"{lm.page_id!r}): decided {decided!r} but the artefact "
                     f"contains {extracted!r}"
                 )
+            levels[lm.line_id] = level
+    return levels
 
 
 def _set_trace(
@@ -1304,6 +1327,12 @@ class CorrectionPipeline:
             # the report (None when the format is lossless or nothing was
             # written).
             format_losses=format_losses or None,
+            # How faithfully each rewritten line carries its decision,
+            # counted by level. A non-zero "normalized" is the run telling
+            # its host that a significant whitespace character did not
+            # survive the format — the thing the invariant used to compare
+            # away before anyone could count it.
+            projection_fidelity=_fidelity_counts(traces) or None,
             # P3.9 (§11) — the run's full provenance record.
             provenance=self._build_provenance(
                 document_manifest=document_manifest,
@@ -2956,7 +2985,12 @@ class CorrectionPipeline:
             # Projection invariant: the artefact must SAY what the run
             # decided. Verified BEFORE the writer sees the bytes — a
             # divergent artefact is corruption, never a valid output.
-            _verify_projection(source_name, pages_for_file, result.texts, decisions)
+            # What it CAN'T refuse — a whitespace character the format
+            # flattened — comes back as a per-line fidelity level and
+            # goes on the record rather than disappearing.
+            fidelity_by_lid = _verify_projection(
+                source_name, pages_for_file, result.texts, decisions
+            )
             corrected_files[source_name] = result.xml_bytes
 
             # rewriter_stats observability event — pure read-only diagnostic
@@ -3001,6 +3035,13 @@ class CorrectionPipeline:
                     t = traces.get(tkey)
                     if t is not None:
                         t.output_alto_text = otxt
+
+            for lid, level in fidelity_by_lid.items():
+                tkey = lid_to_ref.get(lid)
+                if tkey:
+                    t = traces.get(tkey)
+                    if t is not None:
+                        t.projection_fidelity = level
 
         # No trace persistence anywhere in the engine: trace.json IS the
         # CorrectionReport (§9), carried on the result for the caller.
