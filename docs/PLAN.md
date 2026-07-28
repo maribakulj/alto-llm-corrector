@@ -489,11 +489,67 @@ dérivation d'unité, cohérence tenue par invariant » — et il est **atteint*
 `pipeline.py` pourrait l'exiger ; à ce moment-là les deux se font ensemble, et
 pas avant.
 
+### `S3` — la clôture, établie par calcul (2026-07-27)
+
+Choisir la surface à la main, c'est comment on arrive à 95. Elle a donc été
+**calculée** : partir de ce que `load` / `correct` / `correct_sync` retournent,
+et suivre les annotations de type transitivement.
+
+**Clôture des retours : 33 types.** 30 sont déjà exportés. **4 trous** — des
+types qu'un appelant rencontre en typant la valeur de retour et qu'il ne peut
+pas importer depuis le sommet :
+
+| manquant | pourquoi il compte |
+|---|---|
+| `Coords` | la géométrie de chaque ligne du manifeste |
+| `ProjectionFidelity` | le niveau que `L0` a mis sur `ProjectionStage` |
+| `ReconcileMetrics` | porté par `CorrectionResult` |
+| `CORRECTION_REPORT_VERSION` | `docs/versioning.md` dit aux consommateurs de **dispatcher dessus** (`D5`) — et `EDIT_PROTOCOL_VERSION`, lui, est exporté |
+
+**Constat qui change la cible.** Le backend — le seul intégrateur réel —
+**n'utilise ni `load`, ni `correct`, ni `correct_sync`**. Il passe par la porte
+bas niveau : `build_document_manifest` 18×, `parse_alto_file` 5×,
+`rewrite_alto_file` 2×, plus `CorrectionPipeline` et les policies. Ce n'est pas
+un détail de style : ça dit que la façade calculée n'est pas la porte
+empruntée, et qu'une réduction qui l'ignore casserait le seul consommateur.
+
+### Répartition proposée — **95 → 54**
+
+**Gardés (50) + ajoutés (4)**
+
+| groupe | n | contenu |
+|---|---|---|
+| façade | 4 | `load`, `correct`, `correct_sync`, `__version__` |
+| ce que la façade retourne | 25 | `CorrectionResult`, `CorrectionReport`, `DecisionSet`, les manifestes, les étages du rapport, la provenance… |
+| porte avancée | 7 | `CorrectionPipeline`, `EditProducer`, `PipelineObserver`, `BaseProvider`… |
+| policies injectables | 7 | `RetryPolicy`, `GuardConfig`, `ChunkPlannerConfig`, `PairingPolicy`, `LossPolicy`, `ConfidencePolicy`, `RoutingPolicy` |
+| erreurs | 7 | la hiérarchie `CorrigendaError` |
+| **ajoutés** | 4 | les 4 trous ci-dessus |
+
+**Rétrogradés (45)** — retirés de `corrigenda.*`, **toujours importables depuis
+leur module** (vérifié : les 45 ont un module d'accueil réel).
+
+| groupe | n |
+|---|---|
+| protocole d'édition | 12 |
+| formats bas niveau | 8 |
+| contrat LLM | 8 |
+| producteurs concrets | 6 |
+| QE / routage | 6 |
+| enveloppe vision | 4 |
+| divers (`ChunkGranularity`) | 1 |
+
+**Le point à trancher avant de couper** : les 8 symboles « formats bas niveau »
+sont ceux que le backend utilise 26 fois. Les rétrograder l'oblige à changer
+ses imports — mécanique, pas une refonte — mais c'est un changement à faire
+**dans le même commit**, sinon le dépôt se casse lui-même.
+
+
 | id | item | mesure actuelle | cible |
 |---|---|---|---|
 | S1 | Queue de l'ADR-010 : **unité de césure de première classe** — membres ordonnés, pages, type explicite/heuristique, autorité `SUBS_CONTENT`, signe physique, état, décision atomique, projection par format. Pointeurs dérivés, jamais mutables séparément. Retrait des résolveurs obsolètes | **0** doublon de résolveur (était 5) ; 8 lectures de pointeur dans `pipeline.py` (était 18) ; unité pas encore autoritaire | 1 primitive dirigée + 1 dérivation d'unité, 0 pointeur mutable |
 | S2 | Scinder `core/pipeline.py` en composants nommés — préflight, planification, routage, exécution de chunk, validation, acceptation, réconciliation d'unités, projection, assemblage du rapport. Le pipeline public **orchestre**, il ne réimplémente pas | **3052** lignes (3015 le 25/07 : `L0` en a ajouté ~50, `S1` en a rendu ~12) ; `_run_impl` 294/imbr. 4 ; `_attempt_chunk` 220/imbr. 5 | fichier principal < 800 l., aucune méthode > 100 l., assemblage du rapport indépendant du contrôle d'exécution |
-| S3 | Réduire la surface publique. **La cible n'est pas « 8 » mais la clôture transitive de ce que la façade retourne** : `load`/`correct`/`correct_sync` + `LoadedDocument`, `CorrectionResult`, `CorrectionReport`, `DecisionSet`, `LineDecision`, `LineRef`, `EditProducer`, les policies injectables, `CorrigendaError`, `CORRECTION_REPORT_VERSION`, `__version__`. Le reste reste importable depuis son module, sans être façade | **95** exports | clôture arrêtée et gelée |
+| S3 | Réduire la surface publique à la **clôture transitive de ce que la façade retourne** — pas à « 8 symboles ». Clôture établie par calcul (voir ci-dessous), proposition **95 → 54** prête, en attente de ratification | **95** exports ; 4 trous dans la clôture | 54 : 50 gardés + 4 ajoutés, 45 rétrogradés vers leur module |
 | S4 | Queue de l'ADR-011 : geler les types `Source*` (l'immuabilité repose sur une copie défensive, pas sur le type) | — | — |
 | S5 | Écrire `docs/adr/012-*.md` : cité par le code, inexistant ; `docs/adr/README.md` s'arrête à 008 alors que 009-011 existent | — | — |
 
