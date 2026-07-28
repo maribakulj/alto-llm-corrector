@@ -76,11 +76,15 @@ class TestTheSoftHyphenCollapseIsDeliberate:
         # end in a break character and would not pair.
         assert _rebuild('<String CONTENT="néces"/><HYP CONTENT="­"/>') == "néces-"
 
-    def test_u00ad_is_not_in_the_de_duplication_set(self) -> None:
-        # Admitting it would put a soft hyphen into ocr_text that the
-        # round-trip cannot carry.
+    def test_u00ad_is_the_only_mark_outside_the_de_duplication_set(self) -> None:
+        # The property, not a frozen list: the de-dup set is the break-mark
+        # repertoire minus U+00AD, so widening the repertoire (L6) widens
+        # this too and only the soft hyphen stays out. Admitting it would
+        # put a soft hyphen into ocr_text that the round-trip cannot carry.
+        from corrigenda.core.pairing import HYPHEN_CHARS
+
         assert "­" not in _DEDUP_MARKS
-        assert set(_DEDUP_MARKS) == {"-", "¬", "⸗"}
+        assert set(_DEDUP_MARKS) == set(HYPHEN_CHARS) - {"­"}
 
     def test_a_hyp_with_no_content_still_defaults_to_ascii(self) -> None:
         # ALTO allows a bare <HYP/>; there is no source character to
@@ -160,3 +164,32 @@ class TestAMixedRoleLineKeepsItsForwardMark:
         assert result.texts[target].endswith("-"), (
             f"the forward break mark was dropped: {result.texts[target]!r}"
         )
+
+
+class TestTheRepertoireIsJustifiedByEvidence:
+    """L6 — widening the repertoire makes lines pair that did not, on real
+    documents, so each member is there on measurement rather than on the
+    grounds that it looks like a hyphen."""
+
+    def test_the_unambiguous_unicode_hyphens_pair(self) -> None:
+        from corrigenda.core.pairing import HYPHEN_CHARS, trailing_hyphen_char
+
+        for mark in ("‐", "‑"):  # U+2010 HYPHEN, U+2011 NON-BREAKING HYPHEN
+            assert trailing_hyphen_char(f"administra{mark}", HYPHEN_CHARS) == mark
+
+    def test_the_ambiguous_marks_stay_out(self) -> None:
+        # `=` is an equals sign; U+2013 is a dialogue dash or a range. Both
+        # appear ZERO times in the 40 corpus files, so there is no evidence
+        # they are needed and a known reason they would misfire.
+        from corrigenda.core.pairing import HYPHEN_CHARS
+
+        assert "=" not in HYPHEN_CHARS
+        assert "–" not in HYPHEN_CHARS
+
+    def test_a_year_range_still_does_not_pair(self) -> None:
+        # The alphabetic-char requirement is what keeps the repertoire safe
+        # to widen at all.
+        from corrigenda.core.pairing import HYPHEN_CHARS, trailing_hyphen_char
+
+        assert trailing_hyphen_char("en 1789-", HYPHEN_CHARS) is None
+        assert trailing_hyphen_char("n°5‐", HYPHEN_CHARS) is None

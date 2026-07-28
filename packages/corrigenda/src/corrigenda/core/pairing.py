@@ -29,11 +29,37 @@ from corrigenda.core.schemas import (
 
 #: Terminal characters a heuristic parser treats as a word-break hyphen.
 #: ALTO relies on explicit ``SUBS_TYPE``/``HYP`` markup and only falls back
-#: to a plain ``-``; PAGE has no such markup, so it scans for the wider
-#: Transkribus/Fraktur repertoire (P5): hyphen-minus, the ``¬`` negation
-#: sign Transkribus emits, the ``⸗`` double oblique of Fraktur, and the
-#: U+00AD soft hyphen.
-HYPHEN_CHARS: tuple[str, ...] = ("-", "¬", "⸗", "­")
+#: to a plain ``-``; PAGE has no such markup, so it scans this repertoire.
+#:
+#: Widening it is not a free act — a new member makes lines pair that did
+#: not, on real documents — so each one is here on evidence. Measured over
+#: the 40 ALTO/PAGE files in ``examples/`` and ``corpus/``, text content
+#: only: 119 line-final ``-``, 25 line-final ``⸗``, zero of everything
+#: else.
+#:
+#: - ``-``  U+002D HYPHEN-MINUS — the common case.
+#: - ``¬``  U+00AC — what Transkribus emits for a break.
+#: - ``⸗``  U+2E17 DOUBLE OBLIQUE HYPHEN — Fraktur; 25 of the corpus's 144
+#:   line-final marks, and its absence here was a real defect (542c783).
+#: - ``­``  U+00AD SOFT HYPHEN — emitted by some engines as a hyphen
+#:   variant. See ``formats/alto/_text._DEDUP_MARKS`` for the one place it
+#:   is deliberately treated differently.
+#: - ``‐``  U+2010 HYPHEN and ``‑`` U+2011 NON-BREAKING HYPHEN — the
+#:   unambiguous Unicode hyphens. Zero occurrences in the corpora, so they
+#:   are latent coverage for a producer that uses them: no measurable risk
+#:   either way, and nothing else these characters can mean.
+#:
+#: Deliberately EXCLUDED, and both for the same reason — they carry other
+#: meanings and the corpora give no evidence they are needed here:
+#:
+#: - ``=`` U+003D — the equals sign of a table or a formula.
+#: - ``–`` U+2013 EN DASH — a dialogue dash or a range. The alphabetic-char
+#:   requirement in :func:`trailing_hyphen_char` rejects ``1789–`` but not
+#:   a line ending on a dash of dialogue.
+#:
+#: Admitting either needs measurement on a corpus that contains them (M7),
+#: not a tuple edit.
+HYPHEN_CHARS: tuple[str, ...] = ("-", "¬", "⸗", "­", "‐", "‑")
 
 
 def preserve_break_char(source_text: str, corrected: str) -> str:

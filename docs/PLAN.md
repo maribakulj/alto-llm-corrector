@@ -45,7 +45,7 @@ propriétés tenables. Critères de sortie, à ne pas négocier à la baisse :
 |---|---|---|
 | V1 | Aucune altération du texte livré qui ne soit **déclarée et comptée** | `L*` fermés, échelle de fidélité au rapport |
 | V2 | La comptabilité des pertes ne produit **ni fantôme ni angle mort** | `R*` fermés, matrice versionnée |
-| V3 | Une **seule** définition de l'unité de césure dans tout le code | `S1` fermé : 1 primitive dirigée + 1 dérivation d'unité |
+| V3 | Une **seule** définition de l'unité de césure dans tout le code — **atteint** : une famille de primitives dirigées (`core/pairing.py`, seul lecteur des champs pointeurs) + une dérivation d'unité (`core/units.py`), et la cohérence des pointeurs est tenue par l'invariant de symétrie | fait |
 | V4 | Ce que le système **ne peut pas** établir est signalé, pas décidé | `review_required` livré (`G*`) |
 | V5 | La surface publique est la clôture de ce que la façade retourne | `S3` fermé |
 | V6 | Toute revendication chiffrée est un **intervalle**, sur ≥2 familles de modèles, dont le chemin inter-pages | `M*` fermés |
@@ -76,18 +76,30 @@ qu'il faut d'abord finir `S1`.
 
 ---
 
-## Gate 0 — Licences des corpus (bloquant, non technique)
+## Gate 0 — Licences des corpus — **clos (2026-07-27)**
 
-`corpus/37-GT-BNL/` et `corpus/BnF-bpt6k3265015q/` portent tous deux
-« Provenance et licence — À VÉRIFIER » et sont marqués temporaires. Le JPEG de
-9,2 Mo est **définitif dans l'historique git** ; une purge réelle demanderait
-`git filter-repo`.
+Tranché, et plus petit qu'annoncé.
 
-**Aucune publication n'est possible avant que ce soit tranché.** Trois issues :
-confirmer le domaine public et documenter ; exclure les corpus du paquet
-distribué ; purger l'historique.
+- **`corpus/37-GT-BNL/`** — ground truth de la Bibliothèque nationale du
+  Luxembourg, **CC0 / domaine public** par déclaration de la BnL elle-même
+  (« As part of BnL's AI strategy, we provide the ground truth data that falls
+  into the public domain (CC0, see copyright notice) »). Rediffusion libre.
+- **`corpus/BnF-bpt6k3265015q/`** — document de presse du 19e siècle, **domaine
+  public**, librement téléchargeable depuis Gallica. Nuance consignée plutôt
+  qu'ignorée : les conditions de la BnF portent sur la *reproduction numérique*
+  et distinguent réutilisation non commerciale (libre) de commerciale (sous
+  licence). Un usage comme fixture relève de la première.
 
-→ Claude Desktop (le MCP Gallica est l'outil adapté).
+**Et la troisième option du plan était déjà vraie** : les corpus vivent à la
+racine du dépôt, hors de `packages/corrigenda/`, et `sdist.include` est un
+allowlist explicite de quatre entrées. **Aucun corpus ne part dans la wheel ni
+dans la sdist** — vérifié, et désormais épinglé par
+`tests/test_packaging_excludes_corpora.py`, qui refuse aussi qu'un README de
+corpus reparte en « À VÉRIFIER ».
+
+La purge d'historique (`git filter-repo`) n'est donc **pas** requise pour
+publier. Elle reste une option de poids (34 Mo + 9,2 Mo dans les objets git),
+sur un critère de taille et non de droit.
 
 ---
 
@@ -220,19 +232,32 @@ de `pairing.py` — ne remonte nulle part. Même remède, même échelle : décl
 plutôt que taire. Prérequis de `R8` (une substitution déclarée est une perte
 comptable).
 
-### L6 — Répertoire de coupure incomplet
+### L6 — Répertoire de coupure — **fait, sur mesure**
 
-`HYPHEN_CHARS` = `("-", "¬", "⸗", "­")` — manquent `=`, U+2010, U+2011, U+2013.
+`HYPHEN_CHARS` passe de 4 à 6 : ajout de **U+2010 HYPHEN** et **U+2011
+NON-BREAKING HYPHEN**.
 
-**Ne pas élargir sans mesure.** Ajouter U+2013 (tiret demi-cadratin) fait
-apparier des lignes qui ne le sont peut-être pas ; `trailing_hyphen_char`
-exige déjà un caractère alphabétique avant le signe, ce qui écarte `1789–`,
-mais pas tout. Le répertoire est un paramètre à effet de corpus : il relève de
-`M7` (mesure par classe Unicode), pas d'un ajout de tuple.
+Élargir n'est pas neutre — un nouveau membre fait apparier des lignes qui ne
+l'étaient pas — donc chaque membre est là sur **preuve**. Mesuré sur les 40
+fichiers ALTO/PAGE de `examples/` et `corpus/`, contenu textuel seulement :
 
-Porter le signe comme **donnée** dans l'unité de césure (codepoint source,
-rôle logique, forme rendue, balisage explicite ou non) reste la bonne
-structure, et appartient à `S1`.
+| signe | occurrences | en fin de ligne |
+|---|---|---|
+| `-` U+002D | 238 | 119 |
+| `⸗` U+2E17 | 36 | 25 |
+| `¬` U+00AC | 0 | 0 |
+| U+2010, U+2011, U+2013, `=` | **0** | **0** |
+
+Les deux ajoutés sont **prouvablement sans effet** sur les corpus existants :
+couverture latente pour un producteur qui les emploie, et rien d'autre que ces
+caractères puissent signifier.
+
+**`=` et U+2013 restent exclus**, pour la même raison : ils portent d'autres
+sens (signe égal d'un tableau ; tiret de dialogue ou intervalle) et les corpus
+ne donnent **aucune preuve** qu'ils soient nécessaires. La contrainte de
+caractère alphabétique de `trailing_hyphen_char` écarte `1789–` mais pas une
+ligne finissant sur un tiret de dialogue. Les admettre demande une mesure sur
+un corpus qui en contient (`M7`), pas une édition de tuple.
 
 ### L3 — Membre inter-pages gelé sur son OCR — **fait**
 
@@ -436,6 +461,33 @@ n'interroge que les partenaires **directs**, pas la chaîne transitive. Passer a
 groupe élargit le comportement sur les chaînes de 3+ — défendable au titre de
 l'atomicité, mais c'est un changement à mesurer, pas à glisser. Le commentaire
 le dit sur place.
+
+### Décision (2026-07-27) — on s'arrête là, et `V3` est reformulé
+
+**Le cœur de `S1` ne sera pas fait maintenant.** Le travail de cette session a
+déjà capturé l'essentiel de sa valeur par des moyens beaucoup moins chers :
+
+- la carte rôle→créneau ne vit qu'à un endroit ;
+- une seule dérivation d'unité existe, et elle porte `complete` ;
+- **l'invariant de symétrie** (`tests/test_link_symmetry.py`) teste que les
+  pointeurs restent cohérents des deux bouts, sur corpus généré et fixtures
+  réelles ;
+- `split_forward_link` est **vérifié** comme seul mutateur post-parsing.
+
+Le danger des pointeurs-comme-vérité était qu'ils se désynchronisent sans que
+personne le voie. Trois tests le voient maintenant.
+
+Ce que le refactor apporterait encore : rendre l'état illégitime
+**inexprimable** plutôt que testé — une garantie de type, pas de suite.
+Ce qu'il coûterait : le plus gros risque de régression du dépôt, sur la partie
+la plus chargée du moteur, pour fermer un écart déjà surveillé.
+
+`V3` est donc reformulé en « une famille de primitives dirigées + une
+dérivation d'unité, cohérence tenue par invariant » — et il est **atteint**.
+
+**À rouvrir seulement si `S2` le rend nécessaire.** Scinder les 3152 lignes de
+`pipeline.py` pourrait l'exiger ; à ce moment-là les deux se font ensemble, et
+pas avant.
 
 | id | item | mesure actuelle | cible |
 |---|---|---|---|

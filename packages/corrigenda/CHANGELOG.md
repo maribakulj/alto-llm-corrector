@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Two Unicode hyphens join the break-mark repertoire, on evidence.**
+  `HYPHEN_CHARS` gains U+2010 HYPHEN and U+2011 NON-BREAKING HYPHEN. Widening
+  the repertoire is not free — a new member makes lines pair that did not, on
+  real documents — so this was measured first. Across the 40 ALTO/PAGE files in
+  `examples/` and `corpus/`, text content only: 119 line-final `-`, 25
+  line-final `⸗`, and **zero** occurrences of U+2010, U+2011, U+2013 or `=`.
+  The two added are therefore provably inert on the existing corpora: latent
+  coverage for a producer that uses them, and nothing else those characters can
+  mean. `=` and U+2013 stay OUT for the same reason they were considered — they
+  carry other meanings (an equals sign, a dialogue dash or a range) and there
+  is no evidence they are needed; admitting either needs a corpus that contains
+  them.
+
 ### Added
 
 - **`corrigenda.core.losses` — the loss matrix (`LOSS_MATRIX_VERSION`).** The
