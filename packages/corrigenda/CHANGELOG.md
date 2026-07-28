@@ -9,6 +9,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **The top-level import surface is documented as provisional, and pinned
+  against growth.** No symbol was added or removed; what changed is that three
+  documents stopped describing `corrigenda.__all__` as something it is not.
+  The list holds 95 names that were never ratified — they accumulated, one
+  addition at a time — while `docs/PLAN.md` (`S3`) computes the surface as the
+  transitive closure of what the façade returns, 54 symbols, and schedules the
+  cut. Until then: `tests/test_public_api_snapshot.py` no longer calls the list
+  `PUBLIC_API_1_0` / "the frozen 1.0 surface" (now `CURRENT_TOP_LEVEL_SURFACE`,
+  an inventory), and gains a ratchet test — the surface may shrink, never grow.
+  `docs/versioning.md` and the README state the provisional status and spell
+  out the two doors: `corrigenda.*` under strict SemVer *from 1.0.0*, module
+  paths (`corrigenda.core.*`, `corrigenda.formats.*`, `corrigenda.producers.*`)
+  supported and documented. That distinction is what makes the pending cut a
+  move rather than a removal — and it is the door this repository actually uses
+  (695 module-path imports against 64 top-level ones).
+- **`SPECS_LIB_V2.md §8.1` no longer promises three symbols it does not
+  export.** The normative spec listed `reconcile_hyphen_pair`, `check_line` and
+  `plan_page` as "déjà publics, maintenus". They are not in `__all__` and never
+  were, while `__all__` exposed 95 symbols the spec never mentioned — the two
+  contradicted each other in both directions. Resolved by withdrawing the
+  promise rather than honouring it: the feature freeze suspends public-API
+  extension, and `S3` reduces the surface. All three remain importable from
+  their own modules, like everything `S3` will demote.
+
 - **Two Unicode hyphens join the break-mark repertoire, on evidence.**
   `HYPHEN_CHARS` gains U+2010 HYPHEN and U+2011 NON-BREAKING HYPHEN. Widening
   the repertoire is not free — a new member makes lines pair that did not, on

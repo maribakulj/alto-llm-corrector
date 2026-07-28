@@ -29,7 +29,10 @@ Publier une `0.x` honnête plutôt qu'une `1.0` prématurée. Trois raisons
 inchangées :
 
 1. La surface publique doit passer de **95 symboles à sa clôture minimale**
-   (`S3`). C'est une rupture — publier `1.0` avant la gèlerait sous SemVer.
+   (`S3b`). C'est une rupture — publier `1.0` avant la gèlerait sous SemVer.
+   La coupe est différée jusqu'après `S2` ; ce qui est fait dès maintenant
+   (`S3a`), c'est de **dire** qu'elle est provisoire, partout où la doc
+   prétendait le contraire, et d'interdire qu'elle regrandisse.
 2. Les gardes ne sont pas calibrées ; le code le dit lui-même
    (`GuardConfig.vision()`, seuil « safe default, not a calibrated one »).
 3. Un seul modèle, un seul profil de gardes, deux runs mesurés.
@@ -47,7 +50,7 @@ propriétés tenables. Critères de sortie, à ne pas négocier à la baisse :
 | V2 | La comptabilité des pertes ne produit **ni fantôme ni angle mort** | `R*` fermés, matrice versionnée |
 | V3 | Une **seule** définition de l'unité de césure dans tout le code — **atteint** : une famille de primitives dirigées (`core/pairing.py`, seul lecteur des champs pointeurs) + une dérivation d'unité (`core/units.py`), et la cohérence des pointeurs est tenue par l'invariant de symétrie | fait |
 | V4 | Ce que le système **ne peut pas** établir est signalé, pas décidé | `review_required` livré (`G*`) |
-| V5 | La surface publique est la clôture de ce que la façade retourne | `S3` fermé |
+| V5 | La surface publique est la clôture de ce que la façade retourne | `S3b` fermé (`S3a`, son statut provisoire écrit, est fait) |
 | V6 | Toute revendication chiffrée est un **intervalle**, sur ≥2 familles de modèles, dont le chemin inter-pages | `M*` fermés |
 | V7 | Un corpus externe versionné **bloque** un merge | `M5` fermé |
 | V8 | Aucun document normatif ne renvoie vers `docs/history/` ni ne décrit un périmètre faux | `D*` fermés |
@@ -508,10 +511,30 @@ pas importer depuis le sommet :
 
 **Constat qui change la cible.** Le backend — le seul intégrateur réel —
 **n'utilise ni `load`, ni `correct`, ni `correct_sync`**. Il passe par la porte
-bas niveau : `build_document_manifest` 18×, `parse_alto_file` 5×,
-`rewrite_alto_file` 2×, plus `CorrectionPipeline` et les policies. Ce n'est pas
-un détail de style : ça dit que la façade calculée n'est pas la porte
-empruntée, et qu'une réduction qui l'ignore casserait le seul consommateur.
+bas niveau : `CorrectionPipeline`, les policies, et les entrées de format par
+leur chemin de module. Ce n'est pas un détail de style : ça dit que la façade
+calculée n'est pas la porte empruntée, et qu'une réduction qui l'ignore
+raterait sa cible.
+
+**Correction (2026-07-28) d'une mesure fausse de ce plan.** La version
+précédente de ce paragraphe affirmait « `build_document_manifest` 18×,
+`parse_alto_file` 5×, `rewrite_alto_file` 2× » depuis le sommet. C'est faux :
+le comptage confondait `from corrigenda import X` avec
+`from corrigenda.formats.loader import X`. La mesure refaite, sur les
+instructions d'import du dépôt entier :
+
+| forme | dépôt | backend |
+|---|---|---|
+| `from corrigenda import …` (sommet) | **64** | 7 |
+| `from corrigenda.<module> import …` | **695** | 60 |
+
+Et les 7 du backend ne touchent que des symboles **gardés** par la répartition
+ci-dessous, plus `sanitize_error` (3 sites). La conclusion tient toujours, mais
+pour une raison plus forte que celle écrite : **le namespace de sommet est une
+vitrine que le dépôt lui-même n'emprunte pas.** Le coût réel de la
+rétrogradation est de 32 lignes d'import, dont 20 dans les tests de la lib, 6
+dans des scripts et exemples, et **6 en production** — toutes pour
+`sanitize_error`.
 
 ### Répartition proposée — **95 → 54**
 
@@ -539,22 +562,73 @@ leur module** (vérifié : les 45 ont un module d'accueil réel).
 | enveloppe vision | 4 |
 | divers (`ChunkGranularity`) | 1 |
 
-**Le point à trancher avant de couper** : les 8 symboles « formats bas niveau »
-sont ceux que le backend utilise 26 fois. Les rétrograder l'oblige à changer
-ses imports — mécanique, pas une refonte — mais c'est un changement à faire
-**dans le même commit**, sinon le dépôt se casse lui-même.
+**Le point à trancher avant de couper** : rétrograder oblige les appelants à
+changer leurs imports — mécanique, pas une refonte — mais c'est un changement à
+faire **dans le même commit** que la coupe, sinon le dépôt se casse lui-même.
+
+### Décision (2026-07-28) — la coupe est différée, la vérité ne l'est pas
+
+`S3` se scinde en deux, parce que ses deux moitiés n'ont ni le même coût ni le
+même bon moment.
+
+**`S3a` — dire ce qui est provisoire. Fait.** Ce qui coûtait quelque chose
+aujourd'hui n'était pas la longueur de `__all__` : c'était que trois documents
+la décrivaient faussement.
+
+- `tests/test_public_api_snapshot.py` nommait la liste `PUBLIC_API_1_0` et la
+  décrivait comme « the frozen 1.0 surface ». Elle n'a jamais été ratifiée ;
+  elle a été **accumulée**. Le test contredisait donc ce plan, et aurait fait
+  passer la coupe pour une régression. Renommée `CURRENT_TOP_LEVEL_SURFACE`,
+  docstring réécrite.
+- `SPECS_LIB_V2.md §8.1` déclarait `reconcile_hyphen_pair`, `check_line`,
+  `plan_page` « déjà publics, maintenus ». Ils ne sont pas dans `__all__` — la
+  spec normative promettait trois symboles absents pendant que `__all__` en
+  exposait 95 dont la spec ne parlait pas. **Les deux se contredisaient dans
+  les deux sens.** La promesse est retirée (et non honorée : le gel suspend
+  l'extension de l'API publique, et `S3` réduit).
+- `versioning.md` et `README.md` énoncent désormais le statut provisoire et la
+  règle des **deux portes** — `corrigenda.*` sous SemVer strict *à partir de*
+  `1.0.0`, chemins de modules supportés et documentés. Un symbole rétrogradé
+  n'est pas supprimé, il est déplacé.
+
+**`S3b` — couper. Différé jusqu'après `S2`.** Trois raisons, dans l'ordre de
+poids :
+
+1. `S2` scinde `core/pipeline.py` (3152 lignes) en composants nommés. Ça peut
+   déplacer ce qui mérite d'être exposé. Couper avant, c'est migrer les imports
+   **deux fois**.
+2. Rien n'est gelé avant `1.0.0` : `docs/versioning.md` autorise explicitement
+   `0.9.x` à casser. Le coût de l'attente est donc nul, à une condition — la
+   liste ne doit pas regrandir.
+3. Cette condition est **déjà tenue**, et c'est ce qui rend l'attente sûre :
+   le test de cliquet interdit toute croissance de `__all__`, et le gel de
+   fonctionnalités suspend de toute façon l'extension de l'API publique. Un
+   ajout ne peut pas passer en silence — il faudrait toucher le snapshot et le
+   `CHANGELOG`.
+
+Ce qui reste dû par `S3b`, inchangé : la répartition 95 → 54 ci-dessus, les 4
+trous de clôture ajoutés, les 32 lignes d'import migrées, le tout **en un
+commit**. Décision restée ouverte pour ce moment-là : garder `sanitize_error`
+au sommet (surface 55) parce que c'est un utilitaire de sécurité avec une vraie
+dépendance en production — un outil de sécurité se rend facile à trouver.
+
+**Ce que cette décision ne fait pas** : elle ne repousse pas `V5`. `1.0.0` reste
+conditionnée à `S3b` fermé. Elle ordonne, elle n'annule pas.
 
 
 | id | item | mesure actuelle | cible |
 |---|---|---|---|
 | S1 | Queue de l'ADR-010 : **unité de césure de première classe** — membres ordonnés, pages, type explicite/heuristique, autorité `SUBS_CONTENT`, signe physique, état, décision atomique, projection par format. Pointeurs dérivés, jamais mutables séparément. Retrait des résolveurs obsolètes | **0** doublon de résolveur (était 5) ; 8 lectures de pointeur dans `pipeline.py` (était 18) ; unité pas encore autoritaire | 1 primitive dirigée + 1 dérivation d'unité, 0 pointeur mutable |
-| S2 | Scinder `core/pipeline.py` en composants nommés — préflight, planification, routage, exécution de chunk, validation, acceptation, réconciliation d'unités, projection, assemblage du rapport. Le pipeline public **orchestre**, il ne réimplémente pas | **3052** lignes (3015 le 25/07 : `L0` en a ajouté ~50, `S1` en a rendu ~12) ; `_run_impl` 294/imbr. 4 ; `_attempt_chunk` 220/imbr. 5 | fichier principal < 800 l., aucune méthode > 100 l., assemblage du rapport indépendant du contrôle d'exécution |
-| S3 | Réduire la surface publique à la **clôture transitive de ce que la façade retourne** — pas à « 8 symboles ». Clôture établie par calcul (voir ci-dessous), proposition **95 → 54** prête, en attente de ratification | **95** exports ; 4 trous dans la clôture | 54 : 50 gardés + 4 ajoutés, 45 rétrogradés vers leur module |
+| S2 | Scinder `core/pipeline.py` en composants nommés — préflight, planification, routage, exécution de chunk, validation, acceptation, réconciliation d'unités, projection, assemblage du rapport. Le pipeline public **orchestre**, il ne réimplémente pas | **3152** lignes (3015 le 25/07 ; `L*` en a ajouté ~150, `S1` en a rendu ~12) ; `_run_impl` 294/imbr. 4 ; `_attempt_chunk` 220/imbr. 5 | fichier principal < 800 l., aucune méthode > 100 l., assemblage du rapport indépendant du contrôle d'exécution |
+| S3a | **Dire** que la surface est provisoire, là où trois documents disaient le contraire — snapshot renommé, `§8.1` corrigé (3 symboles promis et absents), règle des deux portes écrite, cliquet anti-croissance | **fait (2026-07-28)** | — |
+| S3b | **Couper** : réduire la surface à la **clôture transitive de ce que la façade retourne** — pas à « 8 symboles ». Clôture établie par calcul (voir ci-dessous), répartition **95 → 54** prête. Différé jusqu'après `S2`, qui peut déplacer ce qui mérite d'être exposé | **95** exports, pinnés et non croissants ; 4 trous dans la clôture | 54 (55 si `sanitize_error` reste) : gardés + 4 ajoutés, le reste rétrogradé vers son module |
 | S4 | Queue de l'ADR-011 : geler les types `Source*` (l'immuabilité repose sur une copie défensive, pas sur le type) | — | — |
 | S5 | Écrire `docs/adr/012-*.md` : cité par le code, inexistant ; `docs/adr/README.md` s'arrête à 008 alors que 009-011 existent | — | — |
 
-**`S3` doit précéder toute publication** : publier d'abord gèlerait 95 symboles
-sous SemVer. **`S1` doit précéder `L3`**, et porte `L2`.
+**`S3b` doit précéder toute publication `1.0`** : publier d'abord gèlerait 95
+symboles sous SemVer. Il ne bloque en revanche pas `0.10.0`, que
+`docs/versioning.md` autorise à casser. **`S2` doit précéder `S3b`.**
+**`S1` doit précéder `L3`**, et porte `L2`.
 
 ---
 

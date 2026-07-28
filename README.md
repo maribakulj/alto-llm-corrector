@@ -46,7 +46,10 @@ this repo is that library **plus** a FastAPI + React app around it.
 
 **Status:** pre-`0.10.0`, no git tag yet. The library is a research-grade beta:
 read `docs/PLAN.md` for the known open defects and the criteria a `1.0` has to
-meet before it can claim to be one.
+meet before it can claim to be one. In particular the **top-level import
+surface is provisional** — `corrigenda.__all__` will be cut from 95 symbols to
+the computed 54 before any freeze, and demoted symbols stay importable from
+their own module (`packages/corrigenda/docs/versioning.md`).
 
 **Historical:** everything under [`docs/history/`](docs/history/) is
 frozen design & audit trail (original specs, migration and audit logs).

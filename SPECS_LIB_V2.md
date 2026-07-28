@@ -476,6 +476,37 @@ Chaque entrée : constat → règle normative. Toutes sont **v1.0** sauf mention
 
 ### 8.1 Surface
 
+> **Statut (2026-07-28) — la surface de sommet est PROVISOIRE.**
+>
+> `corrigenda.__all__` porte **95 symboles**. Ce nombre n'a jamais été
+> ratifié : il a été **accumulé**, un ajout à la fois, chacun justifié le
+> jour où il a été fait. `docs/PLAN.md` (`S3`) a calculé ce qu'il devrait
+> être — la clôture transitive de ce que la façade retourne, **54** — et la
+> réduction est **différée à la fin du nettoyage**, parce que `S2` (scinder
+> `core/pipeline.py`) peut encore déplacer ce qui mérite d'être exposé.
+> Couper avant, c'est migrer les imports deux fois.
+>
+> En attendant, deux choses tiennent, et elles suffisent :
+> la série `0.9.x` est explicitement libre de casser la surface
+> (`packages/corrigenda/docs/versioning.md`), et un test de cliquet
+> (`tests/test_public_api_snapshot.py`) interdit qu'elle **grandisse**.
+> Rien n'est gelé sous SemVer avant `1.0.0` — et `1.0.0` ne sera pas taguée
+> avant que `S3` soit fermé (critère de sortie `V5`).
+>
+> **Deux portes, deux garanties** (déjà énoncé dans `versioning.md`, répété
+> ici parce que c'est la section normative) :
+>
+> - `corrigenda.*` — la porte d'entrée. Sous SemVer strict **à partir de
+>   `1.0.0`**, et réduite à la clôture calculée avant cette date.
+> - `corrigenda.core.*`, `corrigenda.formats.*`, `corrigenda.producers.*` —
+>   les chemins de modules. Supportés et documentés ; c'est la porte que le
+>   dépôt emprunte lui-même (**695 imports par chemin de module contre 64
+>   depuis le sommet**), et un symbole rétrogradé par `S3` y reste
+>   importable. Ce n'est donc pas une suppression, c'est un déplacement.
+>
+> Le bloc ci-dessous reste la photographie d'origine de la v2.0 : il dit
+> quelles **entrées** existent, pas ce que `__all__` contient.
+
 ```python
 # parse
 build_document_manifest(files) -> DocumentManifest          # existant
@@ -509,9 +540,16 @@ pipeline.run_sync(...)                            # façade asyncio.run, documen
 # de run() — voir ADR ; le bloc ci-dessus reste la photographie v2.0
 # d'origine.)
 
-# bas niveau (déjà publics, maintenus)
-rewrite_alto_file(...), extract_output_texts(...),
+# bas niveau
+rewrite_alto_file(...), extract_output_texts(...)      # dans `__all__`
 reconcile_hyphen_pair(...), check_line(...), plan_page(...)
+# ^ PAS dans `__all__`. Ces trois-là étaient déclarés ici « déjà publics,
+#   maintenus » ; ils ne l'ont jamais été. Corrigé le 2026-07-28 en
+#   retirant la promesse plutôt qu'en l'honorant : le gel de
+#   fonctionnalités suspend l'extension de l'API publique, et `S3` réduit
+#   la surface au lieu de l'élargir. Ils restent importables depuis
+#   `corrigenda.core.hyphenation` / `.guards` / `.planner`, comme tout ce
+#   que `S3` rétrogradera.
 ```
 
 ### 8.2 Politiques
