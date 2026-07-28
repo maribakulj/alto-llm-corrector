@@ -82,7 +82,9 @@ def test_fast_path_updates_words_line_drops_conf_and_alternatives(tmp_path: Path
 
     # P3 — alternative line TextEquiv removed; @conf dropped on line + words.
     assert metrics.alt_textequiv_dropped == 1  # the index=1 alternative
-    assert metrics.conf_dropped >= 1
+    # R4 — the line lost its OCR confidence: ONE line, however many @conf
+    # went with it (this fixture drops three: the line's and both words').
+    assert metrics.confidence_invalidated == 1
     text = xml.decode("utf-8")
     assert "ALT READING" not in text
     assert "conf=" not in text  # every stale conf gone

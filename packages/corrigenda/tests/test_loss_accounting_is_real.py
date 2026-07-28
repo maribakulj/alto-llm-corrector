@@ -31,10 +31,13 @@ from lxml import etree
 from corrigenda.core.losses import (
     ALTO_STRING_ATTRIBUTES,
     COUNTS_INVALIDATION,
+    INVALIDATION_COUNTER,
+    INVALIDATION_UNIT,
     AttributeClass,
     AttributeFate,
     fate_of,
     is_countable_loss,
+    is_invalidated,
 )
 from corrigenda.core.schemas import LineStatus
 from corrigenda.formats.alto._ns import _detect_namespace
@@ -113,6 +116,12 @@ def assert_every_real_loss_is_counted(
         for attr, count in before.items():
             gone = count - after[attr]
             if gone <= 0:
+                continue
+            if is_invalidated(attr):
+                # Counted per line under its own key (R4), not per String —
+                # ``assert_the_matrix_holds`` owns that check. Asking for
+                # ``wc_dropped`` here would demand the unit the decision
+                # rejected.
                 continue
             claimed = losses.get(f"{attr}_dropped", 0)
             assert claimed == gone, (
@@ -201,7 +210,22 @@ def assert_the_matrix_holds(
             if gone <= 0:
                 continue
             if not is_countable_loss(attr):
-                continue  # INVALIDATED with COUNTS_INVALIDATION off
+                continue
+
+            if fate is AttributeFate.INVALIDATED:
+                # Counted in LINES (R4): the line reports it once however
+                # many Strings carried it, under the key both formats share.
+                assert losses.get(INVALIDATION_COUNTER, 0) == 1, (
+                    f"{line_id}: {gone} × {attr.upper()} disappeared and the "
+                    f"line reports {losses.get(INVALIDATION_COUNTER, 0)}. An "
+                    f"{fate.value} attribute is counted once per line."
+                )
+                assert f"{attr}_dropped" not in losses, (
+                    f"{line_id}: {attr.upper()} is counted twice — once per "
+                    "line and once per String. That is R1's shape exactly."
+                )
+                continue
+
             assert losses.get(f"{attr}_dropped", 0) == gone, (
                 f"{line_id}: {gone} × {attr.upper()} disappeared and the "
                 f"report counts {losses.get(f'{attr}_dropped', 0)}. It is "
@@ -234,29 +258,80 @@ def test_the_matrix_declares_every_attribute_the_fixtures_carry() -> None:
     )
 
 
-def test_invalidation_counting_is_a_declared_choice_not_an_oversight() -> None:
-    """R4 in one assertion.
+def test_invalidation_is_counted_once_per_line_not_once_per_string() -> None:
+    """R4, settled: counted, per LINE.
 
-    WC leaves the file and nothing counts it. That is currently correct
-    *per the matrix* — and the matrix says so out loud, with both sides of
-    the argument, instead of the report simply being quiet. Flipping
-    ``COUNTS_INVALIDATION`` is the ALTO half of a two-format change; PAGE
-    already counts its equivalent as ``conf_dropped``, and the two
-    disagreeing is its own defect either way.
+    The unit is the whole decision. Per occurrence this fires 3339 times on
+    one real page — a number that varies with how wordy a line is rather
+    than with anything an archive acts on, and that would drown the
+    four-digit signals beside it. Per line it says the fact: *these* lines
+    no longer carry the engine's confidence.
+
+    So the assertion is deliberately two-sided. The counter must equal the
+    number of lines that lost at least one ``WC``/``CC`` — not the number of
+    attributes lost (that is the noise the decision rejected), and not zero
+    (that was silence, and PAGE was not silent about the same event).
     """
     assert fate_of("WC") == (AttributeClass.SEMANTIC, AttributeFate.INVALIDATED)
-    assert is_countable_loss("WC") is COUNTS_INVALIDATION
+    assert is_countable_loss("WC") is COUNTS_INVALIDATION is True
+    assert INVALIDATION_UNIT == "line"
 
     path, out, losses = _rewrite("X0000002.xml", _TRANSFORMS["slow"])
     src, sns = _lines_by_id(path)
     dst, dns = _lines_by_id(out)
-    gone = sum(
-        _string_attr_counts(el, sns)["wc"] - _string_attr_counts(dst[lid], dns)["wc"]
-        for lid, el in src.items()
+
+    lines_that_lost = 0
+    attributes_lost = 0
+    for line_id, el in src.items():
+        before = _string_attr_counts(el, sns)
+        after = _string_attr_counts(dst[line_id], dns)
+        gone = sum(before[a] - after[a] for a in ("wc", "cc"))
+        if gone > 0:
+            lines_that_lost += 1
+            attributes_lost += gone
+
+    assert lines_that_lost > 0, "the fixture must exercise the invalidation"
+    assert attributes_lost > lines_that_lost, (
+        "fixture check: with one attribute per line the two units would be "
+        "indistinguishable and this test would prove nothing"
     )
-    counted = sum(v.get("wc_dropped", 0) for v in losses.values())
-    assert gone > 0, "the fixture must exercise the invalidation at all"
-    assert counted == (gone if COUNTS_INVALIDATION else 0)
+
+    counted = sum(v.get(INVALIDATION_COUNTER, 0) for v in losses.values())
+    assert counted == lines_that_lost
+    # Every line that reports it reports exactly 1 — a line cannot lose its
+    # confidence twice.
+    assert {
+        v[INVALIDATION_COUNTER] for v in losses.values() if INVALIDATION_COUNTER in v
+    } == {1}
+    # And the per-String counter stays out of it: two sites counting one
+    # attribute is the shape of R1.
+    assert not any(k.startswith(("wc_", "cc_")) for v in losses.values() for k in v)
+
+
+def test_a_line_that_keeps_its_confidence_reports_nothing() -> None:
+    """The other direction. The fast path removes ``WC`` only from Strings
+    whose CONTENT actually changed, so "the line took a write path" is not
+    "the line lost confidence" — and the counter must follow the file, not
+    the path."""
+    path, out, losses = _rewrite("X0000002.xml", _TRANSFORMS["identity"])
+    src, sns = _lines_by_id(path)
+    dst, dns = _lines_by_id(out)
+    for line_id, el in src.items():
+        before = _string_attr_counts(el, sns)
+        after = _string_attr_counts(dst[line_id], dns)
+        if sum(before[a] - after[a] for a in ("wc", "cc")) == 0:
+            assert INVALIDATION_COUNTER not in losses.get(line_id, {})
+
+
+def test_both_formats_report_the_invalidation_under_one_key() -> None:
+    """The parity half of R4 — the defect was not only silence, it was that
+    ALTO said nothing while PAGE said ``conf_dropped``. One key, one unit,
+    both formats; a consumer must not need to know which format produced a
+    report to find out whether its OCR confidence survived."""
+    from corrigenda.formats.page.rewriter import PageRewriterMetrics
+
+    assert INVALIDATION_COUNTER in PageRewriterMetrics()._loss_counters()
+    assert "conf_dropped" not in PageRewriterMetrics()._loss_counters()
 
 
 def test_an_unknown_attribute_defaults_to_a_countable_loss() -> None:

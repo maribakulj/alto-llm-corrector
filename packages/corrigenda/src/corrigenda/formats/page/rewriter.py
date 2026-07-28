@@ -30,6 +30,7 @@ from lxml import etree
 
 from corrigenda.core._norm import nfc
 from corrigenda.core.identity import ensure_unique_identities
+from corrigenda.core.losses import COUNTS_INVALIDATION, INVALIDATION_COUNTER
 from corrigenda.core.pairing import (
     HYPHEN_CHARS,
     preserve_break_char,
@@ -74,7 +75,17 @@ class PageRewriterMetrics:
 
     # PAGE-specific provenance of what was dropped / detected.
     words_dropped: int = 0
-    conf_dropped: int = 0
+    #: Lines that lost their OCR confidence — @conf removed because the
+    #: correction made it false. Counted per LINE and named for the shared
+    #: key both formats emit (R4); it was ``conf_dropped`` and counted per
+    #: @conf, which made PAGE the only counter in the report speaking a
+    #: unit no line could be held to, and left ALTO silent about the same
+    #: event. See :mod:`corrigenda.core.losses`.
+    confidence_invalidated: int = 0
+    #: Raw @conf removals. NOT reported — the promotion to a per-line count
+    #: happens in the rewrite loop, which is the only place that knows where
+    #: a line ends. Private so no consumer can key on it.
+    _conf_occurrences: int = 0
     alt_textequiv_dropped: int = 0
     custom_offset_stripped: int = 0
     hyphen_preserved: int = 0
@@ -94,7 +105,7 @@ class PageRewriterMetrics:
         attribution (ADR-012)."""
         return {
             "words_dropped": self.words_dropped,
-            "conf_dropped": self.conf_dropped,
+            INVALIDATION_COUNTER: self.confidence_invalidated,
             "alt_textequiv_dropped": self.alt_textequiv_dropped,
             "custom_offset_stripped": self.custom_offset_stripped,
             "hyphen_preserved": self.hyphen_preserved,
@@ -104,6 +115,21 @@ class PageRewriterMetrics:
     def as_losses(self) -> dict[str, int]:
         """Non-zero PAGE-specific counters, for ``CorrectionReport.format_losses``."""
         return {k: v for k, v in self._loss_counters().items() if v}
+
+
+def _promote_confidence_to_line(
+    metrics: PageRewriterMetrics, occurrences_before: int
+) -> None:
+    """R4 — one ``@conf`` removed or forty, the line lost its confidence once.
+
+    Called by the rewrite loop, the only scope that knows where a line ends,
+    and before :func:`_record_line_losses` so the per-line attribution sees
+    it. A ``Word`` deleted outright by the slow path takes its ``@conf`` with
+    it and is NOT counted here: that loss is ``words_dropped``, and the line
+    still reports its confidence gone via the line-level ``TextEquiv``.
+    """
+    if COUNTS_INVALIDATION and metrics._conf_occurrences > occurrences_before:
+        metrics.confidence_invalidated += 1
 
 
 def _record_line_losses(
@@ -181,7 +207,7 @@ def _update_line_textequiv(
     assert canonical is not None  # equivs non-empty
     _set_textequiv_text(canonical, text, ns)
     if _drop_conf(canonical):
-        metrics.conf_dropped += 1
+        metrics._conf_occurrences += 1
     # Remove the alternatives — they described the old reading (P3).
     for te in equivs:
         if te is not canonical:
@@ -205,7 +231,7 @@ def _update_words_fast(
             canonical = etree.SubElement(w_el, _tag("TextEquiv", ns))
         _set_textequiv_text(canonical, token, ns)
         if _drop_conf(canonical):
-            metrics.conf_dropped += 1
+            metrics._conf_occurrences += 1
         for te in equivs:
             if te is not canonical:
                 w_el.remove(te)
@@ -354,6 +380,7 @@ def rewrite_page_file(
         # ADR-012 — everything the counters gain while THIS line is
         # processed is this line's own loss attribution.
         counters_before = metrics._loss_counters()
+        conf_occurrences_before = metrics._conf_occurrences
 
         source_text = canonical_line_text(tl, ns)
         raw_corrected = (
@@ -376,6 +403,7 @@ def rewrite_page_file(
         if corrected == source_text:
             metrics.untouched += 1
             line_paths[line_id] = "untouched"
+            _promote_confidence_to_line(metrics, conf_occurrences_before)
             _record_line_losses(losses_by_line, line_id, counters_before, metrics)
             continue
 
@@ -406,6 +434,7 @@ def rewrite_page_file(
         else:
             metrics.slow_path += 1
         line_paths[line_id] = path
+        _promote_confidence_to_line(metrics, conf_occurrences_before)
         _record_line_losses(losses_by_line, line_id, counters_before, metrics)
 
     _add_provenance(root, ns, provider, model, lib_version, config_fingerprint)

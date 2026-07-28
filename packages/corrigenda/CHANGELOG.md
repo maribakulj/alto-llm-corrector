@@ -9,6 +9,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **OCR confidence invalidation is now reported, per line, by both formats
+  (R4).** When a correction changes a word, the source engine's confidence in
+  that word stops being a fact about the output, so ALTO drops `WC`/`CC` and
+  PAGE drops `@conf`. ALTO said nothing about it; PAGE counted it as
+  `conf_dropped`, once per `@conf`. Both are now one key,
+  `confidence_invalidated`, counted **once per line**.
+  The unit was the whole decision. Per occurrence it fires 3339 times on one
+  real 566-line page — a number that tracks how wordy a line is rather than
+  anything an archive acts on, and that would drown the three-digit counters
+  beside it. Per line it says the fact: 566 lines lost their confidence on the
+  slow path, 492 on the fast one. That gap is the point — the fast path removes
+  `WC` only from `String`s whose CONTENT actually changed, so 74 lines keep
+  theirs, and the counter is measured on the element before and after rather
+  than inferred from which path the line took. "The line was rewritten" is not
+  "the line lost its confidence", and assuming otherwise is what produced the
+  phantom counts fixed in R1.
+  `LOSS_MATRIX_VERSION` moves to `"2"`; `COUNTS_INVALIDATION` is `True` with
+  `INVALIDATION_UNIT = "line"`. The per-`String` loss pass now excludes
+  `INVALIDATED` attributes outright, so nothing is counted at two granularities
+  at once. **Breaking for consumers reading `format_losses`:** the PAGE key
+  `conf_dropped` is gone and its replacement counts lines, not attributes
+  (0.9.x may break; `report_version` is unchanged — the report's *shape* did
+  not move).
+
 - **The top-level import surface is documented as provisional, and pinned
   against growth.** No symbol was added or removed; what changed is that three
   documents stopped describing `corrigenda.__all__` as something it is not.

@@ -11,7 +11,12 @@ from corrigenda.core._norm import clean_content, nfc
 from corrigenda.core._parse import parse_int_tolerant
 from corrigenda.core.alignment import align_tokens
 from corrigenda.core.identity import ensure_unique_identities
-from corrigenda.core.losses import is_unconditional_loss
+from corrigenda.core.losses import (
+    COUNTS_INVALIDATION,
+    INVALIDATED_ATTRIBUTES,
+    INVALIDATION_COUNTER,
+    is_unconditional_loss,
+)
 from corrigenda.core.pairing import HYPHEN_CHARS, forward_break_is_explicit
 from corrigenda.errors import DuplicateIdError
 from corrigenda.formats.alto._ns import (
@@ -415,6 +420,37 @@ def _semantic_attr_losses(orig_string_attribs: list[dict[str, str]]) -> dict[str
             loss_key = f"{local.lower()}_dropped"
             losses[loss_key] = losses.get(loss_key, 0) + 1
     return losses
+
+
+def _confidence_attr_count(el: etree._Element, ns: str) -> int:
+    """How many INVALIDATED attributes (``WC``/``CC``) this line's Strings
+    still carry.
+
+    Measured, not inferred from the path taken: the fast path removes them
+    only from Strings whose CONTENT actually changed, so a line can keep
+    some and lose others, and "did the line take a write path" is not the
+    same question as "did this line lose confidence".
+    """
+    return sum(
+        1
+        for string_el in _get_string_children(el, ns)
+        for attr in string_el.attrib
+        if attr.rsplit("}", 1)[-1].upper() in INVALIDATED_ATTRIBUTES
+    )
+
+
+def _confidence_loss(before: int, el: etree._Element, ns: str) -> dict[str, int]:
+    """One line's invalidation loss — ``1`` if it lost any, not how many.
+
+    The unit is the decision (R4, :data:`INVALIDATION_UNIT`): an archive
+    acts on "this line's OCR confidence is gone", and how many Strings that
+    line happened to hold is not a fact about the correction.
+    """
+    if not COUNTS_INVALIDATION or before == 0:
+        return {}
+    if _confidence_attr_count(el, ns) >= before:
+        return {}
+    return {INVALIDATION_COUNTER: 1}
 
 
 def _drop_structural_break_hyphen(text: str) -> str:
@@ -834,6 +870,18 @@ def rewrite_alto_file(
     losses: dict[str, int] = {}
     losses_by_line: dict[str, dict[str, int]] = {}
 
+    def record(line_id: str, line_losses: dict[str, int]) -> None:
+        """Attribute a line's losses (ADR-012) and roll them into the run
+        aggregate. One site, so the two can never disagree."""
+        if not line_losses:
+            return
+        losses_by_line[line_id] = {
+            **losses_by_line.get(line_id, {}),
+            **line_losses,
+        }
+        for key, value in line_losses.items():
+            losses[key] = losses.get(key, 0) + value
+
     # ADR-007 — a bare line_id keys every correction-to-element
     # association below. A duplicate (in the manifests OR on the XML
     # elements) would silently apply one line's correction to another
@@ -862,6 +910,10 @@ def rewrite_alto_file(
         corrected = lm.corrected_text if lm.corrected_text is not None else lm.ocr_text
         text_changed = not _line_text_unchanged(tl_el, corrected, ns)
         subs_changed = _subs_need_update(tl_el, lm, ns)
+        # Read BEFORE any path touches the tree, so what is reported is what
+        # actually left the line rather than what the chosen path is assumed
+        # to remove (R4).
+        conf_before = _confidence_attr_count(tl_el, ns)
 
         # --- Path 1: UNTOUCHED ---
         if not text_changed and not subs_changed:
@@ -874,6 +926,7 @@ def rewrite_alto_file(
             _apply_subs(tl_el, lm, ns)
             metrics.subs_only += 1
             line_paths[line_id] = "subs_only"
+            record(line_id, _confidence_loss(conf_before, tl_el, ns))
             continue
 
         # An EXPLICIT PART1 line carries its end-of-line hyphen structurally,
@@ -897,6 +950,7 @@ def rewrite_alto_file(
             _apply_subs(tl_el, lm, ns)
             metrics.fast_path += 1
             line_paths[line_id] = "fast_path"
+            record(line_id, _confidence_loss(conf_before, tl_el, ns))
             continue
 
         # --- Path 4: SLOW PATH (word count changed) ---
@@ -904,10 +958,7 @@ def rewrite_alto_file(
         _apply_subs(tl_el, lm, ns)
         metrics.slow_path += 1
         line_paths[line_id] = "slow_path"
-        if line_losses:
-            losses_by_line[line_id] = line_losses
-            for k, v in line_losses.items():
-                losses[k] = losses.get(k, 0) + v
+        record(line_id, {**line_losses, **_confidence_loss(conf_before, tl_el, ns)})
 
     _add_processing_entry(root, ns, provider, model, lib_version, config_fingerprint)
     # pretty_print=False: avoid gratuitously reformatting the entire XML

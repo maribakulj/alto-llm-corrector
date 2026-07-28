@@ -62,8 +62,11 @@ def test_slow_path_reports_dropped_semantic_attrs(tmp_path: Path):
     assert result.losses.get("custom_dropped") == 1
     assert result.losses_by_line["L1"].get("tagrefs_dropped") == 1
 
-    # WC (genuinely invalidated) and geometry/whitelist are NOT losses.
+    # WC is INVALIDATED, not dropped — it is reported, but per LINE and under
+    # the key both formats share (R4), never as a per-String `wc_dropped`.
     assert "wc_dropped" not in result.losses
+    assert result.losses.get("confidence_invalidated") == 1
+    # Geometry and the recycled whitelist are NOT losses.
     assert "style_dropped" not in result.losses
     assert "hpos_dropped" not in result.losses
     assert "id_dropped" not in result.losses
@@ -87,18 +90,44 @@ def test_slow_path_reports_dropped_semantic_attrs(tmp_path: Path):
     assert all(s.get("TAGREFS") is None for s in strings)
 
 
-def test_fast_path_preserves_and_reports_nothing(tmp_path: Path):
-    # "foo" -> "bar": same word count → fast path edits CONTENT in place,
-    # TAGREFS/language survive untouched, nothing to report.
+def test_fast_path_preserves_everything_it_can_and_reports_what_it_cannot(
+    tmp_path: Path,
+):
+    # "foo" -> "bar": same word count → fast path edits CONTENT in place and
+    # TAGREFS/language/CUSTOM survive untouched, so there is nothing to
+    # DROP. It still invalidates the String's WC — the engine's confidence in
+    # a word it no longer contains — and since R4 that is reported (per line).
     result = _run(tmp_path, "bar")
     assert result.rewriter_paths["L1"] == "fast_path"
-    assert result.losses == {}
-    assert result.losses_by_line == {}
+    assert result.losses == {"confidence_invalidated": 1}
+    assert result.losses_by_line == {"L1": {"confidence_invalidated": 1}}
     root = etree.fromstring(result.xml_bytes)
     ns = _detect_namespace(root)
     s1 = next(s for s in root.iter(f"{{{ns}}}String"))
     assert s1.get("TAGREFS") == "T1"
     assert s1.get("language") == "fr"
+    assert s1.get("WC") is None  # what the counter is about
+
+
+def test_a_fast_path_line_whose_words_are_untouched_reports_nothing(
+    tmp_path: Path,
+):
+    """The counter follows the file, not the path. A line can reach the fast
+    path on one changed word while another keeps its WC — and a line where
+    NO String's CONTENT moved keeps every confidence, so it must report
+    nothing even though it took a write path (here: a SUBS-only change would
+    be the same shape)."""
+    xml_path = tmp_path / "p.xml"
+    xml_path.write_text(_ALTO, encoding="utf-8")
+    doc = build_document_manifest([(xml_path, xml_path.name)])
+    by_id = {lm.line_id: lm for p in doc.pages for lm in p.lines}
+    by_id["L1"].corrected_text = "foo"  # identical → UNTOUCHED
+    result = rewrite_alto_file(xml_path, doc.pages, "test", "mock")
+    assert result.rewriter_paths["L1"] == "untouched"
+    assert result.losses == {}
+    root = etree.fromstring(result.xml_bytes)
+    ns = _detect_namespace(root)
+    assert next(s for s in root.iter(f"{{{ns}}}String")).get("WC") == "0.9"
 
 
 def test_untouched_line_reports_nothing(tmp_path: Path):

@@ -369,11 +369,43 @@ garantie.
 | ~~R1~~ | **fait** — `SUBS_TYPE`/`SUBS_CONTENT` étaient comptés perdus alors que `_apply_subs` les réécrit sur les **trois** chemins d'écriture. Mesuré avant correctif : **229 de chaque** revendiqués sur une seule page réelle de 566 lignes dont le fichier de sortie en porte exactement autant que la source. Trouvé par l'invariant différentiel `R0-test` |
 | R2 | Ligne vidée : `STYLE`/`STYLEREFS` réellement perdus, non comptés |
 | R3 | `<HYP>` d'une PART2 supprimé sans compteur |
-| R4 | `WC`/`CC` jamais comptés en ALTO alors que PAGE compte `conf_dropped`. **Quantifié** : sur `examples/X0000002.xml`, **520 `WC` disparus / 0 comptés par le seul chemin rapide**, 3339 par le chemin lent. Épinglé en `xfail(strict)` — dire si c'est une *perte*, une *invalidation* ou un *recalcul* est précisément ce que `R0` doit trancher, et le test l'énonce sans deviner la réponse |
+| ~~R4~~ | **fait (2026-07-28) — comptés, par LIGNE.** `WC`/`CC` n'étaient comptés nulle part en ALTO pendant que PAGE comptait `conf_dropped` **par occurrence** : silence d'un côté, unité incomparable de l'autre. Les deux arguments avaient raison sur des unités différentes, et l'unité était toute la décision — voir ci-dessous |
 | R5 | `word_order_suspected` n'est pas une perte, sortir de `format_losses` |
 | R6 | `hyphen_splits` lu par personne : la seule opération destructrice assumée est invisible pour l'hôte |
 | R7 | `LossPolicy(strict=True)` inopérant en ALTO (`word_count` PAGE-only) : l'armer ou documenter la restriction |
 | R8 | Brancher la descente de niveau de fidélité `L0` sur la comptabilité : une perte de blanc significatif est une perte |
+
+### `R4` — l'unité était toute la décision (2026-07-28)
+
+Le choix n'était pas « compter ou se taire », c'était **en quoi compter**.
+
+| unité | ce que ça donne sur `X0000002.xml` (566 lignes) |
+|---|---|
+| par occurrence (ce que faisait PAGE) | **3339** |
+| par ligne (retenu) | **566** en chemin lent, **492** en chemin rapide |
+| silence (ce que faisait ALTO) | 0 |
+
+Par occurrence, le compteur varie avec la **verbosité d'une ligne** et pas avec
+ce sur quoi un archiviste agit ; à quatre chiffres il noierait les compteurs à
+trois chiffres posés à côté. Par ligne, il énonce le fait : *ces lignes ne
+portent plus la confiance du moteur.* C'est aussi la seule unité que le reste
+du rapport parle — toute autre entrée de `format_losses` est attribuable à une
+ligne (ADR-012), une valeur par occurrence ne l'aurait pas été.
+
+**L'écart 492 / 566 est le contrôle qui compte.** Le chemin rapide ne retire
+`WC` que des `String` dont le `CONTENT` a réellement bougé : 74 lignes gardent
+leur confiance intacte, et le compteur le voit. Il est calculé par mesure
+avant/après sur l'élément, pas déduit du chemin emprunté — « la ligne a été
+réécrite » n'est pas « la ligne a perdu sa confiance », et c'est exactement le
+genre de raccourci qui a produit les fantômes de `R1`.
+
+Fait en un commit sur les deux formats, comme la matrice l'exigeait :
+`COUNTS_INVALIDATION = True`, `INVALIDATION_UNIT = "line"`,
+`INVALIDATION_COUNTER = "confidence_invalidated"` — une clé unique, émise par
+ALTO **et** PAGE (`conf_dropped` disparaît). `LOSS_MATRIX_VERSION` passe à
+`"2"`. La passe par `String` est tenue à l'écart des attributs `INVALIDATED`
+(`is_unconditional_loss`), sans quoi le même attribut serait compté deux fois —
+la forme de `R1`, encore.
 
 ---
 

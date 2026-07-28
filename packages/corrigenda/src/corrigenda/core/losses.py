@@ -46,7 +46,12 @@ from enum import Enum
 #: Bump when a fate changes meaning or an attribute moves between fates —
 #: the report's consumers key their expectations to this, not to the
 #: library version.
-LOSS_MATRIX_VERSION = "1"
+#:
+#: ``"2"`` (2026-07-28): R4 settled. ``INVALIDATED`` attributes are now
+#: counted, per line, under one key shared by both formats. No attribute
+#: changed fate; what changed is what the report says about a fate, which
+#: is the same thing to a consumer reading counters.
+LOSS_MATRIX_VERSION = "2"
 
 
 class AttributeClass(str, Enum):
@@ -78,23 +83,36 @@ class AttributeFate(str, Enum):
     DROPPED = "dropped"
 
 
-#: Whether an ``INVALIDATED`` attribute is reported per occurrence.
+#: Whether the report carries a counter when an ``INVALIDATED`` attribute
+#: goes. **Settled 2026-07-28** (R4), after being left explicit rather than
+#: decided by silence: yes — but counted **per line, not per occurrence**.
 #:
-#: **This is the one genuinely open decision in the table, and it is left
-#: explicit rather than settled by silence** (R4). Today: ALTO says
-#: nothing, PAGE counts its equivalent as ``conf_dropped`` — the two
-#: formats disagree, which is its own defect whichever way it is resolved.
+#: The two arguments were both right about different units. FOR counting: an
+#: archive wants to know its OCR confidence is gone, and format parity is a
+#: stated goal (§6.3) — ALTO said nothing while PAGE counted its equivalent
+#: as ``conf_dropped``, so the two formats disagreed, which was its own
+#: defect whichever way it resolved. AGAINST: per occurrence it fires on
+#: every changed String — 3339 on one real page — drowning the four-digit
+#: signal that matters in a five-digit one that does not, and varying with
+#: how wordy a line is rather than with anything an archivist decides on.
 #:
-#: The case FOR counting: an archive wants to know its OCR confidence is
-#: gone, and format parity is a stated goal (§6.3).
-#: The case AGAINST: it fires on every changed String — 3339 on one real
-#: page — and is a deterministic function of how many lines were rewritten,
-#: which the report already carries per line as ``rewriter_path``. A
-#: counter that can be derived from another counter is noise.
-#:
-#: Whoever settles it must change BOTH formats in the same commit. Flipping
-#: this flag is the ALTO half.
-COUNTS_INVALIDATION = False
+#: Per line answers both. "412 lines lost their OCR confidence" is the fact
+#: an archive acts on; how many Strings each of those lines held is not.
+#: It is also the unit the rest of the report already speaks — every other
+#: entry in ``format_losses`` is attributable to a line (ADR-012), and a
+#: per-occurrence counter could not be.
+COUNTS_INVALIDATION = True
+
+#: The unit :data:`COUNTS_INVALIDATION` counts in. Named because "3339" and
+#: "412" are both plausible readings of the same counter and the difference
+#: is the whole decision above; a consumer must not have to guess.
+INVALIDATION_UNIT = "line"
+
+#: The single key both formats emit for it. ALTO had none and PAGE called it
+#: ``conf_dropped``; one name, one unit, in both, is the parity half of R4.
+#: "invalidated" rather than "dropped" on purpose — the attribute did not
+#: fall through a gap, it was removed because a correction made it false.
+INVALIDATION_COUNTER = "confidence_invalidated"
 
 
 #: ALTO ``String`` attributes. Anything absent is treated as SEMANTIC /
@@ -158,16 +176,34 @@ def fate_of(attribute: str) -> tuple[AttributeClass, AttributeFate]:
     )
 
 
+def is_invalidated(attribute: str) -> bool:
+    """Is this attribute removed because a correction made it false?
+
+    The rewriters use it to know what to watch for on a line; the report
+    counts those removals once per line (:data:`INVALIDATION_UNIT`).
+    """
+    _cls, fate = fate_of(attribute)
+    return fate is AttributeFate.INVALIDATED
+
+
 def is_unconditional_loss(attribute: str) -> bool:
     """Does the per-String counter own this attribute's loss?
 
-    False for :data:`ALIGNMENT_SCOPED` attributes — the alignment-aware
-    pass owns those, and counting them here too would report a loss on
-    every rebuilt String that kept them.
+    False in two cases, both because another site already owns it, and two
+    sites counting one attribute is precisely the shape of R1:
+
+    * :data:`ALIGNMENT_SCOPED` — the alignment-aware pass owns those, and
+      counting them here too would report a loss on every rebuilt String
+      that kept them.
+    * :data:`AttributeFate.INVALIDATED` — the per-LINE counter owns those.
+      This is what keeps ``COUNTS_INVALIDATION = True`` from meaning "per
+      occurrence": the decision was to count lines, so the per-String pass
+      must stay out of it entirely.
     """
-    if attribute.rsplit("}", 1)[-1].upper() in ALIGNMENT_SCOPED:
+    local = attribute.rsplit("}", 1)[-1].upper()
+    if local in ALIGNMENT_SCOPED or is_invalidated(local):
         return False
-    return is_countable_loss(attribute)
+    return is_countable_loss(local)
 
 
 def is_countable_loss(attribute: str) -> bool:
@@ -180,14 +216,28 @@ def is_countable_loss(attribute: str) -> bool:
     return False
 
 
+#: The attributes :func:`is_invalidated` answers True for, as a set — the
+#: rewriters need to look for their presence on an element, not ask about a
+#: name they already hold.
+INVALIDATED_ATTRIBUTES: frozenset[str] = frozenset(
+    name
+    for name, (_cls, fate) in ALTO_STRING_ATTRIBUTES.items()
+    if fate is AttributeFate.INVALIDATED
+)
+
+
 __all__ = [
     "ALTO_STRING_ATTRIBUTES",
     "COUNTS_INVALIDATION",
+    "INVALIDATED_ATTRIBUTES",
+    "INVALIDATION_COUNTER",
+    "INVALIDATION_UNIT",
     "LOSS_MATRIX_VERSION",
     "AttributeClass",
     "AttributeFate",
     "ALIGNMENT_SCOPED",
     "fate_of",
     "is_countable_loss",
+    "is_invalidated",
     "is_unconditional_loss",
 ]
