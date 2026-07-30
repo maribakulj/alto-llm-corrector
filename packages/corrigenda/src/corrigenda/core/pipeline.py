@@ -1356,8 +1356,9 @@ class CorrectionPipeline:
             # (proposal/projection stages), staged per line (§9 v2).
             lines=build_line_outcomes(decisions, traces),
             # ADR-011 — the rewrite's granularity-loss counters surface on
-            # the report (None when the format is lossless or nothing was
-            # written).
+            # the report. None when no MARKUP was dropped (or nothing was
+            # written) — never read as "the run lost nothing": a flattened
+            # character is counted on the fidelity scale below (R8).
             format_losses=format_losses or None,
             # How faithfully each rewritten line carries its decision,
             # counted by level. A non-zero "normalized" is the run telling

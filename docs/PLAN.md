@@ -401,9 +401,16 @@ Détail et preuves : `AUDIT-2026-07-25.md` §3a, §3c, §3d ; `AUDIT-2026-07-27.
 ## R — Comptabilité honnête (bloquant)
 
 « Toute perte comptée » est une revendication d'auditabilité faite dans les docs
-du projet. Elle est aujourd'hui fausse **dans les deux sens** — ce qui est pire
-qu'une absence de comptabilité, parce que le chiffre a l'apparence d'une
-garantie.
+du projet. Elle était fausse **dans les deux sens** — ce qui est pire qu'une
+absence de comptabilité, parce que le chiffre a l'apparence d'une garantie.
+
+**État : `R0` à `R8` fermés (2026-07-28).** Deux des neuf se sont fermés par
+mesure plutôt que par code — `R3` était plus étroit que son énoncé, `R8` était
+déjà compté et c'est la *revendication* qui était fausse — et un troisième
+(`R7`) est documenté et testé plutôt qu'armé, parce que l'armer changerait la
+sortie livrée sans seuil mesuré. Le fil conducteur des neuf est **une** règle :
+un événement, un compteur. Deux sites de comptabilité pour un même événement
+sont libres de diverger, et c'est exactement ce qu'était `R1`.
 
 | id | item |
 |---|---|
@@ -414,8 +421,8 @@ garantie.
 | ~~R4~~ | **fait (2026-07-28) — comptés, par LIGNE.** `WC`/`CC` n'étaient comptés nulle part en ALTO pendant que PAGE comptait `conf_dropped` **par occurrence** : silence d'un côté, unité incomparable de l'autre. Les deux arguments avaient raison sur des unités différentes, et l'unité était toute la décision — voir ci-dessous |
 | ~~R5~~ | **fait (2026-07-28)** — le drapeau voyageait dans le dictionnaire de pertes, donc `sum(format_losses)` comptait un non-événement : rien n'a quitté le balisage, l'alignement n'a simplement pas pu se porter garant de l'ordre qu'on lui a remis. Il a son propre canal (`RewriteResult.word_order_suspected` → `ProjectionStage.word_order_suspected`). Signalé, jamais appliqué — inchangé |
 | ~~R6~~ | **fait (2026-07-28)** — `CorrectionReport.hyphen_splits`. Et une mesure au passage : un split **n'arrive qu'à la granularité `LINE`**, que l'auto-sélection du planificateur n'atteint jamais (PAGE → BLOCK → WINDOW) ; le seul chemin réel est la **descente après échec de chunk**. L'événement est donc rare, et le test doit passer par cette porte-là. Ce qu'aucun autre champ ne dit : le split **remet le rôle de la queue à `NONE`**, donc `unpaired_breaks` — qui ne regarde que les lignes voulant encore un partenaire — y est aveugle par construction ; les deux côtés gardent leur texte, donc ce n'est pas un fallback ; rien ne quitte le balisage, donc ce n'est pas une perte de format. Ce que l'hôte reçoit est une ligne livrée dont le texte finit au milieu d'un mot et qui ne déclare aucune coupure |
-| R7 | `LossPolicy(strict=True)` inopérant en ALTO (`word_count` PAGE-only) : l'armer ou documenter la restriction |
-| R8 | Brancher la descente de niveau de fidélité `L0` sur la comptabilité : une perte de blanc significatif est une perte. **Attention `L8`** : ne brancher que `normalized`. `source_spelling` ne perd rien — le fichier garde son caractère — et le compter fabriquerait un fantôme |
+| ~~R7~~ | **fait (2026-07-28) — documenté et épinglé, pas armé.** `word_count` n'est peuplé que par le parseur PAGE, donc `strict=True` sur un document ALTO rend **exactement** le comportement par défaut, en silence. La docstring le dit désormais franchement, et ajoute ce qui manquait vraiment : ce n'est **pas** « une réécriture ALTO ne perd rien ». Un changement de compte de mots reconstruit la ligne et lâche `TAGREFS`/`language`/attributs vendeur + le `STYLE` des `String` non alignés — **rapportés, gatés par aucun mode**. Armer la garde pour ALTO changerait la sortie livrée : ça demande un seuil mesuré, pas un drapeau retourné en passant. Trois tests tiennent les deux moitiés (`test_loss_policy_scope.py`) |
+| ~~R8~~ | **fait (2026-07-28) — clos par la mesure, sans ajouter de compteur.** La perte **est déjà comptée** : une ligne `normalized` est agrégée par `projection_fidelity` et attribuée par ligne sur `ProjectionStage.fidelity`. Ce qui était faux, c'est la revendication autour : sur un run où une tabulation est aplatie, `format_losses` vaut **`None`** — et qui lit ce champ seul conclut « sans perte ». Corrigé dans le contrat aux trois endroits qui le disaient. **Et refuser d'ajouter une clé à `format_losses` est la même décision que `R4`** : elle coïnciderait avec `projection_fidelity["normalized"]` sur *tous* les runs par construction, et deux sites de comptabilité pour un événement sont libres de diverger par la suite — c'est ce qu'était `R1`. Les deux moitiés sont assertées : la perte est trouvable, et trouvable **à un seul endroit**. `source_spelling` reste hors comptabilité (`L8`) : le fichier garde son caractère |
 
 ### `R6` — une ride observée en l'épinglant, laissée telle quelle
 

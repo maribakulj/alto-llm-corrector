@@ -602,6 +602,26 @@ class LossPolicy(FrozenPolicy):
     alternative ``TextEquiv``, offset-anchored ``custom`` groups)
     describe the OLD reading — they are inherent to ANY correction, so
     they stay report-only in every mode.
+
+    **``strict`` is a no-op on ALTO, and that is worth stating outright
+    rather than leaving to be inferred from the sentence above** (R7).
+    ``word_count`` is populated by the PAGE parser alone: ALTO's per-token
+    ``String`` geometry redistributes at any token count, so there is no
+    word markup to lose and the gate has nothing to measure. A host that
+    sets ``strict=True`` on an ALTO document gets exactly the default
+    behaviour, silently.
+
+    That is not the same as "an ALTO rewrite loses nothing". A
+    word-count-changing correction rebuilds the line and drops the semantic
+    ``String`` attributes it cannot re-attach to re-segmented words —
+    ``TAGREFS``, ``language``, vendor attributes, and the ``STYLE`` of any
+    source String the token alignment could not match. Those losses are
+    REPORTED (``CorrectionReport.format_losses``, attributed per line) and
+    **not gated by this policy in any mode**. Gating them would be a
+    behavioural change to delivered output, so it needs a measured
+    threshold rather than a flag flipped in passing; until then the
+    restriction is documented and pinned by a test instead of being
+    discovered by a host whose gate never fired.
     """
 
     strict: bool = False
@@ -1374,11 +1394,25 @@ class CorrectionReport(BaseModel):
     lines: list[LineOutcome] = Field(default_factory=list)
     #: Format-specific granularity losses aggregated over the run — e.g. the
     #: PAGE rewriter reports ``words_dropped`` / ``custom_offset_stripped`` /
-    #: ``alt_textequiv_dropped`` (6.2 P4/P6) here. ``None`` when the format
-    #: has nothing to report (ALTO's per-path counts already live on the
-    #: line outcomes). Additive and optional, so this does NOT bump
-    #: ``report_version`` — the field's contract is to bump only on a
-    #: *breaking* JSON change, and a new optional key is backward-compatible.
+    #: ``alt_textequiv_dropped`` (6.2 P4/P6) here. Additive and optional, so
+    #: this does NOT bump ``report_version`` — the field's contract is to
+    #: bump only on a *breaking* JSON change, and a new optional key is
+    #: backward-compatible.
+    #:
+    #: **``None`` does NOT mean the run lost nothing** (R8). This field
+    #: counts losses of MARKUP granularity: an element or attribute that
+    #: left the tree. A character the format could not carry — a no-break
+    #: space or a tab flattened into an ordinary one — is a loss of TEXT,
+    #: and it is counted by :attr:`projection_fidelity` as a ``normalized``
+    #: line, with the level attributed per line on
+    #: :attr:`ProjectionStage.fidelity`. A run can therefore have
+    #: ``format_losses is None`` and still have flattened a character; both
+    #: fields have to be read to audit a run.
+    #:
+    #: Deliberately NOT mirrored here as a second counter. It would agree
+    #: with ``projection_fidelity["normalized"]`` on every run by
+    #: construction, and a counter derivable from another counter is what
+    #: R1 was: two accounting sites for one event, free to drift apart.
     format_losses: dict[str, int] | None = None
     #: Per-line projection fidelity, counted by level over the run — e.g.
     #: ``{"exact": 498, "token_equivalent": 22, "normalized": 2}``. Two

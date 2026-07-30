@@ -346,7 +346,10 @@ class RewriteResult:
     verifies against them without re-parsing the output. ``losses`` are
     the format's granularity-loss counters for this file
     (:attr:`~corrigenda.core.schemas.CorrectionReport.format_losses`
-    aggregates them over the run); empty when the rewrite is lossless.
+    aggregates them over the run); empty when the rewrite dropped no
+    markup. "Empty" is not "lossless" — a character the format cannot carry
+    is a loss of TEXT and is graded on the projection fidelity scale
+    instead (R8, :mod:`corrigenda.core.fidelity`).
     """
 
     xml_bytes: bytes

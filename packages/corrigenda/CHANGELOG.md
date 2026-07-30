@@ -28,6 +28,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`format_losses is None` no longer reads as "the run lost nothing" (R8).**
+  A run that flattened a tab into an ordinary space reports
+  `format_losses: None` and `projection_fidelity: {"normalized": 1}`. The loss
+  was already counted — aggregated on `projection_fidelity`, attributed per line
+  on `ProjectionStage.fidelity` — so what needed fixing was the claim around it,
+  and the contract now says in all three places that this field counts losses of
+  MARKUP granularity and that a flattened character is a loss of TEXT graded on
+  the fidelity scale. Both fields have to be read to audit a run.
+  Deliberately NOT mirrored as a second `format_losses` key: it would agree with
+  `projection_fidelity["normalized"]` on every run by construction, and two
+  accounting sites for one event are free to drift apart — which is what R1 was.
+  The same reasoning that settled R4's unit settles this.
+- **`LossPolicy(strict=True)` documents that it is a no-op on ALTO (R7).**
+  `word_count` is populated by the PAGE parser alone, so the gate has no input
+  on ALTO and a host that sets `strict=True` gets the default behaviour,
+  silently. The docstring says so outright now, and says the part that actually
+  matters: this is not "an ALTO rewrite loses nothing". A word-count-changing
+  correction rebuilds the line and drops `TAGREFS`/`language`/vendor attributes
+  plus the `STYLE` of any unmatched `String` — reported, and gated by no mode.
+  Arming the gate for ALTO would change delivered output and needs a measured
+  threshold, not a flag flipped in passing, so the restriction is documented and
+  pinned by tests instead of discovered by a host whose gate never fired.
 - **An emptied line reports the styles it loses (R2).** The ALTO rebuild has
   two exits. A correction that empties the line returns before any token
   alignment happens — there are no target tokens to align against — and that

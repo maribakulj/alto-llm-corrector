@@ -245,3 +245,48 @@ async def test_the_bnf_fixture_stops_claiming_exact_on_its_soft_hyphens() -> Non
         if any(h.get("CONTENT") == "­" for h in tl.iter(f"{{{ns}}}HYP"))
     }
     assert spelled == soft
+
+
+# ---------------------------------------------------------------------------
+# R8 — the fidelity descent IS the loss accounting for a flattened character
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_a_flattened_character_is_counted_exactly_once() -> None:
+    """R8, closed by measurement rather than by adding a counter.
+
+    The item read "wire the L0 fidelity descent into the loss accounting: a
+    significant whitespace loss is a loss". Measured, the loss IS already
+    counted — as a ``normalized`` line, aggregated on
+    ``projection_fidelity`` and attributed per line on
+    ``ProjectionStage.fidelity``. What was wrong was the claim around it:
+    ``format_losses`` is ``None`` on such a run, and a host reading that
+    field alone concludes the run was lossless.
+
+    So the fix was the contract text, and the reason NOT to add a
+    ``format_losses`` key is the same one that settled R4: it would agree
+    with ``projection_fidelity["normalized"]`` on every run by construction,
+    and two accounting sites for one event are free to drift apart. That is
+    what R1 was.
+
+    Asserted here so neither half can regress: the loss is discoverable, and
+    it is discoverable in exactly one place.
+    """
+    result, target = await _run("\t")
+
+    # Counted — run level and per line.
+    counts = result.report.projection_fidelity or {}
+    assert counts.get(ProjectionFidelity.NORMALIZED.value) == 1
+    outcome = _outcome(result.report, target)
+    assert outcome.projection is not None
+    assert outcome.projection.fidelity is ProjectionFidelity.NORMALIZED
+
+    # NOT mirrored into the markup-loss counters, in either direction.
+    assert result.report.format_losses is None
+    assert outcome.projection.losses is None
+
+    # And the two vocabularies stay disjoint: no loss key names the fidelity
+    # levels, so nobody can sum the same event twice.
+    for level in ProjectionFidelity:
+        assert level.value not in (result.report.format_losses or {})
