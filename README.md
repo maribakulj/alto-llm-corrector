@@ -37,7 +37,7 @@ this repo is that library **plus** a FastAPI + React app around it.
 | `SPECS_LIB_V2.md` | Normative spec for the `corrigenda` library — what it **must be** |
 | [`docs/PLAN.md`](docs/PLAN.md) | **The single live plan** — what remains, in what order, and what `1.0` requires. There is exactly one; do not write a second |
 | [`docs/audit/`](docs/audit/) | Findings, with evidence — what has been **observed**. Carries no plan |
-| `packages/corrigenda/docs/` | Library guides: `quickstart`, `formats`, `format-support`, `edit-protocol`, `versioning` |
+| `packages/corrigenda/docs/` | Library guides: `quickstart`, `formats`, `format-support`, `edit-protocol`, `versioning`, and [`reading-a-report`](packages/corrigenda/docs/reading-a-report.md) — what each number in a run's report does **and does not** mean |
 | `packages/corrigenda/CHANGELOG.md` | The library's released changes (SemVer) |
 | [`docs/API.md`](docs/API.md) | Backend HTTP API map (the OpenAPI schema is the contract) |
 | [`docs/adr/`](docs/adr/) | Architecture decision records — why a design is what it is |

@@ -70,6 +70,24 @@ package version:
 
 Consumers should dispatch on `report_version`, not on the package version.
 
+**Dispatch on the field, not on the constant** (D5). The thing to branch on
+is `report.report_version` — read off the artefact you are actually holding,
+which is the only thing that tells you how *that* report was written. The
+library's own `CORRECTION_REPORT_VERSION` says what THIS install emits, so a
+consumer comparing it against a report it just loaded learns nothing about
+that report.
+
+That is why the constant is not in `corrigenda.__all__` while
+`EDIT_PROTOCOL_VERSION` is: the edit protocol's version is something a
+producer must *declare*, the report's is something a reader *finds*. The
+asymmetry was previously unexplained and read as an oversight. When a tool
+does need the constant — a writer checking what it is about to emit — it is
+importable by module path like anything else the top level does not carry:
+
+```python
+from corrigenda.core.schemas import CORRECTION_REPORT_VERSION
+```
+
 ## Byte-parity discipline
 
 Corrected-output bytes are part of the behavioural contract: golden

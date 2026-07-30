@@ -448,7 +448,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   cannot be gathered from a single page's plan and keeps the conservative
   behaviour — it stays with the primary producer. A hyphen member is still
   never SKIPped. On the real corpus the hybrid drops from CER 0.0083 to
-  **0.0021**, matching vision-on-every-line exactly.
+  **0.0021** — matching vision-on-every-line exactly, and both of those
+  numbers come from an **oracle VLM**: a simulated producer that returns the
+  ground truth for the lines it is given. It measures the ROUTING (which
+  lines get escalated, and whether a unit travels whole), not a model. No
+  real vision model has been benchmarked here; expect a real one to sit
+  above both figures, and read this as an upper bound on what routing can
+  buy, never as a quality claim (D3).
 
 ### Added
 

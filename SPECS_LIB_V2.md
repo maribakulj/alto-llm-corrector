@@ -115,22 +115,53 @@ ensuite, chacun avec sa preuve.
 
 ## 3. Architecture cible
 
+> **Relevé du 2026-07-28.** L'arbre ci-dessous décrivait un paquet nommé
+> `lib/` avec 7 modules de cœur, sans `integrations/`, sans `errors.py`, sans
+> `facade.py`, et avec un `producers/llm.py` qui n'existe pas. Un document
+> normatif qui décrit un périmètre faux est le défaut que `V8` interdit :
+> réécrit depuis l'arborescence réelle (`D2`). Ce qu'il faut y lire est la
+> **frontière**, pas la liste — le cœur ne connaît ni lxml ni réseau, les
+> formats ne connaissent pas le producteur, et `integrations/` est le seul
+> étage qui touche un vendeur.
+
 ```
-lib/
+corrigenda/
+├── __init__.py              # surface de sommet (PEP 562 : formats/producteurs paresseux)
+├── errors.py                # hiérarchie CorrigendaError (§8.4)
+├── facade.py                # load / correct / correct_sync — le chemin en 3 lignes (§2)
 ├── core/                    # pur : zéro I/O, zéro réseau, zéro lxml
-│   ├── schemas.py           # manifests, chunks, protocole d'édition, traces
+│   ├── schemas.py           # manifests, chunks, politiques gelées, rapport (§9)
+│   ├── protocols.py         # EditProducer, PipelineObserver, FormatAdapter, RewriteResult
+│   ├── pipeline.py          # orchestration (retry, descente de granularité, traces)
+│   ├── planner.py           # chunk planner (PAGE→BLOCK→WINDOW→LINE, césure-conscient)
 │   ├── guards.py            # matrice anti-migration (3 étages) + GuardConfig
 │   ├── hyphenation.py       # réconciliation de paires (logique TEXTE, format-agnostique)
-│   ├── planner.py           # chunk planner (PAGE→BLOCK→WINDOW→LINE, césure-conscient)
+│   ├── pairing.py           # répertoire de coupure + primitives de lien dirigé (ADR-010)
+│   ├── units.py             # dérivation d'unité de césure + split_forward_link
 │   ├── editing.py           # EditScript : validation, normalisation match→range, application
-│   ├── pipeline.py          # orchestration (retry, descente de granularité, traces)
-│   └── protocols.py         # EditProducer, PipelineObserver, FormatAdapter
-├── formats/
-│   ├── alto/                # parser + rewriter ALTO (lxml, durci)
-│   └── page/                # parser + rewriter PAGE XML (lxml, durci)
-└── producers/
-    ├── llm.py               # contrat provider LLM (payload, schémas de sortie, prompts)
-    └── rules.py             # moteur de règles déterministe (v2.0)
+│   ├── decisions.py         # DecisionSet, assemblage des LineOutcome (ADR-011)
+│   ├── identity.py          # LineRef — l'identité (page_id, line_id) (ADR-009)
+│   ├── fidelity.py          # échelle de fidélité de projection (L0/L8)
+│   ├── losses.py            # matrice des pertes, versionnée (R0)
+│   ├── validator.py         # validation de la réponse producteur + intégrité de césure
+│   ├── alignment.py         # alignement de tokens source↔correction
+│   ├── confidence.py        # confiances de ligne (Phase 1)
+│   ├── quality.py           # QE + routage (Phase 3)
+│   ├── events.py            # types d'événements de l'observateur
+│   ├── _norm.py             # NFC, nettoyage de CONTENT
+│   └── _parse.py            # parsing d'entiers tolérant
+├── formats/                 # formats de transcription concrets (lxml, durci)
+│   ├── loader.py            # détection de format + façade de parsing
+│   ├── validation.py        # validation XSD
+│   ├── alto/                # parser + rewriter ALTO (v2/v3/v4)
+│   └── page/                # parser + rewriter PAGE XML (2013/2019/2024)
+├── producers/               # implémentations d'EditProducer
+│   ├── llm_edit.py          # producteur LLM (enveloppe le contrat d'intégration)
+│   └── rules.py             # moteur de règles déterministe
+└── integrations/            # le seul étage qui connaît un vendeur
+    ├── llm.py               # contrat provider LLM (payload, schéma de sortie, prompt)
+    ├── qe.py                # estimateur de qualité
+    └── vision.py            # extra `corrigenda[vision]` — Pillow, import paresseux (I4)
 ```
 
 Règle d'import : `core` n'importe rien de `formats` ni `producers` ;
@@ -273,9 +304,16 @@ class EditProducer(Protocol):
     wants_image: bool = False
 
     async def produce(
-        self, payload: ModelPayload, *, policy: RetryPolicy
+        self, payload: CorrectionRequest, *, options: ProducerOptions
     ) -> tuple[EditScript, Usage | None]: ...
 ```
+
+> **Corrigé le 2026-07-28 (`D2`).** Cette signature montrait
+> `payload: ModelPayload, *, policy: RetryPolicy` — un type qui n'existe pas,
+> et le `RetryPolicy` complet que P3.7 a précisément **retiré** de cette
+> couture : le moteur possède la stratégie de retry, un producteur n'a besoin
+> de savoir que ce qui concerne **cet appel-ci**. La spec contredisait donc sa
+> propre prose sur `ProducerOptions`.
 
 À partir de v2.0, `BaseProvider` (LLM) devient **une implémentation** de ce
 contrat, pas le contrat lui-même. `Usage` (tokens in/out) remonte au rapport
