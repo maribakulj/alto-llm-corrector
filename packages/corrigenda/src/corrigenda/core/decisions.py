@@ -179,6 +179,10 @@ def build_line_outcomes(
                     # decision: exact, or what the format cost, or a
                     # whitespace character that was substituted away.
                     fidelity=trace.projection_fidelity,
+                    # R5 — a diagnostic, not a loss: it used to travel
+                    # inside `losses` above, where summing the counters
+                    # added a non-loss to the total.
+                    word_order_suspected=trace.word_order_suspected,
                 )
         outcomes.append(
             LineOutcome(

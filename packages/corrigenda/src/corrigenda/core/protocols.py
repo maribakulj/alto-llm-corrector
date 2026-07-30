@@ -363,6 +363,13 @@ class RewriteResult:
     #: comparison had gone through the same collapse.
     texts_verbatim: dict[str, str] = field(default_factory=dict)
     losses: dict[str, int] = field(default_factory=dict)
+    #: R5 — line ids whose token alignment SUSPECTED a word reorder. A
+    #: diagnostic, never acted on (lines never merge, words never move), and
+    #: deliberately not a loss: nothing left the markup. It used to ride in
+    #: ``losses`` as ``word_order_suspected``, so any consumer summing the
+    #: loss counters counted a non-loss — the same defect as R1 with a
+    #: different attribute.
+    word_order_suspected: frozenset[str] = frozenset()
     #: P3.8 (ADR-012) — per-line attribution of ``losses``: line_id →
     #: that line's own loss counters (only lines that lost something
     #: appear). Summing the values reproduces ``losses``.

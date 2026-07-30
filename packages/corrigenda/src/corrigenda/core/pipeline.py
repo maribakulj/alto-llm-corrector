@@ -128,6 +128,7 @@ from corrigenda.core.schemas import (
     DocumentManifest,
     GuardConfig,
     HyphenRole,
+    HyphenSplit,
     ImageAsset,
     PageImage,
     LineManifest,
@@ -816,6 +817,16 @@ class RunContext:
     #: The run's cooperative cancellation probe, forwarded to producers
     #: via :class:`ProducerOptions` (P3.7) so long I/O can be abandoned.
     should_abort: Callable[[], bool] | None = None
+    #: R6 — every forward hyphen link the LINE planner severed this run
+    #: (ADR-010 unit SPLIT). Accumulated here because the cut happens deep
+    #: in planning, once per page and again per granularity descent, while
+    #: the only place it is worth SAYING is the report: a split leaves a
+    #: line whose text still ends mid-word with its role reset to NONE, so
+    #: it is not a fallback, not an unpaired break, and not a format loss.
+    #: It was recorded on the ChunkPlan and read by nobody — the one
+    #: deliberately destructive operation in the engine, invisible to the
+    #: host.
+    hyphen_splits: list[HyphenSplit] = field(default_factory=list)
     #: §4.1 vision envelope — resolved once per run from run(page_images=…).
     image_ref_by_page_id: dict[str, PageImage] = field(default_factory=dict)
     page_dims: dict[str, tuple[int, int]] = field(default_factory=dict)
@@ -1358,6 +1369,11 @@ class CorrectionPipeline:
             # and not the same thing as a fallback — the line WAS corrected,
             # just alone and without its pair-drift guards.
             unpaired_breaks=len(unpaired_break_refs(document_manifest.pages)) or None,
+            # R6 — the units this run CUT to fit the request cap. Distinct
+            # from unpaired_breaks: there the link was never there, here the
+            # engine severed one on purpose, and the split resets the tail's
+            # role to NONE so it cannot show up in that count either.
+            hyphen_splits=ctx.hyphen_splits or None,
             # P3.9 (§11) — the run's full provenance record.
             provenance=self._build_provenance(
                 document_manifest=document_manifest,
@@ -1851,6 +1867,7 @@ class CorrectionPipeline:
         )
 
         plan = plan_page(page, document_id, self.config)
+        ctx.hyphen_splits.extend(plan.hyphen_splits)
 
         # Phase 3/4 — hybrid-selective routing: pre-decide SKIP lines
         # (confirmed clean, no producer call) and route ESCALATE lines to
@@ -2093,6 +2110,7 @@ class CorrectionPipeline:
                 self.config,
                 force_granularity=next_g,
             )
+            ctx.hyphen_splits.extend(sub_plan.hyphen_splits)
             total = 0
             for sub in sub_plan.chunks:
                 # F10 — the descent can spawn many finest-grain chunks;
@@ -3155,6 +3173,16 @@ class CorrectionPipeline:
                     t = traces.get(tkey)
                     if t is not None:
                         t.projection_fidelity = level
+
+            # R5 — the alignment's reorder suspicion, on its own channel
+            # rather than inside the loss counters where summing it counted
+            # a non-loss.
+            for lid in result.word_order_suspected:
+                tkey = lid_to_ref.get(lid)
+                if tkey:
+                    t = traces.get(tkey)
+                    if t is not None:
+                        t.word_order_suspected = True
 
         # No trace persistence anywhere in the engine: trace.json IS the
         # CorrectionReport (§9), carried on the result for the caller.

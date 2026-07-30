@@ -412,10 +412,26 @@ garantie.
 | ~~R2~~ | **fait (2026-07-28)** — la reconstruction a **deux sorties** : une correction qui vide la ligne revient *avant* tout alignement (il n'y a aucun token cible sur quoi aligner), et cette sortie ne comptait aucun `STYLE`/`STYLEREFS`. Rien d'aligné veut dire tout perdu. **56 lignes** des corpus ALTO du dépôt portent ces attributs. Corrigé par **une** fonction de comptabilité appelée aux deux sorties — une seconde copie en ligne est exactement comment `R1` est arrivé |
 | ~~R3~~ | **fait (2026-07-28), et plus étroit que l'énoncé.** « `<HYP>` d'une PART2 » évoque une ligne de continuation portant aussi un signe final : ce n'est **pas** une PART2. Le parseur lit le signe terminal comme une coupure avant, classe la ligne `BOTH`, et le `<HYP>` est **réémis**. Le seul chemin réel est un `<HYP>` **non terminal** — qu'ALTO ne définit pas, que le parseur tolère, et où l'élément part en silence. Compté `hyp_elements_removed` : ce qui part est l'**élément** (sa géométrie, son statut de balisage), pas le signe, dont le caractère revient dans le `CONTENT` reconstruit. Les deux moitiés sont assertées pour que personne ne « corrige » ça en resynthétisant un HYP qui doublerait le signe. **0 des 1711 lignes ALTO** des corpus ont cette forme : chemin latent, épinglé comme `L2` l'a été |
 | ~~R4~~ | **fait (2026-07-28) — comptés, par LIGNE.** `WC`/`CC` n'étaient comptés nulle part en ALTO pendant que PAGE comptait `conf_dropped` **par occurrence** : silence d'un côté, unité incomparable de l'autre. Les deux arguments avaient raison sur des unités différentes, et l'unité était toute la décision — voir ci-dessous |
-| R5 | `word_order_suspected` n'est pas une perte, sortir de `format_losses` |
-| R6 | `hyphen_splits` lu par personne : la seule opération destructrice assumée est invisible pour l'hôte |
+| ~~R5~~ | **fait (2026-07-28)** — le drapeau voyageait dans le dictionnaire de pertes, donc `sum(format_losses)` comptait un non-événement : rien n'a quitté le balisage, l'alignement n'a simplement pas pu se porter garant de l'ordre qu'on lui a remis. Il a son propre canal (`RewriteResult.word_order_suspected` → `ProjectionStage.word_order_suspected`). Signalé, jamais appliqué — inchangé |
+| ~~R6~~ | **fait (2026-07-28)** — `CorrectionReport.hyphen_splits`. Et une mesure au passage : un split **n'arrive qu'à la granularité `LINE`**, que l'auto-sélection du planificateur n'atteint jamais (PAGE → BLOCK → WINDOW) ; le seul chemin réel est la **descente après échec de chunk**. L'événement est donc rare, et le test doit passer par cette porte-là. Ce qu'aucun autre champ ne dit : le split **remet le rôle de la queue à `NONE`**, donc `unpaired_breaks` — qui ne regarde que les lignes voulant encore un partenaire — y est aveugle par construction ; les deux côtés gardent leur texte, donc ce n'est pas un fallback ; rien ne quitte le balisage, donc ce n'est pas une perte de format. Ce que l'hôte reçoit est une ligne livrée dont le texte finit au milieu d'un mot et qui ne déclare aucune coupure |
 | R7 | `LossPolicy(strict=True)` inopérant en ALTO (`word_count` PAGE-only) : l'armer ou documenter la restriction |
 | R8 | Brancher la descente de niveau de fidélité `L0` sur la comptabilité : une perte de blanc significatif est une perte. **Attention `L8`** : ne brancher que `normalized`. `source_spelling` ne perd rien — le fichier garde son caractère — et le compter fabriquerait un fantôme |
+
+### `R6` — une ride observée en l'épinglant, laissée telle quelle
+
+`LineOutcome.hyphen_role` vient de la **trace** de la ligne, écrite quand son
+chunk a été enrichi la première fois. Un split arrive **plus tard** — pendant la
+descente de granularité qui suit un chunk en échec — donc une queue coupée peut
+être rapportée avec le rôle qu'elle avait **avant** la coupure (`HypBoth` là où
+le manifeste dit désormais `HypPart2`).
+
+C'est un second problème de vérité, plus étroit que `R6`, et que le nouveau
+champ ne corrige pas : c'est précisément pourquoi le split a besoin de son
+**propre** enregistrement plutôt que d'être déduit des rôles du rapport. Épinglé
+par un test (`test_the_reported_role_can_predate_the_split`) pour que ce soit
+une quantité connue, et pour qu'un futur correctif ait un test à retourner.
+
+---
 
 ### `R4` — l'unité était toute la décision (2026-07-28)
 

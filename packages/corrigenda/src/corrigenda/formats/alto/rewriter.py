@@ -680,7 +680,7 @@ def _rebuild_line(
     corrected: str,
     manifest: LineManifest,
     ns: str,
-) -> dict[str, int]:
+) -> tuple[dict[str, int], bool]:
     """Slow-path rebuild for any TextLine (normal, PART1, BOTH, PART2).
 
     Behaviour by ``manifest.hyphen_role``:
@@ -817,7 +817,7 @@ def _rebuild_line(
         else:
             for h in saved_hyp:
                 el.append(h)
-        return losses
+        return losses, False
 
     word_tokens = [t for t in tokens if not _is_space_token(t)]
     alignment = align_tokens(orig_contents, word_tokens)
@@ -827,8 +827,6 @@ def _rebuild_line(
         if p.source_index is not None and p.target_index is not None
     }
     _add_alignment_scoped_losses(losses, orig_string_attribs, matched_sources)
-    if alignment.move_suspected:
-        losses["word_order_suspected"] = 1
     # Pre-seed with every ID that WILL be recycled, so a generated ID for
     # an early inserted token can never collide with a later recycled one.
     used_ids: set[str] = {
@@ -879,7 +877,7 @@ def _rebuild_line(
         for h in saved_hyp:
             el.append(h)
 
-    return losses
+    return losses, alignment.move_suspected
 
 
 # ---------------------------------------------------------------------------
@@ -918,6 +916,7 @@ def rewrite_alto_file(
     line_paths: dict[str, str] = {}
     losses: dict[str, int] = {}
     losses_by_line: dict[str, dict[str, int]] = {}
+    word_order_suspected: set[str] = set()
 
     def record(line_id: str, line_losses: dict[str, int]) -> None:
         """Attribute a line's losses (ADR-012) and roll them into the run
@@ -1003,11 +1002,18 @@ def rewrite_alto_file(
             continue
 
         # --- Path 4: SLOW PATH (word count changed) ---
-        line_losses = _rebuild_line(tl_el, write_text, lm, ns)
+        line_losses, move_suspected = _rebuild_line(tl_el, write_text, lm, ns)
         _apply_subs(tl_el, lm, ns)
         metrics.slow_path += 1
         line_paths[line_id] = "slow_path"
         record(line_id, {**line_losses, **_confidence_loss(conf_before, tl_el, ns)})
+        # R5 — a suspected reorder is a DIAGNOSTIC, not a loss: nothing left
+        # the markup, the alignment simply could not vouch for the order it
+        # was handed. It rode in the loss dict, so `sum(format_losses)`
+        # counted a non-loss — R1's disease with a different attribute. It
+        # travels on its own channel now.
+        if move_suspected:
+            word_order_suspected.add(line_id)
 
     _add_processing_entry(root, ns, provider, model, lib_version, config_fingerprint)
     # pretty_print=False: avoid gratuitously reformatting the entire XML
@@ -1038,6 +1044,7 @@ def rewrite_alto_file(
         ),
         losses=losses,
         losses_by_line=losses_by_line,
+        word_order_suspected=frozenset(word_order_suspected),
     )
 
 

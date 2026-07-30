@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`CorrectionReport.hyphen_splits` — the engine's one deliberately
+  destructive operation is no longer invisible (R6).** When a hyphen chain is
+  longer than `max_lines_per_request` the LINE planner severs a forward link so
+  the cut pair cannot straddle two requests (`split_forward_link`, ADR-010).
+  The record existed — on the `ChunkPlan`, an internal planning artefact nobody
+  outside the planner sees — and nothing on the report covered it: the cut
+  resets the tail's role to `NONE`, so `unpaired_breaks` (which counts lines
+  that still *want* a partner) is blind to it by construction; both sides keep
+  their OCR text, so it is not a fallback; nothing leaves the markup, so it is
+  not a `format_loss`. What a host is handed is a delivered line whose text ends
+  mid-word and which declares no break at all.
+  Measured while pinning it: a split can only happen at LINE granularity, which
+  the planner's auto-selection never reaches (PAGE → BLOCK → WINDOW) — the one
+  real path there is the granularity descent after a failed chunk. Rare, and now
+  reported. Optional and additive: `None` when nothing was cut, no
+  `report_version` bump.
+
 ### Fixed
 
 - **An emptied line reports the styles it loses (R2).** The ALTO rebuild has
@@ -35,6 +54,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **`word_order_suspected` is no longer counted as a loss (R5).** The ALTO
+  rewriter's alignment flag rode inside the loss dictionary, so any consumer
+  summing `format_losses` added a non-event to the total: nothing left the
+  markup, the alignment simply could not vouch for the word order it was handed.
+  It now travels on its own channel — `RewriteResult.word_order_suspected`
+  (line ids) → `ProjectionStage.word_order_suspected` (a per-line flag). The
+  behaviour is unchanged: flagged, never acted on, because lines never merge and
+  words never move. `format_losses` no longer carries the key.
 - **`ProjectionFidelity` gains `source_spelling`: `exact` was untrue on 115
   lines of the repo's own BnF fixture (L8).** `exact` promises the artefact
   says the decision *character for character*. 115 of `examples/X0000002.xml`'s

@@ -1109,6 +1109,9 @@ class LineTrace(BaseModel):
     #: surfaces on the report's projection stage. ``None`` until the line's
     #: file has been rewritten (and forever, for a run that writes nothing).
     projection_fidelity: ProjectionFidelity | None = None
+    #: R5 — the rewriter's token alignment suspected a word reorder on this
+    #: line. Flagged, never acted on.
+    word_order_suspected: bool | None = None
     validation_status: str | None = None  # corrected / fallback / failed
     fallback_reason: str | None = None
 
@@ -1193,6 +1196,16 @@ class ProjectionStage(BaseModel):
     #: words diverge, so no worse level can reach a report. Additive and
     #: optional — no ``report_version`` bump.
     fidelity: ProjectionFidelity | None = None
+    #: R5 — the token alignment suspected the correction REORDERED this
+    #: line's words. Flagged, never acted on: lines never merge and words
+    #: never move, so the text is written exactly as decided and the source
+    #: identities stay where the alignment could vouch for them. Not a loss
+    #: and no longer counted as one — it used to sit in :attr:`losses`, where
+    #: a consumer summing loss counters added a non-loss to the total.
+    #: ``None`` when the alignment saw no reorder (and on every path that
+    #: does not align: untouched, subs-only, fast). Additive and optional —
+    #: no ``report_version`` bump.
+    word_order_suspected: bool | None = None
 
 
 class LineConfidence(BaseModel):
@@ -1386,6 +1399,19 @@ class CorrectionReport(BaseModel):
     #: nobody sewed. ``None`` when every break found its partner. Additive
     #: and optional — no ``report_version`` bump.
     unpaired_breaks: int | None = None
+    #: R6 — the forward hyphen links this run SEVERED to keep a chain inside
+    #: one request (ADR-010 unit SPLIT). Recorded on the ``ChunkPlan`` since
+    #: the split existed and read by nobody, which made the engine's one
+    #: deliberately destructive operation the only one a host could not see.
+    #: It is not covered by anything else on this report: the cut resets the
+    #: tail's role to ``NONE``, so it is not an ``unpaired_break``; both
+    #: sides keep their OCR text verbatim, so it is not a fallback; nothing
+    #: leaves the markup, so it is not a ``format_loss``. What a host
+    #: actually gets is a delivered line whose text still ends mid-word and
+    #: which declares no break at all. ``None`` when no chain was cut — the
+    #: common case, since only chains over ``max_lines_per_request`` are.
+    #: Additive and optional — no ``report_version`` bump.
+    hyphen_splits: list[HyphenSplit] | None = None
     #: P3.9 (§11) — the run's full provenance record. Optional and
     #: additive (no ``report_version`` bump): a v2.0 consumer that
     #: ignores unknown keys keeps working, one that reads it gains the

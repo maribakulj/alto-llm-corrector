@@ -97,10 +97,21 @@ def test_unmatched_styled_source_is_a_counted_loss(tmp_path: Path):
 
 def test_suspected_word_reorder_is_flagged_not_applied(tmp_path: Path):
     result = _rewrite(tmp_path, "bbb aaa ccc extra")
-    assert result.losses_by_line["L1"].get("word_order_suspected") == 1
+    # R5 — on its own channel. It used to be `losses["word_order_suspected"]`,
+    # so any consumer summing the loss counters added a non-loss to the total:
+    # nothing left the markup, the alignment merely could not vouch for the
+    # order it was handed.
+    assert result.word_order_suspected == frozenset({"L1"})
+    assert "word_order_suspected" not in result.losses
+    assert "word_order_suspected" not in (result.losses_by_line.get("L1") or {})
     # Flagged, never acted on: the text is written exactly as corrected.
     contents = [s.get("CONTENT") for s in _strings(result)]
     assert contents == ["bbb", "aaa", "ccc", "extra"]
+
+
+def test_a_clean_alignment_flags_nothing(tmp_path: Path):
+    result = _rewrite(tmp_path, "aaa xyz bbb ccc")
+    assert result.word_order_suspected == frozenset()
 
 
 def test_generated_ids_never_collide_with_recycled_ones(tmp_path: Path):

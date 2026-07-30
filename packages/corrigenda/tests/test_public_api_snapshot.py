@@ -251,6 +251,9 @@ def test_correction_report_json_keys_are_pinned():
         # Same contract: optional, absent when every break found its
         # partner, so no CORRECTION_REPORT_VERSION bump.
         "unpaired_breaks",
+        # R6 — the units the planner CUT. Same contract again: optional,
+        # absent when no chain was severed, no version bump.
+        "hyphen_splits",
         "provenance",  # P3.9 — optional, additive (no version bump)
         "usage",  # ROADMAP V3 Phase 0 — optional, additive (no version bump)
         "sidecar",  # ROADMAP V3 Phase 1 — optional, additive (no version bump)
