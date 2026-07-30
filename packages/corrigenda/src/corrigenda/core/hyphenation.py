@@ -8,6 +8,7 @@ from corrigenda.core.pairing import (
     backward_partner_ref,
     forward_partner_id,
     forward_partner_ref,
+    strip_trailing_break_marks,
 )
 from corrigenda.core.schemas import (
     DEFAULT_GUARD_CONFIG,
@@ -48,8 +49,11 @@ def _part1_text_migrated(
         characters (word completion, e.g. ``"néces" → "nécessaires"``);
       - overall char length grew past ``ratio*len + slack``.
     """
-    ocr_bare = ocr_text.rstrip("-").rstrip()
-    corrected_bare = corrected_text.rstrip("-").rstrip(".")
+    # L5 — the whole repertoire. With `rstrip("-")` a ⸗-terminated PART1 kept
+    # its mark in the bare text, so every length and word-growth comparison
+    # below ran against a string one character longer than its counterpart.
+    ocr_bare = strip_trailing_break_marks(ocr_text).rstrip()
+    corrected_bare = strip_trailing_break_marks(corrected_text).rstrip(".")
 
     ocr_words = ocr_bare.split()
     corrected_words = corrected_bare.split()
@@ -58,8 +62,8 @@ def _part1_text_migrated(
         return True
 
     if ocr_words and corrected_words:
-        ocr_last = ocr_words[-1].rstrip("-")
-        corrected_last = corrected_words[-1].rstrip("-")
+        ocr_last = strip_trailing_break_marks(ocr_words[-1])
+        corrected_last = strip_trailing_break_marks(corrected_words[-1])
         if len(corrected_last) > len(ocr_last) + config.part1_last_word_char_growth:
             return True
 

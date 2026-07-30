@@ -374,18 +374,74 @@ rapport montrait un fallback au motif vide.
 
 ### L5 — Cas restants de détection
 
-~~Page vide sautée~~ (**fait** — `link_cross_page_hyphens` itère désormais
-sur les pages qui ont des lignes, pas sur les pages adjacentes : une page vide
-laissait un PART1 orphelin de l'autre côté. Trouvé par `T1`) ; garde orphelin
-ASCII-only ; ~~PART1 sans partenaire annoncé
-`join_with_next=True` au modèle~~ (**fait** — les deux drapeaux suivent désormais
-le **lien** et non le rôle : `enrich_chunk_lines` interroge
-`forward_partner_ref`/`backward_partner_ref`. Charge utile inchangée à l'octet
-pour une paire liée, la clé disparaît simplement pour un orphelin
-(`exclude_none`). Trouvé par un invariant `T3`) ; ~~rejet de `PairingPolicy` silencieux~~ (**fait** — `unpaired_break_refs` compte toute ligne annonçant une coupure sans partenaire visible du run, quelle qu'en soit la cause : politique qui refuse, page absente, pointeur pendant. Remonte en `CorrectionReport.unpaired_breaks`. 1 sur 566 lignes du fichier BnF) ; chaîne
-mixte jetant l'autorité `SUBS_CONTENT` ; ligne vide intercalée capturant PART2 ;
-cross-bloc en ordre de lecture dégradé ; `link_cross_page_hyphens` ne regardant
-que `lines[-1]`/`lines[0]`.
+**Fait (2026-07-28) sauf deux, et les deux qui restent demandent de la
+géométrie, pas un correctif.**
+
+Faits antérieurement : ~~page vide sautée~~, ~~PART1 sans partenaire annonçant
+`join_with_next=True`~~, ~~rejet de `PairingPolicy` silencieux~~.
+
+#### Le répertoire, dans les gardes — 32 lignes sur 363, mesurées
+
+`HYPHEN_CHARS` a six membres et les parseurs s'en servent tous, donc une ligne
+peut légitimement être PART1 en finissant par `⸗` ou `¬`. **Cinq sites de garde
+testaient pourtant le seul tiret ASCII** (`endswith("-")`, `rstrip("-")`).
+
+| signe | lignes PART1/BOTH |
+|---|---|
+| `-` U+002D | 331 |
+| `⸗` U+2E17 | **24** |
+| `¬` U+00AC | **8** |
+
+**32 sur 363 — 8,8 %** tombaient hors de *toutes* ces vérifications. Pas
+latent : `corpus/37-GT-BNL` est du Fraktur et son signe de coupure est `⸗`.
+
+Conséquences réelles, chacune avec le test qui échoue avant :
+
+- **garde orphelin** (`pipeline`) : un `⸗` supprimé par la correction n'était
+  pas rattrapé — la ligne livrée ne disait plus que le mot continue ;
+- **garde de croissance PART1** (`hyphenation`) : le signe restait collé au
+  texte nu, donc chaque comparaison de longueur portait sur une chaîne **un
+  caractère plus longue** que sa contrepartie. Le seuil étant un compte de
+  caractères (`part1_last_word_char_growth`, 3), une complétion de mot de 4
+  caractères se lisait 3 et passait ;
+- **détection de fusion** (`validator`) : un modèle qui complète le mot **et**
+  garde le signe (`nécessaires⸗`) ne correspondait jamais au mot logique — la
+  fusion passait la validation alors que le texte de PART2 avait déjà migré.
+
+Deux primitives dérivées du répertoire (`ends_with_break_mark`,
+`strip_trailing_break_marks`) dans `pairing.py`, seul domicile du répertoire.
+`ends_with_break_mark` n'impose **pas** la contrainte de caractère alphabétique
+de `trailing_hyphen_char` : ses appelants savent déjà que la ligne coupe un mot
+(le rôle le dit, éventuellement depuis un `SUBS_TYPE` explicite), et la
+réimposer désarmerait une ligne explicitement marquée finissant par un chiffre.
+
+#### La ligne vide — la même phrase que la page vide
+
+`link_hyphen_pairs` prenait `lines[i + 1]`. Une ligne blanche entre un PART1 et
+sa vraie continuation devenait donc le PART2 : elle ne porte aucun texte, donc
+rien ne se réconcilie, les gardes de dérive de paire ne tournent jamais, et la
+continuation réelle reste non liée. Même conséquence que le défaut page vide,
+une échelle en dessous — et **la même phrase la règle** : une ligne sans texte
+ne peut rien dire d'un mot qui l'enjambe ; c'est un fait sur le scan, pas sur la
+phrase.
+
+Appliqué aux **deux** parcours, avec une seule définition (`_substantive`) pour
+que « une ligne vide ne porte rien » ne finisse pas par signifier deux choses.
+Ça ferme aussi la facette « `link_cross_page_hyphens` ne regarde que
+`lines[-1]`/`lines[0]` » : une blanche au pied d'une page ou en tête de la
+suivante cachait un mot qui enjambe la couture. **Latent** — 0 ligne vide sur
+1711 — donc onze tests, aucune mesure.
+
+#### Ce qui reste, et pourquoi ce n'est pas un correctif
+
+- **chaîne mixte jetant l'autorité `SUBS_CONTENT`** ;
+- **cross-bloc en ordre de lecture dégradé**, et l'autre facette de
+  `lines[-1]`/`lines[0]` : un en-tête ou un numéro de page en tête de page
+  suivante n'est pas une ligne vide, c'est une ligne **hors ordre de lecture**.
+  Décider qu'elle n'est pas la continuation demande de la géométrie — ce qui est
+  exactement le métier de `PairingPolicy`, qui vet déjà les paires heuristiques
+  géométriquement. Le trancher demande un corpus qui en contient (`M7`), pas une
+  édition de prédicat.
 
 ### L7 — Découpage
 

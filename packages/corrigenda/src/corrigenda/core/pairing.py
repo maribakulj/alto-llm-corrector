@@ -89,6 +89,35 @@ def preserve_break_char(source_text: str, corrected: str) -> str:
     return stripped + trailing_ws
 
 
+#: The repertoire as a character SET, for ``str.rstrip``. Derived, never
+#: retyped: a hardcoded ``"-"`` is how five call sites came to guard the ASCII
+#: hyphen alone while 32 of the 363 hyphenated lines in the repo's own corpora
+#: end in ``⸗`` or ``¬`` (L5).
+_BREAK_MARK_CHARS = "".join(HYPHEN_CHARS)
+
+
+def ends_with_break_mark(text: str) -> bool:
+    """Does ``text`` end in a word-break mark from the repertoire?
+
+    Trailing whitespace is ignored. Deliberately WITHOUT
+    :func:`trailing_hyphen_char`'s requirement of an alphabetic character
+    before the mark: callers of this predicate have already established that
+    the line breaks a word (its ROLE says so, from an explicit ``SUBS_TYPE``
+    or from that very check), and re-imposing the heuristic here would make
+    an explicit ``1789-`` PART1 stop being guarded.
+    """
+    return text.rstrip().endswith(HYPHEN_CHARS)
+
+
+def strip_trailing_break_marks(text: str) -> str:
+    """``text`` without its trailing break marks, whatever spells them.
+
+    The faithful generalisation of the ``rstrip("-")`` these call sites used
+    to do — same "strip every trailing mark" semantics, whole repertoire.
+    """
+    return text.rstrip(_BREAK_MARK_CHARS)
+
+
 def trailing_hyphen_char(text: str, hyphen_chars: tuple[str, ...]) -> str | None:
     """Return the trailing hyphen character of ``text``, or ``None``.
 
@@ -296,14 +325,23 @@ def link_hyphen_pairs(
     engine-asserted (explicit) ones; ``PairingPolicy(geometric_checks=
     False)`` restores the historical accept-every-next-line behaviour.
     """
-    for i, line in enumerate(lines):
+    # L5 — an empty line is skipped OVER, not treated as a wall, and this is
+    # the same sentence the cross-page walk already lives by: a line that
+    # carries no text can say nothing about a word that spans it; it is a
+    # fact about the scan, not about the sentence. Taking `lines[i + 1]`
+    # blindly made a blank line the PART2 of the word above it and left the
+    # real continuation unlinked — no reconciliation, no pair-drift guards,
+    # no atomicity in the planner. Latent on this repo's corpora (0 empty
+    # lines in 1711), which is exactly why it needs a test.
+    substantive = [line for line in lines if line.ocr_text.strip()]
+    for i, line in enumerate(substantive):
         # Skip lines that don't have a forward (PART1) role
         if line.hyphen_role not in (HyphenRole.PART1, HyphenRole.BOTH):
             continue
-        if i + 1 >= len(lines):
+        if i + 1 >= len(substantive):
             continue
 
-        candidate = lines[i + 1]
+        candidate = substantive[i + 1]
 
         # Every role can be a forward partner. PART2/BOTH already carry a
         # backward side; NONE is promoted to PART2 below; and a PART1
@@ -430,6 +468,16 @@ def disambiguate_page_ids(
                     lm.hyphen_forward_pair_page_id = new_pid
 
 
+def _substantive(page: PageManifest) -> list[LineManifest]:
+    """The page's lines that carry text.
+
+    One definition, used by both walks — the intra-page link pass and the
+    cross-page one — so "an empty line carries nothing" cannot come to mean
+    two different things.
+    """
+    return [line for line in page.lines if line.ocr_text.strip()]
+
+
 def link_cross_page_hyphens(
     all_pages: list[PageManifest],
     pairing_policy: PairingPolicy = DEFAULT_PAIRING_POLICY,
@@ -448,10 +496,14 @@ def link_cross_page_hyphens(
     nothing and can say nothing about a word that spans it; it is a fact
     about the scan, not about the sentence.
     """
-    with_lines = [page for page in all_pages if page.lines]
+    with_lines = [page for page in all_pages if _substantive(page)]
     for earlier, later in zip(with_lines, with_lines[1:]):
-        last_line = earlier.lines[-1]
-        first_line = later.lines[0]
+        # The same rule inside the page as across pages: a blank line at the
+        # foot of one page or the head of the next is a fact about the scan.
+        # Taking `lines[-1]`/`lines[0]` blindly let one blank line hide a
+        # word that spans the seam.
+        last_line = _substantive(earlier)[-1]
+        first_line = _substantive(later)[0]
         needs_forward_link = (
             last_line.hyphen_role == HyphenRole.PART1
             and not last_line.hyphen_pair_line_id
@@ -465,6 +517,8 @@ def link_cross_page_hyphens(
 
 __all__ = [
     "HYPHEN_CHARS",
+    "ends_with_break_mark",
+    "strip_trailing_break_marks",
     "trailing_hyphen_char",
     "pair_ref",
     "forward_ref",

@@ -28,6 +28,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The hyphen guards know the whole break-mark repertoire, not just `-`
+  (L5).** `HYPHEN_CHARS` has six members and the parsers use all of them, so a
+  line can legitimately be a PART1 by ending in `⸗` or `¬` — yet five guard
+  sites tested the ASCII hyphen alone. Measured over the 1711 ALTO/PAGE lines of
+  `examples/` and `corpus/`: of 363 hyphenated lines, 331 end in `-`, **24 in
+  `⸗` and 8 in `¬`**. 32 lines, 8.8%, fell outside every one of those checks —
+  and it is not a corner case, `corpus/37-GT-BNL` is Fraktur ground truth whose
+  break mark is `⸗`.
+  Three real consequences, each with the test that fails before the fix: the
+  orphan guard did not pull back a line whose correction dropped a `⸗`, so the
+  delivered line no longer said the word continues; the PART1 growth guard
+  measured the mark as part of the word, and since its threshold is a character
+  count (default 3) a 4-character word completion read as 3 and was waved
+  through; the fusion check compared against a last word with the mark still
+  glued on, so a model that completed the word *and* kept the mark passed
+  validation with PART2's text already migrated up.
+  Two derived predicates, `ends_with_break_mark` and
+  `strip_trailing_break_marks`, in `pairing.py` — the repertoire's only home.
+  The first deliberately omits `trailing_hyphen_char`'s alphabetic-character
+  requirement: its callers already know the line breaks a word, and re-checking
+  would un-guard an explicitly marked line that happens to end in a digit.
+- **An empty line is skipped over when pairing, not treated as a partner
+  (L5).** `link_hyphen_pairs` took `lines[i + 1]`, so a blank line between a
+  PART1 and its real continuation became the PART2: it holds no text, nothing
+  reconciles, the pair-drift guards never run, and the actual continuation is
+  left unlinked. Same consequence as the empty-*page* defect one scale down, and
+  the same sentence rules it — a line that carries no text can say nothing about
+  a word that spans it; it is a fact about the scan, not about the sentence.
+  Applied to both walks from one definition, which also closes the
+  `lines[-1]`/`lines[0]` facet of the cross-page walk: a blank at the foot of a
+  page or the head of the next hid a word spanning the seam. Latent on this
+  repo's corpora (0 empty lines in 1711), so it ships with eleven tests rather
+  than a measurement.
 - **`format_losses is None` no longer reads as "the run lost nothing" (R8).**
   A run that flattened a tab into an ordinary space reports
   `format_losses: None` and `projection_fidelity: {"normalized": 1}`. The loss

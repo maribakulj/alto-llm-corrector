@@ -96,6 +96,7 @@ from corrigenda.core.protocols import (
 )
 from corrigenda.core.alignment import align_tokens
 from corrigenda.core.pairing import (
+    ends_with_break_mark,
     backward_partner_ref,
     forward_partner_ref,
     unpaired_break_refs,
@@ -2745,10 +2746,14 @@ class CorrectionPipeline:
             if corrected is None:
                 continue
 
+            # L5 — the repertoire, not the ASCII hyphen. This guard read
+            # `endswith("-")`, so a line ending in ⸗ or ¬ whose correction
+            # dropped the mark was NOT pulled back: 32 of the 363
+            # hyphenated lines in the repo's corpora end in one of those.
             if (
                 lm.hyphen_role in (HyphenRole.PART1, HyphenRole.BOTH)
-                and lm.ocr_text.rstrip().endswith("-")
-                and not corrected.rstrip().endswith("-")
+                and ends_with_break_mark(lm.ocr_text)
+                and not ends_with_break_mark(corrected)
             ):
                 lm.corrected_text = lm.ocr_text
                 lm.status = LineStatus.FALLBACK
