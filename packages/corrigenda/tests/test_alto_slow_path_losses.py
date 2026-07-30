@@ -159,3 +159,172 @@ def test_loss_surfaces_in_correction_report(tmp_path: Path):
     assert result.report.format_losses is not None
     assert result.report.format_losses.get("tagrefs_dropped") == 1
     assert result.report.format_losses.get("language_dropped") == 1
+
+
+# ---------------------------------------------------------------------------
+# R2 — an EMPTIED line loses its alignment-scoped attributes, uncounted
+# ---------------------------------------------------------------------------
+
+_STYLED = _ALTO.replace(
+    '<String ID="S1" CONTENT="foo" TAGREFS="T1" language="fr" '
+    'CUSTOM="vendor-data" WC="0.9" STYLE="bold" HPOS="0" VPOS="0" '
+    'WIDTH="120" HEIGHT="30"/>',
+    '<String ID="S1" CONTENT="foo" STYLE="bold" STYLEREFS="TS1" HPOS="0" '
+    'VPOS="0" WIDTH="60" HEIGHT="30"/>'
+    '<SP WIDTH="10" HPOS="60" VPOS="0"/>'
+    '<String ID="S2" CONTENT="bar" STYLE="italic" HPOS="70" VPOS="0" '
+    'WIDTH="60" HEIGHT="30"/>',
+)
+
+
+def test_an_emptied_line_reports_the_styles_it_loses(tmp_path: Path):
+    """``STYLE``/``STYLEREFS`` are ALIGNMENT_SCOPED: they survive when their
+    ``String`` is matched to a target token and go when it is not, so the
+    alignment-aware pass owns counting them. A correction that empties the
+    line returns BEFORE that pass — there are no target tokens to align
+    against — so every style went with no counter at all.
+
+    Nothing is matched when nothing is written: the honest count is all of
+    them. 56 lines of the repo's ALTO corpora carry these attributes, so the
+    exposure is real even though emptying a line is a path the acceptance
+    guards normally refuse.
+    """
+    xml_path = tmp_path / "p.xml"
+    xml_path.write_text(_STYLED, encoding="utf-8")
+    doc = build_document_manifest([(xml_path, xml_path.name)])
+    by_id = {lm.line_id: lm for p in doc.pages for lm in p.lines}
+    assert by_id["L1"].ocr_text == "foo bar"
+    by_id["L1"].corrected_text = ""
+    result = rewrite_alto_file(xml_path, doc.pages, "test", "mock")
+
+    assert result.rewriter_paths["L1"] == "slow_path"
+    assert result.losses.get("style_dropped") == 2  # bold + italic
+    assert result.losses.get("stylerefs_dropped") == 1
+    # And they really are gone from the output — we report, we do not invent.
+    root = etree.fromstring(result.xml_bytes)
+    ns = _detect_namespace(root)
+    assert list(root.iter(f"{{{ns}}}String")) == []
+
+
+def test_a_rebuilt_line_that_keeps_its_styles_reports_none(tmp_path: Path):
+    """The other direction: same fixture, a correction that still writes both
+    words. Both Strings align, both styles survive, and the counter that the
+    emptied case needed must not fire here."""
+    xml_path = tmp_path / "p.xml"
+    xml_path.write_text(_STYLED, encoding="utf-8")
+    doc = build_document_manifest([(xml_path, xml_path.name)])
+    by_id = {lm.line_id: lm for p in doc.pages for lm in p.lines}
+    by_id["L1"].corrected_text = "foo bar baz"  # 3 != 2 words → slow path
+    result = rewrite_alto_file(xml_path, doc.pages, "test", "mock")
+    assert result.rewriter_paths["L1"] == "slow_path"
+    assert "style_dropped" not in result.losses
+    assert "stylerefs_dropped" not in result.losses
+
+
+# ---------------------------------------------------------------------------
+# R3 — a PART2 line's <HYP> is removed with no counter
+# ---------------------------------------------------------------------------
+
+
+_PART2 = (
+    '<String ID="S0" CONTENT="tion" SUBS_TYPE="HypPart2" '
+    'SUBS_CONTENT="fonction" HPOS="0" VPOS="0" WIDTH="40" HEIGHT="30"/>'
+)
+_HYP = '<HYP CONTENT="-" HPOS="40" VPOS="0" WIDTH="8" HEIGHT="30"/>'
+_TAIL = '<String ID="S1" CONTENT="suite" HPOS="60" VPOS="0" WIDTH="60" HEIGHT="30"/>'
+
+
+def _one_line(children: str) -> str:
+    return f"""<?xml version="1.0"?>
+<alto xmlns="{_NS}">
+  <Layout>
+    <Page ID="P1" WIDTH="600" HEIGHT="800">
+      <PrintSpace HPOS="0" VPOS="0" WIDTH="600" HEIGHT="800">
+        <TextBlock ID="B1" HPOS="0" VPOS="0" WIDTH="600" HEIGHT="30">
+          <TextLine ID="L1" HPOS="0" VPOS="0" WIDTH="300" HEIGHT="30">{children}</TextLine>
+        </TextBlock>
+      </PrintSpace>
+    </Page>
+  </Layout>
+</alto>"""
+
+
+#: A continuation line whose HYP is line-TERMINAL — which the parser reads as
+#: a forward break, so the role is BOTH and the HYP is re-emitted.
+_PART2_TERMINAL_HYP = _one_line(_PART2 + _HYP)
+#: The same line with the HYP in the MIDDLE. ALTO does not define this, the
+#: parser tolerates it, the role stays PART2 — and the element is dropped.
+_PART2_MIDLINE_HYP = _one_line(_PART2 + _HYP + _TAIL)
+
+
+def test_a_terminal_hyp_on_a_part2_line_makes_it_BOTH_not_part2(tmp_path: Path):
+    """The plan's premise for R3, corrected by measurement.
+
+    R3 read "a PART2 line's ``<HYP>`` is removed with no counter". The
+    common shape it evokes — a continuation line that also carries a
+    trailing break mark — is not PART2 at all: the parser reads the trailing
+    mark as a forward break and classifies the line ``BOTH``, which takes
+    the PART1-like branch and RE-EMITS the HYP. Nothing is dropped and there
+    is nothing to count.
+    """
+    from corrigenda.core.schemas import HyphenRole
+
+    xml_path = tmp_path / "p.xml"
+    xml_path.write_text(_PART2_TERMINAL_HYP, encoding="utf-8")
+    doc = build_document_manifest([(xml_path, xml_path.name)])
+    lm = doc.pages[0].lines[0]
+    assert lm.hyphen_role is HyphenRole.BOTH
+    lm.corrected_text = "tion suite-"  # 2 words → slow path
+    result = rewrite_alto_file(xml_path, doc.pages, "test", "mock")
+    assert result.rewriter_paths["L1"] == "slow_path"
+    assert "hyp_elements_removed" not in result.losses
+    root = etree.fromstring(result.xml_bytes)
+    ns = _detect_namespace(root)
+    assert len(list(root.iter(f"{{{ns}}}HYP"))) == 1  # re-emitted, not lost
+
+
+def test_a_part2_line_reports_the_break_element_it_loses(tmp_path: Path):
+    """The shape that IS reachable: a ``<HYP>`` that is not line-terminal.
+
+    ALTO defines HYP as the line's trailing break, so this is malformed —
+    but the parser accepts it, keeps the role PART2, and the rebuild removes
+    the element with no counter. 0 of the 1711 ALTO lines in ``examples/``
+    and ``corpus/`` have the shape, so this pins a latent path the way L2's
+    doubling test does.
+
+    What is lost is the ELEMENT, not the mark: the ``-`` is already part of
+    the reconstructed text and comes back inside a rebuilt ``String``'s
+    CONTENT. Both halves are asserted, so nobody "fixes" this by
+    re-synthesising a HYP that would then double the mark.
+    """
+    from corrigenda.core.schemas import HyphenRole
+
+    xml_path = tmp_path / "p.xml"
+    xml_path.write_text(_PART2_MIDLINE_HYP, encoding="utf-8")
+    doc = build_document_manifest([(xml_path, xml_path.name)])
+    by_id = {lm.line_id: lm for p in doc.pages for lm in p.lines}
+    assert by_id["L1"].hyphen_role is HyphenRole.PART2
+    assert by_id["L1"].ocr_text == "tion-suite"
+    # 3 word tokens against the source's 2 Strings → the rebuild path.
+    by_id["L1"].corrected_text = "tion-suite encore toujours"
+    result = rewrite_alto_file(xml_path, doc.pages, "test", "mock")
+
+    assert result.rewriter_paths["L1"] == "slow_path"
+    assert result.losses.get("hyp_elements_removed") == 1
+    root = etree.fromstring(result.xml_bytes)
+    ns = _detect_namespace(root)
+    assert list(root.iter(f"{{{ns}}}HYP")) == []
+    # The MARK survives — in CONTENT, where the reconstruction put it.
+    assert result.texts["L1"] == "tion-suite encore toujours"
+
+
+def test_the_element_vocabulary_is_not_the_attribute_vocabulary() -> None:
+    """``hyp_elements_removed`` deliberately avoids the ``<attr>_dropped``
+    suffix: that suffix is a claim about a ``String`` attribute, and the
+    differential invariant reads it as one (source count minus output count).
+    An element loss keyed ``hyp_dropped`` would be checked against a
+    non-existent ``HYP`` attribute and read as a phantom."""
+    from corrigenda.core.losses import ALTO_STRING_ATTRIBUTES
+
+    assert not "hyp_elements_removed".endswith("_dropped")
+    assert "HYP" not in ALTO_STRING_ATTRIBUTES

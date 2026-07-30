@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **An emptied line reports the styles it loses (R2).** The ALTO rebuild has
+  two exits. A correction that empties the line returns before any token
+  alignment happens — there are no target tokens to align against — and that
+  exit counted no `STYLE`/`STYLEREFS` at all, though nothing matched means
+  every one of them went. 56 lines of the repo's ALTO corpora carry those
+  attributes. Both exits now call one accounting function; a second inline copy
+  is exactly how R1's phantom counts came about.
+- **A dropped `<HYP>` element is counted (R3) — and the item was narrower than
+  stated.** "A PART2 line's `<HYP>` removed with no counter" evokes a
+  continuation line that also ends on a break mark; that line is not PART2. The
+  parser reads the trailing mark as a forward break, classifies it `BOTH`, and
+  the HYP is re-emitted — nothing is lost and nothing needs counting. The
+  reachable shape is a `<HYP>` that is **not** line-terminal: ALTO does not
+  define it, the parser tolerates it, the role stays PART2 and the element went
+  silently. Now `hyp_elements_removed`. What goes is the **element** — its
+  geometry and its standing as markup — not the mark, whose character is
+  already in the reconstructed text and comes back inside a rebuilt `String`'s
+  CONTENT; both halves are asserted so nobody "fixes" this by re-synthesising a
+  HYP that would double the mark. 0 of the 1711 ALTO lines in `examples/` and
+  `corpus/` have the shape, so this pins a latent path rather than a measured
+  one. The key deliberately avoids the `*_dropped` suffix: in this vocabulary
+  that suffix claims a `String` attribute, and the differential invariant reads
+  it as one.
+
 ### Changed
 
 - **`ProjectionFidelity` gains `source_spelling`: `exact` was untrue on 115

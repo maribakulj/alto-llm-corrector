@@ -12,6 +12,7 @@ from corrigenda.core._parse import parse_int_tolerant
 from corrigenda.core.alignment import align_tokens
 from corrigenda.core.identity import ensure_unique_identities
 from corrigenda.core.losses import (
+    ALIGNMENT_SCOPED,
     COUNTS_INVALIDATION,
     INVALIDATED_ATTRIBUTES,
     INVALIDATION_COUNTER,
@@ -453,6 +454,36 @@ def _confidence_loss(before: int, el: etree._Element, ns: str) -> dict[str, int]
     return {INVALIDATION_COUNTER: 1}
 
 
+def _add_alignment_scoped_losses(
+    losses: dict[str, int],
+    orig_string_attribs: list[dict[str, str]],
+    matched_sources: set[int],
+) -> None:
+    """Count the :data:`ALIGNMENT_SCOPED` attributes of every source String
+    the token alignment could not match.
+
+    These are the attributes whose loss is CONDITIONAL — ``STYLE`` and
+    ``STYLEREFS`` ride along when their String is matched to a target token
+    and go when it is not — so the unconditional per-String pass leaves them
+    alone (see :func:`corrigenda.core.losses.is_unconditional_loss`) and this
+    one owns them.
+
+    Called from two places on purpose. The rebuild has a second exit: a
+    correction that empties the line returns before any alignment happens,
+    because there are no target tokens to align against. Nothing matched
+    means every style went — 56 lines of the repo's ALTO corpora carry these
+    attributes — and that exit counted none of them (R2). Two exits, one
+    accounting function; a second inline copy is how R1 happened.
+    """
+    for idx, attribs in enumerate(orig_string_attribs):
+        if idx in matched_sources:
+            continue
+        for key in sorted(ALIGNMENT_SCOPED):
+            if key in attribs:
+                loss_key = f"{key.lower()}_dropped"
+                losses[loss_key] = losses.get(loss_key, 0) + 1
+
+
 def _drop_structural_break_hyphen(text: str) -> str:
     """Remove ONE trailing break hyphen from an explicit PART1 line's text.
 
@@ -720,6 +751,26 @@ def _rebuild_line(
     else:  # PART2
         orig_hyp_attribs = {}
         saved_hyp = []
+        # R3 — a PART2 line is a word's continuation: it does not end
+        # mid-word, so it has no forward break to render and _clear_line
+        # removes any <HYP> it carried. The removal is right; being silent
+        # about it was not. What goes is the ELEMENT — its geometry and its
+        # standing as markup — not the mark: a non-terminal HYP's character
+        # is already part of the reconstructed text and survives inside a
+        # rebuilt String's CONTENT. Hence "elements_removed" rather than a
+        # `*_dropped` key, which in this vocabulary claims a String
+        # attribute and would be read as a phantom by the differential
+        # invariant.
+        #
+        # Narrow, and narrower than the plan assumed: a PART2 line whose
+        # HYP is line-TERMINAL is classified BOTH by the parser (the
+        # trailing mark is a forward break), so this branch is reached only
+        # via a non-terminal HYP — which ALTO does not define — or a
+        # hand-built manifest. 0 of the 1711 ALTO lines in examples/ and
+        # corpus/ have the shape.
+        removed_hyps = sum(1 for child in el if child.tag == _tag("HYP", ns))
+        if removed_hyps:
+            losses["hyp_elements_removed"] = removed_hyps
 
     _clear_line(el, ns)
 
@@ -749,6 +800,10 @@ def _rebuild_line(
 
     tokens = _tokenize(corrected)
     if not tokens:
+        # R2 — nothing is written, so nothing aligned: every source String's
+        # alignment-scoped attributes are lost. This exit used to skip the
+        # accounting entirely.
+        _add_alignment_scoped_losses(losses, orig_string_attribs, set())
         if is_part1_like:
             _append_trailing_hyp(
                 el,
@@ -771,13 +826,7 @@ def _rebuild_line(
         for p in alignment.pairs
         if p.source_index is not None and p.target_index is not None
     }
-    for idx, attribs in enumerate(orig_string_attribs):
-        if idx in matched_sources:
-            continue
-        for key in ("STYLE", "STYLEREFS"):
-            if key in attribs:
-                loss_key = f"{key.lower()}_dropped"
-                losses[loss_key] = losses.get(loss_key, 0) + 1
+    _add_alignment_scoped_losses(losses, orig_string_attribs, matched_sources)
     if alignment.move_suspected:
         losses["word_order_suspected"] = 1
     # Pre-seed with every ID that WILL be recycled, so a generated ID for
