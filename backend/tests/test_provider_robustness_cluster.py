@@ -1,4 +1,4 @@
-"""Audit-F wave 2 (2026-07-13) — provider cluster (F13-F17).
+"""Provider robustness cluster.
 
 Each test pins one confirmed finding of docs/audit/AUDIT-2026-07-13.md
 (fix plan: docs/audit/PLAN-CORRECTIONS.md, Vague 2). Every test was

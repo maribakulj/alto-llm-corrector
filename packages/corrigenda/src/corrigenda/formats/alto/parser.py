@@ -368,7 +368,7 @@ def _parse_alto_file(
                 )
                 ocr_text = _build_ocr_text(tl, ns)
 
-                # Phase 1 (ROADMAP V3) — preserve the OCR engine's own
+                # preserve the OCR engine's own
                 # confidence at line level (mean of String/@WC): the
                 # per-word attributes are invalidated by any correction,
                 # but the audit trail keeps the source signal.

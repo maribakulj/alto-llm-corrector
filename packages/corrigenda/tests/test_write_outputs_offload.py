@@ -5,7 +5,7 @@ on the event loop.
 parse/rewrite/serialize of the source file — ~100 MiB corpora) and
 ``adapter.extract_texts`` synchronously from the async ``run()``. In the
 backend, that blocks SSE keepalives and /health for the whole rewrite,
-exactly the class Audit-F19/F21 fixed in the request handlers.
+exactly the class fixed in the request handlers.
 
 The test pins LOOP RESPONSIVENESS directly: a ticker coroutine must keep
 ticking while a (deliberately slow) rewrite runs. Pre-fix the 0.8 s

@@ -755,16 +755,16 @@ class CorrectionResult:
     #: it is the caller's choice (:meth:`write`, or a host-owned
     #: transaction like the demo backend's staging writer).
     corrected_files: dict[str, bytes] = field(default_factory=dict)
-    #: Phase 3 — lines the QE router judged already clean and SKIPPED
+    #: lines the QE router judged already clean and SKIPPED
     #: (confirmed as-is, no producer call). 0 when routing is off. The
     #: economics signal: each skip is one LLM call not spent.
     lines_skipped: int = 0
-    #: Phase 4 — non-hyphen lines the QE router sent to ESCALATE and that
+    #: non-hyphen lines the QE router sent to ESCALATE and that
     #: were routed to the ``escalation_producer`` (a VLM) instead of the
     #: primary producer. 0 when no escalation producer is set. Each one is
     #: a line the hybrid judged worth the heavier (vision) call.
     escalated_lines: int = 0
-    #: Phase 3 — total ``producer.produce`` invocations (retries included):
+    #: total ``producer.produce`` invocations (retries included):
     #: the run's real call cost. Falls when routing drops whole chunks —
     #: routing-on vs routing-off on one document is the cheaper-hybrid proof.
     producer_calls: int = 0
@@ -790,7 +790,7 @@ class CorrectionResult:
         report_path = target / "report.json"
         report_path.write_text(self.report.model_dump_json(indent=2), encoding="utf-8")
         written.append(report_path)
-        # Phase 1 — refused-but-preserved corrections as their own small
+        # refused-but-preserved corrections as their own small
         # artefact for review tooling (they are ALSO inside report.json;
         # this is the convenience view, written only when non-empty).
         if self.report.sidecar:
@@ -825,13 +825,13 @@ class RunContext:
     retry_count: int = 0
     #: Chunks (or descent sub-chunks) that fell back to OCR source text.
     fallback_chunks: int = 0
-    #: Phase 3 — lines the QE router SKIPPED (confirmed clean, no producer
+    #: lines the QE router SKIPPED (confirmed clean, no producer
     #: call). 0 when routing is off.
     lines_skipped: int = 0
-    #: Phase 4 — non-hyphen lines routed to the ``escalation_producer``
+    #: non-hyphen lines routed to the ``escalation_producer``
     #: (a VLM) instead of the primary producer. 0 when none is set.
     escalated_lines: int = 0
-    #: Phase 3 — number of ``producer.produce`` invocations across the run,
+    #: number of ``producer.produce`` invocations across the run,
     #: retries INCLUDED (the real per-call cost driver for an LLM API).
     #: Routing lowers it by dropping whole all-skipped chunks; comparing
     #: routing-on vs routing-off runs on one document is how the hybrid
@@ -922,7 +922,7 @@ class CorrectionPipeline:
         # lose format granularity: REPORT (default, historical) counts
         # and attributes; STRICT rejects the unit pre-projection.
         self.loss_policy = loss_policy or DEFAULT_LOSS_POLICY
-        # Phase 1 (ROADMAP V3) — line confidences on the report. DROP
+        # line confidences on the report. DROP
         # (default) computes nothing; REPORT_ONLY fills
         # LineOutcome.confidence via the injected scorers (default: the
         # zero-dependency HeuristicScorer). Deliberately outside the
@@ -934,7 +934,7 @@ class CorrectionPipeline:
             if confidence_scorers is not None
             else (HeuristicScorer(),)
         )
-        # Phase 3 (ROADMAP V3) — hybrid-selective routing. A line the QE
+        # hybrid-selective routing. A line the QE
         # scorer + RoutingPolicy send to SKIP is confirmed clean and
         # never reaches the producer (no LLM call — the economics). Both
         # OFF by default: no scorer, and DEFAULT_ROUTING_POLICY routes
@@ -944,7 +944,7 @@ class CorrectionPipeline:
         # skips (same rule that held ConfidencePolicy out until write_wc).
         self.qe_scorer = qe_scorer
         self.routing_policy = routing_policy or DEFAULT_ROUTING_POLICY
-        # Phase 4 (ROADMAP V3, §5.2 bis) — the ESCALATE tier's producer.
+        # §5.2 bis — the ESCALATE tier's producer.
         # When set AND routing is on, a non-hyphen line the QE scorer +
         # RoutingPolicy send to ESCALATE is corrected by THIS producer (a
         # VLM) instead of the primary text producer, on a per-line basis —
@@ -1193,11 +1193,11 @@ class CorrectionPipeline:
         # §5.1 — a vision producer without its images is a start-up error,
         # never a silent image-less call.
         require_page_images(self.producer, document_manifest.pages, page_images)
-        # §5.2 bis (Phase 4) — a producer whose declared capabilities
+        # §5.2 bis — a producer whose declared capabilities
         # contradict its wiring (wants images but vision=False) is a
         # start-up error, not a mid-run surprise.
         require_capabilities(self.producer)
-        # Phase 4 — the escalation (vision) producer is the one that needs
+        # the escalation (vision) producer is the one that needs
         # images: preflight it too, so a run that WILL escalate fails at
         # start-up if its VLM lacks a scan, never mid-run.
         if self.escalation_producer is not None:
@@ -1424,12 +1424,12 @@ class CorrectionPipeline:
             usage=(
                 ctx.usage if ctx.usage.total_tokens or ctx.usage.response_ids else None
             ),
-            # Phase 1 — corrections the token_realign gate refused to
+            # corrections the token_realign gate refused to
             # project, preserved for review instead of lost.
             sidecar=sidecar_entries or None,
         )
 
-        # Phase 1 — line confidences (report-only; write_wc stays locked
+        # line confidences (report-only; write_wc stays locked
         # until calibration). Filled AFTER the report is built so every
         # outcome scores its FINAL decided text, whatever path decided it.
         if self.confidence_policy.mode != "drop":
@@ -1479,10 +1479,10 @@ class CorrectionPipeline:
             ),
             decisions=decisions,
             corrected_files=corrected_files,
-            # Phase 3 — routing economics: lines skipped (no producer
+            # routing economics: lines skipped (no producer
             # call) and the run's total producer-call count.
             lines_skipped=ctx.lines_skipped,
-            # Phase 4 — lines routed to the escalation (vision) producer.
+            # lines routed to the escalation (vision) producer.
             escalated_lines=ctx.escalated_lines,
             producer_calls=ctx.producer_calls,
         )
@@ -1498,11 +1498,11 @@ class CorrectionPipeline:
         identity, policy fingerprint, per-file digests of the INPUT
         bytes (computed once in :meth:`run` via ``_digest_sources`` and
         shared with the edit script's preconditions), per-page image
-        digests (Phase 4), and critical dependency versions."""
+        digests, and critical dependency versions."""
         from corrigenda import __version__ as _lib_version
 
         md = self.producer_metadata
-        # Phase 4 — copy the digest each structured ImageAsset already
+        # copy the digest each structured ImageAsset already
         # carries; the core never opens an image (I4). Bare ImageRef
         # strings and digest-less assets contribute nothing.
         image_digests = {
@@ -1510,7 +1510,7 @@ class CorrectionPipeline:
             for page_id, asset in image_assets.items()
             if isinstance(asset, ImageAsset) and asset.sha256
         }
-        # Phase 4 — record the escalation (vision) producer's identity too,
+        # record the escalation (vision) producer's identity too,
         # from its own declared metadata (the same optional-attribute
         # convention as the primary producer's). None for a single-producer
         # run, so text-only provenance is unchanged.
@@ -1670,7 +1670,7 @@ class CorrectionPipeline:
         """Route each chunk's target lines by QE tier, returning per-chunk
         ``(chunk, producer)`` work items.
 
-        SKIP (Phase 3): a line the QE scorer + RoutingPolicy route to SKIP
+        SKIP: a line the QE scorer + RoutingPolicy route to SKIP
         is confirmed clean — its final text is its OCR text, its status is
         CORRECTED, and (the auditable signature of a skip vs an LLM
         identity pass) it never reaches a producer, so its trace's
@@ -1678,7 +1678,7 @@ class CorrectionPipeline:
         ``line_ids`` (context for its neighbours) but leaves
         ``target_line_ids``.
 
-        ESCALATE (Phase 4): when an ``escalation_producer`` is set, a
+        ESCALATE: when an ``escalation_producer`` is set, a
         non-hyphen line routed to ESCALATE is split out of the chunk into a
         sibling chunk (same context ``line_ids``, disjoint targets) carried
         by the escalation producer — the VLM corrects only those lines. The
@@ -1912,7 +1912,7 @@ class CorrectionPipeline:
         plan = plan_page(page, document_id, self.config)
         ctx.hyphen_splits.extend(plan.hyphen_splits)
 
-        # Phase 3/4 — hybrid-selective routing: pre-decide SKIP lines
+        # hybrid-selective routing: pre-decide SKIP lines
         # (confirmed clean, no producer call) and route ESCALATE lines to
         # the vision producer, returning each chunk paired with the
         # producer that owns it. A no-op when routing is off (default), so
@@ -1922,7 +1922,7 @@ class CorrectionPipeline:
             page=page, chunks=plan.chunks, line_by_id=line_by_id, ctx=ctx, traces=traces
         )
 
-        # Phase 4 — a vision producer crops every line it is sent, and
+        # a vision producer crops every line it is sent, and
         # providers cap images per call. Split AFTER routing: only the
         # chunks that actually reached a vision producer are constrained.
         routed_chunks = self._split_for_image_cap(
@@ -2420,7 +2420,7 @@ class CorrectionPipeline:
                 # engine's whole RetryPolicy: the ramp (and the hyphen
                 # 0.0 pin) is decided HERE; the probe lets long I/O be
                 # abandoned mid-flight.
-                # Phase 3 — count every invocation (this attempt hits the
+                # count every invocation (this attempt hits the
                 # producer whether or not it succeeds): the real cost.
                 ctx.producer_calls += 1
                 script, usage = await producer.produce(
@@ -2916,7 +2916,7 @@ class CorrectionPipeline:
         all_lines: dict[LineRef, LineManifest],
         traces: dict[LineRef, LineTrace] | None,
     ) -> list[SidecarEntry]:
-        """Loss policy gates (ADR-012 strict; Phase 1 token_realign).
+        """Loss policy gates (ADR-012 strict; token_realign).
 
         **STRICT**: reject corrections that cannot project without
         losing word granularity. The PAGE rewriter drops a line's

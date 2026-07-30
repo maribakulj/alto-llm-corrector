@@ -74,7 +74,7 @@ def test_dry_run_still_carries_provenance():
 
 
 def test_image_digests_empty_without_images():
-    """A text run records no image digests (Phase 4, additive)."""
+    """A text run records no image digests — additive."""
     result = _run()
     prov = result.report.provenance
     assert prov is not None

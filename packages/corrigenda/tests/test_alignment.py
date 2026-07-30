@@ -1,4 +1,4 @@
-"""ROADMAP V3 Phase 1 — the token aligner (core/alignment.py).
+"""the token aligner (core/alignment.py).
 
 The shared component behind faithful slow-path projection, per-token
 confidence and the future token_realign policy. Pure, deterministic,

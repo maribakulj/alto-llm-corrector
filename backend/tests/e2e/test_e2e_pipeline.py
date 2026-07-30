@@ -112,7 +112,7 @@ def test_honest_job_end_to_end(backend_server, use_honest_vendor):
 
 
 # ---------------------------------------------------------------------------
-# Scenario 1 bis — honest vendor, PAGE XML (ROADMAP V3 Phase 0)
+# Scenario 1 bis — honest vendor, PAGE XML
 # ---------------------------------------------------------------------------
 
 

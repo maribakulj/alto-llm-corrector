@@ -1,4 +1,4 @@
-"""ROADMAP V3 Phase 3 — QE scoring + routing (core/quality.py).
+"""QE scoring + routing (core/quality.py).
 
 The pre-LLM "does this line need correction?" signal and the Router
 that turns it into skip/llm/escalate. Pure, deterministic, opt-in.

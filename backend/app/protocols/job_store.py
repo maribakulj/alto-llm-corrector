@@ -4,7 +4,7 @@ Defined in backend because it represents the persistence + SSE fan-out
 layer of the FastAPI server. ARCHITECTURE.md §8.4 keeps this Protocol
 out of corrigenda to avoid coupling the pure pipeline to server-side
 infrastructure. When the eventual `alto-server` package is extracted
-(Phase 3), this file moves there.
+this file moves there.
 
 The in-memory implementation lives in `app.jobs.store.JobStore`; the
 Protocol mirrors its shape so the existing class satisfies it via duck

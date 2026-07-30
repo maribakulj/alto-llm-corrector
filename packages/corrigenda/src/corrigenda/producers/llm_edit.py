@@ -71,13 +71,13 @@ class LLMEditProducer:
         self._provider = provider
         self._api_key = api_key
         self._model = model
-        #: Phase 4 routing descriptor — a text LLM: structured output, no
+        #: routing descriptor — a text LLM: structured output, no
         #: vision. The default is the plain text profile; a host that knows
         #: the model's real context window can inject a richer one.
         self.capabilities = capabilities or ModelCapabilities(
             text=True, vision=False, structured_output=True
         )
-        # Phase 1 uncertainty channel (opt-in): the contract variant asks
+        # uncertainty channel (opt-in): the contract variant asks
         # the model for a per-line status and per-token reason-coded
         # edits; produce() VERIFIES those claims (confusion table /
         # lexicon) and stamps the resulting score on each ReplaceLine.

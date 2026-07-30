@@ -63,7 +63,7 @@ def test_rules_report_contract_and_improvement(tmp_path: Path):
 
 
 def test_blocking_ceilings_on_the_real_corpus(tmp_path: Path):
-    """ROADMAP V3 Phase 2 — the CI gates the review demanded: a release
+    """the CI gates the review demanded: a release
     candidate producer may not FABRICATE corrections (false positives:
     already-correct lines it changed) nor DEGRADE lines, on the real
     corpus included. Ceilings are 0 for the deterministic producers; an
@@ -75,7 +75,7 @@ def test_blocking_ceilings_on_the_real_corpus(tmp_path: Path):
 
 
 def test_calibration_harness_reports_ece_and_brier(tmp_path: Path):
-    """Phase 2 — every run scores its decision confidences against
+    """Every run scores its decision confidences against
     ground truth (ECE/Brier, [0,1], lower is better). These numbers are
     what will unlock ConfidencePolicy(write_wc); until then they are
     REPORTED, not gated."""

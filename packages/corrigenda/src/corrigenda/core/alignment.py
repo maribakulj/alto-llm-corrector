@@ -1,6 +1,6 @@
 """Token-to-token alignment between a source line and its correction.
 
-ROADMAP V3 Phase 1 — the shared component: the same alignment serves
+the shared component: the same alignment serves
 (1) faithful projection in the rewriters' slow path (recycle a word's
 identity onto the word it actually corresponds to, never onto whatever
 happens to sit at the same position), (2) per-token confidence scoring,

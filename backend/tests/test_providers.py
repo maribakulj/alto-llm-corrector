@@ -1063,7 +1063,7 @@ def test_provider_transient_error_default_status_code_is_none():
 
 
 # ---------------------------------------------------------------------------
-# extract_usage — tokens + response id (F14, §11 / ROADMAP V3 Phase 0)
+# extract_usage — tokens + response id (F14, §11 / the vision/QE programme)
 # ---------------------------------------------------------------------------
 
 

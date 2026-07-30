@@ -177,7 +177,7 @@ class JsonFormatter(logging.Formatter):
             try:
                 json.dumps(value)  # only include JSON-serialisable extras
             except Exception:
-                # Audit-F22 — a probe that raised only for TypeError let a
+                # a probe that raised only for TypeError let a
                 # circular reference (ValueError) or a deeply-nested value
                 # (RecursionError) escape and drop the whole record. A log
                 # must NEVER kill its own record: fall back to repr() for

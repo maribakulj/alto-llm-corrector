@@ -1,9 +1,9 @@
-"""ROADMAP V3 Phase 2 — the QE training-data generator (scripts/qe_data.py).
+"""the QE training-data generator (scripts/qe_data.py).
 
 Verifies the two label sources (real alignment, synthetic degradation),
 determinism (same seed → same data, offline), and the invariant that a
 token's label is exactly ``token != clean``. This is the data the
-Phase 3 QE scorer trains on, so the labels must be trustworthy.
+QE scorer trains on, so the labels must be trustworthy.
 """
 
 from __future__ import annotations

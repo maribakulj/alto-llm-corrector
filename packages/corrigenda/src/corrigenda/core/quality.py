@@ -1,6 +1,6 @@
-"""Quality estimation and routing (ROADMAP V3 Phase 3).
+"""Quality estimation and routing.
 
-QE answers the PRE-LLM question the Phase 2 calibration harness proved
+QE answers the PRE-LLM question the calibration harness proved
 is missing: does this line still carry an OCR error, or is it already
 clean? A :class:`QEScorer` scores the SOURCE text alone (no correction
 yet) — higher means *more likely to need correction*. The :func:`route_line`
@@ -62,14 +62,14 @@ class HeuristicQEScorer:
     - a lexicon was supplied and the token is out of it (the ONLY signal
       that distinguishes a real OCR non-word like ``cukiuent`` from a
       valid historical form like ``cultiuent`` — and it takes a
-      HISTORICAL lexicon to be right, which is precisely why the Phase 3
+      HISTORICAL lexicon to be right, which is precisely why the
       scorer wants D'AlemBERT, not a rule of thumb).
 
     Line score = ``flagged / word_tokens`` (0.0 for an empty or
     punctuation-only line). Without a lexicon only the digit signal
     fires, so the score is sparse BY DESIGN — an honest admission that a
     zero-dependency heuristic cannot judge historical OCR quality alone.
-    This is the baseline the Phase 3 ONNX/D'AlemBERT scorer must beat on
+    This is the baseline the ONNX/D'AlemBERT scorer must beat on
     the calibration harness.
     """
 
@@ -99,7 +99,7 @@ class HeuristicQEScorer:
 
 
 class RoutingDecision(str, Enum):
-    """What the Router decided for one line (ROADMAP V3 Phase 3)."""
+    """What the Router decided for one line."""
 
     #: QE judged the line already clean — do NOT spend an LLM call.
     SKIP = "skip"
@@ -124,7 +124,7 @@ class RoutingPolicy(FrozenPolicy):
     Between the two (or when a bound is ``None``) the line routes to LLM.
     A frozen §8.2-style policy so a run that used routing can fingerprint
     it — though it is NOT in the composite ``config_fingerprint`` until
-    the pipeline actually consumes it (Phase 3 wiring), by the same rule
+    the pipeline actually consumes it (once the pipeline consumes it), by the same rule
     that kept ConfidencePolicy out until write_wc.
     """
 

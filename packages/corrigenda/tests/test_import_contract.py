@@ -160,7 +160,7 @@ def test_importing_core_quality_stays_pure():
 
 
 # ---------------------------------------------------------------------------
-# I4 (ROADMAP V3 Phase 4) — pixel-blindness is a property of the IMPORT
+# I4 — pixel-blindness is a property of the IMPORT
 # GRAPH, not the file tree. The static AST scan (test_edit_producer.py) is a
 # cheap first line; THIS is the honest proof: importing corrigenda (the base
 # install surface — core + eagerly-loaded producers + schemas) must pull no

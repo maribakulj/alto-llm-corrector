@@ -75,7 +75,7 @@ def test_stricter_source_similarity_threads_through_check_line():
 
 
 # ---------------------------------------------------------------------------
-# GuardConfig.vision() — the VLM profile (§5.2 bis, ROADMAP V3 Phase 4)
+# GuardConfig.vision() — the VLM profile (§5.2 bis, the vision/QE programme)
 # ---------------------------------------------------------------------------
 
 

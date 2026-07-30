@@ -1,8 +1,8 @@
 """Characterization snapshot of the /diff and /layout read-model
-projections (audit Phase 1 — filet for audit Problems 4 and 9).
+projections (audit — filet for audit Problems 4 and 9).
 
 Problem 4: ``api/jobs.py`` is a 498-line router that inlines the /diff and
-/layout manifest→JSON projections. Phase 5 will lift them into pure
+/layout manifest→JSON projections. A later slice will lift them into pure
 functions in a read-model module. This test pins their *exact output
 shape* on a small deterministic corpus (``examples/sample.xml``, 2 pages /
 10 lines / 3 blocks) by calling the endpoint functions directly with a
@@ -11,7 +11,7 @@ extraction, the pure functions must reproduce this shape byte-for-byte.
 
 Problem 9: the projections read ``job.document_manifest.pages`` only —
 never the per-line trace. The redundant ``line_traces`` field was deleted
-in Phase 2; this test asserts it is gone and that full /diff and /layout
+by an earlier slice; this test asserts it is gone and that full /diff and /layout
 output is still produced without it.
 """
 
@@ -65,7 +65,7 @@ _LAYOUT_LINE_KEYS = {
 
 def test_diff_projection_shape_is_pinned():
     job = _job()
-    # Problem 9 (Phase 2): the redundant ``line_traces`` field has been
+    # Problem 9: the redundant ``line_traces`` field has been
     # removed entirely; /diff and /layout project from document_manifest.
     assert not hasattr(job, "line_traces")
 

@@ -150,7 +150,7 @@ def test_llm_edit_producer_declares_generic_llm_identity():
 
 
 def test_llm_edit_producer_declares_configuration_fingerprint():
-    """Phase 0 (ROADMAP V3) — an LLM run's provenance must say WHICH
+    """— an LLM run's provenance must say WHICH
     prompt/schema contract produced the edits, not just which model.
     Failed before: metadata carried no configuration_fingerprint."""
     md = LLMEditProducer(DictProvider({}), "k", "gpt-x").metadata

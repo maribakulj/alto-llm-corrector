@@ -1,4 +1,4 @@
-"""Audit-F wave 3 (2026-07-13) — backend robustness (F18-F23).
+"""Backend robustness cluster.
 
 Each test pins one confirmed finding of docs/audit/AUDIT-2026-07-13.md
 (fix plan: docs/audit/PLAN-CORRECTIONS.md, Vague 3). Every test was

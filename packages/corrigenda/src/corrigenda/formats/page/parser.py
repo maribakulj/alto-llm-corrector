@@ -225,7 +225,7 @@ def _parse_page_file(
                 # LossPolicy strict check needs this BEFORE projection.
                 n_words = len(tl.findall(_tag("Word", ns)))
 
-                # Phase 1 (ROADMAP V3) — preserve the source engine's
+                # preserve the source engine's
                 # line confidence (first line-level TextEquiv/@conf).
                 ocr_confidence = None
                 first_equiv = tl.find(_tag("TextEquiv", ns))

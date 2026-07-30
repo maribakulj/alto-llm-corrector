@@ -141,13 +141,13 @@ def test_vision_producer_with_all_pages_ok():
 
 
 # ---------------------------------------------------------------------------
-# ImageAsset (ROADMAP V3 Phase 4) — the structured, recommended page image
+# ImageAsset — the structured, recommended page image
 # ---------------------------------------------------------------------------
 
 
 def test_correction_request_accepts_image_asset_verbatim():
     """The §4.1 envelope carries the richer ImageAsset, not only a bare str:
-    before Phase 4 ``image_ref`` was typed ``str | None`` and pydantic
+    before ``image_ref`` was typed ``str | None`` and pydantic
     rejected a model here."""
     asset = ImageAsset(
         page_id="P1",
@@ -195,7 +195,7 @@ def test_require_page_images_accepts_image_asset_values():
 
 def test_require_page_images_rejects_asset_page_id_mismatch():
     """A scan that names a different page than its mapping key is the silent
-    wrong-image bug the per-page contract exists to catch — before Phase 4
+    wrong-image bug the per-page contract exists to catch — before the routing tier
     the value type was opaque and this slipped through."""
     pages = [_page("P1", "a.xml")]
     with pytest.raises(ConfigurationError, match="page_id"):
@@ -278,7 +278,7 @@ def test_llm_adapter_produces_replace_line_script_and_usage():
 
 
 def test_llm_producer_declares_text_only_capabilities():
-    """Phase 4 — the text LLM producer declares a no-vision capability."""
+    """— the text LLM producer declares a no-vision capability."""
     prod = LLMEditProducer(_FakeProvider(), "key", "model")
     assert prod.capabilities.text is True
     assert prod.capabilities.vision is False
@@ -286,7 +286,7 @@ def test_llm_producer_declares_text_only_capabilities():
 
 
 # ---------------------------------------------------------------------------
-# I4 — pixel-blindness (restated, ROADMAP V3 Phase 4)
+# I4 — pixel-blindness (restated, the vision/QE programme)
 #
 # "No image lib anywhere in corrigenda" was a too-broad PROXY for the thing
 # that actually matters: the correction engine on the base install path

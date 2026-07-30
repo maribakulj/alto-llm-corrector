@@ -333,7 +333,7 @@ class TestX0000002ReconcileInvariant:
     survives, and the reconciliation counts are those the shipping
     ``CorrectionPipeline`` produces — not a test-side re-implementation.
 
-    Audit Phase 1: these tests drive the real pipeline via
+    These tests drive the real pipeline via
     ``tests._pipeline_harness.run_pipeline`` (identity or targeted
     corrections through a ``DictProvider``). Injecting a fault into
     ``pipeline._reconcile_chunk_hyphens`` turns them red — which the

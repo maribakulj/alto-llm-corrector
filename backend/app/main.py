@@ -196,7 +196,7 @@ def create_app() -> FastAPI:
     # sits INSIDE it: an oversize 413 never consumes a slot.
     app.add_middleware(UploadAdmissionMiddleware)
 
-    # 1b. Upload size guard (Audit-F18) — reject over-cap / no-Content-
+    # 1b. Upload size guard — reject over-cap / no-Content-
     # Length POSTs to /api/jobs BEFORE Starlette spools the multipart
     # body to disk. Placed inside CORS (so a 413 still carries CORS
     # headers) but outside form parsing. See app/api/upload_guard.py.

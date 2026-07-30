@@ -1,4 +1,4 @@
-"""ROADMAP V3 Phase 1 — slow-path identity recycling follows the ALIGNMENT.
+"""slow-path identity recycling follows the ALIGNMENT.
 
 Positional recycling attached text to the wrong word identity: an
 inserted word shifted every following token onto the previous token's

@@ -1,4 +1,4 @@
-"""Robustness tests for corrigenda parser + validator (L10 Phase 4).
+"""Robustness tests for corrigenda parser + validator .
 
 Pins three input-tolerance contracts that a hostile audit found
 broken in the pre-L10 codebase:

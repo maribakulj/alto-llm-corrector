@@ -1,4 +1,4 @@
-"""corrigenda[vision] pixel-pure cropper (ROADMAP V3 Phase 4).
+"""corrigenda[vision] pixel-pure cropper.
 
 Self-skips when Pillow (the ``[vision]`` extra) is absent — like the qe
 suite. Every fixture is drawn by Pillow in-process: no network, no API
@@ -268,7 +268,7 @@ def test_vision_producer_crops_each_line_and_produces_ops(tmp_path: Path) -> Non
     prod = VisionEditProducer(vlm, "key", "vlm-1")
     assert isinstance(prod, EditProducer)  # structural
     assert prod.wants_image and prod.wants_geometry
-    # Phase 4 — declares a vision-capable descriptor (passes require_capabilities).
+    # declares a vision-capable descriptor (passes require_capabilities).
     assert prod.capabilities.vision is True and prod.capabilities.text is True
 
     import asyncio
@@ -344,7 +344,7 @@ def test_vision_producer_drives_the_full_pipeline(tmp_path: Path) -> None:
     # Identity reply → no line degraded, run succeeds through the vision seam.
     assert result.fallback_chunks == 0
     assert result.producer_calls >= 1
-    # Phase 4 provenance: the report records the exact image bytes per page,
+    # provenance: the report records the exact image bytes per page,
     # copied from the ImageAsset digest (the core opened no pixel).
     prov = result.report.provenance
     assert prov is not None

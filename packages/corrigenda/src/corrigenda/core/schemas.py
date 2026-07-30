@@ -148,7 +148,7 @@ class LineManifest(BaseModel):
     #: a correction whose token count diverges from this cannot project
     #: without dropping the word geometry.
     word_count: int | None = None
-    #: Phase 1 (ROADMAP V3) — the SOURCE engine's own confidence in this
+    #: the SOURCE engine's own confidence in this
     #: line, in [0, 1]: mean of the ALTO ``String/@WC`` values, or the
     #: PAGE line ``TextEquiv/@conf``. ``None`` when the source carries
     #: none. Preserved so the audit trail keeps the OCR confidence even
@@ -311,7 +311,7 @@ class GuardConfig(FrozenPolicy):
     Every default equals the pre-F13 constant, so ``GuardConfig()`` is
     byte-for-byte compatible with the historical behaviour.
 
-    The ``GuardConfig.vision()`` profile (spec §5.2 bis, ROADMAP V3 Phase 4)
+    The ``GuardConfig.vision()`` profile (spec §5.2 bis, the vision/QE programme)
     relaxes the *source-similarity* stage for VLM producers while keeping
     every inter-line migration guard intact — a VLM reads the image, not
     the OCR, so a legitimate correction of a badly-garbled line diverges
@@ -404,7 +404,7 @@ class GuardConfig(FrozenPolicy):
 
     @classmethod
     def vision(cls, **overrides: Any) -> "GuardConfig":
-        """The VLM guard profile (§5.2 bis, ROADMAP V3 Phase 4).
+        """The VLM guard profile (§5.2 bis, the vision/QE programme).
 
         Relaxes ONLY the Stage-C source-similarity floor
         (:attr:`min_source_similarity`); every inter-line migration guard
@@ -571,7 +571,7 @@ DEFAULT_PAIRING_POLICY = PairingPolicy()
 
 class LossPolicy(FrozenPolicy):
     """What the run does when projecting a correction would LOSE format
-    granularity (ADR-012, P3.8; token_realign — ROADMAP V3 Phase 1).
+    granularity (ADR-012, P3.8; token_realign — the vision/QE programme).
 
     The PAGE rewriter cannot keep ``Word`` geometry when a correction
     changes a line's word count (6.2 P4 slow path: the ``Word`` children
@@ -628,7 +628,7 @@ class LossPolicy(FrozenPolicy):
     #: token_realign threshold in [0, 1] — ``None`` disables the gate
     #: (historical behaviour). 0.6 is a reasonable starting point:
     #: ordinary OCR corrections align far above it, wholesale rewrites
-    #: far below. Calibration against a real corpus is Phase 2's job.
+    #: far below. Calibration against a real corpus is the job of a calibration against a real corpus.
     min_alignment_score: float | None = Field(default=None, ge=0.0, le=1.0)
 
 
@@ -637,7 +637,7 @@ DEFAULT_LOSS_POLICY = LossPolicy()
 
 
 class ConfidencePolicy(FrozenPolicy):
-    """What the run does with line confidences (ROADMAP V3 Phase 1).
+    """What the run does with line confidences.
 
     * **DROP** (default — the historical behaviour): no confidence is
       computed; the report carries none.
@@ -646,7 +646,7 @@ class ConfidencePolicy(FrozenPolicy):
       aggregation formula). Nothing is written into the XML.
     * **WRITE_WC**: reserved — stamping confidences into the output
       markup (ALTO ``WC`` with a declared ``postProcessingStep``, PAGE
-      multi-``TextEquiv``) is LOCKED until the Phase 2 calibration
+      multi-``TextEquiv``) is LOCKED until the calibration against a real corpus
       harness proves the values against a real corpus. Requesting it
       raises at construction.
 
@@ -663,7 +663,7 @@ class ConfidencePolicy(FrozenPolicy):
         if self.mode == "write_wc":
             raise ValueError(
                 "ConfidencePolicy(mode='write_wc') is locked until the "
-                "calibration harness (ROADMAP V3 Phase 2/3) proves the "
+                "calibration harness (the vision/QE programme/3) proves the "
                 "confidence values against a real corpus — use "
                 "'report_only' and read LineOutcome.confidence instead."
             )
@@ -818,7 +818,7 @@ ImageRef = str
 
 
 class ImageTransform(BaseModel):
-    """XML-coordinate-space → image-pixel mapping (ROADMAP V3 Phase 4).
+    """XML-coordinate-space → image-pixel mapping.
 
     ALTO/PAGE geometry is expressed in the coordinate system the OCR
     engine used, which is not always the scan's native pixel grid: an
@@ -844,7 +844,7 @@ class ImageTransform(BaseModel):
 
 
 class ImageAsset(BaseModel):
-    """Structured page-image descriptor (§4.1 / ROADMAP V3 Phase 4).
+    """Structured page-image descriptor (§4.1 / the vision/QE programme).
 
     The RECOMMENDED value for ``run(page_images=…)``: a bare
     :data:`ImageRef` (str) is still accepted, but an ``ImageAsset`` carries
@@ -976,7 +976,7 @@ class ModelInfo(BaseModel):
 
 
 class ModelCapabilities(BaseModel):
-    """What a producer's model can do (ROADMAP V3 Phase 4, §5.2 bis).
+    """What a producer's model can do (the vision/QE programme, §5.2 bis).
 
     The declarative descriptor the Router reads to send each line only to a
     producer that can actually serve it — the mechanism by which a VLM is
@@ -1229,7 +1229,7 @@ class ProjectionStage(BaseModel):
 
 
 class LineConfidence(BaseModel):
-    """Multi-component confidence of one line's DECISION (Phase 1).
+    """Multi-component confidence of one line's DECISION.
 
     Every component keeps its own name — a single magic number whose
     recipe is lost is exactly what this type exists to prevent:
@@ -1248,7 +1248,7 @@ class LineConfidence(BaseModel):
       conservative: a decision is only as safe as its weakest evidence).
 
     These values ORDER lines from safest to riskiest; they are not
-    calibrated probabilities until the Phase 2 harness says so.
+    calibrated probabilities until the calibration harness says so.
     """
 
     ocr: float | None = None
@@ -1269,7 +1269,7 @@ class LineOutcome(BaseModel):
     proposal: ProposalStage | None = None
     decision: DecisionStage
     projection: ProjectionStage | None = None
-    #: Phase 1 — multi-component decision confidence, computed when the
+    #: multi-component decision confidence, computed when the
     #: run's :class:`ConfidencePolicy` is not ``drop``. Additive and
     #: optional — no ``report_version`` bump.
     confidence: LineConfidence | None = None
@@ -1323,7 +1323,7 @@ class RunProvenance(BaseModel):
     config_fingerprint: str
     #: Who produced the edits (generic identity, P3.7-4).
     producer: ProducerProvenance
-    #: Phase 4 — the ESCALATE tier's producer identity, when a run was
+    #: the ESCALATE tier's producer identity, when a run was
     #: configured with an ``escalation_producer`` (a VLM). ``None`` when the
     #: run had a single producer, so a text-only run's provenance is
     #: unchanged. Additive.
@@ -1332,7 +1332,7 @@ class RunProvenance(BaseModel):
     #: report is verifiably tied to the exact document it corrected.
     #: Empty on dry runs (no source files given).
     source_digests: dict[str, str] = Field(default_factory=dict)
-    #: ROADMAP V3 Phase 4 — page_id → ``sha256:<hex>`` of the page IMAGE
+    #: page_id → ``sha256:<hex>`` of the page IMAGE
     #: bytes, for every page whose ``run(page_images=…)`` value is a
     #: structured :class:`ImageAsset` carrying its digest. The mirror of
     #: ``source_digests`` for pixels: it ties the report to the exact scans
@@ -1357,7 +1357,7 @@ class RunProvenance(BaseModel):
 
 class SidecarEntry(BaseModel):
     """A correction the run REFUSED to project into the XML — preserved
-    here instead of lost (token_realign gate, ROADMAP V3 Phase 1).
+    here instead of lost (token_realign gate, the vision/QE programme).
 
     The line's XML keeps its source markup (decision status
     ``fallback``); the corrected text plus the refusal evidence live
@@ -1458,7 +1458,7 @@ class CorrectionReport(BaseModel):
     #: reported usage (rules producer, dry runs). Additive and optional —
     #: no ``report_version`` bump (same contract as ``format_losses``).
     usage: Usage | None = None
-    #: Phase 1 — corrections the token_realign gate refused to project,
+    #: corrections the token_realign gate refused to project,
     #: preserved for review (see :class:`SidecarEntry`). ``None`` when
     #: the gate is off or nothing was refused. Additive and optional —
     #: no ``report_version`` bump.

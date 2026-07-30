@@ -145,8 +145,8 @@ corrigenda/
 │   ├── losses.py            # matrice des pertes, versionnée (R0)
 │   ├── validator.py         # validation de la réponse producteur + intégrité de césure
 │   ├── alignment.py         # alignement de tokens source↔correction
-│   ├── confidence.py        # confiances de ligne (Phase 1)
-│   ├── quality.py           # QE + routage (Phase 3)
+│   ├── confidence.py        # confiances de ligne
+│   ├── quality.py           # QE + routage
 │   ├── events.py            # types d'événements de l'observateur
 │   ├── _norm.py             # NFC, nettoyage de CONTENT
 │   └── _parse.py            # parsing d'entiers tolérant

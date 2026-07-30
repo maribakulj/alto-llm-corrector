@@ -6,7 +6,7 @@ IDs and coordinates round-trip, HYP counts are preserved, and plain
 String CONTENT is untouched under identity correction. Byte-level
 parity is owned by the library's test_byte_parity_corpus (golden
 sha256) — duplicating those hashes here added no signal and broke on
-cosmetic lxml churn, so it was removed (audit Phase 2).
+cosmetic lxml churn, so it was removed (a frozen audit; see docs/audit/).
 
 The identity-correction MockProvider returns each line's OCR text
 unchanged, so the output should be a deterministic transformation of

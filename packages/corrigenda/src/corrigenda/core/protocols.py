@@ -284,7 +284,7 @@ def require_page_images(
 
 def require_capabilities(producer: EditProducer) -> None:
     """Refuse a producer whose declared capabilities contradict its wiring
-    (ROADMAP V3 Phase 4, §5.2 bis).
+    (the vision/QE programme, §5.2 bis).
 
     A ``capabilities`` declaration is optional (``getattr``, absent = no
     constraint, back-compatible). When present it must be internally

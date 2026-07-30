@@ -1,4 +1,4 @@
-"""ModelCapabilities + require_capabilities (ROADMAP V3 Phase 4, §5.2 bis).
+"""ModelCapabilities + require_capabilities (the vision/QE programme, §5.2 bis).
 
 The declarative routing descriptor the Router reads to send each line only
 to a producer that can serve it, and the start-up consistency gate the

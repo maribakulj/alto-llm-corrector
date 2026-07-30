@@ -1,4 +1,4 @@
-"""ROADMAP V3 Phase 3 — routing wired into the pipeline (the economics).
+"""routing wired into the pipeline (the economics).
 
 A line the QE scorer + RoutingPolicy send to SKIP is confirmed clean
 and NEVER reaches the producer — one LLM call not spent. Off by default

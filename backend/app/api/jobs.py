@@ -15,7 +15,7 @@ from pathlib import Path
 
 from corrigenda.core.schemas import PairingPolicy
 
-# ROADMAP V3 Phase 0 — the generic loader, NOT the ALTO parser: the ALTO
+# the generic loader, NOT the ALTO parser: the ALTO
 # parser applied to a valid PAGE file yields an empty manifest (0 pages,
 # 0 lines) instead of an error, silently dropping every PAGE upload.
 from corrigenda.formats.loader import build_document_manifest
@@ -323,7 +323,7 @@ async def _create_job_reserved(
     # extraction/parsing/validation, so any failure in that window must
     # roll both back. Historically a parse failure left a QUEUED job with
     # files on disk forever (never terminal -> never TTL-evicted).
-    # Audit-F21 — store.create_job runs an opportunistic eviction whose
+    # store.create_job runs an opportunistic eviction whose
     # shutil.rmtree would otherwise block the event loop; offload it (the
     # store is thread-safe via its RLock).
     job_id = await asyncio.to_thread(store.create_job, provider_enum, model)
@@ -346,7 +346,7 @@ async def _create_job_reserved(
         # Save and extract files (also extracts images from ZIPs).
         # ValueError = bounded/refused input (zip bomb, name collision,
         # too many members) — a client error, not a server fault (P1-9).
-        # Audit-F19 — ZIP decompression + per-member disk writes are
+        # ZIP decompression + per-member disk writes are
         # synchronous and CPU/IO-bound; offload so a large upload can't
         # freeze the single-worker event loop (SSE keepalives, health
         # probes, in-flight downloads).
@@ -369,7 +369,7 @@ async def _create_job_reserved(
         pairing_policy = PairingPolicy(geometric_checks=geometric_pairing)
         file_pairs = [(path, name) for name, path in saved.items()]
         try:
-            # Audit-F19 — lxml parse + manifest build over up to 200 MiB of
+            # lxml parse + manifest build over up to 200 MiB of
             # XML is synchronous and CPU-bound; offload off the event loop.
             doc_manifest = await asyncio.to_thread(
                 build_document_manifest, file_pairs, pairing_policy=pairing_policy
@@ -623,7 +623,7 @@ async def mint_download_url(
 
 
 def _build_zip_archive(tmp_path: str, out_files: list[Path]) -> None:
-    """Write a DEFLATE ZIP of ``out_files`` to ``tmp_path`` (Audit-F19).
+    """Write a DEFLATE ZIP of ``out_files`` to ``tmp_path``.
 
     Extracted so the CPU-bound compression can run under
     ``asyncio.to_thread`` off the event loop.
@@ -685,7 +685,7 @@ async def download_job(
     # The `with` block closed the file handle but `delete=False` means
     # the file persists on disk for `FileResponse` to read.
     try:
-        # Audit-F19 — DEFLATE compression of a multi-file job (up to the
+        # DEFLATE compression of a multi-file job (up to the
         # 500 MB extraction budget) is CPU-bound; running it inline on the
         # async handler froze every other coroutine on the single-worker
         # loop for the whole build. Offload it.

@@ -1,4 +1,4 @@
-"""Per-line producer selection — the escalation tier (ROADMAP V3 Phase 4, 5b).
+"""Per-line producer selection — the escalation tier (the vision/QE programme, 5b).
 
 A QE scorer + RoutingPolicy send some lines to ESCALATE; when an
 ``escalation_producer`` is set the pipeline routes exactly those lines to
@@ -97,7 +97,7 @@ def _nonhyphen_lines(doc):
 @pytest.mark.asyncio
 async def test_all_escalate_routes_every_line_including_hyphen_units():
     """Every line routes ESCALATE — including hyphen units, which move to
-    the vision producer as whole units (Phase 4: leaving them behind was the
+    the vision producer as whole units (leaving them behind was the
     hybrid's entire residual error on real press OCR)."""
     doc = build_document_manifest([(_SAMPLE, _SAMPLE.name)])
     n_lines = sum(len(p.lines) for p in doc.pages)

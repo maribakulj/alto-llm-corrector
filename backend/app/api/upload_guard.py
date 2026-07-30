@@ -1,4 +1,4 @@
-"""ASGI upload-size guard (Audit-F18).
+"""ASGI upload-size guard.
 
 The in-handler byte caps in ``create_job`` run only AFTER Starlette has
 awaited ``request.form()`` — by which point the multipart parser has

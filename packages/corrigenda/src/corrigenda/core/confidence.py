@@ -1,4 +1,4 @@
-"""Confidence scoring for line decisions (ROADMAP V3 Phase 1).
+"""Confidence scoring for line decisions.
 
 The confidence of a line is MULTI-COMPONENT and every component keeps
 its own name (:class:`~corrigenda.core.schemas.LineConfidence`): the
@@ -10,7 +10,7 @@ number whose recipe is lost.
 
 Doctrine: these scores order lines from safest to riskiest (review
 queues, routing). They are NOT calibrated probabilities until the
-Phase 2 harness measures them against a real corpus — which is also
+calibration harness measures them against a real corpus — which is also
 why ``ConfidencePolicy.write_wc`` stays locked.
 """
 
@@ -46,7 +46,7 @@ _INSERTION_SCORE = 0.3
 _DELETION_SCORE = 0.4
 
 #: Claim-verification values (uncertainty channel). Starting points for
-#: the Phase 2 calibration, like every constant in this module.
+#: the calibration against a real corpus, like every constant in this module.
 _FAILED_CLAIM_SCORE = 0.2
 _CONTEXT_CLAIM_SCORE = 0.6
 _CONJECTURE_SCORE = 0.3
@@ -106,7 +106,7 @@ class HeuristicScorer:
 
     The line score is the mean over events (1.0 when nothing changed).
     Deterministic and cheap by design; its thresholds are starting
-    points for the Phase 2 calibration, not truths.
+    points for the calibration against a real corpus, not truths.
     """
 
     name: str = "heuristic"

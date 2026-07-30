@@ -1,4 +1,4 @@
-"""Audit-F wave 1 (2026-07-13) — library text-integrity cluster.
+"""Library text-integrity cluster.
 
 Each test pins one confirmed finding of docs/audit/AUDIT-2026-07-13.md
 (fix plan: docs/audit/PLAN-CORRECTIONS.md, Vague 1, F1-F12). Every test

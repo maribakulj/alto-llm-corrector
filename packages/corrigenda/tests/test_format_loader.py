@@ -1,4 +1,4 @@
-"""Phase 0 (ROADMAP V3) — the generic, namespace-sniffing manifest builder.
+"""— the generic, namespace-sniffing manifest builder.
 
 Hard-wiring a format-specific parser onto user files silently mis-reads
 the other format: the ALTO parser applied to a valid PAGE file finds no

@@ -596,7 +596,7 @@ def _emit_string(
     Spec F2 / §6.1 — the slow path recycles ONLY identity and styling from
     the original String: ``ID``, ``STYLEREFS``, and ``STYLE``.
     ``recycled`` is the attribute dict of the source String the token
-    ALIGNMENT matched to this new token (Phase 1: identity follows the
+    ALIGNMENT matched to this new token (identity follows the
     word it corresponds to, never whatever sat at the same position), or
     ``None`` for an inserted token — which gets a generated ID instead
     (deduplicated against every ID already used on the line).
@@ -729,7 +729,7 @@ def _rebuild_line(
     # they are cleared; the emitted Strings only carry the §6.1 whitelist.
     losses = _semantic_attr_losses(orig_string_attribs)
 
-    # Phase 1 (ROADMAP V3) — identity follows the token ALIGNMENT, not the
+    # identity follows the token ALIGNMENT, not the
     # position: an inserted word must not shift every following word onto
     # the wrong source ID/STYLE (positional recycling attached text to the
     # wrong word identity). Alignment over the ORIGINAL CONTENTs vs the
