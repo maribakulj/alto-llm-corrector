@@ -116,12 +116,13 @@ listés comme quatre correctifs indépendants. Ce sont quatre symptômes de deux
 absences de modèle. Les traiter séparément recrée le mécanisme d'enlisement
 décrit en `S` : quatre correctifs, quatre chemins de plus.
 
-**État : `L0`, `L1`, `L2`, `L3`, `L9`, `L10` faits ; `L4` retiré.** Les deux défauts qui
-altéraient le texte livré sans laisser **aucune** trace — ni compteur, ni
-erreur — sont fermés. `L4` s'est révélé faux à la vérification (§4.5 de
-l'audit du 27) et laisse à sa place `L8`. `L3` est fermé ; il a fait tomber `L9`, et
-l'invariant écrit pour couvrir cette famille a trouvé `L10`. Restent `L5`,
-`L6`, `L7`, `L8`.
+**État : `L0`, `L1`, `L2`, `L3`, `L6`, `L8`, `L9`, `L10` faits ; `L4` retiré.** Les deux
+défauts qui altéraient le texte livré sans laisser **aucune** trace — ni
+compteur, ni erreur — sont fermés. `L4` s'est révélé faux à la vérification
+(§4.5 de l'audit du 27) et a laissé `L8` à sa place, qui est fait à son tour :
+`exact` ne se revendique plus sur 115 lignes dont le fichier dit autre chose.
+`L3` est fermé ; il a fait tomber `L9`, et l'invariant écrit pour couvrir cette
+famille a trouvé `L10`. Restent **`L5`** (partiel) et **`L7`**.
 
 ### L0 — Échelle de fidélité de projection — **fait** *(prérequis de L1, L4)*
 
@@ -137,10 +138,11 @@ bord n'a aucune représentation). Il était de rendre le niveau atteint
 
 Livré (`core/fidelity.py`, 100 % couvert ; 31 tests) :
 
-- échelle ordonnée `exact` → `token_equivalent` → `normalized`, chaque niveau
-  distinguant ce que le **format coûte** (`<SP>` ne porte pas de contenu : une
-  suite d'espaces et un blanc de bord ne peuvent pas survivre) de ce qui a été
-  **substitué** (U+00A0, U+202F, tabulation aplatis en espace ordinaire) ;
+- échelle ordonnée `exact` → `source_spelling` (ajouté par `L8`) →
+  `token_equivalent` → `normalized`, chaque niveau distinguant ce que le
+  **format coûte** (`<SP>` ne porte pas de contenu : une suite d'espaces et un
+  blanc de bord ne peuvent pas survivre) de ce qui a été **substitué** (U+00A0,
+  U+202F, tabulation aplatis en espace ordinaire) ;
 - le niveau atteint est une donnée du rapport : `ProjectionStage.fidelity` par
   ligne, `CorrectionReport.projection_fidelity` par run (comptage par niveau).
   Champs additifs et optionnels — pas de bump de `CORRECTION_REPORT_VERSION` ;
@@ -227,13 +229,53 @@ sur un caractère qui n'est pas un blanc → nouvel item `L8`.
 
 Preuve et détail : `AUDIT-2026-07-27.md` §4.5.
 
-### L8 — Étendre l'échelle de fidélité aux substitutions hors blancs
+### L8 — Substitutions hors blancs — **fait, et un des deux cas était déjà bon**
 
-`L0` classe les substitutions de **blancs**. Une substitution de caractère
-non-blanc délibérée — la collapse U+00AD (`L4`), et le `preserve_break_char`
-de `pairing.py` — ne remonte nulle part. Même remède, même échelle : déclarer
-plutôt que taire. Prérequis de `R8` (une substitution déclarée est une perte
-comptable).
+`L0` classait les substitutions de **blancs**. Deux substitutions de caractère
+non-blanc étaient soupçonnées de ne remonter nulle part. Vérification faite,
+**une seule** l'était.
+
+**`preserve_break_char` : déjà déclaré.** Le pipeline force le signe de coupure
+de la source *avant* que les décisions se matérialisent, et
+`ProposalStage.output_text` conserve le texte **brut** du producteur. Un
+consommateur voit donc `tou-` proposé et `tou¬` décidé, côte à côte dans le
+rapport. Le commentaire du site d'application le dit déjà. Rien à faire —
+résultat négatif utile, du même genre que l'invariant de symétrie.
+
+**La collapse U+00AD : `exact` était un mensonge sur 115 lignes.** Le niveau
+`EXACT` promet « l'artefact dit la décision, **caractère pour caractère** ». Sur
+115 des 566 lignes de `examples/X0000002.xml`, le fichier porte son signe de
+coupure en U+00AD dans le `<HYP>`, la reconstruction le relit `-`, la réécriture
+réémet l'élément source intact — et le run classait les 115 en `exact`.
+
+Il ne pouvait rien classer d'autre : **la collapse s'applique aux deux côtés de
+la comparaison et s'égale à elle-même.** Même mécanisme d'aveuglement que `L2`.
+Le remède n'est donc pas un invariant plus strict, c'est de donner à l'invariant
+une seconde lecture — `RewriteResult.texts_verbatim`, le même parcours d'arbre
+avec la table de substitution **désactivée**.
+
+Nouveau niveau, **`source_spelling`**, entre `exact` et `token_equivalent` :
+l'artefact dit la décision mais orthographie un caractère comme la **source**,
+là où la décision porte la lecture normalisée. **Rien n'est perdu** — le fichier
+est *plus* précis que la décision — et c'est précisément pourquoi le niveau est
+au-dessus de `token_equivalent`, qui lui perd une suite de blancs pour de bon.
+Classer un désaccord sans perte sous une perte réelle inverserait le sens de
+l'échelle.
+
+Mesure après correctif, sur le fichier BnF : **451 `exact`, 115
+`source_spelling`, 0 `normalized`** — et les 115 sont exactement les lignes à
+`<HYP CONTENT="U+00AD">`, épinglé par égalité d'ensembles, pas par comptage.
+
+**Conséquence pour `R8`, à ne pas manquer** : « une substitution déclarée est
+une perte comptable » est **faux pour `source_spelling`**. Le fichier garde son
+caractère ; le compter en perte fabriquerait un fantôme — la forme de `R1`.
+`R8` ne doit brancher la comptabilité que sur `normalized`.
+
+PAGE ne substitue rien à la lecture (NFC + `strip`) et livre donc un
+`texts_verbatim` vide. Ce n'est pas supposé : un test vérifie que le texte
+logique de chaque ligne se retrouve **caractère pour caractère** dans les octets
+livrés (échappement XML mis à part). ALTO et PAGE en désaccord silencieux sur la
+même classe d'événement est exactement ce que `R4` a dû revenir corriger.
 
 ### L6 — Répertoire de coupure — **fait, sur mesure**
 
@@ -373,7 +415,7 @@ garantie.
 | R5 | `word_order_suspected` n'est pas une perte, sortir de `format_losses` |
 | R6 | `hyphen_splits` lu par personne : la seule opération destructrice assumée est invisible pour l'hôte |
 | R7 | `LossPolicy(strict=True)` inopérant en ALTO (`word_count` PAGE-only) : l'armer ou documenter la restriction |
-| R8 | Brancher la descente de niveau de fidélité `L0` sur la comptabilité : une perte de blanc significatif est une perte |
+| R8 | Brancher la descente de niveau de fidélité `L0` sur la comptabilité : une perte de blanc significatif est une perte. **Attention `L8`** : ne brancher que `normalized`. `source_spelling` ne perd rien — le fichier garde son caractère — et le compter fabriquerait un fantôme |
 
 ### `R4` — l'unité était toute la décision (2026-07-28)
 

@@ -305,6 +305,7 @@ def _verify_projection(
     pages: list[PageManifest],
     output_texts: dict[str, str],
     decisions: DecisionSet,
+    verbatim_texts: dict[str, str] | None = None,
 ) -> dict[str, ProjectionFidelity]:
     """The rewritten file must SAY what the run decided, line for line.
 
@@ -323,6 +324,14 @@ def _verify_projection(
     reached per line id (see
     :class:`~corrigenda.core.fidelity.ProjectionFidelity`) so the caller
     can put it on the record instead.
+
+    ``verbatim_texts`` (L8) is the same lines read with the format's own
+    character substitutions off. A format that substitutes nothing passes
+    ``None``; where it differs from ``output_texts`` the file spells a
+    character its own way and the line grades ``source_spelling`` instead of
+    ``exact`` — not a loss, but not "character for character" either, and
+    the comparison against ``output_texts`` alone is structurally unable to
+    notice, since both sides went through the same substitution.
     """
     levels: dict[str, ProjectionFidelity] = {}
     for page in pages:
@@ -334,7 +343,11 @@ def _verify_projection(
                     f"line {lm.line_id!r} (page {lm.page_id!r}) of "
                     f"{source_name!r} is missing from the rewritten XML"
                 )
-            level = classify_projection_fidelity(decided, extracted)
+            level = classify_projection_fidelity(
+                decided,
+                extracted,
+                (verbatim_texts or {}).get(lm.line_id),
+            )
             if level is None:
                 raise ProjectionError(
                     f"rewritten XML for {source_name!r} diverges from the "
@@ -3085,7 +3098,11 @@ class CorrectionPipeline:
             # flattened — comes back as a per-line fidelity level and
             # goes on the record rather than disappearing.
             fidelity_by_lid = _verify_projection(
-                source_name, pages_for_file, result.texts, decisions
+                source_name,
+                pages_for_file,
+                result.texts,
+                decisions,
+                result.texts_verbatim,
             )
             corrected_files[source_name] = result.xml_bytes
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from xml.sax.saxutils import escape
 
 from corrigenda.formats.page.parser import build_document_manifest, parse_page_file
 from corrigenda.formats.page.rewriter import (
@@ -214,3 +215,44 @@ def test_output_reparses_and_is_deterministic(tmp_path: Path):
     reparsed.write_bytes(a)
     pages, _root = parse_page_file(reparsed, reparsed.name)
     assert pages[0].lines[0].ocr_text == "hello world"
+
+
+def test_page_declares_no_character_substitution_because_it_makes_none() -> None:
+    """L8's other half — the claim, tested rather than assumed.
+
+    ALTO reads a ``<HYP CONTENT="U+00AD">`` back as ``-``, so its rewrite
+    result carries a second, verbatim reading of every line and the
+    projection invariant grades those lines ``source_spelling`` instead of
+    ``exact``. PAGE's read path applies NFC and strips — canonical
+    equivalence and edge whitespace, nothing a consumer can act on — so it
+    has nothing to declare and ships an empty ``texts_verbatim``.
+
+    An empty dict is a weak assertion on its own (a PAGE substitution added
+    later would also leave it empty), so the claim itself is checked: a
+    line's logical text must be findable in the delivered bytes character
+    for character. That is what "substitutes nothing" means, and it is the
+    assertion that would fail if PAGE ever started normalising a mark. ALTO
+    and PAGE disagreeing silently about the same class of event is exactly
+    what R4 had to be sent back to fix.
+    """
+    doc = build_document_manifest([(_NEWSEYE, _NEWSEYE.name)])
+    result = rewrite_page_file(_NEWSEYE, doc.pages, "prov", "mdl")
+
+    assert result.texts_verbatim == {}
+
+    delivered = result.xml_bytes.decode("utf-8")
+    checked = 0
+    for line_id, text in result.texts.items():
+        if not text.strip():
+            continue
+        # XML escaping is not a character substitution — `&` reaches the file
+        # as `&amp;` and comes back as `&`; the character survives, only its
+        # serialisation differs. Escaping the needle keeps the test about
+        # substitution rather than about XML.
+        assert f"<Unicode>{escape(text)}</Unicode>" in delivered, (
+            f"{line_id}: the line's logical text is not in the delivered "
+            "bytes verbatim — PAGE substituted a character somewhere and "
+            "owes the report a verbatim reading (L8)."
+        )
+        checked += 1
+    assert checked > 50, "fixture check: this must exercise real lines"

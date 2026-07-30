@@ -39,8 +39,19 @@ from corrigenda.formats.alto._ns import _tag
 #: that the round-trip then cannot carry.
 _DEDUP_MARKS: tuple[str, ...] = tuple(c for c in HYPHEN_CHARS if c != "­")
 
+#: Source character -> what the logical text says instead. The ONE place
+#: the reconstruction is not verbatim, written as a table so it can be
+#: *asked about* rather than only performed (L8): the projection invariant
+#: needs to know that a line's decision spells a mark differently from the
+#: file, and it cannot know that by comparing two texts that both went
+#: through the same collapse. Widening this dict widens the declaration for
+#: free; hardcoding the collapse twice would not.
+_MARK_SUBSTITUTIONS: dict[str, str] = {"­": "-"}
 
-def reconstruct_textline(textline: etree._Element, ns: str) -> str:
+
+def reconstruct_textline(
+    textline: etree._Element, ns: str, *, verbatim: bool = False
+) -> str:
     """Walk a TextLine's String/SP/HYP children and rebuild its text.
 
     Rules:
@@ -64,8 +75,18 @@ def reconstruct_textline(textline: etree._Element, ns: str) -> str:
     The U+00AD collapse is deliberate and stays — see
     :data:`_DEDUP_MARKS`.
 
-    Returns NFC-normalised text. Does NOT strip or remove carriage
-    returns — those are parser-specific concerns.
+    ``verbatim=True`` skips :data:`_MARK_SUBSTITUTIONS` and returns what
+    the element's characters actually say. Nobody's logical text should use
+    it — a soft hyphen in ``ocr_text`` is exactly what the collapse exists
+    to prevent. It exists so the projection invariant can tell "the
+    artefact says the decision" from "the artefact says the SOURCE's
+    spelling of what the decision normalised" (L8), which comparing two
+    collapsed strings can never do: the collapse is applied identically on
+    both sides and compares equal to itself.
+
+    Returns NFC-normalised text — NFC is canonical equivalence and stays on
+    in both modes; it substitutes nothing a consumer can act on. Does NOT
+    strip or remove carriage returns — those are parser-specific concerns.
     """
     string_tag = _tag("String", ns)
     sp_tag = _tag("SP", ns)
@@ -78,8 +99,8 @@ def reconstruct_textline(textline: etree._Element, ns: str) -> str:
             parts.append(" ")
         elif child.tag == hyp_tag:
             hyp_char = child.get("CONTENT", "-")
-            if hyp_char == "­":
-                hyp_char = "-"
+            if not verbatim:
+                hyp_char = _MARK_SUBSTITUTIONS.get(hyp_char, hyp_char)
             if hyp_char and not "".join(parts).endswith(_DEDUP_MARKS):
                 parts.append(hyp_char)
     return nfc("".join(parts))

@@ -22,6 +22,7 @@ from corrigenda.core.fidelity import (
 )
 
 EXACT = ProjectionFidelity.EXACT
+SPELLED = ProjectionFidelity.SOURCE_SPELLING
 TOKEN = ProjectionFidelity.TOKEN_EQUIVALENT
 NORM = ProjectionFidelity.NORMALIZED
 
@@ -128,13 +129,53 @@ class TestWeakest:
 
 
 def test_the_order_is_best_to_worst():
-    assert FIDELITY_ORDER == (EXACT, TOKEN, NORM)
+    assert FIDELITY_ORDER == (EXACT, SPELLED, TOKEN, NORM)
 
 
 def test_levels_serialize_as_their_string_value():
     # The report is JSON; a consumer dispatches on these strings.
     assert [level.value for level in FIDELITY_ORDER] == [
         "exact",
+        "source_spelling",
         "token_equivalent",
         "normalized",
     ]
+
+
+class TestSourceSpelling:
+    """L8 — a substitution on a character that is not whitespace.
+
+    ``EXACT`` claims the artefact says the decision *character for
+    character*. On 115 lines of the repo's own BnF fixture that was false
+    and unprovable at the same time: the file spells its break mark U+00AD,
+    the reconstruction reads it back as ``-``, and the invariant compared
+    two strings that had both been through that collapse. Feeding it the
+    verbatim reading is what makes the difference expressible at all.
+    """
+
+    def test_a_mark_the_file_spells_its_own_way_is_not_exact(self):
+        # decided/extracted agree (both collapsed); the file says U+00AD.
+        assert classify_projection_fidelity("tra-", "tra-", "tra\xad") is SPELLED
+
+    def test_no_verbatim_reading_means_no_claim_either_way(self):
+        # A format that substitutes nothing passes None and keeps EXACT —
+        # the level must not degrade just because the argument is absent.
+        assert classify_projection_fidelity("tra-", "tra-") is EXACT
+        assert classify_projection_fidelity("tra-", "tra-", "tra-") is EXACT
+
+    def test_it_is_better_than_a_collapsed_space_and_worse_than_exact(self):
+        # The ordering claim, as an assertion: a source-spelled mark loses
+        # NOTHING from the file, a collapsed whitespace run does.
+        assert weakest([EXACT, SPELLED]) is SPELLED
+        assert weakest([SPELLED, TOKEN]) is TOKEN
+
+    def test_a_line_can_be_both_source_spelled_and_lossy(self):
+        # Two independent defects on one line: a doubled space the format
+        # cannot store AND a source-spelled mark. The run must hear the
+        # worse of the two, not whichever was tested first.
+        assert classify_projection_fidelity("a  b-", "a b-", "a b\xad") is TOKEN
+        assert classify_projection_fidelity("a\xa0b-", "a b-", "a b\xad") is NORM
+
+    def test_divergent_words_are_still_corruption_not_a_spelling(self):
+        # The floor must never rescue a line whose words moved.
+        assert classify_projection_fidelity("chat", "chien", "chien") is None

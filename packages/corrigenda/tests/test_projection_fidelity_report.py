@@ -165,3 +165,83 @@ async def test_the_level_survives_the_json_round_trip() -> None:
     assert payload["projection_fidelity"]["normalized"] == 1
     line = next(ln for ln in payload["lines"] if ln["line_id"] == target)
     assert line["projection"]["fidelity"] == "normalized"
+
+
+# ---------------------------------------------------------------------------
+# L8 — a substitution on a character that is not whitespace
+# ---------------------------------------------------------------------------
+
+
+_BNF = Path(__file__).parent.parent.parent.parent / "examples" / "X0000002.xml"
+
+
+class _Echo:
+    """Returns every line unchanged.
+
+    The fidelity question here is about the FILE's spelling, not about a
+    correction — an echo keeps every line on the UNTOUCHED path, which is
+    where the overclaim was most obviously wrong: the rewriter did not so
+    much as look at those elements and the run still called the grade
+    ``exact``.
+    """
+
+    wants_geometry = False
+    wants_image = False
+
+    async def produce(self, payload, *, options):
+        return (
+            EditScript(
+                ops=tuple(
+                    ReplaceLine(line_id=line.line_id, text=line.ocr_text)
+                    for line in payload.lines
+                )
+            ),
+            None,
+        )
+
+
+@pytest.mark.asyncio
+async def test_the_bnf_fixture_stops_claiming_exact_on_its_soft_hyphens() -> None:
+    """End-to-end, on the document that made this false.
+
+    115 of ``X0000002.xml``'s 566 lines carry their break mark as U+00AD
+    inside ``<HYP>``. The reconstruction reads it back as ``-`` (deliberate,
+    and 115 lines depend on it to pair at all), the rewrite re-emits the
+    source element untouched, and the run graded every one of them ``exact``
+    — "the artefact says the decision character for character", of a file
+    whose characters say something else. Nothing was lost then and nothing
+    is lost now: what changed is that the report says which of the two
+    happened.
+    """
+    doc = build_document_manifest([(_BNF, _BNF.name)])
+    pipeline = CorrectionPipeline(
+        producer=_Echo(),
+        observer=_Null(),
+        producer_metadata=ProducerMetadata(name="test", implementation="v1"),
+    )
+    result = await pipeline.run(document_manifest=doc, source_files={_BNF.name: _BNF})
+
+    counts = result.report.projection_fidelity or {}
+    assert counts.get(ProjectionFidelity.SOURCE_SPELLING.value) == 115
+    assert counts.get(ProjectionFidelity.EXACT.value) == 451
+    # No line is worse than that: the collapse costs the file nothing.
+    assert counts.get(ProjectionFidelity.NORMALIZED.value, 0) == 0
+
+    # And it is the soft-hyphen lines specifically, not 115 arbitrary ones.
+    spelled = {
+        ln.line_id
+        for ln in result.report.lines
+        if ln.projection
+        and ln.projection.fidelity is ProjectionFidelity.SOURCE_SPELLING
+    }
+    assert len(spelled) == 115
+    from lxml import etree
+
+    root = etree.parse(str(_BNF)).getroot()
+    ns = root.tag.split("}")[0][1:]
+    soft = {
+        tl.get("ID")
+        for tl in root.iter(f"{{{ns}}}TextLine")
+        if any(h.get("CONTENT") == "­" for h in tl.iter(f"{{{ns}}}HYP"))
+    }
+    assert spelled == soft

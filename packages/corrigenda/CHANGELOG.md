@@ -9,6 +9,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **`ProjectionFidelity` gains `source_spelling`: `exact` was untrue on 115
+  lines of the repo's own BnF fixture (L8).** `exact` promises the artefact
+  says the decision *character for character*. 115 of `examples/X0000002.xml`'s
+  566 lines carry their break mark as U+00AD SOFT HYPHEN inside `<HYP>`; the
+  reconstruction reads it back as `-` (deliberately — a soft hyphen must not
+  reach a CONTENT attribute, and those lines need the collapse to pair at all),
+  the rewrite re-emits the source element untouched, and the run graded all 115
+  `exact`.
+  It could not have graded them anything else. The collapse runs on **both**
+  sides of the projection comparison and compares equal to itself — the same
+  blindness that hid the break-mark doubling. So the fix is not a stricter
+  invariant but a second reading: `RewriteResult.texts_verbatim` walks the same
+  tree with the substitution table off, and a line whose two readings differ
+  grades `source_spelling`.
+  The new level sits **between** `exact` and `token_equivalent`, and the
+  ordering is the claim: nothing is lost here — the file is *more* specific than
+  the decision — whereas a collapsed whitespace run is gone from the file for
+  good. Measured after the fix on that fixture: 451 `exact`, 115
+  `source_spelling`, 0 `normalized`, and the 115 are exactly the U+00AD lines
+  (pinned by set equality, not by count).
+  PAGE substitutes nothing on read (NFC and strip only) and ships an empty
+  `texts_verbatim` — asserted rather than assumed: every line's logical text
+  must be findable character for character in the delivered bytes.
+  The other half of L8 needed no change: `preserve_break_char` runs before
+  decisions materialise and `ProposalStage.output_text` keeps the producer's raw
+  text, so a forced source hyphen is already visible in the report as proposal
+  vs decision.
+
 - **OCR confidence invalidation is now reported, per line, by both formats
   (R4).** When a correction changes a word, the source engine's confidence in
   that word stops being a fact about the output, so ALTO drops `WC`/`CC` and

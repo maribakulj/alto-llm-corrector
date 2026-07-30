@@ -980,18 +980,29 @@ def rewrite_alto_file(
         metrics=metrics,
         rewriter_paths=line_paths,
         texts=_extract_texts_from_root(root, ns, set(line_by_id)),
+        # L8 — the same lines read with the mark collapse OFF. Where the two
+        # differ, the file spells a break mark its own way and the decision
+        # spells it in normal form: real, invisible to a comparison of two
+        # collapsed strings, and until now reported as `exact`.
+        texts_verbatim=_extract_texts_from_root(
+            root, ns, set(line_by_id), verbatim=True
+        ),
         losses=losses,
         losses_by_line=losses_by_line,
     )
 
 
 def _extract_texts_from_root(
-    root: etree._Element, ns: str, line_ids: set[str]
+    root: etree._Element, ns: str, line_ids: set[str], *, verbatim: bool = False
 ) -> dict[str, str]:
     """Per-line text of an ALTO tree, via the shared
     ``reconstruct_textline`` helper — so the text seen here matches both
     the parser's ocr_text and the rewriter's UNTOUCHED-detection
-    comparison."""
+    comparison.
+
+    ``verbatim=True`` returns the same walk with the mark collapse OFF —
+    what the file's characters say rather than the logical reading of them
+    (L8). Used only to grade projection fidelity; never as anyone's text."""
     textline_tag = _tag("TextLine", ns)
     result: dict[str, str] = {}
     for tl_el in root.iter(textline_tag):
@@ -1004,7 +1015,7 @@ def _extract_texts_from_root(
                     f"duplicate TextLine ID {line_id!r} in rewritten ALTO — "
                     "output-text extraction would be ambiguous (ADR-007)."
                 )
-            result[line_id] = reconstruct_textline(tl_el, ns)
+            result[line_id] = reconstruct_textline(tl_el, ns, verbatim=verbatim)
     return result
 
 

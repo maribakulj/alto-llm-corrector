@@ -354,6 +354,14 @@ class RewriteResult:
     #: line_id → "untouched" / "subs_only" / "fast_path" / "slow_path"
     rewriter_paths: dict[str, str]
     texts: dict[str, str]
+    #: L8 — the same lines read with the format's mark substitutions OFF:
+    #: what the artefact's characters SAY, not the logical reading of them.
+    #: Empty when a format has no such substitution to declare, and read
+    #: only to grade projection fidelity — never as anyone's text. Without
+    #: it a line whose file spells its break mark U+00AD while the decision
+    #: spells it ``-`` graded ``exact``, because both sides of the
+    #: comparison had gone through the same collapse.
+    texts_verbatim: dict[str, str] = field(default_factory=dict)
     losses: dict[str, int] = field(default_factory=dict)
     #: P3.8 (ADR-012) — per-line attribution of ``losses``: line_id →
     #: that line's own loss counters (only lines that lost something
