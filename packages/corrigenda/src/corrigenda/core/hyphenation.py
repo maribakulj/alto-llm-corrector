@@ -6,7 +6,6 @@ from corrigenda.core._norm import ncfold
 from corrigenda.core.pairing import (
     HYPHEN_CHARS,
     backward_partner_ref,
-    forward_partner_id,
     forward_partner_ref,
     strip_trailing_break_marks,
 )
@@ -424,30 +423,10 @@ def classify_reconcile_outcome(
     return "neutralised"
 
 
-def should_stay_in_same_chunk(
-    line_a: LineManifest,
-    line_b: LineManifest,
-) -> bool:
-    """
-    Return True if line_a and line_b must be in the same LLM chunk
-    because they form a hyphenated pair.
-
-    Symmetric: true when either line forward-links to the other. The
-    role→field mapping is resolved by the shared ``forward_partner_id``
-    primitive (PART1→pair id, BOTH→forward id), so this predicate never
-    re-encodes it.
-    """
-    return (
-        forward_partner_id(line_a) == line_b.line_id
-        or forward_partner_id(line_b) == line_a.line_id
-    )
-
-
 # --- public surface ---
 __all__ = [
     "ReconcileMetrics",
     "enrich_chunk_lines",
     "reconcile_hyphen_pair",
     "classify_reconcile_outcome",
-    "should_stay_in_same_chunk",
 ]

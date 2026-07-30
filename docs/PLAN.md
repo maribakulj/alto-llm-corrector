@@ -116,13 +116,16 @@ listés comme quatre correctifs indépendants. Ce sont quatre symptômes de deux
 absences de modèle. Les traiter séparément recrée le mécanisme d'enlisement
 décrit en `S` : quatre correctifs, quatre chemins de plus.
 
-**État : `L0`, `L1`, `L2`, `L3`, `L6`, `L8`, `L9`, `L10` faits ; `L4` retiré.** Les deux
+**État : `L*` fermés — `L0`-`L3`, `L5`-`L10` faits, `L4` retiré.** Les deux
 défauts qui altéraient le texte livré sans laisser **aucune** trace — ni
 compteur, ni erreur — sont fermés. `L4` s'est révélé faux à la vérification
 (§4.5 de l'audit du 27) et a laissé `L8` à sa place, qui est fait à son tour :
 `exact` ne se revendique plus sur 115 lignes dont le fichier dit autre chose.
 `L3` est fermé ; il a fait tomber `L9`, et l'invariant écrit pour couvrir cette
-famille a trouvé `L10`. Restent **`L5`** (partiel) et **`L7`**.
+famille a trouvé `L10`. `L5` a élargi `L7` en le corrigeant — la ligne blanche
+enjambée a rendu atteignable une paire non adjacente que trois endroits du
+découpage supposaient impossible — et `L7` a fermé les deux, plus le reste de
+`S1` au passage.
 
 ### L0 — Échelle de fidélité de projection — **fait** *(prérequis de L1, L4)*
 
@@ -443,11 +446,70 @@ suivante cachait un mot qui enjambe la couture. **Latent** — 0 ligne vide sur
   géométriquement. Le trancher demande un corpus qui en contient (`M7`), pas une
   édition de prédicat.
 
-### L7 — Découpage
+### L7 — Découpage — **fait (2026-07-28)**, une racine pour trois symptômes
 
-`_split_for_image_cap` coupe les unités non page-locales ; granularité LINE,
-partenaire non adjacent coupé sans trace `HyphenSplit` ; la descente de
-granularité ne rapatrie pas les partenaires non-cibles.
+Les trois items étaient **le même défaut à trois endroits** : demander
+« mon partenaire est-il la ligne **suivante** ? » au lieu de « **où** est mon
+partenaire ? ». Et le troisième item n'était pas indépendant — il tombait avec
+les deux autres.
+
+**L'invariant, écrit comme tel.** Une paire liée n'a que deux issues légitimes
+au moment du plan : **ensemble dans un chunk**, ou **coupée avec un
+`HyphenSplit` sur le plan**. Ni l'un ni l'autre est un trou silencieux — le
+validateur écarte une paire qui n'est pas entièrement dans le chunk, et le
+réconciliateur pourrait écrire par-dessus la frontière.
+
+**Et mon propre correctif `L5` avait élargi le trou.** Le suivi de chaîne de
+`_plan_line` exigeait l'adjacence stricte ; dès que l'appariement a su enjamber
+une ligne blanche, une paire liée `L0 → L2` échouait au test, la chaîne
+s'arrêtait, les deux membres tombaient dans des chunks différents et le lien
+restait **vivant**. Mesuré avant correctif :
+
+```
+chunks: [['L0'], ['L1'], ['L2'], ['L3']]
+splits: []
+L0 still linked to: L2
+```
+
+- **`_plan_line`** suit désormais le **lien** (une *recherche* id→position, pas
+  un résolveur — la distinction que `S1` a posée), emmène les lignes
+  intercalées avec la paire plutôt que de les laisser hors de tout chunk, et la
+  condition de coupure devient « mon partenaire n'est pas dans mon chunk » au
+  lieu de « le plafond m'a coupé » : les deux coïncidaient seulement tant que
+  l'adjacence était requise. Un partenaire **hors page** (paire inter-pages,
+  propriété du join de `L3`) ou **en arrière** n'est ni suivi ni coupé.
+- **`_try_window`** avait la même racine, via `should_stay_in_same_chunk` —
+  précisément la « troisième formulation » que `S1` laissait à absorber.
+  Remplacée par `_unit_reach`, qui répond à la vraie question : *jusqu'où cette
+  fenêtre doit-elle aller pour contenir tout lien qui en sort ?* Le prédicat
+  pairwise était faux dans **deux** directions — il ne voyait ni un lien
+  partant d'une ligne **antérieure** de la fenêtre, ni un partenaire non
+  adjacent. **Absorbé et supprimé** : un seul appelant en production.
+  **`S1` n'a plus de reste.**
+- **Le troisième item — « la descente ne rapatrie pas les partenaires
+  non-cibles » — n'est pas un défaut indépendant.** Mesuré : le ciblage de
+  fenêtre (`_assign_window_targets`, qui utilise déjà la dérivation partagée)
+  force les deux membres d'une paire dans la même fenêtre. Balayage de **3708
+  chunks** sur 7 formes de page × une grille de configurations : **45
+  violations, toutes de la forme « paire par-dessus une blanche »**, c'est-à-dire
+  la paire non adjacente. Zéro après le correctif de fenêtre. Fermé par la même
+  racine, sans code propre.
+- **`_split_for_image_cap`** posait une autre question à la mauvaise fonction.
+  `_page_local_units` répond « est-ce l'unité **entière** ? » et rend *rien*
+  quand non — ce qui est juste pour le **routeur** : escalader une demi-unité la
+  couperait, donc une unité incomplète reste au producteur primaire et ses
+  membres restent ensemble **en ne faisant rien**. Le batcher n'a pas cette
+  option : il **découpe** un chunk en appels, donc « ne rien faire » n'existe
+  pas. Sans unité, il traitait chaque membre en singleton et pouvait mettre une
+  paire dans deux appels. Deux formes y arrivaient : un groupe dont le dernier
+  pointeur **pend**, et un groupe qui **continue sur une autre page** (son
+  membre distant n'est pas là, ceux qui le sont appartiennent au même appel).
+  Nouveau `_units_visible_on_page` — même dérivation partagée, zéro lecture de
+  pointeur, **projection différente** : les membres présents, entiers ou non.
+
+Les tests sont l'invariant, pas la forme du correctif : 48 combinaisons
+forme × plafond, plus les cas qui ont exposé le défaut avec leurs chiffres.
+Vérifié en revertant : **18 rouges** sur le planificateur, **3** sur le batcher.
 
 Détail et preuves : `AUDIT-2026-07-25.md` §3a, §3c, §3d ; `AUDIT-2026-07-27.md`
 §2.6, §3.1, §3.2, §4.3, §4.4.

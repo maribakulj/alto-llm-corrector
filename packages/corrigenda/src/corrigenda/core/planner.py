@@ -19,7 +19,6 @@ from __future__ import annotations
 
 import uuid
 
-from corrigenda.core.hyphenation import should_stay_in_same_chunk
 from corrigenda.core.pairing import forward_partner_id
 from corrigenda.core.units import derive_hyphen_groups, split_forward_link
 from corrigenda.core.schemas import (
@@ -59,6 +58,48 @@ def downgrade_granularity(current: ChunkGranularity) -> ChunkGranularity | None:
 
 def _total_chars(lines: list[LineManifest]) -> int:
     return sum(len(lm.ocr_text) for lm in lines)
+
+
+def _unit_reach(
+    lines: list[LineManifest],
+    index_by_id: dict[str, int],
+    start: int,
+    end: int,
+) -> int:
+    """The exclusive end a window must reach to hold every live forward link
+    that leaves ``lines[start:end]``.
+
+    Returns ``end`` when nothing leaves — the window is already whole.
+
+    This replaces the pairwise ``should_stay_in_same_chunk(last_in_window,
+    next_line)``, which asked whether the window's LAST line pairs with the
+    very NEXT one. Two different questions, and the pairwise one is wrong in
+    both directions: it cannot see a link that leaves from an EARLIER line in
+    the window, and it cannot see a partner that is not the immediately next
+    line. The second became reachable the moment the linker learned to step
+    over blank lines (L5) — a pair linked across a blank failed the test, the
+    window closed between the two, and no single window held both members, so
+    the target assignment fell through to its per-line fallback and the pair
+    was corrected in two different chunks (L7).
+
+    Absorbing the predicate here also retires it: it was the third
+    formulation of "who is my partner?" that S1 left standing, and it had
+    exactly one production caller.
+
+    A partner off this page (a cross-page pair) or behind ``start`` is not a
+    forward continuation this window can hold, and is ignored rather than
+    chased.
+    """
+    reach = end
+    for position in range(start, end):
+        partner_id = forward_partner_id(lines[position])
+        if not partner_id:
+            continue
+        partner_at = index_by_id.get(partner_id)
+        if partner_at is None or partner_at < end:
+            continue
+        reach = max(reach, partner_at + 1)
+    return reach
 
 
 def _make_chunk(
@@ -278,6 +319,8 @@ def _try_window(
 
     window_size = config.line_window_size
     overlap = config.line_window_overlap
+    # A LOOKUP, not a resolver: id -> position on this page.
+    index_by_id = {lm.line_id: position for position, lm in enumerate(lines)}
 
     window_line_ids: list[list[str]] = []
     start = 0
@@ -307,12 +350,10 @@ def _try_window(
         extension_limit = max(config.max_lines_per_request, end - start + 10)
         max_end = min(n, start + extension_limit)
         while end < max_end:
-            last_in_window = lines[end - 1]
-            next_line = lines[end]
-            if should_stay_in_same_chunk(last_in_window, next_line):
-                end += 1
-            else:
+            reach = _unit_reach(lines, index_by_id, start, end)
+            if reach <= end:
                 break
+            end = min(reach, max_end)
 
         window_line_ids.append([lines[i].line_id for i in range(start, end)])
 
@@ -370,44 +411,62 @@ def _plan_line(
     lines = page.lines
     chunks: list[ChunkRequest] = []
     splits: list[HyphenSplit] = []
+    # A LOOKUP, not a resolver (the S1 distinction): id -> position on this
+    # page. The chain follow used to require the partner to be the literally
+    # NEXT line, which is a different question from "where is my partner?"
+    # and answers it wrongly whenever anything sits between the two — a
+    # blank line, most concretely, now that the linker steps over those
+    # (L5). A non-adjacent pair then failed the adjacency test, the chain
+    # stopped, the two members landed in DIFFERENT chunks, and the link was
+    # left live: the validator skips a pair that is not wholly in-chunk and
+    # the reconciler could write across the boundary. Silent, and with no
+    # HyphenSplit to show for it (L7).
+    index_by_id = {lm.line_id: position for position, lm in enumerate(lines)}
     i = 0
     while i < len(lines):
-        lm = lines[i]
-        # Follow the full chain: PART1 → BOTH → ... → BOTH → PART2
+        # Follow the full chain: PART1 → BOTH → ... → BOTH → PART2.
         # All lines linked by forward hyphen pairs must stay together.
-        chain_ids = [lm.line_id]
+        chain_ids = [lines[i].line_id]
         j = i
-        # The chain follow is capped: an adversarial page where
-        # every line ends in a dash would otherwise produce one unbounded
-        # request.
-        while j < len(lines) and len(chain_ids) < config.max_lines_per_request:
-            cur = lines[j]
-            forward_pair = forward_partner_id(cur)
-            if (
-                forward_pair
-                and j + 1 < len(lines)
-                and lines[j + 1].line_id == forward_pair
-            ):
-                chain_ids.append(lines[j + 1].line_id)
-                j += 1
-            else:
+        while True:
+            forward_pair = forward_partner_id(lines[j])
+            if not forward_pair:
                 break
+            partner_at = index_by_id.get(forward_pair)
+            # None: the partner is not on this page (a cross-page pair,
+            # owned by the reconciler's cross-page join) or the pointer
+            # dangles. Behind us: not a forward continuation. Neither is
+            # this loop's business, and neither may be severed here.
+            if partner_at is None or partner_at <= j:
+                break
+            # Everything BETWEEN the two travels with them. Skipping it
+            # would leave a line in no chunk at all — and the lines in
+            # between are exactly the blank ones the linker steps over.
+            # The chain follow stays capped: an adversarial page where
+            # every line ends in a dash must not produce one unbounded
+            # request.
+            if len(chain_ids) + (partner_at - j) > config.max_lines_per_request:
+                break
+            chain_ids.extend(lm.line_id for lm in lines[j + 1 : partner_at + 1])
+            j = partner_at
 
-        # Pair atomicity (core invariant): if the cap cut the chain
-        # BETWEEN a forward line and its partner, the two halves would sit
-        # in different chunks as a still-linked pair — the validator skips
-        # such pairs (both members must be in-chunk) and the reconciler
-        # could write across the boundary. Sever the cut pair explicitly
-        # through the unit SPLIT operation (ADR-010): both sides degrade
-        # to independent lines with their OCR text preserved verbatim, so
-        # every remaining pair is fully contained in one chunk and
-        # atomicity stays true by construction. The record rides on the
+        # Pair atomicity (core invariant): if the walk stopped with the
+        # tail's partner OUTSIDE this chunk, the two halves would sit in
+        # different chunks as a still-linked pair. Sever the cut pair
+        # explicitly through the unit SPLIT operation (ADR-010): both sides
+        # degrade to independent lines with their OCR text preserved
+        # verbatim, so every remaining pair is fully contained in one chunk
+        # and atomicity stays true by construction. The record rides on the
         # plan — the cut is a unit operation, not a silent side effect.
-        if len(chain_ids) >= config.max_lines_per_request and j + 1 < len(lines):
-            tail = lines[j]
-            head = lines[j + 1]
-            if forward_partner_id(tail) == head.line_id:
-                splits.append(split_forward_link(tail, head))
+        #
+        # The condition is "my partner is not in my chunk", not "the cap
+        # cut me": those coincided only while the chain required adjacency.
+        tail = lines[j]
+        partner_id = forward_partner_id(tail)
+        if partner_id and partner_id not in chain_ids:
+            partner_at = index_by_id.get(partner_id)
+            if partner_at is not None:
+                splits.append(split_forward_link(tail, lines[partner_at]))
 
         chunks.append(
             _make_chunk(
@@ -417,7 +476,7 @@ def _plan_line(
                 chain_ids,
             )
         )
-        i += len(chain_ids)
+        i = j + 1
 
     return ChunkPlan(
         page_id=page.page_id,

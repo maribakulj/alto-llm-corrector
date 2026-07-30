@@ -28,6 +28,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **No chunk boundary separates a still-linked pair any more (L7).** Three
+  planner defects turned out to be one: asking "is my partner the NEXT line?"
+  instead of "WHERE is my partner?". A linked pair has exactly two legitimate
+  outcomes at planning time — together in one chunk, or severed with a
+  `HyphenSplit` on the plan — and a pair that is neither is a silent hole,
+  because the validator skips a pair that is not wholly in-chunk and the
+  reconciler could write across the boundary.
+  The previous release's own blank-line fix widened the hole: once the linker
+  stepped over blanks, a pair linked `L0 → L2` failed the adjacency test, the
+  chain stopped, the two members landed in different chunks and the link stayed
+  live with nothing recorded.
+  `_plan_line` now follows the link (an id→position *lookup*, not a resolver),
+  carries the lines in between rather than leaving them out of every chunk, and
+  severs on "my partner is not in my chunk" instead of "the cap cut me" — those
+  coincided only while adjacency was required. A partner off-page (a cross-page
+  pair) or behind is neither followed nor severed.
+  `_try_window` had the same root through `should_stay_in_same_chunk`, which was
+  wrong in *two* directions: it could not see a link leaving from an earlier
+  line in the window, nor a non-adjacent partner. Replaced by `_unit_reach`,
+  which asks how far the window must reach to hold every link that leaves it.
+  The predicate had one production caller and is now **retired** — it was the
+  third formulation of "who is my partner?" that S1 left standing.
+  `_split_for_image_cap` was asking a different question of the wrong helper.
+  `_page_local_units` answers "is this the WHOLE unit?" and returns nothing when
+  it is not, which is right for the router (escalating half a unit would split
+  it, so leaving it alone keeps it together). The batcher has no "leave it
+  alone" — it slices one chunk into calls — so given nothing it treated each
+  member as a singleton and could put a pair in two calls. Two shapes reached
+  it: a group whose last pointer dangles, and one continuing onto another page.
+  New `_units_visible_on_page`: same shared derivation, no pointer reads, a
+  different projection — the members present, complete or not.
+  Also measured: the third item on the list, "the granularity descent does not
+  repatriate non-target partners", is not an independent defect. Window
+  targeting already forces both members of a pair into one window; a sweep of
+  3708 chunks over 7 page shapes × a config grid found 45 violations, **all** of
+  them the non-adjacent-pair shape, and zero after the window fix.
 - **The hyphen guards know the whole break-mark repertoire, not just `-`
   (L5).** `HYPHEN_CHARS` has six members and the parsers use all of them, so a
   line can legitimately be a PART1 by ending in `⸗` or `¬` — yet five guard

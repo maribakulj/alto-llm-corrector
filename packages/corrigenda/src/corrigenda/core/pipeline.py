@@ -565,6 +565,41 @@ def _page_local_units(
     return units
 
 
+def _units_visible_on_page(
+    line_by_id: dict[str, LineManifest],
+) -> dict[str, set[str]]:
+    """Every hyphen unit's members AS SEEN HERE, by member line_id —
+    complete or not.
+
+    The image-cap batcher's question, and NOT
+    :func:`_page_local_units`'s (L7). That one answers "is this the whole
+    unit?" and returns nothing when the answer is no, which is right for the
+    ROUTER: escalating half a unit to a second producer would split it, so an
+    incomplete unit is left to the primary and its members stay together by
+    doing nothing.
+
+    The batcher has no such option. It is slicing ONE chunk into several
+    calls, so "leave them alone" is not available — every line lands in some
+    batch. Handed nothing, it treated each member as a singleton and could
+    put a pair in two different calls, which is the one thing pair atomicity
+    forbids. Two shapes reached it: a group whose last pointer dangles, and a
+    group that continues onto another page (its far member is simply not
+    here, and the members that ARE still belong in one call).
+
+    So: same shared derivation (ADR-010), same zero pointer reads, different
+    projection — the members present, whether or not they are all of them.
+    Keeping them together is never worse than splitting them.
+    """
+    units: dict[str, set[str]] = {}
+    for group in derive_hyphen_groups(line_by_id.values()):
+        members = {ref.line_id for ref in group.members if ref.line_id in line_by_id}
+        if len(members) < 2:
+            continue
+        for line_id in members:
+            units[line_id] = members
+    return units
+
+
 def _unit_pool(
     line_by_id: dict[str, LineManifest] | None,
     cross_page_partners: dict[LineRef, LineManifest] | None,
@@ -1788,8 +1823,11 @@ class CorrectionPipeline:
             # Derived on the first chunk that needs it, then reused: the
             # units are a property of the page, not of the chunk, and the
             # common case (no cap declared) must not pay for them at all.
+            # Visible members, not COMPLETE units: see the helper — the
+            # batcher cannot "leave a unit alone", so an incomplete one has
+            # to be held together rather than dissolved into singletons.
             if page_units is None:
-                page_units = _page_local_units(line_by_id)
+                page_units = _units_visible_on_page(line_by_id)
 
             targets = set(chunk.targets())
             in_chunk = set(chunk.line_ids)
@@ -1806,6 +1844,9 @@ class CorrectionPipeline:
                     # Both members ride together — and a member that is
                     # context here (target of an adjacent chunk) still
                     # travels, because the reconciler needs the whole pair.
+                    # A unit this page can only partly see (its far member is
+                    # on another page, or a pointer dangles) still keeps the
+                    # members that ARE here in one call.
                     resolved = page_units.get(line_id)
                     if resolved is not None:
                         unit = (resolved & in_chunk) - assigned
