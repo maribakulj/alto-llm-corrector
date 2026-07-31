@@ -5,6 +5,48 @@ All notable changes to **corrigenda** are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Nothing here has ever been released
+
+Read before using the version headings below (`D4`).
+
+**There are zero git tags and the package has never been published to an
+index.** The `[0.9.0]`, `[0.9.0 initial scope]` and `[0.1.0a1]` sections are
+dated development milestones, not releases: no artefact carrying those
+version numbers exists anywhere. `docs/PLAN.md` schedules the first real tag
+as `0.10.0` (`P2`), after a rehearsal on TestPyPI (`P1`).
+
+That matters for one reason in particular. SemVer's promise not to break
+things attaches to *released* versions, so the section that carries the whole
+history of this library's API breaks — `[Unreleased]`, 81 entries — is the one
+section SemVer declares non-binding. Nothing is owed to anybody yet, and that
+is the honest state; the index below exists so the breaks are readable as a
+list rather than found by scrolling.
+
+### Breaking changes so far, in reverse order
+
+Every one of these predates any release. They are listed to be *findable*,
+not because a migration is owed.
+
+| change | what it broke |
+|---|---|
+| OCR-confidence invalidation is counted per line | the PAGE `format_losses` key `conf_dropped` is gone; its replacement counts lines, not attributes |
+| `ProducerMetadata` replaces bare provider/model strings | producer identity |
+| The producer seam takes `ProducerOptions`, not `RetryPolicy` | `EditProducer.produce()`'s signature |
+| Generic vocabulary replaces the LLM-branded names | several exported names |
+| `PipelineEventType` names only engine events | the observer's event vocabulary |
+| Report v2: staged `LineOutcome` entries | the `CorrectionReport` JSON shape (`report_version` 1.0 → 2.0) |
+| `run()` never mutates its input | callers reading results off the input manifest |
+| Persistence left the engine surface | `output_writer` on the pipeline constructor |
+| Page images are keyed by page, not by file | `run(page_images=…)` |
+| `LineRef` — line identity is `(page_id, line_id)` | anything keyed on a bare `line_id` |
+| Recoverability is an allowlist | providers raising raw transport exceptions |
+| Parsers stamp identity | hand-built manifests |
+| Fallback accounting counts LINES, not chunks | `CorrectionResult` counters |
+
+The **top-level import surface** will break once more before the first tag:
+`corrigenda.__all__` is provisional and drops from 95 symbols to the computed
+54 (`S3b`). See `docs/versioning.md`.
+
 ## [Unreleased]
 
 ### Added

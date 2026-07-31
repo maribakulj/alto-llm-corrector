@@ -20,7 +20,7 @@ Two standing rules from that plan, in force until it says otherwise:
 - **Library:** Python 3.11+, Pydantic v2, lxml, httpx — no FastAPI/server dependency
 - **Backend:** FastAPI, uvicorn, sse-starlette (flat `app` package, not built/packaged)
 - **Frontend:** React + TypeScript + Vite + Tailwind CSS (`corrigenda-frontend`)
-- **Deployment:** docker-compose (dev: backend:8000 + frontend:5173) or single Dockerfile for HF Spaces (port 7860, frontend built as static files served by FastAPI). `DEPLOYMENT_PROFILE=demo|institutional` (see SECURITY.md)
+- **Deployment:** docker-compose (dev: backend:8000 + frontend:5173) or single Dockerfile for HF Spaces (port 7860, frontend built as static files served by FastAPI). `DEPLOYMENT_PROFILE=demo|proxy_protected` (`institutional` = deprecated alias; see SECURITY.md)
 - **Storage:** `{JOB_STORAGE_DIR:-/tmp/app-jobs}/{job_id}/` on disk, job state in memory, no database. Orphan job dirs are reclaimed at startup
 
 ## Common Commands

@@ -121,7 +121,7 @@ endpoint returns `404` for pre-restart job_ids, the old tokens are
 gone, and the results are unreachable. The server therefore deletes
 such orphan directories at startup rather than letting them accumulate
 as dead weight. Real persistence (a database holding job records that
-survive restarts) is a planned institutional-profile feature, not a
+survive restarts) is a planned feature of that profile, not a
 mount-a-volume option.
 
 Single-worker on purpose — see Dockerfile comments. A multi-worker setup would need a shared `JobStore` (Redis, Postgres) since the current one is in-process.
@@ -134,7 +134,7 @@ Single-worker on purpose — see Dockerfile comments. A multi-worker setup would
 |---|---|---|
 | `JOB_STORAGE_DIR` | `/tmp/app-jobs` | Base directory for job files (input + output) |
 | `CORS_ORIGINS` | `*` | Comma-separated list of allowed CORS origins, or `*` |
-| `DEPLOYMENT_PROFILE` | `demo` | `demo` (public Space stance) or `institutional` (behind SSO/proxy; refuses wildcard CORS). See [SECURITY.md](SECURITY.md) |
+| `DEPLOYMENT_PROFILE` | `demo` | `demo` (public Space stance) or `proxy_protected` (behind SSO/proxy; refuses wildcard CORS). `institutional` is the deprecated spelling of `proxy_protected` — it still works and warns. See [SECURITY.md](SECURITY.md) |
 | `MAX_ACTIVE_JOBS` | `4` | Concurrent correction pipelines |
 | `MAX_CONCURRENT_UPLOADS` | = `MAX_ACTIVE_JOBS` | Concurrent upload slots — reserved by an ASGI middleware before any body byte is read; at capacity the request is refused (503 + `Retry-After`) without receiving the upload |
 | `JOB_TIMEOUT_SECONDS` | `1800` | Per-job wall-clock budget (0 disables) |
