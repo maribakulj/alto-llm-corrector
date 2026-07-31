@@ -331,8 +331,7 @@ class TestTheImageCapBatcherKeepsVisibleMembersTogether:
         return out
 
     def _batches(self, line_by_id, cap: int) -> list[list[str]]:
-        from corrigenda.core.pipeline import CorrectionPipeline
-        from corrigenda.core.protocols import ProducerMetadata
+        from corrigenda.core.batching import _split_for_image_cap
         from corrigenda.core.schemas import (
             ChunkGranularity,
             ChunkRequest,
@@ -352,11 +351,6 @@ class TestTheImageCapBatcherKeepsVisibleMembersTogether:
                 pass
 
         producer = _Capped()
-        pipeline = CorrectionPipeline(
-            producer=producer,
-            observer=_Null(),
-            producer_metadata=ProducerMetadata(name="t", implementation="v1"),
-        )
         chunk = ChunkRequest(
             chunk_id="c0",
             document_id="d",
@@ -364,7 +358,7 @@ class TestTheImageCapBatcherKeepsVisibleMembersTogether:
             granularity=ChunkGranularity.LINE,
             line_ids=list(line_by_id),
         )
-        routed = pipeline._split_for_image_cap(
+        routed = _split_for_image_cap(
             routed=[(chunk, producer)], line_by_id=line_by_id
         )
         return [list(c.line_ids) for c, _p in routed]
