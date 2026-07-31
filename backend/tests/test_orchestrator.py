@@ -890,7 +890,7 @@ async def test_hyphen_partner_missing_event_emitted_with_direction(
     mapping now lives in `pairing.forward_partner_ref`, and `_lookup_ref`
     only turns a ref into a manifest.)
     """
-    import corrigenda.core.pipeline as cp
+    import corrigenda.core.reconcile as cp
 
     monkeypatch.setattr(cp, "_lookup_ref", lambda *args, **kwargs: None)
 
