@@ -167,7 +167,7 @@ async def test_hyphen_unit_escalates_as_a_whole_unit():
 
 
 def test_page_local_units_gathers_members():
-    from corrigenda.core.pipeline import _page_local_units
+    from corrigenda.core.reconcile import _page_local_units
 
     doc = build_document_manifest([(_SAMPLE, _SAMPLE.name)])
     page = doc.pages[0]
@@ -186,7 +186,7 @@ def test_page_local_units_omits_cross_page_and_dangling():
     """A unit that leaves the page cannot be gathered from one page's plan,
     so it is never escalated — the conservative behaviour. Absence from the
     index is how that is expressed."""
-    from corrigenda.core.pipeline import _page_local_units
+    from corrigenda.core.reconcile import _page_local_units
 
     doc = build_document_manifest([(_SAMPLE, _SAMPLE.name)])
     page = doc.pages[0]
