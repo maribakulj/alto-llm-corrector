@@ -358,9 +358,7 @@ class TestTheImageCapBatcherKeepsVisibleMembersTogether:
             granularity=ChunkGranularity.LINE,
             line_ids=list(line_by_id),
         )
-        routed = _split_for_image_cap(
-            routed=[(chunk, producer)], line_by_id=line_by_id
-        )
+        routed = _split_for_image_cap(routed=[(chunk, producer)], line_by_id=line_by_id)
         return [list(c.line_ids) for c, _p in routed]
 
     def test_a_dangling_chain_is_not_dissolved_into_singletons(self) -> None:

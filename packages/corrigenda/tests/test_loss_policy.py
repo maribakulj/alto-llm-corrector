@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from corrigenda.core.acceptance import _loss_policy_pass
 from corrigenda import CorrectionPipeline
 from corrigenda.core.identity import LineRef, line_ref
 from corrigenda.core.schemas import (
@@ -246,8 +247,11 @@ def test_strict_pass_pulls_the_whole_hyphen_unit():
         )
         for lm in lines
     }
-    pipeline._loss_policy_pass(
-        document_manifest=doc, all_lines=all_lines, traces=traces
+    _loss_policy_pass(
+        loss_policy=pipeline.loss_policy,
+        document_manifest=doc,
+        all_lines=all_lines,
+        traces=traces,
     )
 
     part1, part2 = lines
