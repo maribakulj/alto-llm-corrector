@@ -68,11 +68,11 @@ from corrigenda.core.batching import _split_for_image_cap
 from corrigenda.core.context import RunContext
 from corrigenda.core.projection import _fidelity_counts, _verify_projection
 from corrigenda.core.report import _build_final_edit_script
+from corrigenda.core.routing import _route_and_filter_chunks
 from corrigenda.core.traces import _set_trace
 from corrigenda.core.reconcile import (
     _build_hyphen_pairs,
     _lookup_ref,
-    _page_local_units,
     _reconcile_one_pair,
     _subpage_for_lines,
     _unit_pool,
@@ -110,9 +110,7 @@ from corrigenda.core.pairing import (
 from corrigenda.core.quality import (
     DEFAULT_ROUTING_POLICY,
     QEScorer,
-    RoutingDecision,
     RoutingPolicy,
-    route_line,
 )
 from corrigenda.core.confidence import (
     ConfidenceScorer,
@@ -932,126 +930,6 @@ class CorrectionPipeline:
     # Per-page orchestration
     # ------------------------------------------------------------------
 
-    def _routing_enabled(self) -> bool:
-        """Routing runs only when a QE scorer is present AND the policy
-        has at least one active bound. Otherwise a no-op (default)."""
-        return self.qe_scorer is not None and (
-            self.routing_policy.skip_at_or_below is not None
-            or self.routing_policy.escalate_at_or_above is not None
-        )
-
-    def _route_and_filter_chunks(
-        self,
-        *,
-        page: PageManifest,
-        chunks: list[ChunkRequest],
-        line_by_id: dict[str, LineManifest],
-        ctx: RunContext,
-        traces: dict[LineRef, LineTrace],
-    ) -> list[tuple[ChunkRequest, EditProducer]]:
-        """Route each chunk's target lines by QE tier, returning per-chunk
-        ``(chunk, producer)`` work items.
-
-        SKIP: a line the QE scorer + RoutingPolicy route to SKIP
-        is confirmed clean — its final text is its OCR text, its status is
-        CORRECTED, and (the auditable signature of a skip vs an LLM
-        identity pass) it never reaches a producer, so its trace's
-        ``model_input_text`` stays ``None``. It remains in each chunk's
-        ``line_ids`` (context for its neighbours) but leaves
-        ``target_line_ids``.
-
-        ESCALATE: when an ``escalation_producer`` is set, a
-        non-hyphen line routed to ESCALATE is split out of the chunk into a
-        sibling chunk (same context ``line_ids``, disjoint targets) carried
-        by the escalation producer — the VLM corrects only those lines. The
-        remaining targets stay with the primary producer. A chunk with no
-        targets left after SKIP is dropped (no producer call at all).
-
-        A hyphen unit is NEVER skipped (atomicity — a half-skipped pair
-        could not reconcile). It MAY escalate, but only as a whole unit:
-        when any member routes to ESCALATE, every member goes, so the pair
-        reaches one producer together and reconciles normally. A unit whose
-        links leave the page (or dangle) cannot be gathered from this
-        page's plan and stays with the primary producer.
-
-        When routing is off (default), returns every chunk paired with the
-        primary producer unchanged — a byte-identical run.
-        """
-        if not self._routing_enabled():
-            return [(chunk, self.producer) for chunk in chunks]
-        assert self.qe_scorer is not None  # _routing_enabled guarantees it
-
-        can_escalate = self.escalation_producer is not None
-        skip: set[str] = set()
-        escalate: set[str] = set()
-        page_units = _page_local_units(line_by_id)
-        for lm in page.lines:
-            decision = route_line(
-                self.qe_scorer.needs_correction(lm.ocr_text), self.routing_policy
-            )
-            if lm.hyphen_role is not HyphenRole.NONE:
-                # Atomicity: a hyphen member is NEVER skipped (a half-skipped
-                # pair could not reconcile). It may still escalate — but only
-                # with its whole unit, so the pair reaches one producer
-                # together. Measured on real 19th-c. press OCR, leaving units
-                # behind was the hybrid's entire residual error.
-                if decision is RoutingDecision.ESCALATE and can_escalate:
-                    unit = page_units.get(lm.line_id)
-                    if unit is not None:
-                        escalate |= unit
-                continue
-            if decision is RoutingDecision.SKIP:
-                skip.add(lm.line_id)
-            elif decision is RoutingDecision.ESCALATE and can_escalate:
-                escalate.add(lm.line_id)
-
-        for line_id in skip:
-            lm = line_by_id[line_id]
-            lm.corrected_text = lm.ocr_text
-            lm.status = LineStatus.CORRECTED
-            _set_trace(
-                traces,
-                lm,
-                projected_text=lm.ocr_text,
-                validation_status=LineStatus.CORRECTED.value,
-            )
-        ctx.lines_skipped += len(skip)
-        ctx.escalated_lines += len(escalate)
-
-        routed: list[tuple[ChunkRequest, EditProducer]] = []
-        for chunk in chunks:
-            targets = [t for t in chunk.targets() if t not in skip]
-            if not targets:
-                continue  # every target skipped — no producer call at all
-            primary_targets = [t for t in targets if t not in escalate]
-            escalate_targets = [t for t in targets if t in escalate]
-            if primary_targets:
-                if primary_targets == chunk.targets():
-                    routed.append((chunk, self.producer))  # untouched
-                else:
-                    routed.append(
-                        (
-                            chunk.model_copy(
-                                update={"target_line_ids": primary_targets}
-                            ),
-                            self.producer,
-                        )
-                    )
-            if escalate_targets:
-                assert self.escalation_producer is not None  # can_escalate
-                routed.append(
-                    (
-                        chunk.model_copy(
-                            update={
-                                "target_line_ids": escalate_targets,
-                                "chunk_id": f"{chunk.chunk_id}#esc",
-                            }
-                        ),
-                        self.escalation_producer,
-                    )
-                )
-        return routed
-
     async def _process_page(
         self,
         *,
@@ -1087,8 +965,16 @@ class CorrectionPipeline:
         # producer that owns it. A no-op when routing is off (default), so
         # every chunk pairs with the primary producer and every existing
         # run is byte-identical.
-        routed_chunks = self._route_and_filter_chunks(
-            page=page, chunks=plan.chunks, line_by_id=line_by_id, ctx=ctx, traces=traces
+        routed_chunks = _route_and_filter_chunks(
+            qe_scorer=self.qe_scorer,
+            routing_policy=self.routing_policy,
+            producer=self.producer,
+            escalation_producer=self.escalation_producer,
+            page=page,
+            chunks=plan.chunks,
+            line_by_id=line_by_id,
+            ctx=ctx,
+            traces=traces,
         )
 
         # a vision producer crops every line it is sent, and
