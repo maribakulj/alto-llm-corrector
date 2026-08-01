@@ -432,12 +432,13 @@ def _confidence_attr_count(el: etree._Element, ns: str) -> int:
     some and lose others, and "did the line take a write path" is not the
     same question as "did this line lose confidence".
     """
-    return sum(
-        1
-        for string_el in _get_string_children(el, ns)
-        for attr in string_el.attrib
-        if attr.rsplit("}", 1)[-1].upper() in INVALIDATED_ATTRIBUTES
-    )
+    count = 0
+    for string_el in _get_string_children(el, ns):
+        for attr in string_el.attrib:
+            name = attr.decode() if isinstance(attr, bytes) else str(attr)
+            if name.rsplit("}", 1)[-1].upper() in INVALIDATED_ATTRIBUTES:
+                count += 1
+    return count
 
 
 def _confidence_loss(before: int, el: etree._Element, ns: str) -> dict[str, int]:

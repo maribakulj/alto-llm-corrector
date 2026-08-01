@@ -241,8 +241,7 @@ def create_app() -> FastAPI:
         profile = "proxy_protected"
     if profile not in ("demo", "proxy_protected"):
         raise RuntimeError(
-            "DEPLOYMENT_PROFILE must be 'demo' or 'proxy_protected', got "
-            f"{profile!r}"
+            f"DEPLOYMENT_PROFILE must be 'demo' or 'proxy_protected', got {profile!r}"
         )
 
     # 3. CORS (outermost) — origins configurable via CORS_ORIGINS env
