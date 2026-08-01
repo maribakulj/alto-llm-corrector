@@ -50,22 +50,21 @@ from corrigenda.errors import (
     CorrigendaError,
 )
 from corrigenda.core import events as ev
-from corrigenda.core.decisions import (
-    build_line_outcomes,
-    derive_decision_set,
-)
 from corrigenda.core.planner import downgrade_granularity, plan_page
 from corrigenda.core.acceptance import (
     _apply_line_acceptance,
-    _global_adjacency_pass,
-    _loss_policy_pass,
 )
 from corrigenda.core.batching import _split_for_image_cap
 from corrigenda.core.context import RunContext
+from corrigenda.core.finalize import _finalize_document
+from corrigenda.core.indexing import (
+    DocumentIndex,
+    _cross_page_partners,
+    _index_document,
+)
 from corrigenda.core.preflight import _preflight
-from corrigenda.core.projection import _fidelity_counts
 from corrigenda.core.rendering import _render_outputs
-from corrigenda.core.report import _build_final_edit_script
+from corrigenda.core.report import _build_correction_report
 from corrigenda.core.routing import _route_and_filter_chunks
 from corrigenda.core.traces import _set_trace
 from corrigenda.core.reconcile import (
@@ -74,9 +73,9 @@ from corrigenda.core.reconcile import (
     _subpage_for_lines,
     _unit_pool,
 )
-from corrigenda.core.result import CorrectionResult
+from corrigenda.core.result import CorrectionResult, _build_correction_result
 from corrigenda.core.provenance import (
-    _dependency_versions,
+    _build_run_provenance,
     _digest_sources,
 )
 from corrigenda.core.retry import _classify_retry
@@ -94,10 +93,6 @@ from corrigenda.core.protocols import (
     ProviderPermanentError,
     ProviderTransientError,
 )
-from corrigenda.core.pairing import (
-    unpaired_break_refs,
-    preserve_break_char,
-)
 from corrigenda.core.quality import (
     DEFAULT_ROUTING_POLICY,
     QEScorer,
@@ -106,7 +101,6 @@ from corrigenda.core.quality import (
 from corrigenda.core.confidence import (
     ConfidenceScorer,
     HeuristicScorer,
-    build_line_confidence,
 )
 from corrigenda.core.schemas import (
     DEFAULT_GUARD_CONFIG,
@@ -116,18 +110,15 @@ from corrigenda.core.schemas import (
     DEFAULT_RETRY_POLICY,
     ChunkPlannerConfig,
     ChunkRequest,
-    CorrectionReport,
     DocumentManifest,
     GuardConfig,
     HyphenRole,
-    ImageAsset,
     PageImage,
     LineManifest,
     LineStatus,
     LineTrace,
     ConfidencePolicy,
     LossPolicy,
-    ProducerProvenance,
     ProposalBatch,
     CorrectionRequest,
     PageManifest,
@@ -189,11 +180,6 @@ _SECRET_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
         r"\1****",
     ),
 )
-
-
-#: Critical dependencies recorded on the run's provenance (P3.9, §11).
-#: Versions come from package METADATA (importlib.metadata), never from
-#: an import — the pure core stays lxml-free by construction.
 
 
 def sanitize_error(msg: str, api_key: str | None = None) -> str:
@@ -520,7 +506,13 @@ class CorrectionPipeline:
         should_abort: Callable[[], bool] | None,
         page_images: dict[str, PageImage] | None,
     ) -> CorrectionResult:
-        """Body of :meth:`run`, working on the run's private manifest copy."""
+        """Body of :meth:`run`, working on the run's private manifest copy.
+
+        Six steps, in the only order they can run in: refuse what cannot
+        proceed, index the document, correct every page, finalise the
+        decisions, render the outputs, report. Each step lives in its own
+        module (S2) — this method is the sequence, and nothing else.
+        """
         run_id = run_id or str(uuid.uuid4())
         # One fresh context per execution; no per-run state remains on
         # the instance.
@@ -535,128 +527,29 @@ class CorrectionPipeline:
             ctx=ctx,
         )
 
-        total_hyphen_pairs = sum(
-            sum(
-                1
-                for lm in page.lines
-                if lm.hyphen_role in (HyphenRole.PART1, HyphenRole.BOTH)
-            )
-            for page in document_manifest.pages
-        )
-
+        index = _index_document(document_manifest)
         self._emit(
             ev.DocumentParsed(
                 total_pages=document_manifest.total_pages,
                 total_lines=document_manifest.total_lines,
-                hyphen_pairs=total_hyphen_pairs,
+                hyphen_pairs=index.hyphen_pairs,
             )
         )
 
-        # Initialize line traces
-        traces: dict[LineRef, LineTrace] = {}
-        for page in document_manifest.pages:
-            for lm in page.lines:
-                traces[line_ref(lm)] = LineTrace(
-                    line_id=lm.line_id,
-                    page_id=lm.page_id,
-                    source_ocr_text=lm.ocr_text,
-                    hyphen_role=lm.hyphen_role.value,
-                )
-
-        # Global page-qualified registry for cross-page partner lookups
-        all_lines_global: dict[LineRef, LineManifest] = {}
-        for page in document_manifest.pages:
-            for lm in page.lines:
-                all_lines_global[line_ref(lm)] = lm
-
-        total_chunks = 0
-        total_reconciled = 0
-
-        for page in document_manifest.pages:
-            # F10 — cooperative cancellation between pages, before any work
-            # on this page and before any output is written.
-            if should_abort is not None and should_abort():
-                raise CorrectionAborted(
-                    f"run aborted before page {page.page_id!r} (page {page.page_index})"
-                )
-
-            # Cross-page partners needed by this page's lines
-            cross_page: dict[LineRef, LineManifest] = {}
-            for lm in page.lines:
-                for partner_id, partner_page in (
-                    (lm.hyphen_pair_line_id, lm.hyphen_pair_page_id),
-                    (lm.hyphen_forward_pair_id, lm.hyphen_forward_pair_page_id),
-                ):
-                    if not partner_id or not partner_page:
-                        continue
-                    if partner_page == page.page_id:
-                        continue
-                    partner = all_lines_global.get(
-                        LineRef(page_id=partner_page, line_id=partner_id)
-                    )
-                    if partner is not None:
-                        cross_page[
-                            LineRef(page_id=partner_page, line_id=partner_id)
-                        ] = partner
-
-            page_chunks, page_reconciled = await self._process_page(
-                ctx=ctx,
-                page=page,
-                document_id=document_manifest.document_id,
-                traces=traces,
-                cross_page_partners=cross_page if cross_page else None,
-                should_abort=should_abort,
-            )
-            total_chunks += page_chunks
-            total_reconciled += page_reconciled
-
-        # P3.3 — ONE document-wide consistency pass. Chunk finalization no
-        # longer reverts duplicates, so every line still holds its
-        # PRE-REVERT accepted correction here: the pass compares live
-        # corrected_text over the canonical reading order on one basis,
-        # and extends rejections to whole hyphen units through THE
-        # derivation (ADR-010). Replaces three partial sweeps — the
-        # intra-chunk sweep, the cross-chunk boundary pass and the
-        # page-seam pass — that each carried their own comparison base.
-        _global_adjacency_pass(
-            guard_config=self.guard_config,
+        total_chunks, total_reconciled = await self._process_pages(
+            ctx=ctx,
             document_manifest=document_manifest,
-            all_lines=all_lines_global,
-            traces=traces,
+            index=index,
+            should_abort=should_abort,
         )
 
-        # ADR-012 — STRICT loss policy: a correction that cannot project
-        # without losing word granularity is rejected HERE, before the
-        # decisions materialize and before any output exists — the unit
-        # falls back to source text and the source markup keeps its
-        # Word geometry (the rewrite sees an untouched line).
-        # P5, decision-side (found by the OCR17+ corpus, 2026-07-23): if
-        # the SOURCE line ends in a word-break character and the accepted
-        # correction ends in a DIFFERENT one, force the source's char
-        # BEFORE decisions materialize — historically the PAGE rewriter
-        # enforced this after the decision was recorded, so the artefact
-        # diverged from the decision and _verify_projection raised.
-        for page in document_manifest.pages:
-            for lm in page.lines:
-                if lm.corrected_text is not None and lm.corrected_text != lm.ocr_text:
-                    # The proposal stage in the traces keeps the
-                    # producer's RAW text (auditability); only the
-                    # decided text is normalized.
-                    lm.corrected_text = preserve_break_char(
-                        lm.ocr_text, lm.corrected_text
-                    )
-
-        sidecar_entries = _loss_policy_pass(
+        decisions, sidecar_entries = _finalize_document(
+            guard_config=self.guard_config,
             loss_policy=self.loss_policy,
             document_manifest=document_manifest,
-            all_lines=all_lines_global,
-            traces=traces,
+            all_lines=index.lines,
+            traces=index.traces,
         )
-
-        # ADR-011 — materialize the run's decisions. Refuses a PENDING
-        # line (the run-level terminality backstop): outputs exist only
-        # for a document where every line carries a terminal decision.
-        decisions = derive_decision_set(document_manifest, traces)
 
         format_losses, corrected_files = await _render_outputs(
             format_adapter=self.format_adapter,
@@ -665,7 +558,7 @@ class CorrectionPipeline:
             emit=self._emit,
             document_manifest=document_manifest,
             source_files=source_files,
-            traces=traces,
+            traces=index.traces,
             decisions=decisions,
         )
 
@@ -673,163 +566,84 @@ class CorrectionPipeline:
         # record and the final edit script's preconditions.
         source_digests = _digest_sources(source_files)
 
-        report = CorrectionReport(
+        report = _build_correction_report(
             run_id=run_id,
-            total_lines=len(decisions.decisions),
-            # P3.5 / ADR-011 slice C — the report builder reads the
-            # DecisionSet (terminal stage) + the working traces
-            # (proposal/projection stages), staged per line (§9 v2).
-            lines=build_line_outcomes(decisions, traces),
-            # ADR-011 — the rewrite's granularity-loss counters surface on
-            # the report. None when no MARKUP was dropped (or nothing was
-            # written) — never read as "the run lost nothing": a flattened
-            # character is counted on the fidelity scale below (R8).
-            format_losses=format_losses or None,
-            # How faithfully each rewritten line carries its decision,
-            # counted by level. A non-zero "normalized" is the run telling
-            # its host that a significant whitespace character did not
-            # survive the format — the thing the invariant used to compare
-            # away before anyone could count it.
-            projection_fidelity=_fidelity_counts(traces) or None,
-            # A break whose partner this run never found: silent until now,
-            # and not the same thing as a fallback — the line WAS corrected,
-            # just alone and without its pair-drift guards.
-            unpaired_breaks=len(unpaired_break_refs(document_manifest.pages)) or None,
-            # R6 — the units this run CUT to fit the request cap. Distinct
-            # from unpaired_breaks: there the link was never there, here the
-            # engine severed one on purpose, and the split resets the tail's
-            # role to NONE so it cannot show up in that count either.
-            hyphen_splits=ctx.hyphen_splits or None,
-            # P3.9 (§11) — the run's full provenance record.
-            provenance=self._build_provenance(
-                document_manifest=document_manifest,
-                source_digests=source_digests,
-                image_assets=ctx.image_ref_by_page_id,
-            ),
-            # F14/§11 — the aggregated usage is part of the persisted
-            # artefact, not just the transient result. None when nothing
-            # was reported: a zero Usage would be indistinguishable from
-            # "the provider reported zero tokens".
-            usage=(
-                ctx.usage if ctx.usage.total_tokens or ctx.usage.response_ids else None
-            ),
-            # corrections the token_realign gate refused to
-            # project, preserved for review instead of lost.
-            sidecar=sidecar_entries or None,
+            document_manifest=document_manifest,
+            decisions=decisions,
+            traces=index.traces,
+            ctx=ctx,
+            provenance=self._run_provenance(document_manifest, source_digests, ctx),
+            format_losses=format_losses,
+            sidecar_entries=sidecar_entries,
+            confidence_policy=self.confidence_policy,
+            confidence_scorers=self.confidence_scorers,
+            all_lines=index.lines,
         )
 
-        # line confidences (report-only; write_wc stays locked
-        # until calibration). Filled AFTER the report is built so every
-        # outcome scores its FINAL decided text, whatever path decided it.
-        if self.confidence_policy.mode != "drop":
-            for outcome in report.lines:
-                ref = LineRef(page_id=outcome.page_id, line_id=outcome.line_id)
-                scored_line = all_lines_global.get(ref)
-                # The producer's verified self-assessment rides the
-                # captured ops (uncertainty channel); min over a line's
-                # ops when several declared one.
-                producer_conf: float | None = None
-                captured_line = ctx.producer_ops.get(ref)
-                if captured_line is not None:
-                    declared_confidences: list[float] = [
-                        pc
-                        for op in captured_line[0]
-                        if (pc := getattr(op, "producer_confidence", None)) is not None
-                    ]
-                    if declared_confidences:
-                        producer_conf = min(declared_confidences)
-                outcome.confidence = build_line_confidence(
-                    source_text=outcome.source_text,
-                    final_text=outcome.decision.final_text,
-                    ocr_confidence=(
-                        scored_line.ocr_confidence if scored_line is not None else None
-                    ),
-                    producer_confidence=producer_conf,
-                    scorers=self.confidence_scorers,
-                )
-
-        # Line-level fallback accounting, read from the DecisionSet
-        # (ADR-011): it covers every path that leaves a line at its OCR
-        # text (chunk fallback, guard rejection, duplicate revert), not
-        # just chunks whose attempts were exhausted.
-        return CorrectionResult(
+        return _build_correction_result(
+            ctx=ctx,
+            decisions=decisions,
+            traces=index.traces,
+            report=report,
+            corrected_files=corrected_files,
+            source_digests=source_digests,
             total_chunks=total_chunks,
             total_reconciled=total_reconciled,
-            retry_count=ctx.retry_count,
-            fallback_chunks=ctx.fallback_chunks,
-            fallback_lines=decisions.fallback_lines,
-            fallback_reasons=decisions.fallback_reason_counts(),
-            traces=traces,
-            reconcile_metrics=ctx.reconcile_metrics,
-            usage=ctx.usage,
-            report=report,
-            edit_script=_build_final_edit_script(
-                decisions, ctx, source_digests=source_digests
-            ),
-            decisions=decisions,
-            corrected_files=corrected_files,
-            # routing economics: lines skipped (no producer
-            # call) and the run's total producer-call count.
-            lines_skipped=ctx.lines_skipped,
-            # lines routed to the escalation (vision) producer.
-            escalated_lines=ctx.escalated_lines,
-            producer_calls=ctx.producer_calls,
         )
 
-    def _build_provenance(
+    def _run_provenance(
         self,
-        *,
         document_manifest: DocumentManifest,
         source_digests: dict[str, str],
-        image_assets: dict[str, PageImage],
+        ctx: RunContext,
     ) -> RunProvenance:
-        """The run's §11 provenance record (P3.9): library + producer
-        identity, policy fingerprint, per-file digests of the INPUT
-        bytes (computed once in :meth:`run` via ``_digest_sources`` and
-        shared with the edit script's preconditions), per-page image
-        digests, and critical dependency versions."""
-        from corrigenda import __version__ as _lib_version
-
-        md = self.producer_metadata
-        # copy the digest each structured ImageAsset already
-        # carries; the core never opens an image (I4). Bare ImageRef
-        # strings and digest-less assets contribute nothing.
-        image_digests = {
-            page_id: f"sha256:{asset.sha256}"
-            for page_id, asset in image_assets.items()
-            if isinstance(asset, ImageAsset) and asset.sha256
-        }
-        # record the escalation (vision) producer's identity too,
-        # from its own declared metadata (the same optional-attribute
-        # convention as the primary producer's). None for a single-producer
-        # run, so text-only provenance is unchanged.
-        escalation_prov: ProducerProvenance | None = None
-        if self.escalation_producer is not None:
-            emd = (
-                getattr(self.escalation_producer, "metadata", None)
-                or ProducerMetadata()
-            )
-            escalation_prov = ProducerProvenance(
-                name=emd.name,
-                version=emd.version,
-                implementation=emd.implementation,
-                configuration_fingerprint=emd.configuration_fingerprint,
-            )
-        return RunProvenance(
-            lib_version=_lib_version,
+        """Bind this pipeline's configured identities to the run's inputs
+        (§11). The record itself is built in :mod:`corrigenda.core.provenance`
+        — all this contributes is which producers and which fingerprint."""
+        return _build_run_provenance(
+            producer_metadata=self.producer_metadata,
+            escalation_producer=self.escalation_producer,
             config_fingerprint=self.config_fingerprint(),
-            producer=ProducerProvenance(
-                name=md.name,
-                version=md.version,
-                implementation=md.implementation,
-                configuration_fingerprint=md.configuration_fingerprint,
-            ),
-            escalation_producer=escalation_prov,
+            document_manifest=document_manifest,
             source_digests=source_digests,
-            image_digests=image_digests,
-            source_format=document_manifest.source_format,
-            dependencies=_dependency_versions(),
+            image_assets=ctx.image_ref_by_page_id,
         )
+
+    async def _process_pages(
+        self,
+        *,
+        ctx: RunContext,
+        document_manifest: DocumentManifest,
+        index: DocumentIndex,
+        should_abort: Callable[[], bool] | None,
+    ) -> tuple[int, int]:
+        """Correct every page in manifest order.
+
+        Returns the run's ``(chunks, reconciled pairs)`` totals. Each page
+        is given the partners its hyphen units need from other pages: a
+        unit straddling a page break is still ONE unit, and the page that
+        holds one end cannot resolve it from its own lines (ADR-010).
+        """
+        total_chunks = 0
+        total_reconciled = 0
+        for page in document_manifest.pages:
+            # F10 — cooperative cancellation between pages, before any work
+            # on this page and before any output is written.
+            if should_abort is not None and should_abort():
+                raise CorrectionAborted(
+                    f"run aborted before page {page.page_id!r} (page {page.page_index})"
+                )
+            page_chunks, page_reconciled = await self._process_page(
+                ctx=ctx,
+                page=page,
+                document_id=document_manifest.document_id,
+                traces=index.traces,
+                cross_page_partners=_cross_page_partners(page, index.lines),
+                should_abort=should_abort,
+            )
+            total_chunks += page_chunks
+            total_reconciled += page_reconciled
+        return total_chunks, total_reconciled
 
     def run_sync(
         self,
