@@ -52,6 +52,17 @@ vision = [
     "pillow>=10.0,<12.0",
 ]
 
+# Type-checking toolchain. Not a runtime extra: it exists so that
+# `mypy --strict src/corrigenda` means the same thing locally and in CI.
+# lxml-stubs is load-bearing — without it `_Element.attrib` degrades to
+# `Any` and strict mode silently checks less than the corrigenda-types job
+# does. The mypy pin is exact so a new release never turns a green local
+# run red in CI (or the reverse).
+typecheck = [
+    "mypy==1.15.0",
+    "lxml-stubs",
+]
+
 [project.urls]
 Homepage = "https://github.com/maribakulj/corrigenda"
 Issues = "https://github.com/maribakulj/corrigenda/issues"

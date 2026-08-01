@@ -28,6 +28,8 @@ Two standing rules from that plan, in force until it says otherwise:
 ```bash
 # Library
 cd packages/corrigenda
+pip install -e '.[typecheck]'   # mypy pin + lxml-stubs; without the stubs
+                                # mypy checks LESS than CI does
 pytest                          # coverage gate 85%
 mypy --strict src/corrigenda
 

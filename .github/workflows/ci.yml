@@ -81,9 +81,10 @@ jobs:
           python-version: "3.11"
           cache: pip
       - name: Install corrigenda (editable) + mypy + stubs
-        run: |
-          pip install -e .
-          pip install mypy==1.15.0 lxml-stubs
+        # The toolchain is declared in pyproject.toml's `typecheck` extra —
+        # keep it there, not pinned a second time here, so a local
+        # `pip install -e '.[typecheck]'` checks exactly what this job does.
+        run: pip install -e '.[typecheck]'
       - name: mypy --strict
         run: mypy --strict src/corrigenda
 

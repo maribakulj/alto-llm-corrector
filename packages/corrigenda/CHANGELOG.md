@@ -51,6 +51,13 @@ The **top-level import surface** will break once more before the first tag:
 
 ### Added
 
+- **A `typecheck` extra, so `mypy --strict` means one thing.** `lxml-stubs` was
+  installed by hand in the CI workflow and declared in no manifest, and without
+  it mypy types `_Element.attrib` as `Any` — a local strict run checked less
+  than the gate it was meant to reproduce, silently. `pip install
+  corrigenda[typecheck]` now installs the pinned mypy plus the stubs, and the
+  CI job installs the extra instead of carrying its own pin.
+
 - **`CorrectionReport.hyphen_splits` — the engine's one deliberately
   destructive operation is no longer invisible (R6).** When a hyphen chain is
   longer than `max_lines_per_request` the LINE planner severs a forward link so
