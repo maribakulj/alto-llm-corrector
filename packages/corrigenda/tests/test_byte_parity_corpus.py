@@ -53,6 +53,22 @@ TextLine, bucket into text/structure/confidence/geometry) and update the
 hash ONLY for a deliberate, documented byte change, naming it in the
 commit message. The rewrite is invoked WITHOUT provenance arguments so
 these hashes are independent of the library version string.
+
+    Mixed-role break fix (2026-07-27) — ONE scripted hash moved
+    (``X0000002.xml``; the other three are unchanged, and identity is
+    untouched because it takes the UNTOUCHED path). Classified per TextLine:
+    **exactly 1 of 566 differs**, ``PAG_00000002_TL000454``, whose last
+    String goes from ``Wal`` back to ``Wal-``. Nothing else in the file
+    changes — not geometry, not attributes, not structure.
+
+    That line is BOTH: it opens with an explicit ``SUBS_TYPE="HypPart2"``
+    and ends on a bare heuristic dash with no ``<HYP>``. The writer decided
+    whether to strip the trailing mark from the String by reading
+    ``hyphen_source_explicit`` — which describes the BACKWARD link — and got
+    "explicit", so it dropped the dash expecting a ``<HYP>`` to render it.
+    There is none, and the mark was simply gone from the delivered file. It
+    now reads ``forward_break_is_explicit``, the role→slot map applied to
+    the right flag. The old hash pinned the defect.
 """
 
 from __future__ import annotations
@@ -77,8 +93,10 @@ _GOLDEN = {
     ("X0000002.xml", "identity"): (
         "58b7f7d4f230d202494e5698da34e57aeffae7774b4517de86f233c85b744b3b"
     ),
+    # See the module docstring, "Mixed-role break fix": one TextLine of 566
+    # regained the trailing dash the writer used to drop.
     ("X0000002.xml", "scripted"): (
-        "acaa511607c561fbf717fbcc3b2befe58f4257501db2383c34cf961c7f45fdcc"
+        "2c9bc04d1a1157f9a7dccbb6403712a428a2e0ced9b483ae30dd010998858d85"
     ),
 }
 

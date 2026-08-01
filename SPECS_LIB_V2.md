@@ -33,12 +33,30 @@ Trois invariants fondateurs, hérités de l'existant et non négociables :
 - **I3 — La structure d'origine est intouchable.** IDs, géométrie ligne,
   ordre XML, attributs non textuels : préservés à l'octet quand rien ne
   change (stratégie 4 chemins), modifiés au minimum quand le texte change.
-- **I4 — La lib est aveugle aux pixels.** Le cœur ne charge, ne découpe et
+- **I4 — Le cœur est aveugle aux pixels.** Le cœur ne charge, ne découpe et
   n'encode jamais d'image. La correction *guidée par l'image* (VLM) est un
   **producteur** qui reçoit une **référence** d'image opaque ; charger et
   cropper les pixels est la responsabilité de l'implémentation du producteur,
   hors du cœur (§5.2 bis). C'est le corollaire vision de « zéro I/O dans
   `core` ».
+
+  **Portée exacte, en trois niveaux** — I4 contraint le cœur, pas la
+  distribution entière :
+  1. `core/` et les formats ne touchent jamais un pixel, et n'importent
+     jamais de bibliothèque d'image. Ligne rouge (§12), vérifiée par le scan
+     statique I4.
+  2. L'installation de base (`pip install corrigenda`) n'embarque **aucune**
+     dépendance image : `dependencies` se limite à Pydantic et lxml.
+  3. L'extra `corrigenda[vision]` — `integrations/vision.py`, le producteur
+     de référence — **décode, oriente et crope effectivement des pixels**,
+     avec Pillow pour seule dépendance image, importée **paresseusement à
+     l'intérieur des fonctions** pour que le chemin d'installation de base ne
+     la charge jamais. C'est un producteur, donc hors du cœur : I4 tient.
+
+  Le point 3 est ce que le titre de cet invariant a longtemps laissé croire
+  interdit. Il ne l'est pas — il est la raison d'être du seam. Ce qui reste
+  interdit est de faire entrer un pixel ou une dépendance image **dans le
+  cœur**. `tests/test_import_contract.py` tient les trois niveaux.
 
 Corollaire transverse : **le cœur est agnostique de la modalité**. Validation
 1:1, gardes, réconciliation et rewriter ne voient jamais que du texte-in /
@@ -97,22 +115,53 @@ ensuite, chacun avec sa preuve.
 
 ## 3. Architecture cible
 
+> **Relevé du 2026-07-28.** L'arbre ci-dessous décrivait un paquet nommé
+> `lib/` avec 7 modules de cœur, sans `integrations/`, sans `errors.py`, sans
+> `facade.py`, et avec un `producers/llm.py` qui n'existe pas. Un document
+> normatif qui décrit un périmètre faux est le défaut que `V8` interdit :
+> réécrit depuis l'arborescence réelle (`D2`). Ce qu'il faut y lire est la
+> **frontière**, pas la liste — le cœur ne connaît ni lxml ni réseau, les
+> formats ne connaissent pas le producteur, et `integrations/` est le seul
+> étage qui touche un vendeur.
+
 ```
-lib/
+corrigenda/
+├── __init__.py              # surface de sommet (PEP 562 : formats/producteurs paresseux)
+├── errors.py                # hiérarchie CorrigendaError (§8.4)
+├── facade.py                # load / correct / correct_sync — le chemin en 3 lignes (§2)
 ├── core/                    # pur : zéro I/O, zéro réseau, zéro lxml
-│   ├── schemas.py           # manifests, chunks, protocole d'édition, traces
+│   ├── schemas.py           # manifests, chunks, politiques gelées, rapport (§9)
+│   ├── protocols.py         # EditProducer, PipelineObserver, FormatAdapter, RewriteResult
+│   ├── pipeline.py          # orchestration (retry, descente de granularité, traces)
+│   ├── planner.py           # chunk planner (PAGE→BLOCK→WINDOW→LINE, césure-conscient)
 │   ├── guards.py            # matrice anti-migration (3 étages) + GuardConfig
 │   ├── hyphenation.py       # réconciliation de paires (logique TEXTE, format-agnostique)
-│   ├── planner.py           # chunk planner (PAGE→BLOCK→WINDOW→LINE, césure-conscient)
+│   ├── pairing.py           # répertoire de coupure + primitives de lien dirigé (ADR-010)
+│   ├── units.py             # dérivation d'unité de césure + split_forward_link
 │   ├── editing.py           # EditScript : validation, normalisation match→range, application
-│   ├── pipeline.py          # orchestration (retry, descente de granularité, traces)
-│   └── protocols.py         # EditProducer, PipelineObserver, FormatAdapter
-├── formats/
-│   ├── alto/                # parser + rewriter ALTO (lxml, durci)
-│   └── page/                # parser + rewriter PAGE XML (lxml, durci)
-└── producers/
-    ├── llm.py               # contrat provider LLM (payload, schémas de sortie, prompts)
-    └── rules.py             # moteur de règles déterministe (v2.0)
+│   ├── decisions.py         # DecisionSet, assemblage des LineOutcome (ADR-011)
+│   ├── identity.py          # LineRef — l'identité (page_id, line_id) (ADR-009)
+│   ├── fidelity.py          # échelle de fidélité de projection (L0/L8)
+│   ├── losses.py            # matrice des pertes, versionnée (R0)
+│   ├── validator.py         # validation de la réponse producteur + intégrité de césure
+│   ├── alignment.py         # alignement de tokens source↔correction
+│   ├── confidence.py        # confiances de ligne
+│   ├── quality.py           # QE + routage
+│   ├── events.py            # types d'événements de l'observateur
+│   ├── _norm.py             # NFC, nettoyage de CONTENT
+│   └── _parse.py            # parsing d'entiers tolérant
+├── formats/                 # formats de transcription concrets (lxml, durci)
+│   ├── loader.py            # détection de format + façade de parsing
+│   ├── validation.py        # validation XSD
+│   ├── alto/                # parser + rewriter ALTO (v2/v3/v4)
+│   └── page/                # parser + rewriter PAGE XML (2013/2019/2024)
+├── producers/               # implémentations d'EditProducer
+│   ├── llm_edit.py          # producteur LLM (enveloppe le contrat d'intégration)
+│   └── rules.py             # moteur de règles déterministe
+└── integrations/            # le seul étage qui connaît un vendeur
+    ├── llm.py               # contrat provider LLM (payload, schéma de sortie, prompt)
+    ├── qe.py                # estimateur de qualité
+    └── vision.py            # extra `corrigenda[vision]` — Pillow, import paresseux (I4)
 ```
 
 Règle d'import : `core` n'importe rien de `formats` ni `producers` ;
@@ -255,9 +304,16 @@ class EditProducer(Protocol):
     wants_image: bool = False
 
     async def produce(
-        self, payload: ModelPayload, *, policy: RetryPolicy
+        self, payload: CorrectionRequest, *, options: ProducerOptions
     ) -> tuple[EditScript, Usage | None]: ...
 ```
+
+> **Corrigé le 2026-07-28 (`D2`).** Cette signature montrait
+> `payload: ModelPayload, *, policy: RetryPolicy` — un type qui n'existe pas,
+> et le `RetryPolicy` complet que P3.7 a précisément **retiré** de cette
+> couture : le moteur possède la stratégie de retry, un producteur n'a besoin
+> de savoir que ce qui concerne **cet appel-ci**. La spec contredisait donc sa
+> propre prose sur `ProducerOptions`.
 
 À partir de v2.0, `BaseProvider` (LLM) devient **une implémentation** de ce
 contrat, pas le contrat lui-même. `Usage` (tokens in/out) remonte au rapport
@@ -304,7 +360,8 @@ Ce qui appartient au **consommateur** (le producteur concret, hors lib) :
   encoder, construire le message multimodal, appeler le VLM, renvoyer le même
   JSON `{lines:[{line_id, corrected_text}]}`.
 - C'est une **implémentation de producteur** — par définition hors du cœur,
-  comme tout provider concret (I4 : la lib ne touche aucun pixel).
+  comme tout provider concret (I4 : le *cœur* ne touche aucun pixel ; un
+  producteur vision, lui, en traite — c'est son travail).
 
 **Prototypage sans changement de lib** : un producteur *stateful par document*
 qui se construit avec le `DocumentManifest` + l'image, résout `coords[line_id]`
@@ -457,6 +514,37 @@ Chaque entrée : constat → règle normative. Toutes sont **v1.0** sauf mention
 
 ### 8.1 Surface
 
+> **Statut (2026-07-28) — la surface de sommet est PROVISOIRE.**
+>
+> `corrigenda.__all__` porte **95 symboles**. Ce nombre n'a jamais été
+> ratifié : il a été **accumulé**, un ajout à la fois, chacun justifié le
+> jour où il a été fait. `docs/PLAN.md` (`S3`) a calculé ce qu'il devrait
+> être — la clôture transitive de ce que la façade retourne, **54** — et la
+> réduction est **différée à la fin du nettoyage**, parce que `S2` (scinder
+> `core/pipeline.py`) peut encore déplacer ce qui mérite d'être exposé.
+> Couper avant, c'est migrer les imports deux fois.
+>
+> En attendant, deux choses tiennent, et elles suffisent :
+> la série `0.9.x` est explicitement libre de casser la surface
+> (`packages/corrigenda/docs/versioning.md`), et un test de cliquet
+> (`tests/test_public_api_snapshot.py`) interdit qu'elle **grandisse**.
+> Rien n'est gelé sous SemVer avant `1.0.0` — et `1.0.0` ne sera pas taguée
+> avant que `S3` soit fermé (critère de sortie `V5`).
+>
+> **Deux portes, deux garanties** (déjà énoncé dans `versioning.md`, répété
+> ici parce que c'est la section normative) :
+>
+> - `corrigenda.*` — la porte d'entrée. Sous SemVer strict **à partir de
+>   `1.0.0`**, et réduite à la clôture calculée avant cette date.
+> - `corrigenda.core.*`, `corrigenda.formats.*`, `corrigenda.producers.*` —
+>   les chemins de modules. Supportés et documentés ; c'est la porte que le
+>   dépôt emprunte lui-même (**695 imports par chemin de module contre 64
+>   depuis le sommet**), et un symbole rétrogradé par `S3` y reste
+>   importable. Ce n'est donc pas une suppression, c'est un déplacement.
+>
+> Le bloc ci-dessous reste la photographie d'origine de la v2.0 : il dit
+> quelles **entrées** existent, pas ce que `__all__` contient.
+
 ```python
 # parse
 build_document_manifest(files) -> DocumentManifest          # existant
@@ -490,9 +578,16 @@ pipeline.run_sync(...)                            # façade asyncio.run, documen
 # de run() — voir ADR ; le bloc ci-dessus reste la photographie v2.0
 # d'origine.)
 
-# bas niveau (déjà publics, maintenus)
-rewrite_alto_file(...), extract_output_texts(...),
+# bas niveau
+rewrite_alto_file(...), extract_output_texts(...)      # dans `__all__`
 reconcile_hyphen_pair(...), check_line(...), plan_page(...)
+# ^ PAS dans `__all__`. Ces trois-là étaient déclarés ici « déjà publics,
+#   maintenus » ; ils ne l'ont jamais été. Corrigé le 2026-07-28 en
+#   retirant la promesse plutôt qu'en l'honorant : le gel de
+#   fonctionnalités suspend l'extension de l'API publique, et `S3` réduit
+#   la surface au lieu de l'élargir. Ils restent importables depuis
+#   `corrigenda.core.hyphenation` / `.guards` / `.planner`, comme tout ce
+#   que `S3` rétrogradera.
 ```
 
 ### 8.2 Politiques

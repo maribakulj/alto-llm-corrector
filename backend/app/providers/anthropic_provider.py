@@ -46,7 +46,7 @@ def _model_output_cap(model: str) -> int:
     # Claude 3.5 family — 8192 output tokens.
     if "claude-3-5" in m or "claude-3.5" in m:
         return 8192
-    # Claude 3.7 — 64k. Audit-F14: this branch MUST precede the generic
+    # Claude 3.7 — 64k. this branch MUST precede the generic
     # 'claude-3' one ("claude-3-7-…" contains the substring "claude-3"),
     # otherwise 3.7 is silently capped at 4096 and long chunks truncate
     # into a retry storm.
@@ -65,7 +65,7 @@ def _model_output_cap(model: str) -> int:
     return 8192
 
 
-# Audit-F13 — model families that REJECT the `temperature` parameter
+# model families that REJECT the `temperature` parameter
 # with a hard 400: Anthropic removed sampling params on Opus 4.7/4.8 and
 # Fable 5/Mythos 5, and Sonnet 5 rejects any NON-default value (our
 # retry ramp 0.0/0.3/0.5 is always non-default, so omit for the family).
@@ -152,7 +152,7 @@ class AnthropicProvider:
         # Wave-2 review — /v1/models is PAGINATED (limit default 20, max
         # 1000; after_id cursor, has_more/last_id in the response): the
         # single unparameterised GET silently hid every model past page
-        # one — the same defect class Audit-F16 fixed on Gemini. Ask for
+        # one — the same defect class fixed on Gemini. Ask for
         # the biggest pages, follow the cursor with the same safety
         # bound, and make truncation loud instead of silent.
         models = []
@@ -222,7 +222,7 @@ class AnthropicProvider:
             ],
             "tool_choice": {"type": "tool", "name": tool_name},
         }
-        # Audit-F13 — only send temperature to families that accept it.
+        # only send temperature to families that accept it.
         if _supports_temperature(model):
             body["temperature"] = temperature
         elif temperature:

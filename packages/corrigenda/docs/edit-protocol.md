@@ -121,8 +121,8 @@ apply_edit_script(script, {"l1": "ſoleil"}).text_by_id     # {"l1": "soleil"}
   start-up `ConfigurationError` (`require_page_images`).
 
   Each `page_images` value is a `PageImage`: the historical **opaque**
-  `ImageRef` (str — path/URL/handle) *or*, recommended since ROADMAP V3
-  Phase 4, a structured **`ImageAsset`** carrying the provenance the
+  `ImageRef` (str — path/URL/handle) *or*, recommended since the vision
+  producer landed, a structured **`ImageAsset`** carrying the provenance the
   audit trail wants (`sha256` of the bytes, decoded `media_type` and
   pixel dimensions, multipage `frame_index`, `exif_orientation`, and an
   `ImageTransform` mapping XML coordinates onto image pixels). Either

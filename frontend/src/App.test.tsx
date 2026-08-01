@@ -178,7 +178,7 @@ describe('App — happy path', () => {
     })
 
     // Terminal UI: download + diff + layout sections.
-    await screen.findByRole('button', { name: /download corrected alto/i })
+    await screen.findByRole('button', { name: /download corrected xml/i })
     await screen.findByText('Résultats de correction')
     await screen.findByText(/aucune mise en page/i)
 
@@ -219,7 +219,7 @@ describe('App — happy path', () => {
     act(() => {
       es.dispatch('completed', completePayload())
     })
-    await screen.findByRole('button', { name: /download corrected alto/i })
+    await screen.findByRole('button', { name: /download corrected xml/i })
 
     fireEvent.click(screen.getByRole('button', { name: /new correction/i }))
 
@@ -227,7 +227,7 @@ describe('App — happy path', () => {
       expect(screen.queryByText('Progress')).not.toBeInTheDocument()
     })
     expect(
-      screen.queryByRole('button', { name: /download corrected alto/i }),
+      screen.queryByRole('button', { name: /download corrected xml/i }),
     ).not.toBeInTheDocument()
     expect(screen.queryByText('Résultats de correction')).not.toBeInTheDocument()
     // FileUpload remounted empty → play disabled again.
@@ -258,7 +258,7 @@ describe('App — degraded and failure paths', () => {
     await screen.findByText('FAILED')
     expect(screen.getByText(/failed: provider exploded/i)).toBeInTheDocument()
     expect(
-      screen.queryByRole('button', { name: /download corrected alto/i }),
+      screen.queryByRole('button', { name: /download corrected xml/i }),
     ).not.toBeInTheDocument()
     // Reset is still offered.
     expect(screen.getByRole('button', { name: /new correction/i })).toBeInTheDocument()
@@ -277,7 +277,7 @@ describe('App — degraded and failure paths', () => {
 
     await screen.findByText('COMPLETED (WITH FALLBACKS)')
     expect(screen.getByText(/degraded success — 2 line\(s\)/i)).toBeInTheDocument()
-    await screen.findByRole('button', { name: /download corrected alto/i })
+    await screen.findByRole('button', { name: /download corrected xml/i })
   })
 
   it('renders a visible trace error and retries after a debug toggle', async () => {

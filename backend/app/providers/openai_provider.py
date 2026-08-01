@@ -38,7 +38,7 @@ def _keep_model(model_id: str) -> bool:
     return True
 
 
-# Audit-F15 — OpenAI's o-series reasoning models (and the gpt-5 family,
+# OpenAI's o-series reasoning models (and the gpt-5 family,
 # wave-2 review) only accept the DEFAULT temperature (1) and return a
 # hard 400 for any explicit value (our ramp is 0.0/0.3/0.5). The
 # allowlist advertises them, so omit the parameter for the family;
@@ -90,7 +90,7 @@ class OpenAIProvider:
                 "json_schema": json_schema,
             },
         }
-        # Audit-F15 — only send temperature to families that accept it.
+        # only send temperature to families that accept it.
         if _supports_temperature(model):
             body["temperature"] = temperature
         elif temperature:

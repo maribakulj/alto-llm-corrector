@@ -284,7 +284,7 @@ def require_page_images(
 
 def require_capabilities(producer: EditProducer) -> None:
     """Refuse a producer whose declared capabilities contradict its wiring
-    (ROADMAP V3 Phase 4, §5.2 bis).
+    (the vision/QE programme, §5.2 bis).
 
     A ``capabilities`` declaration is optional (``getattr``, absent = no
     constraint, back-compatible). When present it must be internally
@@ -346,7 +346,10 @@ class RewriteResult:
     verifies against them without re-parsing the output. ``losses`` are
     the format's granularity-loss counters for this file
     (:attr:`~corrigenda.core.schemas.CorrectionReport.format_losses`
-    aggregates them over the run); empty when the rewrite is lossless.
+    aggregates them over the run); empty when the rewrite dropped no
+    markup. "Empty" is not "lossless" — a character the format cannot carry
+    is a loss of TEXT and is graded on the projection fidelity scale
+    instead (R8, :mod:`corrigenda.core.fidelity`).
     """
 
     xml_bytes: bytes
@@ -354,7 +357,22 @@ class RewriteResult:
     #: line_id → "untouched" / "subs_only" / "fast_path" / "slow_path"
     rewriter_paths: dict[str, str]
     texts: dict[str, str]
+    #: L8 — the same lines read with the format's mark substitutions OFF:
+    #: what the artefact's characters SAY, not the logical reading of them.
+    #: Empty when a format has no such substitution to declare, and read
+    #: only to grade projection fidelity — never as anyone's text. Without
+    #: it a line whose file spells its break mark U+00AD while the decision
+    #: spells it ``-`` graded ``exact``, because both sides of the
+    #: comparison had gone through the same collapse.
+    texts_verbatim: dict[str, str] = field(default_factory=dict)
     losses: dict[str, int] = field(default_factory=dict)
+    #: R5 — line ids whose token alignment SUSPECTED a word reorder. A
+    #: diagnostic, never acted on (lines never merge, words never move), and
+    #: deliberately not a loss: nothing left the markup. It used to ride in
+    #: ``losses`` as ``word_order_suspected``, so any consumer summing the
+    #: loss counters counted a non-loss — the same defect as R1 with a
+    #: different attribute.
+    word_order_suspected: frozenset[str] = frozenset()
     #: P3.8 (ADR-012) — per-line attribution of ``losses``: line_id →
     #: that line's own loss counters (only lines that lost something
     #: appear). Summing the values reproduces ``losses``.

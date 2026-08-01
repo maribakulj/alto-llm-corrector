@@ -1,4 +1,4 @@
-"""Audit-F wave 1 (2026-07-13) — library text-integrity cluster.
+"""Library text-integrity cluster.
 
 Each test pins one confirmed finding of docs/audit/AUDIT-2026-07-13.md
 (fix plan: docs/audit/PLAN-CORRECTIONS.md, Vague 1, F1-F12). Every test
@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import pytest
 
+from corrigenda.core.acceptance import _apply_unit_reverts
 from corrigenda.core.protocols import ProducerMetadata
 from corrigenda.core.hyphenation import reconcile_hyphen_pair
 from corrigenda.core.identity import line_ref
@@ -134,7 +135,7 @@ def test_f2_three_line_chain_reverts_atomically(flagged_index: int):
     chain = _reconciled_chain("m0t un-", "deux-", "tr0is fin")
     all_lines = {line_ref(lm): lm for lm in chain}
     pipeline = _make_pipeline()
-    pipeline._apply_unit_reverts(
+    _apply_unit_reverts(
         reverts={line_ref(chain[flagged_index]): "adjacent_duplicate_detected"},
         all_lines=all_lines,
         traces=None,
@@ -149,7 +150,7 @@ def test_f2_four_line_chain_reverts_atomically():
     chain = _reconciled_chain("a0-", "b0-", "c0-", "d fin")
     all_lines = {line_ref(lm): lm for lm in chain}
     pipeline = _make_pipeline()
-    pipeline._apply_unit_reverts(
+    _apply_unit_reverts(
         reverts={line_ref(chain[0]): "adjacent_duplicate_detected"},
         all_lines=all_lines,
         traces=None,

@@ -37,18 +37,28 @@ CER**. Pour du chiffré, c'est `corpus/37-GT-BNL/` qui fait référence.
   page suivante (`f3`, absente ici) : cas de **césure inter-pages**, laissé à
   `cross_page_partners` — utile comme cas limite, pas comme régression.
 
-## Provenance et licence — À VÉRIFIER
+## Provenance et licence — **domaine public** (avec une nuance)
 
 - Source : Gallica / BnF, `ark:/12148/bpt6k3265015q/f2`
-  (`sourceImageInformation/fileIdentifier` de l'ALTO).
+  (`sourceImageInformation/fileIdentifier` de l'ALTO), librement téléchargeable
+  depuis Gallica.
 - ALTO fourni par le mainteneur du dépôt ; scan récupéré via l'API IIIF de la
   BnF (`openapi.bnf.fr`, `full/max/0/default.jpg`), sha256 du JPEG estampillé
   dans les rapports de run (`RunProvenance.image_digests`).
-- L'ALTO ne porte **aucune métadonnée de droits**. Les documents Gallica de
-  cette période sont généralement dans le domaine public, mais les conditions
-  de réutilisation de la BnF distinguent usage non commercial et commercial —
-  **à confirmer avant toute rediffusion**, et à consigner ici. Même statut
-  non résolu que `corpus/37-GT-BNL/`.
+
+**Le document** — presse du 19e siècle — est dans le **domaine public**.
+
+**La nuance, à connaître plutôt qu'à ignorer** : les conditions d'utilisation
+de la BnF portent sur la *reproduction numérique*, pas sur l'œuvre, et
+distinguent la réutilisation non commerciale (libre) de la réutilisation
+commerciale des reproductions (soumise à licence). Un usage comme fixture de
+test relève de la première ; un rediffuseur commercial en aval doit le savoir.
+C'est écrit ici pour qu'il l'apprenne d'ici et pas d'un courrier.
+
+Ce corpus **ne part pas dans le paquet distribué** : il vit à la racine du
+dépôt, hors de `packages/corrigenda/`, et `pyproject.toml` déclare un allowlist
+`sdist.include` explicite de quatre entrées qui ne le contient pas. Épinglé par
+`tests/test_packaging_excludes_corpora.py`.
 
 ## Utilisation
 

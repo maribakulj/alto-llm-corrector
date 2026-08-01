@@ -130,7 +130,7 @@ async def aclose_shared_client() -> None:
     _shared_client_loop_id = None
 
 
-# Audit-F13/F15 — sampling parameters some model generations reject with
+# sampling parameters some model generations reject with
 # a hard 400 (Anthropic removed them on Opus 4.7/4.8, Sonnet 5, Fable 5;
 # OpenAI's o-series only accepts the default temperature). The provider
 # capability tables omit them for KNOWN families; this generic fallback
@@ -204,7 +204,7 @@ async def call_llm(
     """Send a structured LLM request with optional 400/422 fallbacks.
 
     Centralises the httpx client lifecycle, the fallback-on-schema-
-    rejection pattern, the strip-unsupported-param retry (Audit-F13/F15)
+    rejection pattern, the strip-unsupported-param retry
     and status-code handling that every provider needs. Transient
     transport failures are re-raised as :class:`ProviderTransientError`
     so the pipeline's retry classifier routes them to exponential
@@ -220,7 +220,7 @@ async def call_llm(
             timeout=timeout,
         )
 
-        # Audit-F13/F15 — a 400 citing an unsupported sampling parameter
+        # a 400 citing an unsupported sampling parameter
         # is retried once without it (and the schema fallback below is
         # stripped too, so the two fallbacks compose instead of the
         # second reintroducing the rejected param).

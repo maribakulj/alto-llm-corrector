@@ -10,12 +10,17 @@ Normative docs: `README.md`, `SPECS_LIB_V2.md` (the contract — what the librar
 
 There is exactly ONE plan. Three competing, unratified ones were consolidated into `docs/PLAN.md` on 2026-07-25 and the originals moved to `docs/history/`; do not write a second, and do not revive the old ones.
 
+Two standing rules from that plan, in force until it says otherwise:
+
+- **Feature freeze.** No new producer, format, routing policy, cost optimisation, confidence writing, or public-API extension until the `L*` (line integrity) and `R*` (loss accounting) items are closed. Fixes, *reducing* refactors, corpora, measurement, tests and truth-in-documentation are always allowed.
+- **No sixth path.** Five concurrent hyphen-partner resolvers already exist because an earlier unification landed as an addition. A fix that needs a new one is the signal to finish `S1` first, not to add it.
+
 ## Tech Stack
 
 - **Library:** Python 3.11+, Pydantic v2, lxml, httpx — no FastAPI/server dependency
 - **Backend:** FastAPI, uvicorn, sse-starlette (flat `app` package, not built/packaged)
 - **Frontend:** React + TypeScript + Vite + Tailwind CSS (`corrigenda-frontend`)
-- **Deployment:** docker-compose (dev: backend:8000 + frontend:5173) or single Dockerfile for HF Spaces (port 7860, frontend built as static files served by FastAPI). `DEPLOYMENT_PROFILE=demo|institutional` (see SECURITY.md)
+- **Deployment:** docker-compose (dev: backend:8000 + frontend:5173) or single Dockerfile for HF Spaces (port 7860, frontend built as static files served by FastAPI). `DEPLOYMENT_PROFILE=demo|proxy_protected` (`institutional` = deprecated alias; see SECURITY.md)
 - **Storage:** `{JOB_STORAGE_DIR:-/tmp/app-jobs}/{job_id}/` on disk, job state in memory, no database. Orphan job dirs are reclaimed at startup
 
 ## Common Commands

@@ -1,4 +1,4 @@
-"""Shared real-pipeline test harness (audit Phase 1 — securing by tests).
+"""Shared real-pipeline test harness (audit — securing by tests).
 
 The corpus reconciliation tests used to drive a *hand-rolled copy* of the
 pipeline's hyphen-reconciliation loop (``_reconcile_all_pairs`` in

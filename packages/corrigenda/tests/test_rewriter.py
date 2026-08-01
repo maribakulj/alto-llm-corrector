@@ -514,7 +514,7 @@ def test_fast_path_subs_not_on_wrong_token(tmp_path):
 def test_slow_path_preserves_original_attributes(tmp_path):
     """Slow path: recycles ONLY ID + STYLEREFS; WC/CC never recycled.
 
-    Spec F2 / §6.1, updated by Phase 1 (ROADMAP V3): the rebuild reuses
+    Spec F2 / §6.1: the rebuild reuses
     ``ID`` and ``STYLEREFS`` by token ALIGNMENT (identity follows the
     word the source token corresponds to — here ``old`` is closer to
     ``world`` than to ``hello`` by character evidence), recomputes
@@ -752,7 +752,7 @@ def test_no_newline_in_content(tmp_path):
 
 def test_string_ids_slow_path(tmp_path):
     """Slow path: extra words get generated IDs; existing words reuse
-    original — via alignment (Phase 1): 'old' matches 'world', so the
+    original — via alignment: 'old' matches 'world', so the
     generated ID goes to 'hello' (target index 0)."""
     lines_xml = """\
 <TextLine ID="TL1" HPOS="10" VPOS="20" WIDTH="400" HEIGHT="30">

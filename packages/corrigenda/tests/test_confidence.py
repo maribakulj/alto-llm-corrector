@@ -1,4 +1,4 @@
-"""ROADMAP V3 Phase 1 — ConfidencePolicy, HeuristicScorer and the
+"""ConfidencePolicy, HeuristicScorer and the
 multi-component LineConfidence block on the report.
 
 Doctrine under test: components keep their names (never one magic

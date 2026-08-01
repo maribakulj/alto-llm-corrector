@@ -2,7 +2,7 @@
 
 The manual harness in ``tools/e2e/`` was the proof-run for these
 scenarios (2026-07-13); this module powers the permanent pytest/CI
-gate (Wave 0 of ``docs/audit/PLAN-CORRECTIONS.md``). The mock vendor
+gate (a frozen audit; see ``docs/audit/``). The mock vendor
 speaks the exact Mistral API dialect ``app/providers/mistral_provider.py``
 expects, and the REAL backend app is launched under a real uvicorn
 server with the Mistral base URL repointed at the mock — upload,

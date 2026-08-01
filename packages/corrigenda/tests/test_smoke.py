@@ -165,7 +165,6 @@ def test_changelog_added_symbols_are_importable():
                 "reconcile_hyphen_pair",
                 "ReconcileMetrics",
                 "classify_reconcile_outcome",
-                "should_stay_in_same_chunk",
             ],
         ),
         # corrigenda.core

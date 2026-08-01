@@ -28,52 +28,62 @@ import json
 import re
 import uuid
 from collections.abc import Callable
-from dataclasses import dataclass, field
 from typing import Any
 from pathlib import Path
 
 from corrigenda.core.editing import (
-    EDIT_PROTOCOL_VERSION,
     EditOp,
     EditScript,
-    LinePrecondition,
     ReplaceLine,
     ReplaceSpan,
     apply_edit_script,
-    line_digest,
 )
 from corrigenda.core.hyphenation import (
-    ReconcileMetrics,
-    classify_reconcile_outcome,
     enrich_chunk_lines,
-    reconcile_hyphen_pair,
 )
 from corrigenda.core.identity import (
     LineRef,
-    ensure_unique_identities,
-    ensure_unique_page_ids_across_files,
     line_ref,
 )
 from corrigenda.errors import (
-    ConfigurationError,
     CorrectionAborted,
     CorrigendaError,
-    ProjectionError,
 )
 from corrigenda.core import events as ev
 from corrigenda.core.decisions import (
-    DecisionSet,
     build_line_outcomes,
     derive_decision_set,
 )
 from corrigenda.core.planner import downgrade_granularity, plan_page
-from corrigenda.core.units import derive_hyphen_groups, hyphen_group_by_line
-from corrigenda.core.guards import (
-    check_adjacent_duplicates,
-    check_boundary_migration,
-    check_line,
+from corrigenda.core.acceptance import (
+    _apply_line_acceptance,
+    _global_adjacency_pass,
+    _loss_policy_pass,
 )
-from corrigenda.core.validator import HyphenIntegrityError, validate_llm_response
+from corrigenda.core.batching import _split_for_image_cap
+from corrigenda.core.context import RunContext
+from corrigenda.core.preflight import _preflight
+from corrigenda.core.projection import _fidelity_counts
+from corrigenda.core.rendering import _render_outputs
+from corrigenda.core.report import _build_final_edit_script
+from corrigenda.core.routing import _route_and_filter_chunks
+from corrigenda.core.traces import _set_trace
+from corrigenda.core.reconcile import (
+    _build_hyphen_pairs,
+    _reconcile_chunk_hyphens,
+    _subpage_for_lines,
+    _unit_pool,
+)
+from corrigenda.core.result import CorrectionResult
+from corrigenda.core.provenance import (
+    _dependency_versions,
+    _digest_sources,
+)
+from corrigenda.core.retry import _classify_retry
+from corrigenda.core.units import (
+    units_containing,
+)
+from corrigenda.core.validator import validate_llm_response
 from corrigenda.core.protocols import (
     EditProducer,
     FormatAdapter,
@@ -83,17 +93,15 @@ from corrigenda.core.protocols import (
     StructuredCompletionClient,
     ProviderPermanentError,
     ProviderTransientError,
-    require_capabilities,
-    require_page_images,
 )
-from corrigenda.core.alignment import align_tokens
-from corrigenda.core.pairing import preserve_break_char
+from corrigenda.core.pairing import (
+    unpaired_break_refs,
+    preserve_break_char,
+)
 from corrigenda.core.quality import (
     DEFAULT_ROUTING_POLICY,
     QEScorer,
-    RoutingDecision,
     RoutingPolicy,
-    route_line,
 )
 from corrigenda.core.confidence import (
     ConfidenceScorer,
@@ -106,7 +114,6 @@ from corrigenda.core.schemas import (
     DEFAULT_LOSS_POLICY,
     DEFAULT_PAIRING_POLICY,
     DEFAULT_RETRY_POLICY,
-    BlockManifest,
     ChunkPlannerConfig,
     ChunkRequest,
     CorrectionReport,
@@ -127,7 +134,6 @@ from corrigenda.core.schemas import (
     PairingPolicy,
     RetryPolicy,
     RunProvenance,
-    SidecarEntry,
     Usage,
 )
 
@@ -185,70 +191,9 @@ _SECRET_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
 )
 
 
-def _adapter_for_format(source_format: str | None) -> FormatAdapter:
-    """Resolve the adapter the MANIFEST declares — no implicit default (§3).
-
-    The format travels with the document: the parsers stamp
-    ``DocumentManifest.source_format`` and the engine derives the
-    matching adapter here. A manifest without a stamped format
-    (hand-built) has no derivable adapter, and silently assuming one —
-    the historical ALTO default — is exactly how a PAGE document ended
-    up rewritten by the ALTO rewriter.
-
-    This function is the ONLY place ``core`` touches a concrete format,
-    and the imports are function-local so importing any
-    ``corrigenda.core`` module never loads lxml. The import-contract
-    test pins both facts: core modules carry no static formats/lxml
-    import, and this exact function is the single allowed lazy site.
-    """
-    if source_format == "alto":
-        from corrigenda.formats.alto.adapter import AltoFormatAdapter
-
-        return AltoFormatAdapter()
-    if source_format == "page":
-        from corrigenda.formats.page.adapter import PageFormatAdapter
-
-        return PageFormatAdapter()
-    raise ConfigurationError(
-        f"the manifest declares no derivable format "
-        f"(source_format={source_format!r}); load the document through a "
-        "corrigenda format parser, or inject format_adapter explicitly "
-        "on the pipeline"
-    )
-
-
 #: Critical dependencies recorded on the run's provenance (P3.9, §11).
 #: Versions come from package METADATA (importlib.metadata), never from
 #: an import — the pure core stays lxml-free by construction.
-_PROVENANCE_DEPENDENCIES = ("lxml", "pydantic")
-
-
-def _dependency_versions() -> dict[str, str]:
-    """Installed versions of the critical dependencies; a package that
-    is not installed is simply absent (never an error — a core-only
-    consumer legitimately runs without lxml)."""
-    import importlib.metadata as _md
-
-    versions: dict[str, str] = {}
-    for package in _PROVENANCE_DEPENDENCIES:
-        try:
-            versions[package] = _md.version(package)
-        except _md.PackageNotFoundError:
-            continue
-    return versions
-
-
-def _digest_sources(source_files: dict[str, Path]) -> dict[str, str]:
-    """``sha256:<hex>`` of every input file's bytes, as GIVEN (P3.9/P3.10).
-
-    Computed once per run and shared by the provenance record and the
-    final edit script's preconditions — the two must agree by
-    construction, not by coincidence.
-    """
-    return {
-        name: "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
-        for name, path in source_files.items()
-    }
 
 
 def sanitize_error(msg: str, api_key: str | None = None) -> str:
@@ -267,514 +212,6 @@ def sanitize_error(msg: str, api_key: str | None = None) -> str:
     for pattern, replacement in _SECRET_PATTERNS:
         msg = pattern.sub(replacement, msg)
     return msg
-
-
-def _projection_normal_form(text: str) -> str:
-    """Whitespace-run normal form for the projection invariant.
-
-    ALTO/PAGE tokenize a line into word elements, so runs of consecutive
-    whitespace cannot survive the write→extract round-trip. Word-level
-    equality is the enforceable contract; exact spacing is a property of
-    the formats, not a correctness signal.
-    """
-    return " ".join(text.split())
-
-
-def _verify_projection(
-    source_name: str,
-    pages: list[PageManifest],
-    output_texts: dict[str, str],
-    decisions: DecisionSet,
-) -> None:
-    """The rewritten file must SAY what the run decided, line for line.
-
-    Compares the rewrite's per-line texts against each line's terminal
-    decision (ADR-011 — read from the immutable :class:`DecisionSet`,
-    not the mutable manifests) in whitespace normal form. A missing line
-    or a word-level divergence is corruption of the deliverable — the
-    run fails here, before the writer can persist the artefact.
-    """
-    for page in pages:
-        for lm in page.lines:
-            decided = decisions.by_ref[line_ref(lm)].final_text
-            extracted = output_texts.get(lm.line_id)
-            if extracted is None:
-                raise ProjectionError(
-                    f"line {lm.line_id!r} (page {lm.page_id!r}) of "
-                    f"{source_name!r} is missing from the rewritten XML"
-                )
-            if _projection_normal_form(extracted) != _projection_normal_form(decided):
-                raise ProjectionError(
-                    f"rewritten XML for {source_name!r} diverges from the "
-                    f"run's decision on line {lm.line_id!r} (page "
-                    f"{lm.page_id!r}): decided {decided!r} but the artefact "
-                    f"contains {extracted!r}"
-                )
-
-
-def _set_trace(
-    traces: dict[LineRef, LineTrace] | None,
-    lm: LineManifest,
-    **fields: object,
-) -> None:
-    """Assign trace fields on the LineTrace keyed by ``lm``, if tracked.
-
-    Centralises the ``if traces is not None: t = traces.get(...);
-    if t is not None: ...`` pattern that was repeated five times in
-    ``_run_chunk`` and its helpers. A trace dict that isn't tracking
-    a given line silently no-ops.
-    """
-    if traces is None:
-        return
-    trace = traces.get(line_ref(lm))
-    if trace is None:
-        return
-    for name, value in fields.items():
-        setattr(trace, name, value)
-
-
-@dataclass(frozen=True)
-class _RetryDecision:
-    """Pure result of classifying a retry-loop exception.
-
-    Decoupled from the retry loop so the classifier can be tested in
-    isolation (no chunk, no observer, no traces — just the exception
-    and the per-chunk hyphen latch).
-    """
-
-    is_retryable: bool
-    backoff: float
-    error_tag: str
-    is_hyphen_violation: bool
-
-
-def _classify_retry(
-    *,
-    exc: BaseException,
-    sanitised_msg: str,
-    attempt: int,
-    hyphen_already_seen: bool,
-    policy: RetryPolicy = DEFAULT_RETRY_POLICY,
-) -> _RetryDecision:
-    """Decide what to do with an exception during the LLM retry loop.
-
-    Three retryable branches:
-      - ``HyphenIntegrityError`` (first occurrence per chunk):
-        backoff 0, fixed tag ``"hyphen_integrity_violation"``.
-      - ``ProviderTransientError`` (transport): backoff = attempt * 2.
-      - other ``ValueError`` / ``JSONDecodeError`` (malformed LLM
-        output): backoff = attempt.
-
-    Anything else (or a second hyphen-integrity violation in the same
-    chunk) is non-retryable from THIS decision's standpoint — the
-    caller short-circuits to the OCR fallback.
-
-    Caller passes ``sanitised_msg`` (already run through
-    ``sanitize_error``) so we don't re-sanitise here.
-    """
-    is_hyphen_violation = isinstance(exc, HyphenIntegrityError)
-    is_transient_http = isinstance(exc, ProviderTransientError)
-    # A repeated HyphenIntegrityError on the same chunk falls into the
-    # LLM-output-error path (linear backoff): the per-chunk latch only
-    # exempts the FIRST occurrence; subsequent ones are treated like
-    # any other malformed LLM output.
-    is_llm_output_error = isinstance(exc, (ValueError, json.JSONDecodeError))
-
-    if is_hyphen_violation and not hyphen_already_seen:
-        return _RetryDecision(
-            is_retryable=True,
-            backoff=0,
-            error_tag="hyphen_integrity_violation",
-            is_hyphen_violation=True,
-        )
-    if is_transient_http:
-        return _RetryDecision(
-            is_retryable=True,
-            backoff=attempt * policy.transient_backoff_base,
-            error_tag=sanitised_msg[:120],
-            is_hyphen_violation=False,
-        )
-    if is_llm_output_error:
-        return _RetryDecision(
-            is_retryable=True,
-            backoff=attempt * policy.output_backoff_base,
-            error_tag=sanitised_msg[:120],
-            is_hyphen_violation=False,
-        )
-    return _RetryDecision(
-        is_retryable=False,
-        backoff=0,
-        error_tag=sanitised_msg[:120],
-        is_hyphen_violation=False,
-    )
-
-
-def _subpage_for_lines(page: PageManifest, lines: list[LineManifest]) -> PageManifest:
-    """Build a synthetic single-page manifest holding just ``lines`` (F1).
-
-    Used to re-plan a failed chunk's lines at a finer granularity via the
-    normal chunk planner: the planner needs a ``PageManifest`` with the
-    blocks that own these lines. Blocks are copied with their ``line_ids``
-    filtered to the subset, preserving block order and geometry so BLOCK /
-    WINDOW planning behave exactly as on the real page.
-    """
-    kept_ids = {lm.line_id for lm in lines}
-    sub_blocks = [
-        BlockManifest(
-            block_id=b.block_id,
-            page_id=b.page_id,
-            block_order=b.block_order,
-            coords=b.coords,
-            line_ids=[lid for lid in b.line_ids if lid in kept_ids],
-        )
-        for b in page.blocks
-        if any(lid in kept_ids for lid in b.line_ids)
-    ]
-    return PageManifest(
-        page_id=page.page_id,
-        source_file=page.source_file,
-        page_index=page.page_index,
-        page_width=page.page_width,
-        page_height=page.page_height,
-        blocks=sub_blocks,
-        lines=lines,
-    )
-
-
-def _build_hyphen_pairs(lines: list[LineManifest]) -> dict[str, str]:
-    """Return PART1↔PART2 mapping (bidirectional) for lines in the chunk."""
-    pairs: dict[str, str] = {}
-    for lm in lines:
-        if lm.hyphen_role == HyphenRole.PART1 and lm.hyphen_pair_line_id:
-            pairs[lm.line_id] = lm.hyphen_pair_line_id
-            pairs[lm.hyphen_pair_line_id] = lm.line_id
-        elif lm.hyphen_role == HyphenRole.BOTH and lm.hyphen_forward_pair_id:
-            pairs[lm.line_id] = lm.hyphen_forward_pair_id
-            pairs[lm.hyphen_forward_pair_id] = lm.line_id
-    return pairs
-
-
-def _resolve_partner(
-    lm: LineManifest,
-    *,
-    is_forward: bool,
-    line_by_id: dict[str, LineManifest],
-    cross_page_partners: dict[LineRef, LineManifest] | None,
-) -> LineManifest | None:
-    """Resolve a hyphen partner using a page-qualified lookup.
-
-    When two ALTO files declare the same TextLine ID, a bare-id lookup
-    against the page-local `line_by_id` returns the wrong manifest for
-    cross-page pairs. Prefer the qualified `(page_id, line_id)` lookup
-    whenever the parser populated `hyphen_pair_page_id`/
-    `hyphen_forward_pair_page_id`.
-    """
-    if is_forward:
-        partner_id = lm.hyphen_forward_pair_id
-        partner_page = lm.hyphen_forward_pair_page_id
-    else:
-        partner_id = lm.hyphen_pair_line_id
-        partner_page = lm.hyphen_pair_page_id
-
-    if not partner_id:
-        return None
-
-    if partner_page is None or partner_page == lm.page_id:
-        return line_by_id.get(partner_id)
-
-    if cross_page_partners is None:
-        return None
-    return cross_page_partners.get(LineRef(page_id=partner_page, line_id=partner_id))
-
-
-def _page_local_hyphen_unit(
-    seed: LineManifest, line_by_id: dict[str, LineManifest]
-) -> set[str] | None:
-    """The line_ids of ``seed``'s hyphen unit, or ``None`` when the unit is
-    not wholly resolvable on this page (ROADMAP V3 Phase 4).
-
-    Used by the router to move a hyphen unit to the escalation producer
-    **as a unit**: escalating one member and leaving its partner behind
-    would split the pair across producers, which is exactly what hyphen
-    atomicity forbids. A unit whose link crosses a page boundary — or
-    dangles — cannot be gathered from one page's plan, so it is left to the
-    primary producer (the conservative pre-Phase-4 behaviour).
-    """
-    members: set[str] = set()
-    seen: set[str] = {seed.line_id}
-    worklist = [seed]
-    while worklist:
-        lm = worklist.pop()
-        members.add(lm.line_id)
-        for partner_id, partner_page in (
-            (lm.hyphen_pair_line_id, lm.hyphen_pair_page_id),
-            (lm.hyphen_forward_pair_id, lm.hyphen_forward_pair_page_id),
-        ):
-            if not partner_id:
-                continue
-            if partner_page is not None and partner_page != lm.page_id:
-                return None  # the unit leaves this page
-            partner = line_by_id.get(partner_id)
-            if partner is None:
-                return None  # dangling link — not ours to move
-            if partner.line_id not in seen:
-                seen.add(partner.line_id)
-                worklist.append(partner)
-    return members
-
-
-def _hyphen_closure(
-    seeds: list[LineManifest],
-    line_by_id: dict[str, LineManifest],
-    cross_page_partners: dict[LineRef, LineManifest] | None,
-) -> dict[int, LineManifest]:
-    """Fixed-point closure of hyphen links over the CURRENT pointers.
-
-    The one traversal behind every "atomically with its partners"
-    operation (duplicate reverts, unit fallback): seeds plus every line
-    transitively reachable through pair/forward links, resolved via
-    ``_resolve_partner`` so cross-page members are reached too. Keyed by
-    object identity — bare line_ids legitimately repeat across files.
-    """
-    closure: dict[int, LineManifest] = {id(lm): lm for lm in seeds}
-    worklist = list(seeds)
-    while worklist:
-        lm = worklist.pop()
-        for is_forward in (False, True):
-            partner = _resolve_partner(
-                lm,
-                is_forward=is_forward,
-                line_by_id=line_by_id,
-                cross_page_partners=cross_page_partners,
-            )
-            if partner is not None and id(partner) not in closure:
-                closure[id(partner)] = partner
-                worklist.append(partner)
-    return closure
-
-
-def _reconcile_one_pair(
-    lm: LineManifest,
-    part2: LineManifest,
-    text_by_id: dict[str, str],
-    *,
-    is_forward: bool,
-    config: GuardConfig = DEFAULT_GUARD_CONFIG,
-) -> str:
-    """Apply reconcile_hyphen_pair and write results back onto the manifests.
-
-    Returns the outcome classification produced by
-    ``classify_reconcile_outcome``: ``"coherent"`` / ``"fallback"`` /
-    ``"neutralised"``. The pipeline aggregates these into the per-job
-    ReconcileMetrics surfaced on the reconcile_stats observability event.
-    """
-    # ADR-010 (unit fallback atomicity): a member whose partner already
-    # fell back to OCR may not be corrected alone — the joined word would
-    # be rewritten on one line and kept verbatim on the other. The whole
-    # pair stays at source text; "fallback" is the classified outcome.
-    if lm.status is LineStatus.FALLBACK or part2.status is LineStatus.FALLBACK:
-        for member in (lm, part2):
-            member.corrected_text = member.ocr_text
-            member.status = LineStatus.FALLBACK
-        return "fallback"
-
-    corrected_p2 = text_by_id.get(part2.line_id, part2.ocr_text)
-
-    if is_forward:
-        corrected_p1 = lm.corrected_text or text_by_id.get(lm.line_id, lm.ocr_text)
-        final_p1, final_p2, subs = reconcile_hyphen_pair(
-            lm,
-            part2,
-            corrected_p1,
-            corrected_p2,
-            subs_content=lm.hyphen_forward_subs_content,
-            source_explicit=lm.hyphen_forward_explicit,
-            config=config,
-        )
-    else:
-        corrected_p1 = text_by_id.get(lm.line_id, lm.ocr_text)
-        final_p1, final_p2, subs = reconcile_hyphen_pair(
-            lm,
-            part2,
-            corrected_p1,
-            corrected_p2,
-            config=config,
-        )
-
-    outcome = classify_reconcile_outcome(
-        lm.ocr_text,
-        part2.ocr_text,
-        corrected_p1,
-        corrected_p2,
-        final_p1,
-        final_p2,
-        subs,
-    )
-
-    lm.corrected_text = final_p1
-    lm.status = LineStatus.CORRECTED
-    part2.corrected_text = final_p2
-    part2.status = LineStatus.CORRECTED
-    part2.hyphen_subs_content = subs
-
-    if is_forward:
-        lm.hyphen_forward_subs_content = subs
-    else:
-        lm.hyphen_subs_content = subs
-
-    return outcome
-
-
-@dataclass
-class CorrectionResult:
-    """Outcome of a full pipeline run.
-
-    The input manifest is never mutated (ADR-011 slice E): what the run
-    decided is read off ``decisions`` (and ``corrected_files`` for the
-    artefacts). `traces` is the line-by-line text trace through every
-    stage.
-    """
-
-    total_chunks: int
-    total_reconciled: int
-    retry_count: int
-    #: Number of chunks whose producer attempts were exhausted (an
-    #: orchestration counter — one rejected 20-line chunk counts once).
-    fallback_chunks: int
-    #: Number of LINES whose terminal status is ``FALLBACK`` — they kept
-    #: their OCR source text, whether a whole chunk fell back, a guard
-    #: rejected the correction, or a duplicate revert undid it. Manifest
-    #: statuses are the authority; "completed with fallbacks" means
-    #: exactly ``fallback_lines > 0``.
-    fallback_lines: int
-    #: Aggregated ``fallback_reason`` prefixes → line counts for the
-    #: fallen lines (e.g. ``{"all_attempts_exhausted": 20}``), so a
-    #: consumer can say WHY without parsing messages.
-    fallback_reasons: dict[str, int]
-    traces: dict[LineRef, LineTrace]
-    reconcile_metrics: ReconcileMetrics
-    #: F14 — aggregate token consumption across every producer call in the
-    #: run (zero when no provider reported usage).
-    usage: Usage
-    #: §9 — public, versioned correction report (same line traces, promoted
-    #: to a documented artefact). Present on every run, including dry runs.
-    report: CorrectionReport
-    #: §4 — the normalized EditScript the run applied, accumulated across
-    #: chunks. In v1 the LLM path emits ``replace_line`` ops (byte-identical
-    #: to the direct correction); a rules/​span producer surfaces its
-    #: ``replace_span`` ops here too.
-    edit_script: EditScript
-    #: ADR-011 — the run's immutable :class:`DecisionSet`: one terminal
-    #: decision per line in document reading order. Since slice E the
-    #: input manifest is never mutated, so THIS is where a caller reads
-    #: what the run decided (``decisions.by_ref[LineRef(...)]``).
-    decisions: DecisionSet
-    #: ADR-011 — the corrected artefacts themselves, keyed by source file
-    #: name, computed on EVERY run: the result IS the output; persisting
-    #: it is the caller's choice (:meth:`write`, or a host-owned
-    #: transaction like the demo backend's staging writer).
-    corrected_files: dict[str, bytes] = field(default_factory=dict)
-    #: Phase 3 — lines the QE router judged already clean and SKIPPED
-    #: (confirmed as-is, no producer call). 0 when routing is off. The
-    #: economics signal: each skip is one LLM call not spent.
-    lines_skipped: int = 0
-    #: Phase 4 — non-hyphen lines the QE router sent to ESCALATE and that
-    #: were routed to the ``escalation_producer`` (a VLM) instead of the
-    #: primary producer. 0 when no escalation producer is set. Each one is
-    #: a line the hybrid judged worth the heavier (vision) call.
-    escalated_lines: int = 0
-    #: Phase 3 — total ``producer.produce`` invocations (retries included):
-    #: the run's real call cost. Falls when routing drops whole chunks —
-    #: routing-on vs routing-off on one document is the cheaper-hybrid proof.
-    producer_calls: int = 0
-
-    def write(self, directory: str | Path) -> list[Path]:
-        """Persist the run's artefacts into ``directory`` (created if
-        needed): each corrected XML under its source file's name, plus
-        the §9 report as ``report.json``. Returns the written paths.
-
-        ADR-011 — a caller-side convenience, not engine behaviour: the
-        engine only computes values. Hosts that own a file transaction
-        (commit/discard staging) keep their injected writer instead.
-        """
-        target = Path(directory)
-        target.mkdir(parents=True, exist_ok=True)
-        written: list[Path] = []
-        for source_name, xml_bytes in self.corrected_files.items():
-            # Strip any directory part: the key names a source FILE and
-            # must not steer the write outside ``directory``.
-            path = target / Path(source_name).name
-            path.write_bytes(xml_bytes)
-            written.append(path)
-        report_path = target / "report.json"
-        report_path.write_text(self.report.model_dump_json(indent=2), encoding="utf-8")
-        written.append(report_path)
-        # Phase 1 — refused-but-preserved corrections as their own small
-        # artefact for review tooling (they are ALSO inside report.json;
-        # this is the convenience view, written only when non-empty).
-        if self.report.sidecar:
-            sidecar_path = target / "sidecar.json"
-            sidecar_path.write_text(
-                json.dumps(
-                    [entry.model_dump(mode="json") for entry in self.report.sidecar],
-                    indent=2,
-                    ensure_ascii=False,
-                ),
-                encoding="utf-8",
-            )
-            written.append(sidecar_path)
-        return written
-
-
-@dataclass
-class RunContext:
-    """All mutable state of ONE pipeline execution.
-
-    Created fresh at the top of every :meth:`CorrectionPipeline.run`
-    (together with the run's private manifest copy — ADR-011 slice E)
-    and threaded through the internal methods, so ``CorrectionPipeline``
-    itself carries only immutable configuration and injected
-    dependencies. Nothing here survives the run: the public outcome is
-    copied into :class:`CorrectionResult` before returning.
-
-    Not exported: this is internal orchestration state, not API surface.
-    """
-
-    #: Retries consumed across every chunk's attempt loop.
-    retry_count: int = 0
-    #: Chunks (or descent sub-chunks) that fell back to OCR source text.
-    fallback_chunks: int = 0
-    #: Phase 3 — lines the QE router SKIPPED (confirmed clean, no producer
-    #: call). 0 when routing is off.
-    lines_skipped: int = 0
-    #: Phase 4 — non-hyphen lines routed to the ``escalation_producer``
-    #: (a VLM) instead of the primary producer. 0 when none is set.
-    escalated_lines: int = 0
-    #: Phase 3 — number of ``producer.produce`` invocations across the run,
-    #: retries INCLUDED (the real per-call cost driver for an LLM API).
-    #: Routing lowers it by dropping whole all-skipped chunks; comparing
-    #: routing-on vs routing-off runs on one document is how the hybrid
-    #: PROVES it is cheaper.
-    producer_calls: int = 0
-    #: Per-pair reconciliation outcomes (coherent / fallback / neutralised).
-    reconcile_metrics: ReconcileMetrics = field(default_factory=ReconcileMetrics)
-    #: Aggregate token consumption across every producer call of the run.
-    usage: Usage = field(default_factory=Usage)
-    #: §4 — per target line, the producer's ops (a line may carry several,
-    #: e.g. one replace_span per occurrence) and the text those ops
-    #: produced (pre-guard, pre-reconcile). Consumed by
-    #: _build_final_edit_script to emit the ops the run ACTUALLY applied.
-    #: Keyed by (page_id, line_id): bare line_ids may legitimately repeat
-    #: across FILES (only page_ids are unique document-wide), and a
-    #: bare-id key would let the last file's ops overwrite an earlier
-    #: file's, corrupting the dry-run edit_script.
-    producer_ops: dict[LineRef, tuple[list[EditOp], str]] = field(default_factory=dict)
-    #: The run's cooperative cancellation probe, forwarded to producers
-    #: via :class:`ProducerOptions` (P3.7) so long I/O can be abandoned.
-    should_abort: Callable[[], bool] | None = None
-    #: §4.1 vision envelope — resolved once per run from run(page_images=…).
-    image_ref_by_page_id: dict[str, PageImage] = field(default_factory=dict)
-    page_dims: dict[str, tuple[int, int]] = field(default_factory=dict)
 
 
 class CorrectionPipeline:
@@ -831,7 +268,7 @@ class CorrectionPipeline:
         # lose format granularity: REPORT (default, historical) counts
         # and attributes; STRICT rejects the unit pre-projection.
         self.loss_policy = loss_policy or DEFAULT_LOSS_POLICY
-        # Phase 1 (ROADMAP V3) — line confidences on the report. DROP
+        # line confidences on the report. DROP
         # (default) computes nothing; REPORT_ONLY fills
         # LineOutcome.confidence via the injected scorers (default: the
         # zero-dependency HeuristicScorer). Deliberately outside the
@@ -843,7 +280,7 @@ class CorrectionPipeline:
             if confidence_scorers is not None
             else (HeuristicScorer(),)
         )
-        # Phase 3 (ROADMAP V3) — hybrid-selective routing. A line the QE
+        # hybrid-selective routing. A line the QE
         # scorer + RoutingPolicy send to SKIP is confirmed clean and
         # never reaches the producer (no LLM call — the economics). Both
         # OFF by default: no scorer, and DEFAULT_ROUTING_POLICY routes
@@ -853,7 +290,7 @@ class CorrectionPipeline:
         # skips (same rule that held ConfidencePolicy out until write_wc).
         self.qe_scorer = qe_scorer
         self.routing_policy = routing_policy or DEFAULT_ROUTING_POLICY
-        # Phase 4 (ROADMAP V3, §5.2 bis) — the ESCALATE tier's producer.
+        # §5.2 bis — the ESCALATE tier's producer.
         # When set AND routing is on, a non-hyphen line the QE scorer +
         # RoutingPolicy send to ESCALATE is corrected by THIS producer (a
         # VLM) instead of the primary text producer, on a per-line basis —
@@ -999,16 +436,6 @@ class CorrectionPipeline:
         observer keeps receiving ``(event_type, payload_dict)``."""
         self.observer.on_event(event.type, event.payload())
 
-    @staticmethod
-    def _record_reconcile_outcome(ctx: RunContext, outcome: str) -> None:
-        """Bump the run's ReconcileMetrics counter for a single pair."""
-        if outcome == "coherent":
-            ctx.reconcile_metrics.coherent += 1
-        elif outcome == "fallback":
-            ctx.reconcile_metrics.fallback += 1
-        elif outcome == "neutralised":
-            ctx.reconcile_metrics.neutralised += 1
-
     # ------------------------------------------------------------------
     # Public entry point
     # ------------------------------------------------------------------
@@ -1099,67 +526,14 @@ class CorrectionPipeline:
         # the instance.
         ctx = RunContext(should_abort=should_abort)
 
-        # §5.1 — a vision producer without its images is a start-up error,
-        # never a silent image-less call.
-        require_page_images(self.producer, document_manifest.pages, page_images)
-        # §5.2 bis (Phase 4) — a producer whose declared capabilities
-        # contradict its wiring (wants images but vision=False) is a
-        # start-up error, not a mid-run surprise.
-        require_capabilities(self.producer)
-        # Phase 4 — the escalation (vision) producer is the one that needs
-        # images: preflight it too, so a run that WILL escalate fails at
-        # start-up if its VLM lacks a scan, never mid-run.
-        if self.escalation_producer is not None:
-            require_page_images(
-                self.escalation_producer, document_manifest.pages, page_images
-            )
-            require_capabilities(self.escalation_producer)
-
-        # §3 — the format travels with the document. An injected adapter
-        # that contradicts the format the manifest was parsed as would
-        # only surface at write time (as a confusing projection failure);
-        # refuse it before any correction work is spent. Adapters without
-        # a ``format_name`` (custom implementations) are trusted as-is.
-        declared = document_manifest.source_format
-        adapter_format = getattr(self.format_adapter, "format_name", None)
-        if declared and adapter_format and declared != adapter_format:
-            raise ConfigurationError(
-                f"the injected format_adapter writes {adapter_format!r} but "
-                f"the manifest was parsed as {declared!r} — parse with the "
-                "matching corrigenda parser or inject the matching adapter"
-            )
-
-        # ADR-007 — identity-uniqueness invariant, enforced at the pipeline
-        # door so hand-built manifests get the same guarantee as
-        # parser-built ones: within one source file every page/block/line
-        # ID must be unique (correction-to-line association is keyed by
-        # bare line_id per file), and page_ids must be unique across the
-        # whole document (trace keys, per-page image/dimension lookups).
-        pages_by_file: dict[str, list[PageManifest]] = {}
-        for page in document_manifest.pages:
-            pages_by_file.setdefault(page.source_file, []).append(page)
-        for src_name, src_pages in pages_by_file.items():
-            ensure_unique_identities(src_pages, src_name)
-        ensure_unique_page_ids_across_files(document_manifest.pages)
-        # §4.1 — per-page vision envelope lookups. Pure copying: the
-        # ImageRef stays an opaque string end to end. A key matching no
-        # page is refused: it is almost always a legacy file-name key
-        # from the pre-page_images contract, silently dropping it would
-        # reproduce the old wrong-image behaviour.
-        images = page_images or {}
-        known_pages = {page.page_id for page in document_manifest.pages}
-        unknown = sorted(set(images) - known_pages)
-        if unknown:
-            raise ConfigurationError(
-                f"page_images keys must be page ids; {unknown} match no "
-                "page of this document (file-name keys are no longer "
-                "accepted — pass one ImageRef per page_id)"
-            )
-        ctx.image_ref_by_page_id = dict(images)
-        ctx.page_dims = {
-            page.page_id: (page.page_width, page.page_height)
-            for page in document_manifest.pages
-        }
+        _preflight(
+            producer=self.producer,
+            escalation_producer=self.escalation_producer,
+            format_adapter=self.format_adapter,
+            document_manifest=document_manifest,
+            page_images=page_images,
+            ctx=ctx,
+        )
 
         total_hyphen_pairs = sum(
             sum(
@@ -1244,7 +618,8 @@ class CorrectionPipeline:
         # derivation (ADR-010). Replaces three partial sweeps — the
         # intra-chunk sweep, the cross-chunk boundary pass and the
         # page-seam pass — that each carried their own comparison base.
-        self._global_adjacency_pass(
+        _global_adjacency_pass(
+            guard_config=self.guard_config,
             document_manifest=document_manifest,
             all_lines=all_lines_global,
             traces=traces,
@@ -1271,7 +646,8 @@ class CorrectionPipeline:
                         lm.ocr_text, lm.corrected_text
                     )
 
-        sidecar_entries = self._loss_policy_pass(
+        sidecar_entries = _loss_policy_pass(
+            loss_policy=self.loss_policy,
             document_manifest=document_manifest,
             all_lines=all_lines_global,
             traces=traces,
@@ -1282,7 +658,11 @@ class CorrectionPipeline:
         # for a document where every line carries a terminal decision.
         decisions = derive_decision_set(document_manifest, traces)
 
-        format_losses, corrected_files = await self._render_outputs(
+        format_losses, corrected_files = await _render_outputs(
+            format_adapter=self.format_adapter,
+            producer_metadata=self.producer_metadata,
+            config_fingerprint=self.config_fingerprint(),
+            emit=self._emit,
             document_manifest=document_manifest,
             source_files=source_files,
             traces=traces,
@@ -1301,9 +681,25 @@ class CorrectionPipeline:
             # (proposal/projection stages), staged per line (§9 v2).
             lines=build_line_outcomes(decisions, traces),
             # ADR-011 — the rewrite's granularity-loss counters surface on
-            # the report (None when the format is lossless or nothing was
-            # written).
+            # the report. None when no MARKUP was dropped (or nothing was
+            # written) — never read as "the run lost nothing": a flattened
+            # character is counted on the fidelity scale below (R8).
             format_losses=format_losses or None,
+            # How faithfully each rewritten line carries its decision,
+            # counted by level. A non-zero "normalized" is the run telling
+            # its host that a significant whitespace character did not
+            # survive the format — the thing the invariant used to compare
+            # away before anyone could count it.
+            projection_fidelity=_fidelity_counts(traces) or None,
+            # A break whose partner this run never found: silent until now,
+            # and not the same thing as a fallback — the line WAS corrected,
+            # just alone and without its pair-drift guards.
+            unpaired_breaks=len(unpaired_break_refs(document_manifest.pages)) or None,
+            # R6 — the units this run CUT to fit the request cap. Distinct
+            # from unpaired_breaks: there the link was never there, here the
+            # engine severed one on purpose, and the split resets the tail's
+            # role to NONE so it cannot show up in that count either.
+            hyphen_splits=ctx.hyphen_splits or None,
             # P3.9 (§11) — the run's full provenance record.
             provenance=self._build_provenance(
                 document_manifest=document_manifest,
@@ -1317,12 +713,12 @@ class CorrectionPipeline:
             usage=(
                 ctx.usage if ctx.usage.total_tokens or ctx.usage.response_ids else None
             ),
-            # Phase 1 — corrections the token_realign gate refused to
+            # corrections the token_realign gate refused to
             # project, preserved for review instead of lost.
             sidecar=sidecar_entries or None,
         )
 
-        # Phase 1 — line confidences (report-only; write_wc stays locked
+        # line confidences (report-only; write_wc stays locked
         # until calibration). Filled AFTER the report is built so every
         # outcome scores its FINAL decided text, whatever path decided it.
         if self.confidence_policy.mode != "drop":
@@ -1367,15 +763,15 @@ class CorrectionPipeline:
             reconcile_metrics=ctx.reconcile_metrics,
             usage=ctx.usage,
             report=report,
-            edit_script=self._build_final_edit_script(
+            edit_script=_build_final_edit_script(
                 decisions, ctx, source_digests=source_digests
             ),
             decisions=decisions,
             corrected_files=corrected_files,
-            # Phase 3 — routing economics: lines skipped (no producer
+            # routing economics: lines skipped (no producer
             # call) and the run's total producer-call count.
             lines_skipped=ctx.lines_skipped,
-            # Phase 4 — lines routed to the escalation (vision) producer.
+            # lines routed to the escalation (vision) producer.
             escalated_lines=ctx.escalated_lines,
             producer_calls=ctx.producer_calls,
         )
@@ -1391,11 +787,11 @@ class CorrectionPipeline:
         identity, policy fingerprint, per-file digests of the INPUT
         bytes (computed once in :meth:`run` via ``_digest_sources`` and
         shared with the edit script's preconditions), per-page image
-        digests (Phase 4), and critical dependency versions."""
+        digests, and critical dependency versions."""
         from corrigenda import __version__ as _lib_version
 
         md = self.producer_metadata
-        # Phase 4 — copy the digest each structured ImageAsset already
+        # copy the digest each structured ImageAsset already
         # carries; the core never opens an image (I4). Bare ImageRef
         # strings and digest-less assets contribute nothing.
         image_digests = {
@@ -1403,7 +799,7 @@ class CorrectionPipeline:
             for page_id, asset in image_assets.items()
             if isinstance(asset, ImageAsset) and asset.sha256
         }
-        # Phase 4 — record the escalation (vision) producer's identity too,
+        # record the escalation (vision) producer's identity too,
         # from its own declared metadata (the same optional-attribute
         # convention as the primary producer's). None for a single-producer
         # run, so text-only provenance is unchanged.
@@ -1433,83 +829,6 @@ class CorrectionPipeline:
             image_digests=image_digests,
             source_format=document_manifest.source_format,
             dependencies=_dependency_versions(),
-        )
-
-    def _build_final_edit_script(
-        self,
-        decisions: DecisionSet,
-        ctx: RunContext,
-        *,
-        source_digests: dict[str, str] | None = None,
-    ) -> EditScript:
-        """§4 — the EditScript the run *actually applied*, in document order.
-
-        Reconciles the captured producer ops against the FINAL per-line
-        decision (ADR-011 — read from the immutable :class:`DecisionSet`,
-        which is already in document reading order), after
-        reconciliation, the acceptance guard, and the global consistency
-        pass have run. It therefore never carries an op for a line that
-        was reverted to OCR or reconciled to different text (a dry-run
-        consumer replaying it would otherwise diverge from the
-        pipeline's own corrected XML):
-
-        - line not ``CORRECTED`` (fallback / failed) → no op;
-        - ``CORRECTED`` and the producer's op output survived unchanged →
-          the producer's original op, preserving its TYPE (e.g. a rules
-          producer's ``replace_span``);
-        - ``CORRECTED`` but the final text differs from the op output
-          (a reconciled hyphen member) → a ``replace_line`` carrying the
-          final text, since the original span no longer describes it.
-
-        P3.10 — the script is stamped with its protocol version, the
-        run's source-file digests, and one :class:`LinePrecondition`
-        per op-carrying line (the digest of the SOURCE text the ops
-        were computed against), so replaying it on a different document
-        fails explicitly instead of editing a lookalike line.
-        """
-        ops: list[EditOp] = []
-        preconditions: list[LinePrecondition] = []
-        for decision in decisions.decisions:
-            if decision.status is not LineStatus.CORRECTED:
-                continue
-            captured = ctx.producer_ops.get(decision.ref)
-            if captured is None:
-                # An accepted line the producer left untouched (no op) —
-                # e.g. a rules producer's uncovered line. Nothing applied.
-                continue
-            preconditions.append(
-                LinePrecondition(
-                    line_id=decision.ref.line_id,
-                    page_id=decision.ref.page_id,
-                    digest=line_digest(decision.source_text),
-                )
-            )
-            line_ops, produced_text = captured
-            if produced_text == decision.final_text:
-                # The producer's output survived every guard unchanged —
-                # keep its original ops (and their TYPE, e.g. span),
-                # stamped with the page_id so a consumer can attribute
-                # them per file (bare line_ids repeat across
-                # files — ADR-001).
-                ops.extend(
-                    op.model_copy(update={"page_id": decision.ref.page_id})
-                    for op in line_ops
-                )
-            else:
-                # A guard / the reconciler rewrote the final text; the
-                # original ops no longer describe it.
-                ops.append(
-                    ReplaceLine(
-                        line_id=decision.ref.line_id,
-                        text=decision.final_text,
-                        page_id=decision.ref.page_id,
-                    )
-                )
-        return EditScript(
-            ops=ops,
-            protocol_version=EDIT_PROTOCOL_VERSION,
-            source_digests=source_digests or {},
-            preconditions=preconditions,
         )
 
     def run_sync(
@@ -1543,226 +862,6 @@ class CorrectionPipeline:
     # Per-page orchestration
     # ------------------------------------------------------------------
 
-    def _routing_enabled(self) -> bool:
-        """Routing runs only when a QE scorer is present AND the policy
-        has at least one active bound. Otherwise a no-op (default)."""
-        return self.qe_scorer is not None and (
-            self.routing_policy.skip_at_or_below is not None
-            or self.routing_policy.escalate_at_or_above is not None
-        )
-
-    def _route_and_filter_chunks(
-        self,
-        *,
-        page: PageManifest,
-        chunks: list[ChunkRequest],
-        line_by_id: dict[str, LineManifest],
-        ctx: RunContext,
-        traces: dict[LineRef, LineTrace],
-    ) -> list[tuple[ChunkRequest, EditProducer]]:
-        """Route each chunk's target lines by QE tier, returning per-chunk
-        ``(chunk, producer)`` work items.
-
-        SKIP (Phase 3): a line the QE scorer + RoutingPolicy route to SKIP
-        is confirmed clean — its final text is its OCR text, its status is
-        CORRECTED, and (the auditable signature of a skip vs an LLM
-        identity pass) it never reaches a producer, so its trace's
-        ``model_input_text`` stays ``None``. It remains in each chunk's
-        ``line_ids`` (context for its neighbours) but leaves
-        ``target_line_ids``.
-
-        ESCALATE (Phase 4): when an ``escalation_producer`` is set, a
-        non-hyphen line routed to ESCALATE is split out of the chunk into a
-        sibling chunk (same context ``line_ids``, disjoint targets) carried
-        by the escalation producer — the VLM corrects only those lines. The
-        remaining targets stay with the primary producer. A chunk with no
-        targets left after SKIP is dropped (no producer call at all).
-
-        A hyphen unit is NEVER skipped (atomicity — a half-skipped pair
-        could not reconcile). It MAY escalate, but only as a whole unit:
-        when any member routes to ESCALATE, every member goes, so the pair
-        reaches one producer together and reconciles normally. A unit whose
-        links leave the page (or dangle) cannot be gathered from this
-        page's plan and stays with the primary producer.
-
-        When routing is off (default), returns every chunk paired with the
-        primary producer unchanged — a byte-identical run.
-        """
-        if not self._routing_enabled():
-            return [(chunk, self.producer) for chunk in chunks]
-        assert self.qe_scorer is not None  # _routing_enabled guarantees it
-
-        can_escalate = self.escalation_producer is not None
-        skip: set[str] = set()
-        escalate: set[str] = set()
-        for lm in page.lines:
-            decision = route_line(
-                self.qe_scorer.needs_correction(lm.ocr_text), self.routing_policy
-            )
-            if lm.hyphen_role is not HyphenRole.NONE:
-                # Atomicity: a hyphen member is NEVER skipped (a half-skipped
-                # pair could not reconcile). It may still escalate — but only
-                # with its whole unit, so the pair reaches one producer
-                # together. Measured on real 19th-c. press OCR, leaving units
-                # behind was the hybrid's entire residual error.
-                if decision is RoutingDecision.ESCALATE and can_escalate:
-                    unit = _page_local_hyphen_unit(lm, line_by_id)
-                    if unit is not None:
-                        escalate |= unit
-                continue
-            if decision is RoutingDecision.SKIP:
-                skip.add(lm.line_id)
-            elif decision is RoutingDecision.ESCALATE and can_escalate:
-                escalate.add(lm.line_id)
-
-        for line_id in skip:
-            lm = line_by_id[line_id]
-            lm.corrected_text = lm.ocr_text
-            lm.status = LineStatus.CORRECTED
-            _set_trace(
-                traces,
-                lm,
-                projected_text=lm.ocr_text,
-                validation_status=LineStatus.CORRECTED.value,
-            )
-        ctx.lines_skipped += len(skip)
-        ctx.escalated_lines += len(escalate)
-
-        routed: list[tuple[ChunkRequest, EditProducer]] = []
-        for chunk in chunks:
-            targets = [t for t in chunk.targets() if t not in skip]
-            if not targets:
-                continue  # every target skipped — no producer call at all
-            primary_targets = [t for t in targets if t not in escalate]
-            escalate_targets = [t for t in targets if t in escalate]
-            if primary_targets:
-                if primary_targets == chunk.targets():
-                    routed.append((chunk, self.producer))  # untouched
-                else:
-                    routed.append(
-                        (
-                            chunk.model_copy(
-                                update={"target_line_ids": primary_targets}
-                            ),
-                            self.producer,
-                        )
-                    )
-            if escalate_targets:
-                assert self.escalation_producer is not None  # can_escalate
-                routed.append(
-                    (
-                        chunk.model_copy(
-                            update={
-                                "target_line_ids": escalate_targets,
-                                "chunk_id": f"{chunk.chunk_id}#esc",
-                            }
-                        ),
-                        self.escalation_producer,
-                    )
-                )
-        return routed
-
-    @staticmethod
-    def _image_cap(producer: EditProducer) -> int | None:
-        """The producer's per-call image ceiling, or ``None`` when it has
-        none (undeclared, or the producer sends no images at all)."""
-        if not getattr(producer, "wants_image", False):
-            return None
-        capabilities = getattr(producer, "capabilities", None)
-        if capabilities is None:
-            return None
-        cap: int | None = getattr(capabilities, "max_images", None)
-        return cap
-
-    def _split_for_image_cap(
-        self,
-        *,
-        routed: list[tuple[ChunkRequest, EditProducer]],
-        line_by_id: dict[str, LineManifest],
-    ) -> list[tuple[ChunkRequest, EditProducer]]:
-        """Split image-bearing chunks so no single call exceeds the
-        producer's ``ModelCapabilities.max_images``.
-
-        A vision producer crops EVERY line of the chunk it receives, so a
-        chunk's line count IS its image count. Providers cap that per call
-        (Mistral rejects a 9th image with HTTP 400 ``"Total number of
-        images exceeds the maximum allowed of 8"``) — an error no retry
-        and no granularity downgrade can heal, because the downgrade ladder
-        reacts to malformed OUTPUT, not to a request refused outright.
-
-        The descriptor already described the limit (`max_images`) and
-        already explained it (`reason_cannot_serve`); this is where the app
-        acts on it. Splitting rather than failing keeps the capability a
-        routing input instead of a hard stop.
-
-        Sibling chunks carry only the lines they correct, plus any hyphen
-        partner already in the parent chunk — a unit is never severed
-        (atomicity), so the pair still reaches one producer in one call and
-        reconciles normally. Textual context is NOT lost by the split:
-        ``prev_text``/``next_text`` are resolved against the whole page,
-        not against the chunk's own membership.
-
-        ``max_images=None`` (the default) skips all of this, so an
-        undeclared cap leaves every existing run byte-identical.
-        """
-        out: list[tuple[ChunkRequest, EditProducer]] = []
-        for chunk, producer in routed:
-            cap = self._image_cap(producer)
-            if cap is None or len(chunk.line_ids) <= cap:
-                out.append((chunk, producer))
-                continue
-
-            targets = set(chunk.targets())
-            in_chunk = set(chunk.line_ids)
-            batches: list[list[str]] = []
-            current: list[str] = []
-            assigned: set[str] = set()
-
-            for line_id in chunk.line_ids:
-                if line_id in assigned or line_id not in targets:
-                    continue
-                lm = line_by_id.get(line_id)
-                unit: set[str] = {line_id}
-                if lm is not None and lm.hyphen_role is not HyphenRole.NONE:
-                    # Both members ride together — and a member that is
-                    # context here (target of an adjacent chunk) still
-                    # travels, because the reconciler needs the whole pair.
-                    resolved = _page_local_hyphen_unit(lm, line_by_id)
-                    if resolved is not None:
-                        unit = (resolved & in_chunk) - assigned
-                members = [lid for lid in chunk.line_ids if lid in unit]
-                if len(members) > cap:
-                    raise ConfigurationError(
-                        f"hyphen unit {sorted(members)!r} needs {len(members)} "
-                        f"images in one call but the producer's max_images is "
-                        f"{cap}: a unit cannot be split across calls "
-                        "(atomicity). Raise max_images or route these lines "
-                        "to a text producer."
-                    )
-                if current and len(current) + len(members) > cap:
-                    batches.append(current)
-                    current = []
-                current.extend(members)
-                assigned |= set(members)
-            if current:
-                batches.append(current)
-
-            for index, batch in enumerate(batches):
-                batch_targets = [lid for lid in batch if lid in targets]
-                out.append(
-                    (
-                        chunk.model_copy(
-                            update={
-                                "line_ids": batch,
-                                "target_line_ids": batch_targets,
-                                "chunk_id": f"{chunk.chunk_id}#img{index}",
-                            }
-                        ),
-                        producer,
-                    )
-                )
-        return out
-
     async def _process_page(
         self,
         *,
@@ -1790,21 +889,30 @@ class CorrectionPipeline:
         )
 
         plan = plan_page(page, document_id, self.config)
+        ctx.hyphen_splits.extend(plan.hyphen_splits)
 
-        # Phase 3/4 — hybrid-selective routing: pre-decide SKIP lines
+        # hybrid-selective routing: pre-decide SKIP lines
         # (confirmed clean, no producer call) and route ESCALATE lines to
         # the vision producer, returning each chunk paired with the
         # producer that owns it. A no-op when routing is off (default), so
         # every chunk pairs with the primary producer and every existing
         # run is byte-identical.
-        routed_chunks = self._route_and_filter_chunks(
-            page=page, chunks=plan.chunks, line_by_id=line_by_id, ctx=ctx, traces=traces
+        routed_chunks = _route_and_filter_chunks(
+            qe_scorer=self.qe_scorer,
+            routing_policy=self.routing_policy,
+            producer=self.producer,
+            escalation_producer=self.escalation_producer,
+            page=page,
+            chunks=plan.chunks,
+            line_by_id=line_by_id,
+            ctx=ctx,
+            traces=traces,
         )
 
-        # Phase 4 — a vision producer crops every line it is sent, and
+        # a vision producer crops every line it is sent, and
         # providers cap images per call. Split AFTER routing: only the
         # chunks that actually reached a vision producer are constrained.
-        routed_chunks = self._split_for_image_cap(
+        routed_chunks = _split_for_image_cap(
             routed=routed_chunks, line_by_id=line_by_id
         )
 
@@ -1883,10 +991,9 @@ class CorrectionPipeline:
                     # ADR-010 — the absorbed chunk's unit members on OTHER
                     # pages (already corrected or not yet processed) fall
                     # back too: a mixed pair may not survive the absorb.
-                    closure = _hyphen_closure(
-                        undecided, line_by_id, cross_page_partners
+                    undecided = units_containing(
+                        undecided, _unit_pool(line_by_id, cross_page_partners)
                     )
-                    undecided = list(closure.values())
                     reason = sanitize_error(str(exc))[:120]
                     for lm in undecided:
                         lm.corrected_text = lm.ocr_text
@@ -2033,6 +1140,7 @@ class CorrectionPipeline:
                 self.config,
                 force_granularity=next_g,
             )
+            ctx.hyphen_splits.extend(sub_plan.hyphen_splits)
             total = 0
             for sub in sub_plan.chunks:
                 # F10 — the descent can spawn many finest-grain chunks;
@@ -2112,15 +1220,19 @@ class CorrectionPipeline:
         target_ids = set(chunk.targets())
         target_lines = [lm for lm in chunk_lines if lm.line_id in target_ids]
 
-        reconciled_count = self._reconcile_chunk_hyphens(
+        reconciled_count = _reconcile_chunk_hyphens(
+            guard_config=self.guard_config,
+            emit=self._emit,
             ctx=ctx,
             chunk_id=chunk.chunk_id,
             chunk_lines=target_lines,
             text_by_id=text_by_id,
             line_by_id=line_by_id,
             cross_page_partners=cross_page_partners,
+            traces=traces,
         )
-        self._apply_line_acceptance(
+        _apply_line_acceptance(
+            guard_config=self.guard_config,
             chunk_lines=target_lines,
             text_by_id=text_by_id,
             all_lines_by_id=line_by_id,
@@ -2189,10 +1301,10 @@ class CorrectionPipeline:
                 validation_status="fallback",
                 fallback_reason=f"all_attempts_exhausted: {sanitised_msg[:120]}",
             )
-        closure = _hyphen_closure(
-            targets, line_by_id if line_by_id is not None else {}, cross_page_partners
+        unit_members = units_containing(
+            targets, _unit_pool(line_by_id, cross_page_partners)
         )
-        for lm in closure.values():
+        for lm in unit_members:
             if lm.line_id in target_ids:
                 continue
             lm.corrected_text = lm.ocr_text
@@ -2298,7 +1410,7 @@ class CorrectionPipeline:
                 # engine's whole RetryPolicy: the ramp (and the hyphen
                 # 0.0 pin) is decided HERE; the probe lets long I/O be
                 # abandoned mid-flight.
-                # Phase 3 — count every invocation (this attempt hits the
+                # count every invocation (this attempt hits the
                 # producer whether or not it succeeds): the real cost.
                 ctx.producer_calls += 1
                 script, usage = await producer.produce(
@@ -2481,392 +1593,6 @@ class CorrectionPipeline:
     # Chunk helpers extracted from _run_chunk
     # ------------------------------------------------------------------
 
-    def _reconcile_chunk_hyphens(
-        self,
-        *,
-        ctx: RunContext,
-        chunk_id: str,
-        chunk_lines: list[LineManifest],
-        text_by_id: dict[str, str],
-        line_by_id: dict[str, LineManifest],
-        cross_page_partners: dict[LineRef, LineManifest] | None,
-    ) -> int:
-        """Unit-driven hyphen reconciliation (ADR-010).
-
-        The chunk's target lines and their resolved partners are handed
-        to THE derivation (:func:`derive_hyphen_groups`), and each unit's
-        joins are then reconciled with one walk in reading order —
-        replacing the historical two role-keyed passes (PART1→partner,
-        then BOTH→forward) that re-derived the grouping from pointer
-        fields at every step. A join is owned by its TAIL: it reconciles
-        here iff the tail is one of this chunk's targets (the partner may
-        be a context line, another chunk's line, or a cross-page member),
-        so the derived groups are the unit AS THIS CHUNK SEES IT — a
-        member two hops away contributes nothing and is simply absent.
-
-        Returns the number of joins successfully reconciled. Emits a
-        ``hyphen_partner_missing`` event for each unresolvable partner
-        (likely cross-page) so observers can surface the diagnostic.
-        """
-        # 1. Resolve every target's outgoing join through the same scope
-        #    as ever: page-wide ids, then cross-page partners.
-        joins: dict[LineRef, tuple[LineManifest, LineManifest, bool]] = {}
-        pool: dict[LineRef, LineManifest] = {line_ref(lm): lm for lm in chunk_lines}
-        for lm in chunk_lines:
-            if lm.hyphen_role == HyphenRole.PART1 and lm.hyphen_pair_line_id:
-                is_forward = False
-                partner_id = lm.hyphen_pair_line_id
-            elif lm.hyphen_role == HyphenRole.BOTH and lm.hyphen_forward_pair_id:
-                is_forward = True
-                partner_id = lm.hyphen_forward_pair_id
-            else:
-                continue
-            partner = _resolve_partner(
-                lm,
-                is_forward=is_forward,
-                line_by_id=line_by_id,
-                cross_page_partners=cross_page_partners,
-            )
-            if partner is None:
-                self._emit(
-                    ev.HyphenPartnerMissing(
-                        chunk_id=chunk_id,
-                        line_id=lm.line_id,
-                        missing_partner_id=partner_id,
-                        direction="forward" if is_forward else "backward",
-                    )
-                )
-                continue
-            pool[line_ref(partner)] = partner
-            joins[line_ref(lm)] = (lm, partner, is_forward)
-
-        # 2. One walk per unit, members in reading order. Every join's
-        #    tail and partner are both in the pool, so the derivation
-        #    groups them and the walk visits every join exactly once.
-        reconciled_count = 0
-        written_heads: set[LineRef] = set()
-        for group in derive_hyphen_groups(pool.values()):
-            for member in group.members:
-                join = joins.get(member)
-                if join is None:
-                    continue
-                tail, head, is_forward = join
-                head_ref = line_ref(head)
-                if head_ref in written_heads:
-                    continue  # two tails claiming one head — corrupt link
-                outcome = _reconcile_one_pair(
-                    tail,
-                    head,
-                    text_by_id,
-                    is_forward=is_forward,
-                    config=self.guard_config,
-                )
-                self._record_reconcile_outcome(ctx, outcome)
-                written_heads.add(head_ref)
-                reconciled_count += 1
-
-        return reconciled_count
-
-    def _apply_line_acceptance(
-        self,
-        *,
-        chunk_lines: list[LineManifest],
-        text_by_id: dict[str, str],
-        all_lines_by_id: dict[str, LineManifest],
-        traces: dict[LineRef, LineTrace] | None,
-        cross_page_partners: dict[LineRef, LineManifest] | None = None,
-    ) -> None:
-        """Apply the per-line acceptance policy on lines not already
-        reconciled as hyphen pairs.
-
-        Two guards in order:
-          1. Orphan PART1/BOTH whose OCR ends in '-' but corrected does
-             not → the LLM completed a hyphen we couldn't reconcile;
-             fall back to OCR to keep the marker.
-          2. Centralised :func:`check_line` with prev/next context — the
-             single source of truth for "is this correction acceptable?".
-        """
-        for lm in chunk_lines:
-            if lm.corrected_text is not None:
-                continue
-            corrected = text_by_id.get(lm.line_id)
-            if corrected is None:
-                continue
-
-            if (
-                lm.hyphen_role in (HyphenRole.PART1, HyphenRole.BOTH)
-                and lm.ocr_text.rstrip().endswith("-")
-                and not corrected.rstrip().endswith("-")
-            ):
-                lm.corrected_text = lm.ocr_text
-                lm.status = LineStatus.FALLBACK
-                _set_trace(traces, lm, fallback_reason="orphan_hyphen_completed")
-                continue
-
-            # ADR-010 (unit fallback atomicity): a hyphen member whose
-            # partner already fell back (its chunk was rejected — the
-            # cross-page case: this side reaches acceptance because the
-            # partner sits in no reconcile pass of THIS chunk) keeps its
-            # source text too.
-            fallen_partner = any(
-                partner is not None and partner.status is LineStatus.FALLBACK
-                for partner in (
-                    _resolve_partner(
-                        lm,
-                        is_forward=is_forward,
-                        line_by_id=all_lines_by_id,
-                        cross_page_partners=cross_page_partners,
-                    )
-                    for is_forward in (False, True)
-                )
-            )
-            if fallen_partner:
-                lm.corrected_text = lm.ocr_text
-                lm.status = LineStatus.FALLBACK
-                _set_trace(traces, lm, fallback_reason="hyphen_partner_fell_back")
-                continue
-
-            prev_ocr = (
-                all_lines_by_id[lm.prev_line_id].ocr_text
-                if lm.prev_line_id and lm.prev_line_id in all_lines_by_id
-                else None
-            )
-            next_ocr = (
-                all_lines_by_id[lm.next_line_id].ocr_text
-                if lm.next_line_id and lm.next_line_id in all_lines_by_id
-                else None
-            )
-            result = check_line(
-                lm.ocr_text, corrected, prev_ocr, next_ocr, config=self.guard_config
-            )
-            lm.corrected_text = result.text
-            # P3.5 — the guard's once-computed metrics ride the trace to
-            # the report's decision stage, accepted or not.
-            _set_trace(traces, lm, proposal_features=result.features)
-            if result.accepted:
-                lm.status = LineStatus.CORRECTED
-            else:
-                lm.status = LineStatus.FALLBACK
-                _set_trace(traces, lm, fallback_reason=result.reason)
-
-    def _global_adjacency_pass(
-        self,
-        *,
-        document_manifest: DocumentManifest,
-        all_lines: dict[LineRef, LineManifest],
-        traces: dict[LineRef, LineTrace] | None,
-    ) -> None:
-        """ONE adjacent-duplicate pass over the whole document (P3.3).
-
-        The canonical sequence is pages in manifest order, lines in page
-        order, broken at source-file transitions: file A's last physical
-        line is not adjacent to file B's first, and comparing them could
-        spuriously revert either. Keys are :class:`LineRef`s, so the
-        bare-id ambiguity that forced the old page-seam pass to skip
-        colliding seams (ADR-007) cannot arise — every seam is checked.
-        Runs after the page loop: no earlier pass has reverted anything,
-        so the live ``corrected_text`` IS the pre-revert accepted
-        correction, and a run of three identical corrections straddling
-        any seam is seen whole on one comparison basis.
-        """
-        reverts: dict[LineRef, str] = {}
-        segment: list[tuple[LineRef, str, str]] = []
-        prev_file: str | None = None
-
-        def flush() -> None:
-            if len(segment) > 1:
-                reverts.update(
-                    check_adjacent_duplicates(segment, config=self.guard_config)
-                )
-                # A word migrating across a line seam is invisible to the
-                # pair-level guards when the OCR mangled the break glyph
-                # (the line was never paired). This line-role-agnostic pass
-                # catches it; reverts merge — a line flagged by either guard
-                # falls back, atomically with its hyphen unit below.
-                reverts.update(
-                    check_boundary_migration(segment, config=self.guard_config)
-                )
-            segment.clear()
-
-        for page in document_manifest.pages:
-            if page.source_file != prev_file:
-                flush()
-                prev_file = page.source_file
-            for lm in page.lines:
-                segment.append(
-                    (
-                        line_ref(lm),
-                        lm.ocr_text,
-                        lm.corrected_text
-                        if lm.corrected_text is not None
-                        else lm.ocr_text,
-                    )
-                )
-        flush()
-
-        self._apply_unit_reverts(reverts=reverts, all_lines=all_lines, traces=traces)
-
-    def _loss_policy_pass(
-        self,
-        *,
-        document_manifest: DocumentManifest,
-        all_lines: dict[LineRef, LineManifest],
-        traces: dict[LineRef, LineTrace] | None,
-    ) -> list[SidecarEntry]:
-        """Loss policy gates (ADR-012 strict; Phase 1 token_realign).
-
-        **STRICT**: reject corrections that cannot project without
-        losing word granularity. The PAGE rewriter drops a line's
-        ``Word`` children when the corrected word count diverges from
-        the markup's (6.2 P4 slow path) — the one predictable,
-        decision-relevant format loss. ``LineManifest.word_count``
-        carries the markup's count from parse time, so the check runs in
-        the pure core, BEFORE the decisions materialize: a rejected line
-        falls back to source (whole hyphen unit, ADR-010) and its
-        rewrite becomes untouched — the source geometry survives.
-
-        **TOKEN_REALIGN** (``min_alignment_score`` set, not strict): a
-        word-count-changing correction whose tokens cannot be aligned
-        onto the source tokens with at least the threshold score — or
-        ANY correction that raises the move flag — is not projected.
-        The line reverts like strict, but the correction is preserved as
-        a :class:`SidecarEntry` (returned; surfaced on
-        ``CorrectionReport.sidecar``) instead of lost.
-
-        Under REPORT (default) this pass is a no-op: the loss projects,
-        is counted, and is attributed per line.
-        """
-        if self.loss_policy.strict:
-            reverts: dict[LineRef, str] = {}
-            for page in document_manifest.pages:
-                for lm in page.lines:
-                    if lm.word_count is None or lm.corrected_text is None:
-                        continue
-                    if lm.corrected_text == lm.ocr_text:
-                        continue  # identity projects untouched
-                    n_corrected = len(lm.corrected_text.split())
-                    if n_corrected != lm.word_count:
-                        reverts[line_ref(lm)] = (
-                            "format_loss: corrected word count "
-                            f"{n_corrected} != source Word markup {lm.word_count} "
-                            "— unprojectable without dropping word geometry "
-                            "(LossPolicy strict)"
-                        )
-            self._apply_unit_reverts(
-                reverts=reverts,
-                all_lines=all_lines,
-                traces=traces,
-                atomicity_reason="format_loss_pair_atomicity",
-            )
-            return []
-
-        threshold = self.loss_policy.min_alignment_score
-        if threshold is None:
-            return []
-
-        gate_reverts: dict[LineRef, str] = {}
-        evidence: dict[LineRef, tuple[float, bool]] = {}
-        snapshots: dict[LineRef, tuple[str, str]] = {}
-        for page in document_manifest.pages:
-            for lm in page.lines:
-                if lm.corrected_text is None or lm.corrected_text == lm.ocr_text:
-                    continue
-                ref = line_ref(lm)
-                snapshots[ref] = (lm.ocr_text, lm.corrected_text)
-                source_tokens = lm.ocr_text.split()
-                target_tokens = lm.corrected_text.split()
-                al = align_tokens(source_tokens, target_tokens)
-                if al.move_suspected:
-                    evidence[ref] = (al.score, True)
-                    gate_reverts[ref] = (
-                        "token_realign: suspected word reorder — "
-                        "correction preserved in sidecar"
-                    )
-                elif len(target_tokens) != len(source_tokens) and al.score < threshold:
-                    evidence[ref] = (al.score, False)
-                    gate_reverts[ref] = (
-                        f"token_realign: alignment score {al.score:.2f} < "
-                        f"{threshold:.2f} — correction preserved in sidecar"
-                    )
-        reverted = self._apply_unit_reverts(
-            reverts=gate_reverts,
-            all_lines=all_lines,
-            traces=traces,
-            atomicity_reason="token_realign_pair_atomicity",
-        )
-        entries: list[SidecarEntry] = []
-        for ref, reason in reverted.items():
-            snapshot = snapshots.get(ref)
-            if snapshot is None:
-                continue  # unit member whose own text was never corrected
-            source_text, corrected_text = snapshot
-            score, moved = evidence.get(ref, (None, False))
-            entries.append(
-                SidecarEntry(
-                    page_id=ref.page_id,
-                    line_id=ref.line_id,
-                    source_text=source_text,
-                    corrected_text=corrected_text,
-                    reason=reason,
-                    alignment_score=score,
-                    move_suspected=moved,
-                )
-            )
-        return entries
-
-    def _apply_unit_reverts(
-        self,
-        *,
-        reverts: dict[LineRef, str],
-        all_lines: dict[LineRef, LineManifest],
-        traces: dict[LineRef, LineTrace] | None,
-        atomicity_reason: str = "adjacent_duplicate_pair_atomicity",
-    ) -> dict[LineRef, str]:
-        """Revert flagged lines to OCR — atomically with their WHOLE
-        hyphen unit. Returns the FULL revert map (flagged + pulled
-        members, each with its reason) so a caller can attribute what
-        was reverted — the sidecar builder needs the pulled members too.
-
-        A mixed OCR+corrected pair is the exact state
-        ``reconcile_hyphen_pair`` guarantees can never survive, so a
-        flagged member pulls every other member of its unit with it —
-        cross-page members included, ``all_lines`` being the
-        page-qualified document-wide index. Membership is a group lookup
-        on THE derivation (ADR-010): the pass runs after planning, when
-        the pointer fields are final, so the derived groups cannot be
-        stale. A flagged line keeps its own revert reason; pulled
-        members are stamped ``atomicity_reason`` (the calling pass's
-        vocabulary) unless an earlier fallback path already pinned one.
-        """
-        if not reverts:
-            return {}
-        by_line = hyphen_group_by_line(derive_hyphen_groups(all_lines.values()))
-        to_revert: dict[LineRef, str] = dict(reverts)
-        for ref in reverts:
-            group = by_line.get(ref)
-            if group is None:
-                continue
-            for member in group.members:
-                to_revert.setdefault(member, atomicity_reason)
-
-        for ref, reason in to_revert.items():
-            lm = all_lines.get(ref)
-            if lm is None:
-                continue
-            lm.corrected_text = lm.ocr_text
-            lm.status = LineStatus.FALLBACK
-            _set_trace(
-                traces,
-                lm,
-                projected_text=lm.ocr_text,
-                validation_status=lm.status.value,
-            )
-            if traces is not None:
-                trace = traces.get(ref)
-                if trace is not None and not trace.fallback_reason:
-                    trace.fallback_reason = reason
-        return to_revert
-
     def _finalize_chunk_traces(
         self,
         *,
@@ -2893,118 +1619,6 @@ class CorrectionPipeline:
     # ------------------------------------------------------------------
     # Output rendering (rewriter + trace assembly)
     # ------------------------------------------------------------------
-
-    async def _render_outputs(
-        self,
-        *,
-        document_manifest: DocumentManifest,
-        source_files: dict[str, Path],
-        traces: dict[LineRef, LineTrace],
-        decisions: DecisionSet,
-    ) -> tuple[dict[str, int], dict[str, bytes]]:
-        """Rewrite corrected files in memory and update the traces.
-        Returns ``(losses, corrected_files)`` — the format's
-        granularity-loss counters aggregated across every file (for
-        ``CorrectionReport.format_losses``) and the corrected bytes per
-        source file name (for ``CorrectionResult.corrected_files``).
-
-        ADR-011 — pure computation: nothing is persisted here (the
-        engine has no writer; the caller persists from the result). The
-        projection invariant verifies against the
-        :class:`RewriteResult`'s texts, read off the very tree the bytes
-        were serialized from: the second full parse of the output is
-        gone. The heavy ``rewrite_file`` call (a full lxml
-        parse/rewrite/serialize of the source file) runs in a worker
-        thread so a ~100 MiB rewrite no longer freezes the host's event
-        loop (SSE keepalives, /health). Observer events stay ON the
-        loop — emit sites must never run from a thread (the store's
-        queues are not thread-safe).
-        """
-        # §11 — provenance stamped into every corrected file's processingStep.
-        from corrigenda import __version__ as _lib_version
-
-        config_fingerprint = self.config_fingerprint()
-        # Adapter resolution is lazy (first file to write): a run with no
-        # output files — every hand-built-manifest dry-run in the test
-        # suite passes source_files={} — needs no format at all.
-        adapter: FormatAdapter | None = self.format_adapter
-        losses_total: dict[str, int] = {}
-        corrected_files: dict[str, bytes] = {}
-
-        for source_name, xml_path in source_files.items():
-            pages_for_file = [
-                p for p in document_manifest.pages if p.source_file == source_name
-            ]
-            if not pages_for_file:
-                continue
-            if adapter is None:
-                adapter = _adapter_for_format(document_manifest.source_format)
-
-            provider_label, model_label = self.producer_metadata.provenance_labels()
-            result = await asyncio.to_thread(
-                adapter.rewrite_file,
-                xml_path,
-                pages_for_file,
-                # §11 provenance labels — constructor state since the §5.1
-                # resorption (run() no longer carries provider/model).
-                provider_label,
-                model_label,
-                lib_version=_lib_version,
-                config_fingerprint=config_fingerprint,
-            )
-
-            # Projection invariant: the artefact must SAY what the run
-            # decided. Verified BEFORE the writer sees the bytes — a
-            # divergent artefact is corruption, never a valid output.
-            _verify_projection(source_name, pages_for_file, result.texts, decisions)
-            corrected_files[source_name] = result.xml_bytes
-
-            # rewriter_stats observability event — pure read-only diagnostic
-            # surfacing how each line classified (UNTOUCHED / SUBS_ONLY /
-            # FAST_PATH / SLOW_PATH). Zero impact on the corrected XML.
-            self._emit(
-                ev.RewriterStats(
-                    source_stem=xml_path.stem,
-                    untouched=result.metrics.untouched,
-                    subs_only=result.metrics.subs_only,
-                    fast_path=result.metrics.fast_path,
-                    slow_path=result.metrics.slow_path,
-                )
-            )
-            for key, count in result.losses.items():
-                losses_total[key] = losses_total.get(key, 0) + count
-
-            lid_to_ref: dict[str, LineRef] = {}
-            for p in pages_for_file:
-                for lm in p.lines:
-                    lid_to_ref[lm.line_id] = line_ref(lm)
-
-            for lid, rpath in result.rewriter_paths.items():
-                tkey = lid_to_ref.get(lid)
-                if tkey:
-                    t = traces.get(tkey)
-                    if t is not None:
-                        t.rewriter_path = rpath
-
-            # ADR-012 — the rewrite's per-line loss attribution rides the
-            # traces onto the report's projection stage.
-            for lid, line_losses in result.losses_by_line.items():
-                tkey = lid_to_ref.get(lid)
-                if tkey:
-                    t = traces.get(tkey)
-                    if t is not None:
-                        t.projection_losses = line_losses
-
-            for lid, otxt in result.texts.items():
-                tkey = lid_to_ref.get(lid)
-                if tkey:
-                    t = traces.get(tkey)
-                    if t is not None:
-                        t.output_alto_text = otxt
-
-        # No trace persistence anywhere in the engine: trace.json IS the
-        # CorrectionReport (§9), carried on the result for the caller.
-        return losses_total, corrected_files
 
 
 # --- public surface ---

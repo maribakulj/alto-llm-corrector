@@ -1,4 +1,4 @@
-"""Per-line producer selection — the escalation tier (ROADMAP V3 Phase 4, 5b).
+"""Per-line producer selection — the escalation tier (the vision/QE programme, 5b).
 
 A QE scorer + RoutingPolicy send some lines to ESCALATE; when an
 ``escalation_producer`` is set the pipeline routes exactly those lines to
@@ -97,7 +97,7 @@ def _nonhyphen_lines(doc):
 @pytest.mark.asyncio
 async def test_all_escalate_routes_every_line_including_hyphen_units():
     """Every line routes ESCALATE — including hyphen units, which move to
-    the vision producer as whole units (Phase 4: leaving them behind was the
+    the vision producer as whole units (leaving them behind was the
     hybrid's entire residual error on real press OCR)."""
     doc = build_document_manifest([(_SAMPLE, _SAMPLE.name)])
     n_lines = sum(len(p.lines) for p in doc.pages)
@@ -166,32 +166,45 @@ async def test_hyphen_unit_escalates_as_a_whole_unit():
     assert {part1.line_id, partner_id} <= vision.lines_seen
 
 
-def test_page_local_hyphen_unit_gathers_members():
-    from corrigenda.core.pipeline import _page_local_hyphen_unit
+def test_page_local_units_gathers_members():
+    from corrigenda.core.reconcile import _page_local_units
 
     doc = build_document_manifest([(_SAMPLE, _SAMPLE.name)])
     page = doc.pages[0]
     by_id = {lm.line_id: lm for lm in page.lines}
     part1 = next(lm for lm in page.lines if lm.hyphen_role is HyphenRole.PART1)
-    unit = _page_local_hyphen_unit(part1, by_id)
-    assert unit == {part1.line_id, part1.hyphen_pair_line_id}
+
+    units = _page_local_units(by_id)
+    expected = {part1.line_id, part1.hyphen_pair_line_id}
+    assert units[part1.line_id] == expected
+    # Every member indexes the SAME unit — the caller may seed from either
+    # side of the pair and must get the whole thing.
+    assert units[part1.hyphen_pair_line_id] == expected
 
 
-def test_page_local_hyphen_unit_refuses_cross_page_and_dangling():
+def test_page_local_units_omits_cross_page_and_dangling():
     """A unit that leaves the page cannot be gathered from one page's plan,
-    so it is never escalated — the conservative pre-Phase-4 behaviour."""
-    from corrigenda.core.pipeline import _page_local_hyphen_unit
+    so it is never escalated — the conservative behaviour. Absence from the
+    index is how that is expressed."""
+    from corrigenda.core.reconcile import _page_local_units
 
     doc = build_document_manifest([(_SAMPLE, _SAMPLE.name)])
     page = doc.pages[0]
     by_id = {lm.line_id: lm for lm in page.lines}
     part1 = next(lm for lm in page.lines if lm.hyphen_role is HyphenRole.PART1)
+    partner_id = part1.hyphen_pair_line_id
 
-    cross = part1.model_copy(update={"hyphen_pair_page_id": "SOME_OTHER_PAGE"})
-    assert _page_local_hyphen_unit(cross, by_id) is None
+    def _units_with(**update):
+        patched = dict(by_id)
+        patched[part1.line_id] = part1.model_copy(update=update)
+        return _page_local_units(patched)
 
-    dangling = part1.model_copy(update={"hyphen_pair_line_id": "TL_NOPE"})
-    assert _page_local_hyphen_unit(dangling, by_id) is None
+    assert part1.line_id not in _units_with(hyphen_pair_page_id="SOME_OTHER_PAGE")
+    assert part1.line_id not in _units_with(hyphen_pair_line_id="TL_NOPE")
+    # The partner is dropped with it: half a unit is not a unit, and
+    # escalating the half that stayed is precisely the split atomicity
+    # forbids.
+    assert partner_id not in _units_with(hyphen_pair_page_id="SOME_OTHER_PAGE")
 
 
 @pytest.mark.asyncio

@@ -1,4 +1,4 @@
-"""ROADMAP V3 Phase 0 — offline XSD validation, diagnostic in, GATE out.
+"""offline XSD validation, diagnostic in, GATE out.
 
 Input validation is a diagnostic: real-world exports carry dialect
 extensions (Transkribus writes a ``TranskribusMetadata`` element the

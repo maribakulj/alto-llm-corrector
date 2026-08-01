@@ -128,7 +128,7 @@ async def test_chunk_completed_reports_chunk_total_across_retries():
 
 @pytest.mark.asyncio
 async def test_report_persists_the_aggregated_usage():
-    """Phase 0 (ROADMAP V3) — usage lived only on the TRANSIENT
+    """— usage lived only on the TRANSIENT
     CorrectionResult while the report is the persisted artefact, so
     cost (and response ids) never reached trace.json. Failed before:
     CorrectionReport had no usage field."""

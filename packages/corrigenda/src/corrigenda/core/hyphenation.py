@@ -3,7 +3,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from corrigenda.core._norm import ncfold
-from corrigenda.core.pairing import HYPHEN_CHARS, forward_partner_id
+from corrigenda.core.pairing import (
+    HYPHEN_CHARS,
+    backward_partner_ref,
+    forward_partner_ref,
+    strip_trailing_break_marks,
+)
 from corrigenda.core.schemas import (
     DEFAULT_GUARD_CONFIG,
     GuardConfig,
@@ -43,8 +48,11 @@ def _part1_text_migrated(
         characters (word completion, e.g. ``"néces" → "nécessaires"``);
       - overall char length grew past ``ratio*len + slack``.
     """
-    ocr_bare = ocr_text.rstrip("-").rstrip()
-    corrected_bare = corrected_text.rstrip("-").rstrip(".")
+    # L5 — the whole repertoire. With `rstrip("-")` a ⸗-terminated PART1 kept
+    # its mark in the bare text, so every length and word-growth comparison
+    # below ran against a string one character longer than its counterpart.
+    ocr_bare = strip_trailing_break_marks(ocr_text).rstrip()
+    corrected_bare = strip_trailing_break_marks(corrected_text).rstrip(".")
 
     ocr_words = ocr_bare.split()
     corrected_words = corrected_bare.split()
@@ -53,8 +61,8 @@ def _part1_text_migrated(
         return True
 
     if ocr_words and corrected_words:
-        ocr_last = ocr_words[-1].rstrip("-")
-        corrected_last = corrected_words[-1].rstrip("-")
+        ocr_last = strip_trailing_break_marks(ocr_words[-1])
+        corrected_last = strip_trailing_break_marks(corrected_words[-1])
         if len(corrected_last) > len(ocr_last) + config.part1_last_word_char_growth:
             return True
 
@@ -208,40 +216,30 @@ def enrich_chunk_lines(
                     geometry=geometry,
                 )
             )
-        elif lm.hyphen_role == HyphenRole.BOTH:
-            # Chained: PART2 of previous pair + PART1 of next pair.
-            # Both join candidates exposed symmetrically.
-            result.append(
-                LineContext(
-                    line_id=lm.line_id,
-                    prev_text=prev_text,
-                    ocr_text=lm.ocr_text,
-                    next_text=next_text,
-                    hyphenation_role=lm.hyphen_role.value,
-                    hyphen_candidate=True,
-                    hyphen_join_with_next=True,
-                    hyphen_join_with_prev=True,
-                    backward_join_candidate=lm.hyphen_subs_content or None,
-                    forward_join_candidate=lm.hyphen_forward_subs_content or None,
-                    geometry=geometry,
-                )
-            )
-        elif lm.hyphen_role == HyphenRole.PART1:
-            result.append(
-                LineContext(
-                    line_id=lm.line_id,
-                    prev_text=prev_text,
-                    ocr_text=lm.ocr_text,
-                    next_text=next_text,
-                    hyphenation_role=lm.hyphen_role.value,
-                    hyphen_candidate=True,
-                    hyphen_join_with_next=True,
-                    forward_join_candidate=lm.hyphen_subs_content or None,
-                    geometry=geometry,
-                )
-            )
         else:
-            # PART2
+            # ``join_with_next`` / ``join_with_prev`` are ASSERTIONS about the
+            # document, not hints, so they follow the LINK and not the role.
+            # A role is read off the line's own text — a trailing break mark
+            # makes it PART1 — while the link is established in a second pass
+            # that can legitimately find nobody: the partner is on a page this
+            # run does not have, the pairing policy refused the candidate. The
+            # role then says PART1 and there is no one there.
+            #
+            # Announcing a join anyway asked the model to leave a word
+            # unfinished for a partner that never arrives, and nothing
+            # downstream could notice: no pair means the reconciler that
+            # checks a join never runs, and the payload is compared against
+            # nothing.
+            joins_next = forward_partner_ref(lm) is not None
+            joins_prev = backward_partner_ref(lm) is not None
+            # The SUBS_CONTENT authority travels with the link it belongs to:
+            # PART1's sits in the pair slot, BOTH's forward one in the forward
+            # slot (the same role→slot map as the refs above).
+            forward_subs = (
+                lm.hyphen_forward_subs_content
+                if lm.hyphen_role == HyphenRole.BOTH
+                else lm.hyphen_subs_content
+            )
             result.append(
                 LineContext(
                     line_id=lm.line_id,
@@ -249,9 +247,19 @@ def enrich_chunk_lines(
                     ocr_text=lm.ocr_text,
                     next_text=next_text,
                     hyphenation_role=lm.hyphen_role.value,
+                    # Still a candidate: the line DOES end (or begin) on a
+                    # break mark, and the model must know that so it does not
+                    # read the dash as punctuation and "fix" it. What it no
+                    # longer claims is a partner it does not have.
                     hyphen_candidate=True,
-                    hyphen_join_with_prev=True,
-                    backward_join_candidate=lm.hyphen_subs_content or None,
+                    hyphen_join_with_next=joins_next or None,
+                    hyphen_join_with_prev=joins_prev or None,
+                    backward_join_candidate=(
+                        (lm.hyphen_subs_content or None) if joins_prev else None
+                    ),
+                    forward_join_candidate=(
+                        (forward_subs or None) if joins_next else None
+                    ),
                     geometry=geometry,
                 )
             )
@@ -415,30 +423,10 @@ def classify_reconcile_outcome(
     return "neutralised"
 
 
-def should_stay_in_same_chunk(
-    line_a: LineManifest,
-    line_b: LineManifest,
-) -> bool:
-    """
-    Return True if line_a and line_b must be in the same LLM chunk
-    because they form a hyphenated pair.
-
-    Symmetric: true when either line forward-links to the other. The
-    role→field mapping is resolved by the shared ``forward_partner_id``
-    primitive (PART1→pair id, BOTH→forward id), so this predicate never
-    re-encodes it.
-    """
-    return (
-        forward_partner_id(line_a) == line_b.line_id
-        or forward_partner_id(line_b) == line_a.line_id
-    )
-
-
 # --- public surface ---
 __all__ = [
     "ReconcileMetrics",
     "enrich_chunk_lines",
     "reconcile_hyphen_pair",
     "classify_reconcile_outcome",
-    "should_stay_in_same_chunk",
 ]

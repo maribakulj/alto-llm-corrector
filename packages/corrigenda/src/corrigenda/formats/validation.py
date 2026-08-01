@@ -1,4 +1,4 @@
-"""Offline XSD validation for ALTO/PAGE documents (ROADMAP V3 Phase 0).
+"""Offline XSD validation for ALTO/PAGE documents.
 
 Role split (§ roadmap): on INPUT the validation is a *diagnostic* — a
 slightly non-conformant file can still yield a perfectly good manifest,

@@ -9,12 +9,18 @@ pinned: false
 
 # Corrigenda
 
-Post-OCR text correction of ALTO XML files using LLM providers (OpenAI, Anthropic, Mistral, Google Gemini).
+Post-OCR text correction of **ALTO and PAGE XML** files using LLM providers (OpenAI, Anthropic, Mistral, Google Gemini).
 
-Upload one or more ALTO XML files, choose a provider and model, and get corrected ALTO XML back — with hyphenation pairs preserved intact across line boundaries.
+Upload one or more ALTO or PAGE XML files, choose a provider and model, and get the corrected XML back — in its original format and namespace, with hyphenation pairs preserved intact across line boundaries.
 
-**What it does:** corrects OCR errors in ALTO `<String CONTENT="..."/>` elements.
+**What it does:** corrects OCR errors in the text of a line — ALTO `<String CONTENT="..."/>`, PAGE `<TextEquiv><Unicode>` — never its geometry.
 **What it does not:** OCR, resegmentation, line merging/splitting, translation, or text modernisation.
+
+**Formats:** ALTO v2/v3/v4 and PAGE 2013/2019/2024 (other PAGE dates parse
+tolerantly). Both are first-class: same engine, same guarantees, same
+`DocumentManifest`. See
+[`packages/corrigenda/docs/format-support.md`](packages/corrigenda/docs/format-support.md)
+for the version matrix and what each one validates against.
 
 ---
 
@@ -28,12 +34,22 @@ this repo is that library **plus** a FastAPI + React app around it.
 | Doc | Scope |
 |---|---|
 | `README.md` (this file) | The app: what it does, how to run and deploy it |
-| `SPECS_LIB_V2.md` | Normative spec for the `corrigenda` library |
-| `packages/corrigenda/docs/` | Library guides: `quickstart`, `formats`, `edit-protocol`, `versioning` |
+| `SPECS_LIB_V2.md` | Normative spec for the `corrigenda` library — what it **must be** |
+| [`docs/PLAN.md`](docs/PLAN.md) | **The single live plan** — what remains, in what order, and what `1.0` requires. There is exactly one; do not write a second |
+| [`docs/audit/`](docs/audit/) | Findings, with evidence — what has been **observed**. Carries no plan |
+| `packages/corrigenda/docs/` | Library guides: `quickstart`, `formats`, `format-support`, `edit-protocol`, `versioning`, and [`reading-a-report`](packages/corrigenda/docs/reading-a-report.md) — what each number in a run's report does **and does not** mean |
 | `packages/corrigenda/CHANGELOG.md` | The library's released changes (SemVer) |
 | [`docs/API.md`](docs/API.md) | Backend HTTP API map (the OpenAPI schema is the contract) |
+| [`docs/adr/`](docs/adr/) | Architecture decision records — why a design is what it is |
 | [`SECURITY.md`](SECURITY.md) | Deployment profiles, threat model, vulnerability reporting |
 | `CONTRIBUTING.md`, `CLAUDE.md` | Contributor + assistant guidance |
+
+**Status:** pre-`0.10.0`, no git tag yet. The library is a research-grade beta:
+read `docs/PLAN.md` for the known open defects and the criteria a `1.0` has to
+meet before it can claim to be one. In particular the **top-level import
+surface is provisional** — `corrigenda.__all__` will be cut from 95 symbols to
+the computed 54 before any freeze, and demoted symbols stay importable from
+their own module (`packages/corrigenda/docs/versioning.md`).
 
 **Historical:** everything under [`docs/history/`](docs/history/) is
 frozen design & audit trail (original specs, migration and audit logs).
@@ -105,7 +121,7 @@ endpoint returns `404` for pre-restart job_ids, the old tokens are
 gone, and the results are unreachable. The server therefore deletes
 such orphan directories at startup rather than letting them accumulate
 as dead weight. Real persistence (a database holding job records that
-survive restarts) is a planned institutional-profile feature, not a
+survive restarts) is a planned feature of that profile, not a
 mount-a-volume option.
 
 Single-worker on purpose — see Dockerfile comments. A multi-worker setup would need a shared `JobStore` (Redis, Postgres) since the current one is in-process.
@@ -118,7 +134,7 @@ Single-worker on purpose — see Dockerfile comments. A multi-worker setup would
 |---|---|---|
 | `JOB_STORAGE_DIR` | `/tmp/app-jobs` | Base directory for job files (input + output) |
 | `CORS_ORIGINS` | `*` | Comma-separated list of allowed CORS origins, or `*` |
-| `DEPLOYMENT_PROFILE` | `demo` | `demo` (public Space stance) or `institutional` (behind SSO/proxy; refuses wildcard CORS). See [SECURITY.md](SECURITY.md) |
+| `DEPLOYMENT_PROFILE` | `demo` | `demo` (public Space stance) or `proxy_protected` (behind SSO/proxy; refuses wildcard CORS). `institutional` is the deprecated spelling of `proxy_protected` — it still works and warns. See [SECURITY.md](SECURITY.md) |
 | `MAX_ACTIVE_JOBS` | `4` | Concurrent correction pipelines |
 | `MAX_CONCURRENT_UPLOADS` | = `MAX_ACTIVE_JOBS` | Concurrent upload slots — reserved by an ASGI middleware before any body byte is read; at capacity the request is refused (503 + `Retry-After`) without receiving the upload |
 | `JOB_TIMEOUT_SECONDS` | `1800` | Per-job wall-clock budget (0 disables) |
@@ -127,7 +143,7 @@ Single-worker on purpose — see Dockerfile comments. A multi-worker setup would
 
 ## Hyphenation Reconciler
 
-ALTO files often encode inter-line hyphenation via `SUBS_TYPE="HypPart1/HypPart2"` and `SUBS_CONTENT` attributes, or via a trailing dash heuristic. The **Hyphenation Reconciler** (`corrigenda.core.hyphenation`, in the `packages/corrigenda` library) treats such pairs as atomic units:
+ALTO files often encode inter-line hyphenation via `SUBS_TYPE="HypPart1/HypPart2"` and `SUBS_CONTENT` attributes, or via a trailing dash heuristic; PAGE carries no equivalent markup, so pairing there is heuristic only. The **Hyphenation Reconciler** (`corrigenda.core.hyphenation`, in the `packages/corrigenda` library) treats such pairs as atomic units in both formats:
 
 - Both lines are always sent in the **same LLM chunk** — never split across requests.
 - The LLM is instructed to correct each line individually without moving text between them.

@@ -65,7 +65,7 @@ te sont fournis à titre indicatif uniquement pour le contexte.\
 
 
 # ---------------------------------------------------------------------------
-# Uncertainty channel (ROADMAP V3 Phase 1) — opt-in contract variant
+# Uncertainty channel — opt-in contract variant
 # ---------------------------------------------------------------------------
 
 #: Reason codes the model may attach to a modified token. ASCII slugs on

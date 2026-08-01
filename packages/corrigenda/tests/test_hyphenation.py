@@ -5,7 +5,6 @@ from __future__ import annotations
 from corrigenda.core.hyphenation import (
     enrich_chunk_lines,
     reconcile_hyphen_pair,
-    should_stay_in_same_chunk,
 )
 
 from corrigenda.core.schemas import Coords, HyphenRole, LineManifest
@@ -673,50 +672,6 @@ def test_reconcile_subs_content_preserved_when_coherent():
     )
     _, _, subs = reconcile_hyphen_pair(part1, part2, "pratica-", "bles dans ce terrain")
     assert subs == "praticables"
-
-
-# ---------------------------------------------------------------------------
-# should_stay_in_same_chunk
-# ---------------------------------------------------------------------------
-
-
-def test_should_stay_linked_pair():
-    part1 = make_line(
-        "TL1",
-        "por-",
-        hyphen_role=HyphenRole.PART1,
-        hyphen_pair_line_id="TL2",
-    )
-    part2 = make_line(
-        "TL2",
-        "te",
-        hyphen_role=HyphenRole.PART2,
-        hyphen_pair_line_id="TL1",
-    )
-    assert should_stay_in_same_chunk(part1, part2) is True
-    assert should_stay_in_same_chunk(part2, part1) is True
-
-
-def test_should_stay_unrelated_lines():
-    line_a = make_line("TL1", "Bonjour monde.")
-    line_b = make_line("TL2", "Autre ligne.")
-    assert should_stay_in_same_chunk(line_a, line_b) is False
-
-
-def test_should_stay_part1_wrong_pair_id():
-    part1 = make_line(
-        "TL1",
-        "por-",
-        hyphen_role=HyphenRole.PART1,
-        hyphen_pair_line_id="TL99",
-    )
-    part2 = make_line(
-        "TL2",
-        "te",
-        hyphen_role=HyphenRole.PART2,
-        hyphen_pair_line_id="TL1",
-    )
-    assert should_stay_in_same_chunk(part1, part2) is False
 
 
 # ---------------------------------------------------------------------------

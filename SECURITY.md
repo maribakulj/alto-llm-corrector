@@ -41,12 +41,20 @@ What it is: a public demonstration. Treat it accordingly.
 - Abuse limits: request rate limit, per-request/total upload caps,
   concurrent-upload and concurrent-job caps, ZIP-bomb guards.
 
-### `institutional` (behind your SSO / reverse proxy)
+### `proxy_protected` (behind your SSO / reverse proxy)
+
+> Renamed from `institutional` on 2026-07-28. This section was already
+> honest about the scope; the NAME was not — an operator reads
+> "institutional" as "ready for an institution", which is precisely what
+> the paragraph below denies. `DEPLOYMENT_PROFILE=institutional` still
+> works and logs a deprecation warning naming the replacement.
 
 What it asserts: the app runs **behind an authenticating reverse
-proxy**; the app itself still has no user accounts (job ownership,
-quotas and durable persistence are roadmap items — see
-`docs/history/PLAN-REMEDIATION-2026-07-15.md`, Vague 5).
+proxy** — and nothing more. The app itself still has **no user accounts,
+no job ownership, no per-user quotas, no database and no durable
+persistence**, and is single-worker by design. Behind an SSO it can serve as a single-node internal pilot;
+it is not yet a durable institutional service. Those capabilities are
+open plan items, not shipped ones — see `docs/PLAN.md`.
 
 Enforced by the app in this profile:
 

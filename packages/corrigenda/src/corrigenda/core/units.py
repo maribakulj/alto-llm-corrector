@@ -25,7 +25,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 
 from corrigenda.core.identity import LineRef, line_ref
-from corrigenda.core.pairing import forward_partner_id
+from corrigenda.core.pairing import forward_partner_id, forward_ref, pair_ref
 from corrigenda.core.schemas import HyphenRole, HyphenSplit, LineManifest
 
 
@@ -43,6 +43,21 @@ class HyphenGroup:
     #: in the document). Conservative heuristic mode hangs off this: a
     #: heuristic group never invents SUBS_CONTENT.
     explicit: bool
+    #: True when every pointer every member carries resolved INSIDE the
+    #: set this group was derived from — no link leaves it, none dangles.
+    #:
+    #: Derived here rather than re-checked by callers, and that is the
+    #: point. A consumer that must move a unit as a whole (the router
+    #: escalating to a second producer, the image-cap batcher) has to
+    #: know whether the unit it can see IS the unit. Asking the group
+    #: keeps that question answered in the one place the pointers are
+    #: read; asking the pointers again is how a fifth resolver appears.
+    #:
+    #: A group derived over ONE page is therefore incomplete exactly when
+    #: it continues onto another page or points at a line that is not
+    #: there. Derived over the whole document, only a genuinely dangling
+    #: link makes it False.
+    complete: bool
 
     def member_ids_on_page(self, page_id: str) -> tuple[str, ...]:
         """The group's bare line ids on ONE page (page-scoped consumers)."""
@@ -77,20 +92,22 @@ def derive_hyphen_groups(lines: Iterable[LineManifest]) -> tuple[HyphenGroup, ..
     def union(a: LineRef, b: LineRef) -> None:
         parent[find(a)] = find(b)
 
-    def partner_ref(
-        lm: LineManifest, pid: str | None, ppage: str | None
-    ) -> LineRef | None:
-        if not pid:
-            return None
-        return LineRef(page_id=ppage or lm.page_id, line_id=pid)
+    # Refs carrying a pointer that does not resolve inside ``lines`` —
+    # it crosses out of the set, or dangles. Collected on the ONE walk
+    # that already reads every pointer, so ``complete`` costs nothing
+    # and no caller has to read a pointer field to learn the same thing.
+    unresolved: set[LineRef] = set()
 
+    # Both slots, read through the shared primitives — this module no
+    # longer knows which attribute holds what (ADR-010).
     for ref, lm in by_ref.items():
-        for partner in (
-            partner_ref(lm, lm.hyphen_pair_line_id, lm.hyphen_pair_page_id),
-            partner_ref(lm, lm.hyphen_forward_pair_id, lm.hyphen_forward_pair_page_id),
-        ):
-            if partner is not None and partner in parent:
+        for partner in (pair_ref(lm), forward_ref(lm)):
+            if partner is None:
+                continue
+            if partner in parent:
                 union(ref, partner)
+            else:
+                unresolved.add(ref)
 
     components: dict[LineRef, list[LineRef]] = {}
     for ref in by_ref:
@@ -107,6 +124,7 @@ def derive_hyphen_groups(lines: Iterable[LineManifest]) -> tuple[HyphenGroup, ..
                 members=ordered,
                 spans_pages=len({r.page_id for r in ordered}) > 1,
                 explicit=explicit,
+                complete=not any(r in unresolved for r in ordered),
             )
         )
     groups.sort(key=lambda g: order[g.members[0]])
@@ -131,6 +149,47 @@ def hyphen_group_by_line(
         for member in group.members:
             index[member] = group
     return index
+
+
+def units_containing(
+    seeds: Iterable[LineManifest],
+    pool: Iterable[LineManifest],
+) -> list[LineManifest]:
+    """``seeds`` plus every line sharing a hyphen unit with one of them.
+
+    THE traversal behind every "…and its partners, atomically" operation:
+    a chunk whose error was absorbed drags its units down with it, an
+    exhausted chunk's fallback takes the members that sit outside it.
+    Both need the transitive set, not the direct partners — a mixed
+    PART1→BOTH→PART2 chain where one member kept a correction and the
+    others fell back is a word rewritten on one line and verbatim on the
+    next.
+
+    ``pool`` bounds what is reachable, exactly as the caller's lookup
+    maps used to: pass one page's lines plus the known cross-page
+    partners and a link out of that set simply does not resolve. Order
+    is the pool's reading order, and seeds are always included — even a
+    seed in no unit at all.
+
+    Lives here, beside the derivation, because it *is* the derivation:
+    the pipeline used to carry a second fixed-point walk over the
+    pointer fields that could disagree with this one. Two encodings of
+    "which lines travel together" is one too many (ADR-010).
+    """
+    seed_list = list(seeds)
+    seed_refs = {line_ref(lm) for lm in seed_list}
+    index = hyphen_group_by_line(derive_hyphen_groups(pool))
+
+    wanted = set(seed_refs)
+    for ref in seed_refs:
+        group = index.get(ref)
+        if group is not None:
+            wanted.update(group.members)
+
+    by_ref = {line_ref(lm): lm for lm in seed_list}
+    for lm in pool:
+        by_ref.setdefault(line_ref(lm), lm)
+    return [by_ref[ref] for ref in by_ref if ref in wanted]
 
 
 def split_forward_link(tail: LineManifest, head: LineManifest) -> HyphenSplit:
@@ -197,4 +256,5 @@ __all__ = [
     "derive_hyphen_groups",
     "hyphen_group_by_line",
     "split_forward_link",
+    "units_containing",
 ]

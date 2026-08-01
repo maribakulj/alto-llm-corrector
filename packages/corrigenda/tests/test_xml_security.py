@@ -1,6 +1,6 @@
 """Security tests for corrigenda XML parsing — XXE / SSRF / entity expansion.
 
-Roadmap L10 Phase 1 (B1) — these tests pin the contract that EVERY
+Roadmap L10 (B1) — these tests pin the contract that EVERY
 lxml parser instantiation in corrigenda goes through the hardened
 ``make_safe_parser()`` helper in ``corrigenda.formats._xml`` (the
 format-neutral home; each format's ``_ns`` re-exports it).

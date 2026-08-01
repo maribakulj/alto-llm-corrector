@@ -5,9 +5,445 @@ All notable changes to **corrigenda** are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Nothing here has ever been released
+
+Read before using the version headings below (`D4`).
+
+**There are zero git tags and the package has never been published to an
+index.** The `[0.9.0]`, `[0.9.0 initial scope]` and `[0.1.0a1]` sections are
+dated development milestones, not releases: no artefact carrying those
+version numbers exists anywhere. `docs/PLAN.md` schedules the first real tag
+as `0.10.0` (`P2`), after a rehearsal on TestPyPI (`P1`).
+
+That matters for one reason in particular. SemVer's promise not to break
+things attaches to *released* versions, so the section that carries the whole
+history of this library's API breaks — `[Unreleased]`, 81 entries — is the one
+section SemVer declares non-binding. Nothing is owed to anybody yet, and that
+is the honest state; the index below exists so the breaks are readable as a
+list rather than found by scrolling.
+
+### Breaking changes so far, in reverse order
+
+Every one of these predates any release. They are listed to be *findable*,
+not because a migration is owed.
+
+| change | what it broke |
+|---|---|
+| OCR-confidence invalidation is counted per line | the PAGE `format_losses` key `conf_dropped` is gone; its replacement counts lines, not attributes |
+| `ProducerMetadata` replaces bare provider/model strings | producer identity |
+| The producer seam takes `ProducerOptions`, not `RetryPolicy` | `EditProducer.produce()`'s signature |
+| Generic vocabulary replaces the LLM-branded names | several exported names |
+| `PipelineEventType` names only engine events | the observer's event vocabulary |
+| Report v2: staged `LineOutcome` entries | the `CorrectionReport` JSON shape (`report_version` 1.0 → 2.0) |
+| `run()` never mutates its input | callers reading results off the input manifest |
+| Persistence left the engine surface | `output_writer` on the pipeline constructor |
+| Page images are keyed by page, not by file | `run(page_images=…)` |
+| `LineRef` — line identity is `(page_id, line_id)` | anything keyed on a bare `line_id` |
+| Recoverability is an allowlist | providers raising raw transport exceptions |
+| Parsers stamp identity | hand-built manifests |
+| Fallback accounting counts LINES, not chunks | `CorrectionResult` counters |
+
+The **top-level import surface** will break once more before the first tag:
+`corrigenda.__all__` is provisional and drops from 95 symbols to the computed
+54 (`S3b`). See `docs/versioning.md`.
+
 ## [Unreleased]
 
 ### Added
+
+- **`CorrectionReport.hyphen_splits` — the engine's one deliberately
+  destructive operation is no longer invisible (R6).** When a hyphen chain is
+  longer than `max_lines_per_request` the LINE planner severs a forward link so
+  the cut pair cannot straddle two requests (`split_forward_link`, ADR-010).
+  The record existed — on the `ChunkPlan`, an internal planning artefact nobody
+  outside the planner sees — and nothing on the report covered it: the cut
+  resets the tail's role to `NONE`, so `unpaired_breaks` (which counts lines
+  that still *want* a partner) is blind to it by construction; both sides keep
+  their OCR text, so it is not a fallback; nothing leaves the markup, so it is
+  not a `format_loss`. What a host is handed is a delivered line whose text ends
+  mid-word and which declares no break at all.
+  Measured while pinning it: a split can only happen at LINE granularity, which
+  the planner's auto-selection never reaches (PAGE → BLOCK → WINDOW) — the one
+  real path there is the granularity descent after a failed chunk. Rare, and now
+  reported. Optional and additive: `None` when nothing was cut, no
+  `report_version` bump.
+
+### Fixed
+
+- **No chunk boundary separates a still-linked pair any more (L7).** Three
+  planner defects turned out to be one: asking "is my partner the NEXT line?"
+  instead of "WHERE is my partner?". A linked pair has exactly two legitimate
+  outcomes at planning time — together in one chunk, or severed with a
+  `HyphenSplit` on the plan — and a pair that is neither is a silent hole,
+  because the validator skips a pair that is not wholly in-chunk and the
+  reconciler could write across the boundary.
+  The previous release's own blank-line fix widened the hole: once the linker
+  stepped over blanks, a pair linked `L0 → L2` failed the adjacency test, the
+  chain stopped, the two members landed in different chunks and the link stayed
+  live with nothing recorded.
+  `_plan_line` now follows the link (an id→position *lookup*, not a resolver),
+  carries the lines in between rather than leaving them out of every chunk, and
+  severs on "my partner is not in my chunk" instead of "the cap cut me" — those
+  coincided only while adjacency was required. A partner off-page (a cross-page
+  pair) or behind is neither followed nor severed.
+  `_try_window` had the same root through `should_stay_in_same_chunk`, which was
+  wrong in *two* directions: it could not see a link leaving from an earlier
+  line in the window, nor a non-adjacent partner. Replaced by `_unit_reach`,
+  which asks how far the window must reach to hold every link that leaves it.
+  The predicate had one production caller and is now **retired** — it was the
+  third formulation of "who is my partner?" that S1 left standing.
+  `_split_for_image_cap` was asking a different question of the wrong helper.
+  `_page_local_units` answers "is this the WHOLE unit?" and returns nothing when
+  it is not, which is right for the router (escalating half a unit would split
+  it, so leaving it alone keeps it together). The batcher has no "leave it
+  alone" — it slices one chunk into calls — so given nothing it treated each
+  member as a singleton and could put a pair in two calls. Two shapes reached
+  it: a group whose last pointer dangles, and one continuing onto another page.
+  New `_units_visible_on_page`: same shared derivation, no pointer reads, a
+  different projection — the members present, complete or not.
+  Also measured: the third item on the list, "the granularity descent does not
+  repatriate non-target partners", is not an independent defect. Window
+  targeting already forces both members of a pair into one window; a sweep of
+  3708 chunks over 7 page shapes × a config grid found 45 violations, **all** of
+  them the non-adjacent-pair shape, and zero after the window fix.
+- **The hyphen guards know the whole break-mark repertoire, not just `-`
+  (L5).** `HYPHEN_CHARS` has six members and the parsers use all of them, so a
+  line can legitimately be a PART1 by ending in `⸗` or `¬` — yet five guard
+  sites tested the ASCII hyphen alone. Measured over the 1711 ALTO/PAGE lines of
+  `examples/` and `corpus/`: of 363 hyphenated lines, 331 end in `-`, **24 in
+  `⸗` and 8 in `¬`**. 32 lines, 8.8%, fell outside every one of those checks —
+  and it is not a corner case, `corpus/37-GT-BNL` is Fraktur ground truth whose
+  break mark is `⸗`.
+  Three real consequences, each with the test that fails before the fix: the
+  orphan guard did not pull back a line whose correction dropped a `⸗`, so the
+  delivered line no longer said the word continues; the PART1 growth guard
+  measured the mark as part of the word, and since its threshold is a character
+  count (default 3) a 4-character word completion read as 3 and was waved
+  through; the fusion check compared against a last word with the mark still
+  glued on, so a model that completed the word *and* kept the mark passed
+  validation with PART2's text already migrated up.
+  Two derived predicates, `ends_with_break_mark` and
+  `strip_trailing_break_marks`, in `pairing.py` — the repertoire's only home.
+  The first deliberately omits `trailing_hyphen_char`'s alphabetic-character
+  requirement: its callers already know the line breaks a word, and re-checking
+  would un-guard an explicitly marked line that happens to end in a digit.
+- **An empty line is skipped over when pairing, not treated as a partner
+  (L5).** `link_hyphen_pairs` took `lines[i + 1]`, so a blank line between a
+  PART1 and its real continuation became the PART2: it holds no text, nothing
+  reconciles, the pair-drift guards never run, and the actual continuation is
+  left unlinked. Same consequence as the empty-*page* defect one scale down, and
+  the same sentence rules it — a line that carries no text can say nothing about
+  a word that spans it; it is a fact about the scan, not about the sentence.
+  Applied to both walks from one definition, which also closes the
+  `lines[-1]`/`lines[0]` facet of the cross-page walk: a blank at the foot of a
+  page or the head of the next hid a word spanning the seam. Latent on this
+  repo's corpora (0 empty lines in 1711), so it ships with eleven tests rather
+  than a measurement.
+- **`format_losses is None` no longer reads as "the run lost nothing" (R8).**
+  A run that flattened a tab into an ordinary space reports
+  `format_losses: None` and `projection_fidelity: {"normalized": 1}`. The loss
+  was already counted — aggregated on `projection_fidelity`, attributed per line
+  on `ProjectionStage.fidelity` — so what needed fixing was the claim around it,
+  and the contract now says in all three places that this field counts losses of
+  MARKUP granularity and that a flattened character is a loss of TEXT graded on
+  the fidelity scale. Both fields have to be read to audit a run.
+  Deliberately NOT mirrored as a second `format_losses` key: it would agree with
+  `projection_fidelity["normalized"]` on every run by construction, and two
+  accounting sites for one event are free to drift apart — which is what R1 was.
+  The same reasoning that settled R4's unit settles this.
+- **`LossPolicy(strict=True)` documents that it is a no-op on ALTO (R7).**
+  `word_count` is populated by the PAGE parser alone, so the gate has no input
+  on ALTO and a host that sets `strict=True` gets the default behaviour,
+  silently. The docstring says so outright now, and says the part that actually
+  matters: this is not "an ALTO rewrite loses nothing". A word-count-changing
+  correction rebuilds the line and drops `TAGREFS`/`language`/vendor attributes
+  plus the `STYLE` of any unmatched `String` — reported, and gated by no mode.
+  Arming the gate for ALTO would change delivered output and needs a measured
+  threshold, not a flag flipped in passing, so the restriction is documented and
+  pinned by tests instead of discovered by a host whose gate never fired.
+- **An emptied line reports the styles it loses (R2).** The ALTO rebuild has
+  two exits. A correction that empties the line returns before any token
+  alignment happens — there are no target tokens to align against — and that
+  exit counted no `STYLE`/`STYLEREFS` at all, though nothing matched means
+  every one of them went. 56 lines of the repo's ALTO corpora carry those
+  attributes. Both exits now call one accounting function; a second inline copy
+  is exactly how R1's phantom counts came about.
+- **A dropped `<HYP>` element is counted (R3) — and the item was narrower than
+  stated.** "A PART2 line's `<HYP>` removed with no counter" evokes a
+  continuation line that also ends on a break mark; that line is not PART2. The
+  parser reads the trailing mark as a forward break, classifies it `BOTH`, and
+  the HYP is re-emitted — nothing is lost and nothing needs counting. The
+  reachable shape is a `<HYP>` that is **not** line-terminal: ALTO does not
+  define it, the parser tolerates it, the role stays PART2 and the element went
+  silently. Now `hyp_elements_removed`. What goes is the **element** — its
+  geometry and its standing as markup — not the mark, whose character is
+  already in the reconstructed text and comes back inside a rebuilt `String`'s
+  CONTENT; both halves are asserted so nobody "fixes" this by re-synthesising a
+  HYP that would double the mark. 0 of the 1711 ALTO lines in `examples/` and
+  `corpus/` have the shape, so this pins a latent path rather than a measured
+  one. The key deliberately avoids the `*_dropped` suffix: in this vocabulary
+  that suffix claims a `String` attribute, and the differential invariant reads
+  it as one.
+
+### Changed
+
+- **`word_order_suspected` is no longer counted as a loss (R5).** The ALTO
+  rewriter's alignment flag rode inside the loss dictionary, so any consumer
+  summing `format_losses` added a non-event to the total: nothing left the
+  markup, the alignment simply could not vouch for the word order it was handed.
+  It now travels on its own channel — `RewriteResult.word_order_suspected`
+  (line ids) → `ProjectionStage.word_order_suspected` (a per-line flag). The
+  behaviour is unchanged: flagged, never acted on, because lines never merge and
+  words never move. `format_losses` no longer carries the key.
+- **`ProjectionFidelity` gains `source_spelling`: `exact` was untrue on 115
+  lines of the repo's own BnF fixture (L8).** `exact` promises the artefact
+  says the decision *character for character*. 115 of `examples/X0000002.xml`'s
+  566 lines carry their break mark as U+00AD SOFT HYPHEN inside `<HYP>`; the
+  reconstruction reads it back as `-` (deliberately — a soft hyphen must not
+  reach a CONTENT attribute, and those lines need the collapse to pair at all),
+  the rewrite re-emits the source element untouched, and the run graded all 115
+  `exact`.
+  It could not have graded them anything else. The collapse runs on **both**
+  sides of the projection comparison and compares equal to itself — the same
+  blindness that hid the break-mark doubling. So the fix is not a stricter
+  invariant but a second reading: `RewriteResult.texts_verbatim` walks the same
+  tree with the substitution table off, and a line whose two readings differ
+  grades `source_spelling`.
+  The new level sits **between** `exact` and `token_equivalent`, and the
+  ordering is the claim: nothing is lost here — the file is *more* specific than
+  the decision — whereas a collapsed whitespace run is gone from the file for
+  good. Measured after the fix on that fixture: 451 `exact`, 115
+  `source_spelling`, 0 `normalized`, and the 115 are exactly the U+00AD lines
+  (pinned by set equality, not by count).
+  PAGE substitutes nothing on read (NFC and strip only) and ships an empty
+  `texts_verbatim` — asserted rather than assumed: every line's logical text
+  must be findable character for character in the delivered bytes.
+  The other half of L8 needed no change: `preserve_break_char` runs before
+  decisions materialise and `ProposalStage.output_text` keeps the producer's raw
+  text, so a forced source hyphen is already visible in the report as proposal
+  vs decision.
+
+- **OCR confidence invalidation is now reported, per line, by both formats
+  (R4).** When a correction changes a word, the source engine's confidence in
+  that word stops being a fact about the output, so ALTO drops `WC`/`CC` and
+  PAGE drops `@conf`. ALTO said nothing about it; PAGE counted it as
+  `conf_dropped`, once per `@conf`. Both are now one key,
+  `confidence_invalidated`, counted **once per line**.
+  The unit was the whole decision. Per occurrence it fires 3339 times on one
+  real 566-line page — a number that tracks how wordy a line is rather than
+  anything an archive acts on, and that would drown the three-digit counters
+  beside it. Per line it says the fact: 566 lines lost their confidence on the
+  slow path, 492 on the fast one. That gap is the point — the fast path removes
+  `WC` only from `String`s whose CONTENT actually changed, so 74 lines keep
+  theirs, and the counter is measured on the element before and after rather
+  than inferred from which path the line took. "The line was rewritten" is not
+  "the line lost its confidence", and assuming otherwise is what produced the
+  phantom counts fixed in R1.
+  `LOSS_MATRIX_VERSION` moves to `"2"`; `COUNTS_INVALIDATION` is `True` with
+  `INVALIDATION_UNIT = "line"`. The per-`String` loss pass now excludes
+  `INVALIDATED` attributes outright, so nothing is counted at two granularities
+  at once. **Breaking for consumers reading `format_losses`:** the PAGE key
+  `conf_dropped` is gone and its replacement counts lines, not attributes
+  (0.9.x may break; `report_version` is unchanged — the report's *shape* did
+  not move).
+
+- **The top-level import surface is documented as provisional, and pinned
+  against growth.** No symbol was added or removed; what changed is that three
+  documents stopped describing `corrigenda.__all__` as something it is not.
+  The list holds 95 names that were never ratified — they accumulated, one
+  addition at a time — while `docs/PLAN.md` (`S3`) computes the surface as the
+  transitive closure of what the façade returns, 54 symbols, and schedules the
+  cut. Until then: `tests/test_public_api_snapshot.py` no longer calls the list
+  `PUBLIC_API_1_0` / "the frozen 1.0 surface" (now `CURRENT_TOP_LEVEL_SURFACE`,
+  an inventory), and gains a ratchet test — the surface may shrink, never grow.
+  `docs/versioning.md` and the README state the provisional status and spell
+  out the two doors: `corrigenda.*` under strict SemVer *from 1.0.0*, module
+  paths (`corrigenda.core.*`, `corrigenda.formats.*`, `corrigenda.producers.*`)
+  supported and documented. That distinction is what makes the pending cut a
+  move rather than a removal — and it is the door this repository actually uses
+  (695 module-path imports against 64 top-level ones).
+- **`SPECS_LIB_V2.md §8.1` no longer promises three symbols it does not
+  export.** The normative spec listed `reconcile_hyphen_pair`, `check_line` and
+  `plan_page` as "déjà publics, maintenus". They are not in `__all__` and never
+  were, while `__all__` exposed 95 symbols the spec never mentioned — the two
+  contradicted each other in both directions. Resolved by withdrawing the
+  promise rather than honouring it: the feature freeze suspends public-API
+  extension, and `S3` reduces the surface. All three remain importable from
+  their own modules, like everything `S3` will demote.
+
+- **Two Unicode hyphens join the break-mark repertoire, on evidence.**
+  `HYPHEN_CHARS` gains U+2010 HYPHEN and U+2011 NON-BREAKING HYPHEN. Widening
+  the repertoire is not free — a new member makes lines pair that did not, on
+  real documents — so this was measured first. Across the 40 ALTO/PAGE files in
+  `examples/` and `corpus/`, text content only: 119 line-final `-`, 25
+  line-final `⸗`, and **zero** occurrences of U+2010, U+2011, U+2013 or `=`.
+  The two added are therefore provably inert on the existing corpora: latent
+  coverage for a producer that uses them, and nothing else those characters can
+  mean. `=` and U+2013 stay OUT for the same reason they were considered — they
+  carry other meanings (an equals sign, a dialogue dash or a range) and there
+  is no evidence they are needed; admitting either needs a corpus that contains
+  them.
+
+### Added
+
+- **`corrigenda.core.losses` — the loss matrix (`LOSS_MATRIX_VERSION`).** The
+  loss counters had grown one fix at a time and nothing ever stated what each
+  attribute is *supposed* to do, so "every loss is counted" was a claim with
+  no referent — and false in both directions at once. One versioned table now
+  says, per attribute, which of four things happens to it (`PRESERVED`,
+  `REWRITTEN`, `INVALIDATED`, `DROPPED`) and whether the report counts it. The
+  ALTO rewriter consumes the table instead of keeping its own list. The
+  distinction the counters were missing: `STRUCTURAL` attributes belong to the
+  `String` and follow re-segmentation — a rebuild that writes *more* words has
+  more `HPOS`, not fewer, and neither direction is a loss — while `SEMANTIC`
+  ones carry an assertion about a reading. `WC`/`CC` are `INVALIDATED` (a
+  correction makes the source engine's per-word confidence untrue) and whether
+  that is *counted* is left as an explicit, documented flag rather than
+  settled by silence: ALTO says nothing today, PAGE counts its equivalent as
+  `conf_dropped`, and reconciling the two is a change both formats have to
+  make together.
+
+### Fixed
+
+- **The report no longer claims hyphenation attributes it did not lose (ALTO).**
+  A slow-path rebuild counted `SUBS_TYPE` and `SUBS_CONTENT` as dropped from
+  every String it rebuilt — while `_apply_subs`, which runs on every write
+  path, re-established both from the manifest on the same pass. On one real
+  566-line page the report claimed **229 dropped SUBS_CONTENT** for a file
+  whose output carries exactly as many as the source. A phantom loss misleads
+  an auditor as much as a missed one, arguably more: it invites a hunt for
+  damage that is not there.
+
+### Added
+
+- **`CorrectionReport.unpaired_breaks`** — how many lines announce a hyphen
+  break that this run could find no partner for. Every cause of that was
+  silent: `PairingPolicy.can_pair` returning False simply `continue`s, a
+  partner on an absent page resolves to nothing, a pointer dangles. The line
+  still ends mid-word, is corrected alone, and never reaches the reconciler,
+  so its pair-drift guards never run either — and a host reading "0 fallback"
+  could not learn that N words were split across a seam nobody sewed.
+  Counted once for all causes, because the consequence is one.  Optional and
+  additive — no `report_version` bump.
+
+### Fixed
+
+- **The payload no longer promises the model a hyphen partner that does not
+  exist.** `hyphen_join_with_next` / `hyphen_join_with_prev` are assertions
+  about the document, not hints, and they were set from the line's ROLE. A
+  role is read off the line's own text — a trailing break mark makes it PART1
+  — while the LINK is established in a second pass that can legitimately find
+  nobody (the partner is on a page this run does not have, the pairing policy
+  refused the candidate). The engine then told the model "this word continues
+  onto the next line" about a line whose continuation does not exist, asking
+  it to leave a word unfinished for a partner that never arrives — and nothing
+  downstream could notice, since no pair means the reconciler never runs and
+  the payload is compared against nothing. Both flags now follow the link,
+  via `forward_partner_ref` / `backward_partner_ref`. A `SUBS_CONTENT`
+  authority no longer travels without its link either. A linked pair's payload
+  is byte-identical to before; for an orphan the key is simply absent
+  (`exclude_none`), so the model is not told a continuation exists and is not
+  told one is impossible — it is not told.
+
+- **An empty page no longer severs a word broken across it.**
+  `link_cross_page_hyphens` compared ADJACENT pages and skipped a page with no
+  lines, so a word broken from page 1 onto page 3 was never linked when page 2
+  happened to carry no text: the tail was left an orphan PART1 announcing a
+  continuation to the model with no partner to reconcile against, and both
+  fragments were corrected as unrelated lines. The walk now runs over the
+  pages that have lines. An empty page is a fact about the scan, not about the
+  sentence. Found by a metamorphic property, not by reading.
+
+- **A mixed-role line no longer loses its forward break mark (ALTO).** A line
+  can be BOTH with an explicit backward link and a HEURISTIC forward break —
+  `PAG_00000002_TL000454` of `examples/X0000002.xml` opens on
+  `SUBS_TYPE="HypPart2"` and ends on a bare dash with no `<HYP>`. The writer
+  chose whether to strip that trailing mark from the String by reading
+  `hyphen_source_explicit`, which describes the *backward* link; it answered
+  "explicit", so the dash was dropped on the assumption a `<HYP>` element
+  would render it. There is none, and the mark was gone from the delivered
+  file. New `pairing.forward_break_is_explicit` applies the same role→slot map
+  as `forward_partner_ref` to the explicitness flags. Byte diff on the real
+  corpus, classified per TextLine: exactly 1 of 566, `Wal` → `Wal-`.
+
+- **A cross-page hyphen pair no longer freezes its second member.** The
+  reconciler owned a join from its TAIL, which is unreachable across a page
+  break: the tail always sits on the earlier page and is decided before the
+  head exists, so the tail's pass read the head's text out of a response that
+  never mentioned it, fell back to raw OCR, and wrote that as the head's
+  decision with `status = CORRECTED`. The later page then skipped the line
+  (`corrected_text is not None`) and discarded the correction it had just paid
+  for — **the first line of every page continuing a hyphenated word was never
+  corrected**, and because the status was CORRECTED the loss reached no
+  fallback counter. A join that leaves the page is now owned by its HEAD, the
+  only point at which both sides exist. New `pairing.backward_partner_ref` is
+  what made that expressible: the incoming direction had never been named,
+  which is precisely why ownership could only ever sit on the tail.
+
+- **A rejected hyphen pair is no longer reported as corrected.**
+  Independently of the above and not limited to cross-page pairs: when
+  `reconcile_hyphen_pair` reverted BOTH sides to their OCR text for
+  incoherence, the members were still marked CORRECTED. Two lines kept their
+  source text while reporting as corrections, so the revert appeared in no
+  fallback counter and carried no reason. The status now follows the outcome;
+  an identity correction still lands as CORRECTED, since nothing was proposed
+  and thrown away. Both members' traces are refreshed by the reconciler, so a
+  reverted tail whose page already closed still reports a reason (the decision
+  set reads the reason from the trace).
+
+- **A break mark is no longer doubled when the source renders it twice
+  (ALTO).** Some producers write the end-of-line hyphen into the `String`
+  CONTENT *and* emit a `<HYP>` for it; that is one mark rendered once, and
+  `reconstruct_textline` de-duplicates it. The de-duplication tested
+  `endswith("-")` — the ASCII hyphen alone — so every other mark in the
+  repertoire doubled: `Ober⸗` + `HYP "⸗"` read back as `Ober⸗⸗`, `Ober¬` as
+  `Ober¬¬`. It now tests the repertoire. Silent until now because this
+  function feeds *both* sides of the projection invariant — the parser's
+  `ocr_text` and the rewriter's UNTOUCHED comparison — so the mistake was
+  made identically on both sides and compared equal to itself. Note the
+  scope: no document in the repo's corpora triggers it (checked), so this
+  closes a latent path rather than a measured one. The U+00AD → `-` collapse
+  is deliberate and unchanged — it is what lets the 115 `<HYP>`-only lines of
+  `examples/X0000002.xml` pair at all, and the bytes keep the source
+  character because the rewrite paths re-emit the original element.
+
+- **A no-break space no longer becomes an ordinary one (ALTO).** The
+  rewriter's slow path tokenised on `\s`, which in Python covers U+00A0 and
+  U+202F, and re-emitted every gap as an `<SP>` — an element that carries no
+  content. `M.\xa0Dupont` was delivered as `M. Dupont`: the character whose
+  entire job is to say "do not break here" was replaced by one that says the
+  opposite, and the projection invariant compared the two as equal (see
+  *Added*, below). The tokeniser now splits on **breaking** whitespace only,
+  so a no-break space stays inside its `String`'s CONTENT and survives the
+  round-trip verbatim. Repertoire: U+00A0, U+202F (French typography's space
+  before `%`, `;`, `!`, `?`, `:`), U+2007. Token classification no longer
+  goes through `str.strip()`, which calls a no-break space whitespace and was
+  itself the substitution. A tab is unaffected and still normalises: it is a
+  genuine break opportunity with no ALTO representation — and the run now
+  reports that instead of staying silent about it.
+
+### Added
+
+- **Projection fidelity: the run now says what the format cost it.** The
+  projection invariant compared the decided text against the rewritten
+  artefact in whitespace normal form (`" ".join(text.split())`), so a
+  whitespace *substitution* compared equal to no change at all. A line
+  decided as `M.\xa0Dupont` and written back as `M. Dupont` passed silently:
+  no error, no counter, no trace — the one corruption class the invariant
+  exists to catch was the one class it could not express.
+  `corrigenda.core.fidelity` replaces the boolean with an ordered scale.
+  `exact` (the bytes say the decision character for character),
+  `token_equivalent` (only what ALTO cannot represent was lost — a collapsed
+  whitespace run, an edge space; `<SP>` carries no content) and `normalized`
+  (a whitespace character was **swapped**: U+00A0, U+202F or a tab flattened
+  to an ordinary space). A word-level divergence still fails the run with
+  `ProjectionError`, unchanged. The level rides the report: per line on
+  `ProjectionStage.fidelity`, per run on `CorrectionReport.projection_fidelity`
+  as a count by level. Both fields are optional and additive, so
+  `CORRECTION_REPORT_VERSION` does **not** move. Note U+202F specifically —
+  French typography's space before `%`, `;`, `!`, `?` and `:`, the most
+  frequent significant space in the corpus this library targets, and one that
+  no earlier finding had named.
 
 - **Real VLMs behind the vision seam + a terminal runner
   (`scripts/providers_multimodal.py`, `scripts/run_vision.py`).**
@@ -54,7 +490,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   cannot be gathered from a single page's plan and keeps the conservative
   behaviour — it stays with the primary producer. A hyphen member is still
   never SKIPped. On the real corpus the hybrid drops from CER 0.0083 to
-  **0.0021**, matching vision-on-every-line exactly.
+  **0.0021** — matching vision-on-every-line exactly, and both of those
+  numbers come from an **oracle VLM**: a simulated producer that returns the
+  ground truth for the lines it is given. It measures the ROUTING (which
+  lines get escalated, and whether a unit travels whole), not a model. No
+  real vision model has been benchmarked here; expect a real one to sit
+  above both figures, and read this as an upper bound on what routing can
+  buy, never as a quality claim (D3).
 
 ### Added
 

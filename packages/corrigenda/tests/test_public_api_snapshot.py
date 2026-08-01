@@ -1,13 +1,33 @@
-"""Public-API snapshot (P5) — the 1.0 surface is a contract, not an accident.
+"""Public-API snapshot — an inventory held still, NOT the 1.0 contract.
 
-Three pins:
+This file used to call the list below ``PUBLIC_API_1_0`` and describe it as
+"the frozen 1.0 surface". That was false in a way worth naming, because the
+name is what a reader trusts: the 95 entries were never ratified as a
+contract, they **accreted**. Each was added because something needed it that
+day. `docs/PLAN.md` (`S3`) computes what the surface should be — the
+transitive closure of what the façade returns, 54 symbols — and the
+reduction has not happened yet. A test asserting the accretion is the 1.0
+promise contradicted the plan and would have made the cut look like a
+regression.
 
-  1. ``corrigenda.__all__`` is EXACTLY the frozen list below. Adding a
-     symbol is a deliberate act (update the snapshot + CHANGELOG); removing
-     or renaming one is a breaking change (major version).
-  2. Every listed symbol actually resolves — eager or lazy (PEP 562) — and
+So, plainly: **the surface is provisional.** The 0.9.x series is explicitly
+free to break it (`docs/versioning.md`), and it will be cut once the
+structural work that decides the final shape (`S2`) has landed.
+
+What this snapshot is for, meanwhile, is the ratchet. The list got to 95 by
+accretion; the only thing that stops it reaching 110 while the cut waits is
+that no name can join it silently. Four pins:
+
+  1. ``corrigenda.__all__`` is EXACTLY the list below. Adding a symbol is a
+     deliberate act (update the snapshot + CHANGELOG) — and during the
+     feature freeze, extending the public API is suspended outright, so an
+     addition needs a reason that survives review.
+  2. The surface does not GROW. Stated separately from (1) because it is the
+     property that matters while the reduction is pending, and it should
+     fail with that sentence rather than a diff of 95 strings.
+  3. Every listed symbol actually resolves — eager or lazy (PEP 562) — and
      every lazy-map key is part of ``__all__``.
-  3. The signatures of the top entry points (``run``, ``run_sync``,
+  4. The signatures of the top entry points (``run``, ``run_sync``,
      ``for_provider``) and the ``CorrectionReport`` JSON keys are pinned:
      these are what consumer code and persisted artefacts depend on.
 
@@ -22,10 +42,13 @@ import inspect
 import corrigenda
 
 # ---------------------------------------------------------------------------
-# 1. The frozen 1.0 surface
+# 1. The current surface — what `__all__` holds today, not what it should hold
 # ---------------------------------------------------------------------------
 
-PUBLIC_API_1_0 = sorted(
+#: The provisional top-level surface. `S3` reduces this to the computed
+#: closure (54); until then it is pinned so that it can only shrink or move
+#: deliberately. Do not read this list as a promise to consumers.
+CURRENT_TOP_LEVEL_SURFACE = sorted(
     [
         # Version
         "__version__",
@@ -122,20 +145,20 @@ PUBLIC_API_1_0 = sorted(
         # Provenance (§11, P3.9)
         "ProducerProvenance",
         "RunProvenance",
-        # token_realign sidecar (ROADMAP V3 Phase 1) — additive
+        # token_realign sidecar — additive
         "SidecarEntry",
-        # Confidence block (ROADMAP V3 Phase 1) — additive
+        # Confidence block — additive
         "ConfidencePolicy",
         "ConfidenceScorer",
         "HeuristicScorer",
         "LineConfidence",
-        # QE + routing (ROADMAP V3 Phase 3) — additive
+        # QE + routing — additive
         "HeuristicQEScorer",
         "QEScorer",
         "RoutingDecision",
         "RoutingPolicy",
         "route_line",
-        # Structured page image (ROADMAP V3 Phase 4) — additive
+        # Structured page image — additive
         "ImageAsset",
         "ImageRef",
         "ImageTransform",
@@ -145,10 +168,23 @@ PUBLIC_API_1_0 = sorted(
 
 
 def test_public_api_is_exactly_the_snapshot():
-    assert sorted(corrigenda.__all__) == PUBLIC_API_1_0, (
-        "corrigenda.__all__ drifted from the 1.0 snapshot. If deliberate, "
-        "update PUBLIC_API_1_0 here AND document the change in CHANGELOG.md "
-        "(a removal/rename is a MAJOR version bump)."
+    assert sorted(corrigenda.__all__) == CURRENT_TOP_LEVEL_SURFACE, (
+        "corrigenda.__all__ drifted from the pinned surface. If deliberate, "
+        "update CURRENT_TOP_LEVEL_SURFACE here AND document the change in "
+        "CHANGELOG.md. Before 1.0 a removal is allowed (0.9.x may break); "
+        "after 1.0 it is a MAJOR bump."
+    )
+
+
+def test_the_surface_does_not_grow_while_the_reduction_is_pending():
+    """The ratchet. `S3` cuts this list to 54; nothing may push it upward in
+    the meantime, and the feature freeze suspends public-API extension
+    anyway. A shrink is the point and passes here — pin (1) catches it."""
+    assert len(corrigenda.__all__) <= len(CURRENT_TOP_LEVEL_SURFACE), (
+        f"the top-level surface grew to {len(corrigenda.__all__)} symbols. "
+        "It reached 95 by accretion once already, which is what S3 exists to "
+        "undo — adding to it now makes that cut larger. Export from the "
+        "symbol's own module instead, or close S3 first."
     )
 
 
@@ -208,9 +244,19 @@ def test_correction_report_json_keys_are_pinned():
         "total_lines",
         "lines",
         "format_losses",
+        # Optional and additive: absent from a run that wrote no file, and
+        # a v2.0 consumer that ignores unknown keys is unaffected — so it
+        # does NOT bump CORRECTION_REPORT_VERSION.
+        "projection_fidelity",
+        # Same contract: optional, absent when every break found its
+        # partner, so no CORRECTION_REPORT_VERSION bump.
+        "unpaired_breaks",
+        # R6 — the units the planner CUT. Same contract again: optional,
+        # absent when no chain was severed, no version bump.
+        "hyphen_splits",
         "provenance",  # P3.9 — optional, additive (no version bump)
-        "usage",  # ROADMAP V3 Phase 0 — optional, additive (no version bump)
-        "sidecar",  # ROADMAP V3 Phase 1 — optional, additive (no version bump)
+        "usage",  # optional, additive (no version bump)
+        "sidecar",  # optional, additive (no version bump)
     }, (
         "CorrectionReport JSON shape moved — a key removal/rename requires "
         "bumping CORRECTION_REPORT_VERSION (§9); an addition must stay "

@@ -30,6 +30,7 @@ from pathlib import Path
 
 import pytest
 
+from corrigenda.core.acceptance import _apply_unit_reverts
 from corrigenda.core.pairing import link_hyphen_pairs
 from corrigenda.core.planner import plan_page
 from corrigenda.core.schemas import (
@@ -330,7 +331,7 @@ def test_duplicate_revert_extends_to_hyphen_partner():
 
     all_lines = {line_ref(lm): lm for lm in (part1, part2)}
 
-    pipeline._apply_unit_reverts(
+    _apply_unit_reverts(
         reverts={line_ref(part2): "adjacent_duplicate_detected"},
         all_lines=all_lines,
         traces=None,
@@ -376,7 +377,7 @@ def test_duplicate_revert_extends_to_CROSS_PAGE_hyphen_partner():
 
     all_lines = {line_ref(part1): part1, line_ref(part2): part2}
 
-    pipeline._apply_unit_reverts(
+    _apply_unit_reverts(
         reverts={line_ref(part1): "adjacent_duplicate_detected"},
         all_lines=all_lines,
         traces=None,

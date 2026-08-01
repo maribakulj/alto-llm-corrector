@@ -144,7 +144,7 @@ async def test_programming_error_propagates_not_masked_as_ocr_fallback():
 
 @pytest.mark.asyncio
 async def test_misdeclared_capabilities_fail_at_startup():
-    """Phase 4 — a producer that wants images but declares vision=False is a
+    """— a producer that wants images but declares vision=False is a
     start-up ConfigurationError, even when images are supplied (the caps
     gate runs after require_page_images)."""
     from corrigenda.core.schemas import ImageAsset, ModelCapabilities
@@ -199,9 +199,9 @@ async def test_vision_envelope_reaches_the_producer():
 
 @pytest.mark.asyncio
 async def test_vision_producer_receives_image_asset_verbatim():
-    """ROADMAP V3 Phase 4 — a structured ImageAsset rides the §4.1 envelope
+    """a structured ImageAsset rides the §4.1 envelope
     exactly where the bare ref did, forwarded as the very object passed to
-    run() (still no pixel opened, I4). Before Phase 4 the envelope was typed
+    run() (still no pixel opened, I4). Before the envelope was typed
     ``str | None`` and the run raised a validation error on the asset."""
     doc = build_document_manifest([(_SAMPLE, _SAMPLE.name)])
     producer = _VisionProducer()

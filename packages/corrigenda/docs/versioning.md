@@ -8,6 +8,18 @@ break is still a deliberate act (snapshot-test change + CHANGELOG entry).
 `1.0.0rc1` freezes the API; `1.0.0` is tagged only after the independent
 external review of the public API required by the release plan.
 
+**The top-level surface is provisional and will shrink before that
+freeze.** `corrigenda.__all__` holds 95 symbols today, accumulated one
+addition at a time rather than designed; `docs/PLAN.md` (`S3`) computed
+what it should be — the transitive closure of what the façade returns,
+54 — and schedules the cut for the end of the current cleanup, once the
+structural work that decides the final shape has landed. A demoted
+symbol is **not removed**: it stays importable from its own module (see
+*What is public* below), so a migration is an import rewrite, not a
+rewrite. Meanwhile the snapshot test refuses any *growth* of the list.
+Treat `__all__` as an inventory until `S3` closes; the entry points
+pinned by that same test are the part you can rely on today.
+
 ## SemVer, strictly
 
 From `1.0.0`, `corrigenda` follows [Semantic Versioning](https://semver.org):
@@ -29,10 +41,16 @@ CHANGELOG entry.
 
 ## What is public
 
-- Everything importable from the top level (`corrigenda.__all__`).
-- The submodule paths documented in the README (`corrigenda.core.*`,
+Two doors, and the difference between them is the guarantee, not the
+mechanism — both resolve to the same objects.
+
+- **`corrigenda.*`** — everything listed in `corrigenda.__all__`. Under
+  strict SemVer *from 1.0.0*; provisional until then (see above).
+- **The submodule paths** documented in the README (`corrigenda.core.*`,
   `corrigenda.formats.alto` / `corrigenda.formats.page`,
-  `corrigenda.producers.*`).
+  `corrigenda.producers.*`). Supported and documented — this is the door
+  the repository itself uses (695 module-path imports against 64
+  top-level ones), and the one a symbol demoted by `S3` keeps.
 - The `CorrectionReport` JSON schema (see below).
 - The four frozen policies' fields and their defaults (§8.2) — a default
   change alters `policy_fingerprint()` and is at least MINOR, with a
@@ -51,6 +69,24 @@ package version:
 - **Additive** optional key → `report_version` unchanged, package MINOR.
 
 Consumers should dispatch on `report_version`, not on the package version.
+
+**Dispatch on the field, not on the constant** (D5). The thing to branch on
+is `report.report_version` — read off the artefact you are actually holding,
+which is the only thing that tells you how *that* report was written. The
+library's own `CORRECTION_REPORT_VERSION` says what THIS install emits, so a
+consumer comparing it against a report it just loaded learns nothing about
+that report.
+
+That is why the constant is not in `corrigenda.__all__` while
+`EDIT_PROTOCOL_VERSION` is: the edit protocol's version is something a
+producer must *declare*, the report's is something a reader *finds*. The
+asymmetry was previously unexplained and read as an oversight. When a tool
+does need the constant — a writer checking what it is about to emit — it is
+importable by module path like anything else the top level does not carry:
+
+```python
+from corrigenda.core.schemas import CORRECTION_REPORT_VERSION
+```
 
 ## Byte-parity discipline
 

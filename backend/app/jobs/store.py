@@ -64,12 +64,12 @@ class JobStore:
     MAX_SUBSCRIBERS_PER_JOB: int = 10
 
     #: SSE keepalive cadence. On each timeout the stream re-checks the
-    #: job's terminal status (Audit-F20) so a terminal event dropped
+    #: job's terminal status so a terminal event dropped
     #: under queue backpressure cannot leave the stream running forever.
     KEEPALIVE_TIMEOUT_SECONDS: float = 30.0
 
     #: Terminal SSE event names — delivery of these is GUARANTEED by
-    #: emit() even when the subscriber queue is full (Audit-F20).
+    #: emit() even when the subscriber queue is full.
     _TERMINAL_EVENTS: frozenset[str] = frozenset({"completed", "failed", "cancelled"})
 
     def __init__(self, ttl_seconds: int = _DEFAULT_TTL_SECONDS) -> None:
@@ -202,7 +202,7 @@ class JobStore:
                 q.put_nowait(sse)
             except asyncio.QueueFull:
                 if is_terminal:
-                    # Audit-F20 — a dropped TERMINAL event leaves the
+                    # a dropped TERMINAL event leaves the
                     # stream_events poll loop yielding keepalives forever
                     # (the SSE client only closes on completed/failed).
                     # Guarantee delivery: evict the oldest buffered event
@@ -337,7 +337,7 @@ class JobStore:
                     if event.event in self._TERMINAL_EVENTS:
                         break
                 except TimeoutError:
-                    # Audit-F20 — the terminal event may have been dropped
+                    # the terminal event may have been dropped
                     # under backpressure (or emit's force-delivery raced a
                     # just-freed slot). Re-check the authoritative status
                     # on every keepalive: if the job is terminal, drain

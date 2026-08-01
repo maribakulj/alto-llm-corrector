@@ -1,7 +1,7 @@
 # ALTO / PAGE version support matrix
 
 What corrigenda accepts, what it writes back, and what it can check
-against an official schema (ROADMAP V3 Phase 0). "Parse/rewrite" is
+against an official schema. "Parse/rewrite" is
 namespace-tolerant: the parsers accept any root namespace matching the
 format marker (`loc.gov/standards/alto` / `primaresearch.org/PAGE`) and
 the rewriter re-emits the document in its ORIGINAL namespace. "XSD

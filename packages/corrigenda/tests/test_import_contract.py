@@ -53,24 +53,29 @@ def test_core_has_no_forbidden_imports_except_pinned_lazy_default():
     all_violations: list[str] = []
     for f in core_files:
         all_violations.extend(_violations(f, FORBIDDEN_IN_CORE))
-    # The only allowed sites: the two pinned lazy functions in pipeline.py
-    # (_adapter_for_format imports one adapter per supported format).
+    # The only allowed sites: two pinned lazy FUNCTIONS
+    # (``_adapter_for_format`` imports one adapter per supported format).
     assert len(all_violations) == 3, f"unexpected core imports: {all_violations}"
-    assert all("pipeline.py" in v for v in all_violations), all_violations
 
-    # And those imports must be FUNCTION-LOCAL, inside the pinned names.
-    tree = ast.parse((SRC / "core" / "pipeline.py").read_text(encoding="utf-8"))
-    lazy_funcs = sorted(
-        node.name
-        for node in ast.walk(tree)
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
-        and any(
-            n
-            for n, _ in _imports(node)
-            if n.startswith(("corrigenda.formats", "corrigenda.producers"))
+    # The pin is on the function NAMES, not on the file they happen to live
+    # in. It used to name pipeline.py, which meant splitting that file (S2)
+    # broke a test about import purity for a reason that has nothing to do
+    # with import purity — `_adapter_for_format` moved to `provenance.py`
+    # and took two of the three imports with it, unchanged.
+    lazy_funcs: list[str] = []
+    for f in core_files:
+        tree = ast.parse(f.read_text(encoding="utf-8"))
+        lazy_funcs.extend(
+            node.name
+            for node in ast.walk(tree)
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+            and any(
+                n
+                for n, _ in _imports(node)
+                if n.startswith(("corrigenda.formats", "corrigenda.producers"))
+            )
         )
-    )
-    assert lazy_funcs == ["_adapter_for_format", "for_provider"], lazy_funcs
+    assert sorted(lazy_funcs) == ["_adapter_for_format", "for_provider"], lazy_funcs
 
 
 def test_importing_core_never_loads_lxml():
@@ -160,7 +165,7 @@ def test_importing_core_quality_stays_pure():
 
 
 # ---------------------------------------------------------------------------
-# I4 (ROADMAP V3 Phase 4) — pixel-blindness is a property of the IMPORT
+# I4 — pixel-blindness is a property of the IMPORT
 # GRAPH, not the file tree. The static AST scan (test_edit_producer.py) is a
 # cheap first line; THIS is the honest proof: importing corrigenda (the base
 # install surface — core + eagerly-loaded producers + schemas) must pull no

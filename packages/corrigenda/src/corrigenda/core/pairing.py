@@ -16,6 +16,9 @@ keeps it that way.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
+
+from corrigenda.core.identity import LineRef, line_ref
 from corrigenda.core.schemas import (
     DEFAULT_PAIRING_POLICY,
     HyphenRole,
@@ -26,11 +29,37 @@ from corrigenda.core.schemas import (
 
 #: Terminal characters a heuristic parser treats as a word-break hyphen.
 #: ALTO relies on explicit ``SUBS_TYPE``/``HYP`` markup and only falls back
-#: to a plain ``-``; PAGE has no such markup, so it scans for the wider
-#: Transkribus/Fraktur repertoire (P5): hyphen-minus, the ``¬`` negation
-#: sign Transkribus emits, the ``⸗`` double oblique of Fraktur, and the
-#: U+00AD soft hyphen.
-HYPHEN_CHARS: tuple[str, ...] = ("-", "¬", "⸗", "­")
+#: to a plain ``-``; PAGE has no such markup, so it scans this repertoire.
+#:
+#: Widening it is not a free act — a new member makes lines pair that did
+#: not, on real documents — so each one is here on evidence. Measured over
+#: the 40 ALTO/PAGE files in ``examples/`` and ``corpus/``, text content
+#: only: 119 line-final ``-``, 25 line-final ``⸗``, zero of everything
+#: else.
+#:
+#: - ``-``  U+002D HYPHEN-MINUS — the common case.
+#: - ``¬``  U+00AC — what Transkribus emits for a break.
+#: - ``⸗``  U+2E17 DOUBLE OBLIQUE HYPHEN — Fraktur; 25 of the corpus's 144
+#:   line-final marks, and its absence here was a real defect (542c783).
+#: - ``­``  U+00AD SOFT HYPHEN — emitted by some engines as a hyphen
+#:   variant. See ``formats/alto/_text._DEDUP_MARKS`` for the one place it
+#:   is deliberately treated differently.
+#: - ``‐``  U+2010 HYPHEN and ``‑`` U+2011 NON-BREAKING HYPHEN — the
+#:   unambiguous Unicode hyphens. Zero occurrences in the corpora, so they
+#:   are latent coverage for a producer that uses them: no measurable risk
+#:   either way, and nothing else these characters can mean.
+#:
+#: Deliberately EXCLUDED, and both for the same reason — they carry other
+#: meanings and the corpora give no evidence they are needed here:
+#:
+#: - ``=`` U+003D — the equals sign of a table or a formula.
+#: - ``–`` U+2013 EN DASH — a dialogue dash or a range. The alphabetic-char
+#:   requirement in :func:`trailing_hyphen_char` rejects ``1789–`` but not
+#:   a line ending on a dash of dialogue.
+#:
+#: Admitting either needs measurement on a corpus that contains them (M7),
+#: not a tuple edit.
+HYPHEN_CHARS: tuple[str, ...] = ("-", "¬", "⸗", "­", "‐", "‑")
 
 
 def preserve_break_char(source_text: str, corrected: str) -> str:
@@ -60,6 +89,35 @@ def preserve_break_char(source_text: str, corrected: str) -> str:
     return stripped + trailing_ws
 
 
+#: The repertoire as a character SET, for ``str.rstrip``. Derived, never
+#: retyped: a hardcoded ``"-"`` is how five call sites came to guard the ASCII
+#: hyphen alone while 32 of the 363 hyphenated lines in the repo's own corpora
+#: end in ``⸗`` or ``¬`` (L5).
+_BREAK_MARK_CHARS = "".join(HYPHEN_CHARS)
+
+
+def ends_with_break_mark(text: str) -> bool:
+    """Does ``text`` end in a word-break mark from the repertoire?
+
+    Trailing whitespace is ignored. Deliberately WITHOUT
+    :func:`trailing_hyphen_char`'s requirement of an alphabetic character
+    before the mark: callers of this predicate have already established that
+    the line breaks a word (its ROLE says so, from an explicit ``SUBS_TYPE``
+    or from that very check), and re-imposing the heuristic here would make
+    an explicit ``1789-`` PART1 stop being guarded.
+    """
+    return text.rstrip().endswith(HYPHEN_CHARS)
+
+
+def strip_trailing_break_marks(text: str) -> str:
+    """``text`` without its trailing break marks, whatever spells them.
+
+    The faithful generalisation of the ``rstrip("-")`` these call sites used
+    to do — same "strip every trailing mark" semantics, whole repertoire.
+    """
+    return text.rstrip(_BREAK_MARK_CHARS)
+
+
 def trailing_hyphen_char(text: str, hyphen_chars: tuple[str, ...]) -> str | None:
     """Return the trailing hyphen character of ``text``, or ``None``.
 
@@ -82,29 +140,167 @@ def trailing_hyphen_char(text: str, hyphen_chars: tuple[str, ...]) -> str | None
     return None
 
 
-def forward_partner_id(lm: LineManifest) -> str | None:
-    """The line_id this line's word continues ONTO, if any.
+# ---------------------------------------------------------------------------
+# The directed link — ONE place that reads the pointer fields (ADR-010)
+# ---------------------------------------------------------------------------
+#
+# A line carries two link slots, and their names are a trap:
+#
+#   ``hyphen_pair_*``     the PAIR slot
+#   ``hyphen_forward_*``  the FORWARD slot
+#
+# "Forward" names the SLOT, not the reading direction. A PART1 line's word
+# continues onto the line in its PAIR slot; only a BOTH line — tail of one
+# hyphenated word and head of the next — uses the FORWARD slot for that.
+# Every place that re-derived "which slot holds my continuation?" from the
+# role got a chance to get this backwards, and the pipeline's reconciler had
+# it spelled out inline, next to a helper that already knew.
+#
+# So: two functions read a slot, one function maps a role to a slot, and
+# nothing else touches these fields.
 
-    A ``PART1`` line continues to its ``hyphen_pair_line_id``; a ``BOTH``
-    line (tail of one hyphenated word, head of the next) continues to its
-    ``hyphen_forward_pair_id``; ``PART2`` / ``NONE`` continue nowhere.
 
-    Single source of truth for "who is my forward hyphen partner?": the
-    LINE-chain planner, the cross-block union-find, and the same-chunk
-    predicate all resolve the forward link through here, so the
-    role→field mapping (which field holds the forward id per role) lives in
-    exactly one place instead of being re-encoded at each call site.
+def pair_ref(lm: LineManifest) -> LineRef | None:
+    """The PAIR slot's link, page-qualified — or ``None`` when empty.
 
-    NB this is the strictly *forward* partner. The window-target assignment
-    keeps a chain atomic in either direction and uses its own broader
-    ``planner._hyphen_partner_id`` (backward-inclusive); the two notions are
-    deliberately distinct.
+    Qualification matters: two ALTO files may declare the same TextLine ID,
+    so a bare-id lookup finds the wrong manifest for a cross-page link. An
+    unset ``hyphen_pair_page_id`` means "same page as me".
+    """
+    if not lm.hyphen_pair_line_id:
+        return None
+    return LineRef(
+        page_id=lm.hyphen_pair_page_id or lm.page_id,
+        line_id=lm.hyphen_pair_line_id,
+    )
+
+
+def forward_ref(lm: LineManifest) -> LineRef | None:
+    """The FORWARD slot's link, page-qualified — or ``None`` when empty.
+
+    See :func:`pair_ref` on qualification, and the note above on why
+    "forward" here is a slot name and not a direction.
+    """
+    if not lm.hyphen_forward_pair_id:
+        return None
+    return LineRef(
+        page_id=lm.hyphen_forward_pair_page_id or lm.page_id,
+        line_id=lm.hyphen_forward_pair_id,
+    )
+
+
+def forward_partner_ref(lm: LineManifest) -> LineRef | None:
+    """The line this line's word continues ONTO, page-qualified.
+
+    The role→slot map, and the only one: ``PART1`` continues through its
+    PAIR slot, ``BOTH`` through its FORWARD slot, ``PART2``/``NONE``
+    continue nowhere.
+
+    This is the strictly *directed* edge. Anything that needs the whole
+    unit — the window-target assignment, the cross-block union-find, the
+    router's escalation set, a fallback that must take partners with it —
+    asks :func:`~corrigenda.core.units.derive_hyphen_groups` or
+    :func:`~corrigenda.core.units.units_containing` instead: those walk
+    both slots and report whether what they found is the complete unit.
+    The two notions are deliberately distinct, and conflating them is what
+    produced the parallel resolvers ADR-010 is retiring.
     """
     if lm.hyphen_role == HyphenRole.PART1:
-        return lm.hyphen_pair_line_id
+        return pair_ref(lm)
     if lm.hyphen_role == HyphenRole.BOTH:
-        return lm.hyphen_forward_pair_id
+        return forward_ref(lm)
     return None
+
+
+def forward_break_is_explicit(lm: LineManifest) -> bool:
+    """Is THIS line's end-of-line break marked up in the source?
+
+    The same role→slot map as :func:`forward_partner_ref`, applied to the
+    explicitness flags: ``PART1`` reads ``hyphen_source_explicit`` (its
+    forward link is the PAIR slot), ``BOTH`` reads
+    ``hyphen_forward_explicit``.
+
+    The distinction is load-bearing and a real BnF line depends on it.
+    ``PAG_00000002_TL000454`` of ``examples/X0000002.xml`` opens with an
+    explicit ``SUBS_TYPE="HypPart2"`` and ends on a bare heuristic dash
+    (``Wal-``) with no ``<HYP>``: backward explicit, forward heuristic, on
+    one line. Reading ``hyphen_source_explicit`` to decide about the
+    FORWARD break answered "explicit", so the writer dropped the dash from
+    the String expecting a HYP element to render it — and there is none.
+    The mark vanished from the artefact.
+    """
+    if lm.hyphen_role == HyphenRole.BOTH:
+        return lm.hyphen_forward_explicit
+    return lm.hyphen_source_explicit
+
+
+def backward_partner_ref(lm: LineManifest) -> LineRef | None:
+    """The line whose word continues ONTO this one, page-qualified.
+
+    The mirror of :func:`forward_partner_ref`: ``PART2`` and ``BOTH`` are
+    continued into, through their PAIR slot; ``PART1``/``NONE`` are not.
+
+    That this direction had no name until now is not a detail — it is why
+    a join could only ever be owned by its TAIL. An intra-page pair does
+    not care: both members are in scope together. A CROSS-PAGE pair does,
+    because the tail always sits on the earlier page and is decided
+    before the head exists, so tail-ownership froze the head on raw OCR
+    (`docs/PLAN.md` L3). Naming the incoming edge is what lets the head —
+    the only point at which both sides exist — own that join instead.
+    """
+    if lm.hyphen_role in (HyphenRole.PART2, HyphenRole.BOTH):
+        return pair_ref(lm)
+    return None
+
+
+def forward_partner_id(lm: LineManifest) -> str | None:
+    """Bare line_id of :func:`forward_partner_ref` — for lookups already
+    scoped to one page (the LINE-chain planner, the same-chunk predicate).
+
+    Prefer ``forward_partner_ref`` anywhere a document-wide lookup is in
+    play: a bare id is ambiguous across files.
+    """
+    ref = forward_partner_ref(lm)
+    return None if ref is None else ref.line_id
+
+
+def unpaired_break_refs(pages: Iterable[PageManifest]) -> list[LineRef]:
+    """Lines that announce a hyphen break with no partner this run can see.
+
+    A line's ROLE is read off its own text — a trailing break mark makes it
+    PART1 — while the LINK is a second pass that can end up with nobody:
+    the pairing policy refused the candidate (`PairingPolicy.can_pair`
+    returns False and the loop simply moves on), the partner sits on a page
+    this run does not have, the pointer dangles.
+
+    Every one of those was silent. The line still ends mid-word, still gets
+    corrected alone, and never reaches the reconciler — so its Stage-B
+    pair-drift guards never run either. A host reading "0 fallback" had no
+    way to learn that N words were split across a seam nobody sewed.
+
+    Counted here rather than reported at each rejection site, because the
+    causes are several and the consequence is one: this line's word has no
+    continuation in this run. The count belongs on the report next to the
+    other things a run admits it could not do.
+    """
+    known = {line_ref(lm) for page in pages for lm in page.lines}
+    orphans: list[LineRef] = []
+    for page in pages:
+        for lm in page.lines:
+            ref = line_ref(lm)
+            wants_forward = lm.hyphen_role in (HyphenRole.PART1, HyphenRole.BOTH)
+            wants_backward = lm.hyphen_role in (HyphenRole.PART2, HyphenRole.BOTH)
+            forward = forward_partner_ref(lm)
+            backward = backward_partner_ref(lm)
+            missing_forward = wants_forward and (
+                forward is None or forward not in known
+            )
+            missing_backward = wants_backward and (
+                backward is None or backward not in known
+            )
+            if missing_forward or missing_backward:
+                orphans.append(ref)
+    return orphans
 
 
 def link_hyphen_pairs(
@@ -129,14 +325,23 @@ def link_hyphen_pairs(
     engine-asserted (explicit) ones; ``PairingPolicy(geometric_checks=
     False)`` restores the historical accept-every-next-line behaviour.
     """
-    for i, line in enumerate(lines):
+    # L5 — an empty line is skipped OVER, not treated as a wall, and this is
+    # the same sentence the cross-page walk already lives by: a line that
+    # carries no text can say nothing about a word that spans it; it is a
+    # fact about the scan, not about the sentence. Taking `lines[i + 1]`
+    # blindly made a blank line the PART2 of the word above it and left the
+    # real continuation unlinked — no reconciliation, no pair-drift guards,
+    # no atomicity in the planner. Latent on this repo's corpora (0 empty
+    # lines in 1711), which is exactly why it needs a test.
+    substantive = [line for line in lines if line.ocr_text.strip()]
+    for i, line in enumerate(substantive):
         # Skip lines that don't have a forward (PART1) role
         if line.hyphen_role not in (HyphenRole.PART1, HyphenRole.BOTH):
             continue
-        if i + 1 >= len(lines):
+        if i + 1 >= len(substantive):
             continue
 
-        candidate = lines[i + 1]
+        candidate = substantive[i + 1]
 
         # Every role can be a forward partner. PART2/BOTH already carry a
         # backward side; NONE is promoted to PART2 below; and a PART1
@@ -263,6 +468,16 @@ def disambiguate_page_ids(
                     lm.hyphen_forward_pair_page_id = new_pid
 
 
+def _substantive(page: PageManifest) -> list[LineManifest]:
+    """The page's lines that carry text.
+
+    One definition, used by both walks — the intra-page link pass and the
+    cross-page one — so "an empty line carries nothing" cannot come to mean
+    two different things.
+    """
+    return [line for line in page.lines if line.ocr_text.strip()]
+
+
 def link_cross_page_hyphens(
     all_pages: list[PageManifest],
     pairing_policy: PairingPolicy = DEFAULT_PAIRING_POLICY,
@@ -272,12 +487,23 @@ def link_cross_page_hyphens(
     ``link_hyphen_pairs`` works on any list of consecutive lines, so a
     2-element ``[last_line, first_line]`` list is enough. Only fires when
     the last line looks like an unlinked PART1/BOTH.
+
+    Pages with no lines are **skipped over**, not treated as a wall. The
+    walk used to compare adjacent pages and ``continue`` on an empty one,
+    so a word broken from page 1 onto page 3 was never linked when page 2
+    happened to carry no text — the pair was silently lost and both
+    fragments were corrected as unrelated lines. An empty page carries
+    nothing and can say nothing about a word that spans it; it is a fact
+    about the scan, not about the sentence.
     """
-    for i in range(len(all_pages) - 1):
-        if not all_pages[i].lines or not all_pages[i + 1].lines:
-            continue
-        last_line = all_pages[i].lines[-1]
-        first_line = all_pages[i + 1].lines[0]
+    with_lines = [page for page in all_pages if _substantive(page)]
+    for earlier, later in zip(with_lines, with_lines[1:]):
+        # The same rule inside the page as across pages: a blank line at the
+        # foot of one page or the head of the next is a fact about the scan.
+        # Taking `lines[-1]`/`lines[0]` blindly let one blank line hide a
+        # word that spans the seam.
+        last_line = _substantive(earlier)[-1]
+        first_line = _substantive(later)[0]
         needs_forward_link = (
             last_line.hyphen_role == HyphenRole.PART1
             and not last_line.hyphen_pair_line_id
@@ -291,9 +517,17 @@ def link_cross_page_hyphens(
 
 __all__ = [
     "HYPHEN_CHARS",
+    "ends_with_break_mark",
+    "strip_trailing_break_marks",
     "trailing_hyphen_char",
+    "pair_ref",
+    "forward_ref",
+    "forward_partner_ref",
+    "backward_partner_ref",
+    "forward_break_is_explicit",
     "forward_partner_id",
     "link_hyphen_pairs",
+    "unpaired_break_refs",
     "disambiguate_page_ids",
     "link_cross_page_hyphens",
 ]

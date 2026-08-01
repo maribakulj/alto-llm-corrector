@@ -6,6 +6,7 @@ from typing import Any, ClassVar
 
 from corrigenda.core._norm import has_line_separator, ncfold
 from corrigenda.errors import ProposalValidationError
+from corrigenda.core.pairing import strip_trailing_break_marks
 from corrigenda.core.schemas import (
     DEFAULT_GUARD_CONFIG,
     GuardConfig,
@@ -243,8 +244,10 @@ def _validate_hyphen_integrity(
         if not subs_content or part1_id not in text_by_id:
             continue
         part1_text = text_by_id[part1_id]
-        # Strip trailing dash and whitespace to get the bare text
-        part1_words = part1_text.rstrip().rstrip("-").split()
+        # Bare text: whitespace and the trailing break MARK, whichever of the
+        # repertoire spells it (L5 — this was `rstrip("-")`, so a ⸗ or ¬ stayed
+        # glued to the last word and the fusion comparison never matched).
+        part1_words = strip_trailing_break_marks(part1_text.rstrip()).split()
         if not part1_words:
             continue
         part1_last_word = part1_words[-1]
@@ -256,7 +259,9 @@ def _validate_hyphen_integrity(
         # line reading 'AA-'), the word's presence carries no fusion
         # signal, and an identity proposal would be re-rejected on every
         # retry until the whole chunk hard-fails.
-        ocr_words = ocr_texts.get(part1_id, "").rstrip().rstrip("-").split()
+        ocr_words = strip_trailing_break_marks(
+            ocr_texts.get(part1_id, "").rstrip()
+        ).split()
         if ocr_words and ncfold(ocr_words[-1]) == ncfold(subs_content):
             continue
         raise HyphenIntegrityError(

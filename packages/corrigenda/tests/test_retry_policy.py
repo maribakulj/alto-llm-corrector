@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import pytest
 
-from corrigenda.core.pipeline import _classify_retry
+from corrigenda.core.retry import _classify_retry
 from corrigenda.core.protocols import ProviderTransientError
 from corrigenda.core.schemas import DEFAULT_RETRY_POLICY, RetryPolicy
 

@@ -1,4 +1,4 @@
-"""ROADMAP V3 Phase 1 — the LLM uncertainty channel.
+"""the LLM uncertainty channel.
 
 Doctrine under test: the model supplies AUDITABLE EVIDENCE (a status and
 reason-coded per-token claims), never a raw score; the app verifies

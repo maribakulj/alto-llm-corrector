@@ -8,6 +8,8 @@ from typing import Any, ClassVar, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validator
 
+from corrigenda.core.fidelity import ProjectionFidelity
+
 # ---------------------------------------------------------------------------
 # Enums
 # ---------------------------------------------------------------------------
@@ -146,7 +148,7 @@ class LineManifest(BaseModel):
     #: a correction whose token count diverges from this cannot project
     #: without dropping the word geometry.
     word_count: int | None = None
-    #: Phase 1 (ROADMAP V3) — the SOURCE engine's own confidence in this
+    #: the SOURCE engine's own confidence in this
     #: line, in [0, 1]: mean of the ALTO ``String/@WC`` values, or the
     #: PAGE line ``TextEquiv/@conf``. ``None`` when the source carries
     #: none. Preserved so the audit trail keeps the OCR confidence even
@@ -309,7 +311,7 @@ class GuardConfig(FrozenPolicy):
     Every default equals the pre-F13 constant, so ``GuardConfig()`` is
     byte-for-byte compatible with the historical behaviour.
 
-    The ``GuardConfig.vision()`` profile (spec §5.2 bis, ROADMAP V3 Phase 4)
+    The ``GuardConfig.vision()`` profile (spec §5.2 bis, the vision/QE programme)
     relaxes the *source-similarity* stage for VLM producers while keeping
     every inter-line migration guard intact — a VLM reads the image, not
     the OCR, so a legitimate correction of a badly-garbled line diverges
@@ -402,7 +404,7 @@ class GuardConfig(FrozenPolicy):
 
     @classmethod
     def vision(cls, **overrides: Any) -> "GuardConfig":
-        """The VLM guard profile (§5.2 bis, ROADMAP V3 Phase 4).
+        """The VLM guard profile (§5.2 bis, the vision/QE programme).
 
         Relaxes ONLY the Stage-C source-similarity floor
         (:attr:`min_source_similarity`); every inter-line migration guard
@@ -569,7 +571,7 @@ DEFAULT_PAIRING_POLICY = PairingPolicy()
 
 class LossPolicy(FrozenPolicy):
     """What the run does when projecting a correction would LOSE format
-    granularity (ADR-012, P3.8; token_realign — ROADMAP V3 Phase 1).
+    granularity (ADR-012, P3.8; token_realign — the vision/QE programme).
 
     The PAGE rewriter cannot keep ``Word`` geometry when a correction
     changes a line's word count (6.2 P4 slow path: the ``Word`` children
@@ -600,13 +602,33 @@ class LossPolicy(FrozenPolicy):
     alternative ``TextEquiv``, offset-anchored ``custom`` groups)
     describe the OLD reading — they are inherent to ANY correction, so
     they stay report-only in every mode.
+
+    **``strict`` is a no-op on ALTO, and that is worth stating outright
+    rather than leaving to be inferred from the sentence above** (R7).
+    ``word_count`` is populated by the PAGE parser alone: ALTO's per-token
+    ``String`` geometry redistributes at any token count, so there is no
+    word markup to lose and the gate has nothing to measure. A host that
+    sets ``strict=True`` on an ALTO document gets exactly the default
+    behaviour, silently.
+
+    That is not the same as "an ALTO rewrite loses nothing". A
+    word-count-changing correction rebuilds the line and drops the semantic
+    ``String`` attributes it cannot re-attach to re-segmented words —
+    ``TAGREFS``, ``language``, vendor attributes, and the ``STYLE`` of any
+    source String the token alignment could not match. Those losses are
+    REPORTED (``CorrectionReport.format_losses``, attributed per line) and
+    **not gated by this policy in any mode**. Gating them would be a
+    behavioural change to delivered output, so it needs a measured
+    threshold rather than a flag flipped in passing; until then the
+    restriction is documented and pinned by a test instead of being
+    discovered by a host whose gate never fired.
     """
 
     strict: bool = False
     #: token_realign threshold in [0, 1] — ``None`` disables the gate
     #: (historical behaviour). 0.6 is a reasonable starting point:
     #: ordinary OCR corrections align far above it, wholesale rewrites
-    #: far below. Calibration against a real corpus is Phase 2's job.
+    #: far below. Calibration against a real corpus is the job of a calibration against a real corpus.
     min_alignment_score: float | None = Field(default=None, ge=0.0, le=1.0)
 
 
@@ -615,7 +637,7 @@ DEFAULT_LOSS_POLICY = LossPolicy()
 
 
 class ConfidencePolicy(FrozenPolicy):
-    """What the run does with line confidences (ROADMAP V3 Phase 1).
+    """What the run does with line confidences.
 
     * **DROP** (default — the historical behaviour): no confidence is
       computed; the report carries none.
@@ -624,7 +646,7 @@ class ConfidencePolicy(FrozenPolicy):
       aggregation formula). Nothing is written into the XML.
     * **WRITE_WC**: reserved — stamping confidences into the output
       markup (ALTO ``WC`` with a declared ``postProcessingStep``, PAGE
-      multi-``TextEquiv``) is LOCKED until the Phase 2 calibration
+      multi-``TextEquiv``) is LOCKED until the calibration against a real corpus
       harness proves the values against a real corpus. Requesting it
       raises at construction.
 
@@ -641,7 +663,7 @@ class ConfidencePolicy(FrozenPolicy):
         if self.mode == "write_wc":
             raise ValueError(
                 "ConfidencePolicy(mode='write_wc') is locked until the "
-                "calibration harness (ROADMAP V3 Phase 2/3) proves the "
+                "calibration harness (the vision/QE programme/3) proves the "
                 "confidence values against a real corpus — use "
                 "'report_only' and read LineOutcome.confidence instead."
             )
@@ -796,7 +818,7 @@ ImageRef = str
 
 
 class ImageTransform(BaseModel):
-    """XML-coordinate-space → image-pixel mapping (ROADMAP V3 Phase 4).
+    """XML-coordinate-space → image-pixel mapping.
 
     ALTO/PAGE geometry is expressed in the coordinate system the OCR
     engine used, which is not always the scan's native pixel grid: an
@@ -822,7 +844,7 @@ class ImageTransform(BaseModel):
 
 
 class ImageAsset(BaseModel):
-    """Structured page-image descriptor (§4.1 / ROADMAP V3 Phase 4).
+    """Structured page-image descriptor (§4.1 / the vision/QE programme).
 
     The RECOMMENDED value for ``run(page_images=…)``: a bare
     :data:`ImageRef` (str) is still accepted, but an ``ImageAsset`` carries
@@ -954,7 +976,7 @@ class ModelInfo(BaseModel):
 
 
 class ModelCapabilities(BaseModel):
-    """What a producer's model can do (ROADMAP V3 Phase 4, §5.2 bis).
+    """What a producer's model can do (the vision/QE programme, §5.2 bis).
 
     The declarative descriptor the Router reads to send each line only to a
     producer that can actually serve it — the mechanism by which a VLM is
@@ -1103,6 +1125,13 @@ class LineTrace(BaseModel):
     #: (e.g. ``{"words_dropped": 4}``), ``None`` when its rewrite lost
     #: nothing; surfaces on the report's projection stage.
     projection_losses: dict[str, int] | None = None
+    #: The fidelity level the projection invariant measured for this line;
+    #: surfaces on the report's projection stage. ``None`` until the line's
+    #: file has been rewritten (and forever, for a run that writes nothing).
+    projection_fidelity: ProjectionFidelity | None = None
+    #: R5 — the rewriter's token alignment suspected a word reorder on this
+    #: line. Flagged, never acted on.
+    word_order_suspected: bool | None = None
     validation_status: str | None = None  # corrected / fallback / failed
     fallback_reason: str | None = None
 
@@ -1177,10 +1206,30 @@ class ProjectionStage(BaseModel):
     #: when this line's rewrite lost nothing. Additive and optional —
     #: no ``report_version`` bump.
     losses: dict[str, int] | None = None
+    #: How faithfully the artefact carries this line's decision — see
+    #: :class:`~corrigenda.core.fidelity.ProjectionFidelity`. ``exact`` when
+    #: the bytes say the decision character for character;
+    #: ``token_equivalent`` when only what the format cannot represent was
+    #: lost (a collapsed whitespace run, an edge space); ``normalized``
+    #: when a whitespace character was SUBSTITUTED — a no-break space or
+    #: U+202F flattened to an ordinary one. The run fails outright if the
+    #: words diverge, so no worse level can reach a report. Additive and
+    #: optional — no ``report_version`` bump.
+    fidelity: ProjectionFidelity | None = None
+    #: R5 — the token alignment suspected the correction REORDERED this
+    #: line's words. Flagged, never acted on: lines never merge and words
+    #: never move, so the text is written exactly as decided and the source
+    #: identities stay where the alignment could vouch for them. Not a loss
+    #: and no longer counted as one — it used to sit in :attr:`losses`, where
+    #: a consumer summing loss counters added a non-loss to the total.
+    #: ``None`` when the alignment saw no reorder (and on every path that
+    #: does not align: untouched, subs-only, fast). Additive and optional —
+    #: no ``report_version`` bump.
+    word_order_suspected: bool | None = None
 
 
 class LineConfidence(BaseModel):
-    """Multi-component confidence of one line's DECISION (Phase 1).
+    """Multi-component confidence of one line's DECISION.
 
     Every component keeps its own name — a single magic number whose
     recipe is lost is exactly what this type exists to prevent:
@@ -1199,7 +1248,7 @@ class LineConfidence(BaseModel):
       conservative: a decision is only as safe as its weakest evidence).
 
     These values ORDER lines from safest to riskiest; they are not
-    calibrated probabilities until the Phase 2 harness says so.
+    calibrated probabilities until the calibration harness says so.
     """
 
     ocr: float | None = None
@@ -1220,7 +1269,7 @@ class LineOutcome(BaseModel):
     proposal: ProposalStage | None = None
     decision: DecisionStage
     projection: ProjectionStage | None = None
-    #: Phase 1 — multi-component decision confidence, computed when the
+    #: multi-component decision confidence, computed when the
     #: run's :class:`ConfidencePolicy` is not ``drop``. Additive and
     #: optional — no ``report_version`` bump.
     confidence: LineConfidence | None = None
@@ -1274,7 +1323,7 @@ class RunProvenance(BaseModel):
     config_fingerprint: str
     #: Who produced the edits (generic identity, P3.7-4).
     producer: ProducerProvenance
-    #: Phase 4 — the ESCALATE tier's producer identity, when a run was
+    #: the ESCALATE tier's producer identity, when a run was
     #: configured with an ``escalation_producer`` (a VLM). ``None`` when the
     #: run had a single producer, so a text-only run's provenance is
     #: unchanged. Additive.
@@ -1283,7 +1332,7 @@ class RunProvenance(BaseModel):
     #: report is verifiably tied to the exact document it corrected.
     #: Empty on dry runs (no source files given).
     source_digests: dict[str, str] = Field(default_factory=dict)
-    #: ROADMAP V3 Phase 4 — page_id → ``sha256:<hex>`` of the page IMAGE
+    #: page_id → ``sha256:<hex>`` of the page IMAGE
     #: bytes, for every page whose ``run(page_images=…)`` value is a
     #: structured :class:`ImageAsset` carrying its digest. The mirror of
     #: ``source_digests`` for pixels: it ties the report to the exact scans
@@ -1308,7 +1357,7 @@ class RunProvenance(BaseModel):
 
 class SidecarEntry(BaseModel):
     """A correction the run REFUSED to project into the XML — preserved
-    here instead of lost (token_realign gate, ROADMAP V3 Phase 1).
+    here instead of lost (token_realign gate, the vision/QE programme).
 
     The line's XML keeps its source markup (decision status
     ``fallback``); the corrected text plus the refusal evidence live
@@ -1345,12 +1394,58 @@ class CorrectionReport(BaseModel):
     lines: list[LineOutcome] = Field(default_factory=list)
     #: Format-specific granularity losses aggregated over the run — e.g. the
     #: PAGE rewriter reports ``words_dropped`` / ``custom_offset_stripped`` /
-    #: ``alt_textequiv_dropped`` (6.2 P4/P6) here. ``None`` when the format
-    #: has nothing to report (ALTO's per-path counts already live on the
-    #: line outcomes). Additive and optional, so this does NOT bump
-    #: ``report_version`` — the field's contract is to bump only on a
-    #: *breaking* JSON change, and a new optional key is backward-compatible.
+    #: ``alt_textequiv_dropped`` (6.2 P4/P6) here. Additive and optional, so
+    #: this does NOT bump ``report_version`` — the field's contract is to
+    #: bump only on a *breaking* JSON change, and a new optional key is
+    #: backward-compatible.
+    #:
+    #: **``None`` does NOT mean the run lost nothing** (R8). This field
+    #: counts losses of MARKUP granularity: an element or attribute that
+    #: left the tree. A character the format could not carry — a no-break
+    #: space or a tab flattened into an ordinary one — is a loss of TEXT,
+    #: and it is counted by :attr:`projection_fidelity` as a ``normalized``
+    #: line, with the level attributed per line on
+    #: :attr:`ProjectionStage.fidelity`. A run can therefore have
+    #: ``format_losses is None`` and still have flattened a character; both
+    #: fields have to be read to audit a run.
+    #:
+    #: Deliberately NOT mirrored here as a second counter. It would agree
+    #: with ``projection_fidelity["normalized"]`` on every run by
+    #: construction, and a counter derivable from another counter is what
+    #: R1 was: two accounting sites for one event, free to drift apart.
     format_losses: dict[str, int] | None = None
+    #: Per-line projection fidelity, counted by level over the run — e.g.
+    #: ``{"exact": 498, "token_equivalent": 22, "normalized": 2}``. Two
+    #: normalized lines mean two lines where a significant whitespace
+    #: character (U+00A0, U+202F, a tab) was flattened into an ordinary
+    #: space: the artefact still says the same WORDS, and no longer says
+    #: them the same way. Before this existed the invariant compared in
+    #: whitespace normal form and could not see that at all. ``None`` when
+    #: the run rendered no output file. Additive and optional — no
+    #: ``report_version`` bump.
+    projection_fidelity: dict[str, int] | None = None
+    #: Lines that announce a hyphen break with no partner this run can see —
+    #: the pairing policy refused the candidate, the partner sits on a page
+    #: this run does not have, the pointer dangles. Each was silent: the line
+    #: still ends mid-word, is corrected alone, and never reaches the
+    #: reconciler, so its pair-drift guards never run either. A host reading
+    #: "0 fallback" could not learn that N words were split across a seam
+    #: nobody sewed. ``None`` when every break found its partner. Additive
+    #: and optional — no ``report_version`` bump.
+    unpaired_breaks: int | None = None
+    #: R6 — the forward hyphen links this run SEVERED to keep a chain inside
+    #: one request (ADR-010 unit SPLIT). Recorded on the ``ChunkPlan`` since
+    #: the split existed and read by nobody, which made the engine's one
+    #: deliberately destructive operation the only one a host could not see.
+    #: It is not covered by anything else on this report: the cut resets the
+    #: tail's role to ``NONE``, so it is not an ``unpaired_break``; both
+    #: sides keep their OCR text verbatim, so it is not a fallback; nothing
+    #: leaves the markup, so it is not a ``format_loss``. What a host
+    #: actually gets is a delivered line whose text still ends mid-word and
+    #: which declares no break at all. ``None`` when no chain was cut — the
+    #: common case, since only chains over ``max_lines_per_request`` are.
+    #: Additive and optional — no ``report_version`` bump.
+    hyphen_splits: list[HyphenSplit] | None = None
     #: P3.9 (§11) — the run's full provenance record. Optional and
     #: additive (no ``report_version`` bump): a v2.0 consumer that
     #: ignores unknown keys keeps working, one that reads it gains the
@@ -1363,7 +1458,7 @@ class CorrectionReport(BaseModel):
     #: reported usage (rules producer, dry runs). Additive and optional —
     #: no ``report_version`` bump (same contract as ``format_losses``).
     usage: Usage | None = None
-    #: Phase 1 — corrections the token_realign gate refused to project,
+    #: corrections the token_realign gate refused to project,
     #: preserved for review (see :class:`SidecarEntry`). ``None`` when
     #: the gate is off or nothing was refused. Additive and optional —
     #: no ``report_version`` bump.
@@ -1410,6 +1505,7 @@ __all__ = [
     "ProposalFeatures",
     "DecisionStage",
     "DecisionReason",
+    "ProjectionFidelity",
     "ProjectionStage",
     "ProducerProvenance",
     "RunProvenance",

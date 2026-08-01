@@ -139,8 +139,26 @@ async def test_part2_side_fallback_pulls_the_cross_page_partner(tmp_path) -> Non
 
 
 @pytest.mark.asyncio
-async def test_clean_run_corrects_both_sides(tmp_path) -> None:
+async def test_no_chunk_failure_still_reverts_an_incoherent_pair(tmp_path) -> None:
+    """Nothing fails here, and the pair still goes back to OCR — correctly.
+
+    The harness substitutes ``e``→``3``, so ``prati-`` + ``qu3s`` joins to
+    ``pratiqu3s`` while the source ``SUBS_CONTENT`` says ``pratiques``. An
+    explicit pair whose boundary join no longer matches its SUBS_CONTENT is
+    rejected, both sides revert, and — the part that used to be missing — the
+    STATUS says so. This test previously asserted CORRECTED on both, which
+    held only because a reverted pair was mislabelled: the two lines kept
+    their OCR text while reporting as corrected, so the revert reached no
+    counter (the same silent shape as the cross-page freeze, L3).
+    """
     doc = await _run(tmp_path, failing=set())
     lines = {lm.line_id: lm for page in doc.pages for lm in page.lines}
-    assert lines["L1"].status is LineStatus.CORRECTED
-    assert lines["L2"].status is LineStatus.CORRECTED
+    _assert_pair_consistent(doc)
+    assert lines["L1"].status is LineStatus.FALLBACK
+    assert lines["L2"].status is LineStatus.FALLBACK
+    assert lines["L1"].corrected_text == lines["L1"].ocr_text
+    assert lines["L2"].corrected_text == lines["L2"].ocr_text
+    # A line outside the pair is unaffected: this is pair-scoped, not a
+    # blanket revert.
+    assert lines["L0"].status is LineStatus.CORRECTED
+    assert lines["L0"].corrected_text == "d3but"

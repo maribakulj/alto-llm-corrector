@@ -1,5 +1,5 @@
 """Characterization of the hyphen partner-resolution invariant (audit
-Phase 1 — filet for audit Problem 1).
+— filet for audit Problem 1).
 
 Problem 1: the rule "given a line, who is its forward hyphen partner?" is
 re-encoded four times (``planner._hyphen_partner_id``, the inline ternary

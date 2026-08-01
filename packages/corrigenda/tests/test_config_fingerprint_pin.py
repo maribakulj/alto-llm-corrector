@@ -1,5 +1,5 @@
 """Pin the configuration fingerprint and the §8.2 policy surface (audit
-Phase 1 — filet for audit Problem 7).
+— filet for audit Problem 7).
 
 Problem 7: ``GuardConfig`` carries 21 knobs, two of which are duplicated
 concepts (``part2_collapse_ratio`` / ``pair_drift_part2_collapse_ratio``
@@ -71,7 +71,7 @@ def test_config_fingerprint_is_pinned():
     (ADR-012, P3.8 — a fifth ``loss`` key in the composite payload;
     behaviour change recorded in CHANGELOG under [Unreleased])
     → ``15dc07cba9122106`` when LossPolicy grew ``min_alignment_score``
-    (ROADMAP V3 Phase 1 token_realign gate — default ``None`` keeps
+    (the vision/QE programme token_realign gate — default ``None`` keeps
     behaviour identical; the FIELD joins the fingerprinted surface,
     recorded in CHANGELOG under [Unreleased])."""
     assert _default_pipeline().config_fingerprint() == "15dc07cba9122106"

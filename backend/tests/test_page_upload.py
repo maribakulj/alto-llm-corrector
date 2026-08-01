@@ -1,4 +1,4 @@
-"""ROADMAP V3 Phase 0 — PAGE XML travels the upload path.
+"""PAGE XML travels the upload path.
 
 The app has always advertised "ALTO/PAGE" (FastAPI description) while
 `create_job` hard-wired the ALTO parser. On a valid PAGE file that

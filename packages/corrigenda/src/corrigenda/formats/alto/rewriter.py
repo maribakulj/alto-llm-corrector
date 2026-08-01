@@ -11,7 +11,14 @@ from corrigenda.core._norm import clean_content, nfc
 from corrigenda.core._parse import parse_int_tolerant
 from corrigenda.core.alignment import align_tokens
 from corrigenda.core.identity import ensure_unique_identities
-from corrigenda.core.pairing import HYPHEN_CHARS
+from corrigenda.core.losses import (
+    ALIGNMENT_SCOPED,
+    COUNTS_INVALIDATION,
+    INVALIDATED_ATTRIBUTES,
+    INVALIDATION_COUNTER,
+    is_unconditional_loss,
+)
+from corrigenda.core.pairing import HYPHEN_CHARS, forward_break_is_explicit
 from corrigenda.errors import DuplicateIdError
 from corrigenda.formats.alto._ns import (
     _detect_namespace,
@@ -51,9 +58,45 @@ class RewriterMetrics:
 # ---------------------------------------------------------------------------
 
 
+#: Whitespace that ALTO renders as an ``<SP>`` — that is, whitespace where a
+#: line may BREAK. A no-break space is deliberately excluded: U+00A0, U+202F
+#: (French typography's space before ``%``, ``;``, ``!``, ``?``, ``:``) and
+#: U+2007 exist precisely to say "do not break here", and ``<SP>`` carries no
+#: content, so routing one through an SP element replaces it with an ordinary
+#: space and destroys the only thing it was there to express. Splitting on
+#: breaking whitespace only keeps it inside its ``String``'s CONTENT, where it
+#: survives the round-trip verbatim.
+#:
+#: The set: U+00A0 NO-BREAK SPACE, U+202F NARROW NO-BREAK SPACE, U+2007 FIGURE
+#: SPACE. Spelled as escapes on purpose: they are indistinguishable from an
+#: ordinary space in a source listing, and a reviewer has to be able to see
+#: which ones are in here.
+_NO_BREAK_SPACES = "\u00a0\u202f\u2007"
+_BREAKING_WS = re.compile(rf"[^\S{_NO_BREAK_SPACES}]+")
+#: Same class, capturing — ``re.split`` keeps the separators only when the
+#: pattern has a group, and the rewriter needs them to emit its ``<SP>``s.
+_BREAKING_WS_SPLIT = re.compile(rf"([^\S{_NO_BREAK_SPACES}]+)")
+
+
 def _tokenize(text: str) -> list[str]:
-    """Split text into alternating word/space tokens, dropping empty strings."""
-    return [t for t in re.split(r"(\s+)", text) if t]
+    """Split text into alternating word/space tokens, dropping empty strings.
+
+    "Space token" means BREAKING whitespace — see :data:`_BREAKING_WS`. A
+    word token may therefore contain a no-break space, which is what makes
+    ``M.\u00a0Dupont`` one String rather than two joined by a lossy ``<SP>``.
+    """
+    return [t for t in _BREAKING_WS_SPLIT.split(text) if t]
+
+
+def _is_space_token(token: str) -> bool:
+    """True when ``token`` is the whitespace BETWEEN two words — an ``<SP>``.
+
+    Not ``token.strip() == ""``: :meth:`str.strip` treats a no-break space as
+    whitespace, so a lone U+00A0 token would classify as a separator and be
+    written back as an ordinary space — the very substitution this module
+    stopped making.
+    """
+    return _BREAKING_WS.fullmatch(token) is not None
 
 
 # ---------------------------------------------------------------------------
@@ -86,7 +129,7 @@ def _compute_geometry(
         return []
 
     def _weight(t: str) -> float:
-        return len(t) * 0.6 if t.strip() == "" else float(len(t))
+        return len(t) * 0.6 if _is_space_token(t) else float(len(t))
 
     weights = [_weight(t) for t in tokens]
     total_weight = sum(weights)
@@ -356,30 +399,15 @@ def _apply_subs(
 # vendor attributes) is NOT invalidated by a spelling fix — the rebuild still
 # cannot re-attach it to a re-segmented word without guessing, so it is
 # dropped, but it must be REPORTED, not lost silently ("lossless" was a lie).
-_SLOW_PATH_RETAINED_OR_JUSTIFIED = frozenset(
-    {
-        # CONTENT is the payload the run exists to change: a rebuild REPLACES
-        # the source reading with the correction, it does not lose it.
-        # Counting it produced a phantom loss on every rebuilt String — 239 of
-        # them on a real 566-line page whose corrections were sound — and a
-        # report that counts a non-loss misleads an auditor exactly as much as
-        # one that misses a real loss.
-        "CONTENT",
-        "ID",
-        "STYLEREFS",
-        "STYLE",
-        "WC",
-        "CC",
-        "HPOS",
-        "VPOS",
-        "WIDTH",
-        "HEIGHT",
-    }
-)
-
-
 def _semantic_attr_losses(orig_string_attribs: list[dict[str, str]]) -> dict[str, int]:
-    """Count semantic String attributes a slow-path rebuild will drop.
+    """Count the attributes a slow-path rebuild really loses.
+
+    "Really" is defined by :mod:`corrigenda.core.losses`, the versioned
+    matrix, and not by a second list kept here — a second list is how this
+    counter came to claim 229 dropped SUBS_CONTENT on a file that kept
+    every one of them (R1). The matrix says which attributes are
+    STRUCTURAL (they follow the tokens and cannot be lost), which are
+    re-established, and which disappearances the report carries.
 
     Keyed ``<attr>_dropped`` (namespace stripped, lower-cased) to match the
     PAGE rewriter's loss vocabulary, e.g. ``TAGREFS`` → ``tagrefs_dropped``.
@@ -388,11 +416,73 @@ def _semantic_attr_losses(orig_string_attribs: list[dict[str, str]]) -> dict[str
     for attribs in orig_string_attribs:
         for key in attribs:
             local = key.rsplit("}", 1)[-1]
-            if local in _SLOW_PATH_RETAINED_OR_JUSTIFIED:
+            if not is_unconditional_loss(local):
                 continue
             loss_key = f"{local.lower()}_dropped"
             losses[loss_key] = losses.get(loss_key, 0) + 1
     return losses
+
+
+def _confidence_attr_count(el: etree._Element, ns: str) -> int:
+    """How many INVALIDATED attributes (``WC``/``CC``) this line's Strings
+    still carry.
+
+    Measured, not inferred from the path taken: the fast path removes them
+    only from Strings whose CONTENT actually changed, so a line can keep
+    some and lose others, and "did the line take a write path" is not the
+    same question as "did this line lose confidence".
+    """
+    count = 0
+    for string_el in _get_string_children(el, ns):
+        for attr in string_el.attrib:
+            name = attr.decode() if isinstance(attr, bytes) else str(attr)
+            if name.rsplit("}", 1)[-1].upper() in INVALIDATED_ATTRIBUTES:
+                count += 1
+    return count
+
+
+def _confidence_loss(before: int, el: etree._Element, ns: str) -> dict[str, int]:
+    """One line's invalidation loss — ``1`` if it lost any, not how many.
+
+    The unit is the decision (R4, :data:`INVALIDATION_UNIT`): an archive
+    acts on "this line's OCR confidence is gone", and how many Strings that
+    line happened to hold is not a fact about the correction.
+    """
+    if not COUNTS_INVALIDATION or before == 0:
+        return {}
+    if _confidence_attr_count(el, ns) >= before:
+        return {}
+    return {INVALIDATION_COUNTER: 1}
+
+
+def _add_alignment_scoped_losses(
+    losses: dict[str, int],
+    orig_string_attribs: list[dict[str, str]],
+    matched_sources: set[int],
+) -> None:
+    """Count the :data:`ALIGNMENT_SCOPED` attributes of every source String
+    the token alignment could not match.
+
+    These are the attributes whose loss is CONDITIONAL — ``STYLE`` and
+    ``STYLEREFS`` ride along when their String is matched to a target token
+    and go when it is not — so the unconditional per-String pass leaves them
+    alone (see :func:`corrigenda.core.losses.is_unconditional_loss`) and this
+    one owns them.
+
+    Called from two places on purpose. The rebuild has a second exit: a
+    correction that empties the line returns before any alignment happens,
+    because there are no target tokens to align against. Nothing matched
+    means every style went — 56 lines of the repo's ALTO corpora carry these
+    attributes — and that exit counted none of them (R2). Two exits, one
+    accounting function; a second inline copy is how R1 happened.
+    """
+    for idx, attribs in enumerate(orig_string_attribs):
+        if idx in matched_sources:
+            continue
+        for key in sorted(ALIGNMENT_SCOPED):
+            if key in attribs:
+                loss_key = f"{key.lower()}_dropped"
+                losses[loss_key] = losses.get(loss_key, 0) + 1
 
 
 def _drop_structural_break_hyphen(text: str) -> str:
@@ -423,7 +513,7 @@ def _update_content_in_place(
     HEIGHT, WC, CC, STYLEREFS, etc.) and SP/HYP elements stay untouched.
     """
     orig_strings = _get_string_children(el, ns)
-    words = [t for t in _tokenize(corrected) if t.strip()]
+    words = [t for t in _tokenize(corrected) if not _is_space_token(t)]
     if len(words) != len(orig_strings):
         return False
     for string_el, word in zip(orig_strings, words):
@@ -507,7 +597,7 @@ def _emit_string(
     Spec F2 / §6.1 — the slow path recycles ONLY identity and styling from
     the original String: ``ID``, ``STYLEREFS``, and ``STYLE``.
     ``recycled`` is the attribute dict of the source String the token
-    ALIGNMENT matched to this new token (Phase 1: identity follows the
+    ALIGNMENT matched to this new token (identity follows the
     word it corresponds to, never whatever sat at the same position), or
     ``None`` for an inserted token — which gets a generated ID instead
     (deduplicated against every ID already used on the line).
@@ -591,7 +681,7 @@ def _rebuild_line(
     corrected: str,
     manifest: LineManifest,
     ns: str,
-) -> dict[str, int]:
+) -> tuple[dict[str, int], bool]:
     """Slow-path rebuild for any TextLine (normal, PART1, BOTH, PART2).
 
     Behaviour by ``manifest.hyphen_role``:
@@ -640,7 +730,7 @@ def _rebuild_line(
     # they are cleared; the emitted Strings only carry the §6.1 whitelist.
     losses = _semantic_attr_losses(orig_string_attribs)
 
-    # Phase 1 (ROADMAP V3) — identity follows the token ALIGNMENT, not the
+    # identity follows the token ALIGNMENT, not the
     # position: an inserted word must not shift every following word onto
     # the wrong source ID/STYLE (positional recycling attached text to the
     # wrong word identity). Alignment over the ORIGINAL CONTENTs vs the
@@ -662,6 +752,26 @@ def _rebuild_line(
     else:  # PART2
         orig_hyp_attribs = {}
         saved_hyp = []
+        # R3 — a PART2 line is a word's continuation: it does not end
+        # mid-word, so it has no forward break to render and _clear_line
+        # removes any <HYP> it carried. The removal is right; being silent
+        # about it was not. What goes is the ELEMENT — its geometry and its
+        # standing as markup — not the mark: a non-terminal HYP's character
+        # is already part of the reconstructed text and survives inside a
+        # rebuilt String's CONTENT. Hence "elements_removed" rather than a
+        # `*_dropped` key, which in this vocabulary claims a String
+        # attribute and would be read as a phantom by the differential
+        # invariant.
+        #
+        # Narrow, and narrower than the plan assumed: a PART2 line whose
+        # HYP is line-TERMINAL is classified BOTH by the parser (the
+        # trailing mark is a forward break), so this branch is reached only
+        # via a non-terminal HYP — which ALTO does not define — or a
+        # hand-built manifest. 0 of the 1711 ALTO lines in examples/ and
+        # corpus/ have the shape.
+        removed_hyps = sum(1 for child in el if child.tag == _tag("HYP", ns))
+        if removed_hyps:
+            losses["hyp_elements_removed"] = removed_hyps
 
     _clear_line(el, ns)
 
@@ -691,6 +801,10 @@ def _rebuild_line(
 
     tokens = _tokenize(corrected)
     if not tokens:
+        # R2 — nothing is written, so nothing aligned: every source String's
+        # alignment-scoped attributes are lost. This exit used to skip the
+        # accounting entirely.
+        _add_alignment_scoped_losses(losses, orig_string_attribs, set())
         if is_part1_like:
             _append_trailing_hyp(
                 el,
@@ -704,24 +818,16 @@ def _rebuild_line(
         else:
             for h in saved_hyp:
                 el.append(h)
-        return losses
+        return losses, False
 
-    word_tokens = [t for t in tokens if t.strip()]
+    word_tokens = [t for t in tokens if not _is_space_token(t)]
     alignment = align_tokens(orig_contents, word_tokens)
     matched_sources = {
         p.source_index
         for p in alignment.pairs
         if p.source_index is not None and p.target_index is not None
     }
-    for idx, attribs in enumerate(orig_string_attribs):
-        if idx in matched_sources:
-            continue
-        for key in ("STYLE", "STYLEREFS"):
-            if key in attribs:
-                loss_key = f"{key.lower()}_dropped"
-                losses[loss_key] = losses.get(loss_key, 0) + 1
-    if alignment.move_suspected:
-        losses["word_order_suspected"] = 1
+    _add_alignment_scoped_losses(losses, orig_string_attribs, matched_sources)
     # Pre-seed with every ID that WILL be recycled, so a generated ID for
     # an early inserted token can never collide with a later recycled one.
     used_ids: set[str] = {
@@ -736,7 +842,7 @@ def _rebuild_line(
     last_word_width = hyp_width
 
     for token, tok_hpos, tok_width in geo:
-        if token.strip() == "":
+        if _is_space_token(token):
             _emit_sp(el, ns, orig_sp_attribs, sp_n, tok_hpos, tok_width, vpos)
             sp_n += 1
         else:
@@ -772,7 +878,7 @@ def _rebuild_line(
         for h in saved_hyp:
             el.append(h)
 
-    return losses
+    return losses, alignment.move_suspected
 
 
 # ---------------------------------------------------------------------------
@@ -811,6 +917,19 @@ def rewrite_alto_file(
     line_paths: dict[str, str] = {}
     losses: dict[str, int] = {}
     losses_by_line: dict[str, dict[str, int]] = {}
+    word_order_suspected: set[str] = set()
+
+    def record(line_id: str, line_losses: dict[str, int]) -> None:
+        """Attribute a line's losses (ADR-012) and roll them into the run
+        aggregate. One site, so the two can never disagree."""
+        if not line_losses:
+            return
+        losses_by_line[line_id] = {
+            **losses_by_line.get(line_id, {}),
+            **line_losses,
+        }
+        for key, value in line_losses.items():
+            losses[key] = losses.get(key, 0) + value
 
     # ADR-007 — a bare line_id keys every correction-to-element
     # association below. A duplicate (in the manifests OR on the XML
@@ -840,6 +959,10 @@ def rewrite_alto_file(
         corrected = lm.corrected_text if lm.corrected_text is not None else lm.ocr_text
         text_changed = not _line_text_unchanged(tl_el, corrected, ns)
         subs_changed = _subs_need_update(tl_el, lm, ns)
+        # Read BEFORE any path touches the tree, so what is reported is what
+        # actually left the line rather than what the chosen path is assumed
+        # to remove (R4).
+        conf_before = _confidence_attr_count(tl_el, ns)
 
         # --- Path 1: UNTOUCHED ---
         if not text_changed and not subs_changed:
@@ -852,6 +975,7 @@ def rewrite_alto_file(
             _apply_subs(tl_el, lm, ns)
             metrics.subs_only += 1
             line_paths[line_id] = "subs_only"
+            record(line_id, _confidence_loss(conf_before, tl_el, ns))
             continue
 
         # An EXPLICIT PART1 line carries its end-of-line hyphen structurally,
@@ -864,10 +988,10 @@ def rewrite_alto_file(
         # A HEURISTIC PART1 (no HYP/SUBS markup) has no structural hyphen and
         # keeps its trailing dash in CONTENT — untouched by this branch.
         write_text = corrected
-        if (
-            lm.hyphen_role in (HyphenRole.PART1, HyphenRole.BOTH)
-            and lm.hyphen_source_explicit
-        ):
+        if lm.hyphen_role in (
+            HyphenRole.PART1,
+            HyphenRole.BOTH,
+        ) and forward_break_is_explicit(lm):
             write_text = _drop_structural_break_hyphen(corrected)
 
         # --- Path 3: FAST PATH (word count same) ---
@@ -875,17 +999,22 @@ def rewrite_alto_file(
             _apply_subs(tl_el, lm, ns)
             metrics.fast_path += 1
             line_paths[line_id] = "fast_path"
+            record(line_id, _confidence_loss(conf_before, tl_el, ns))
             continue
 
         # --- Path 4: SLOW PATH (word count changed) ---
-        line_losses = _rebuild_line(tl_el, write_text, lm, ns)
+        line_losses, move_suspected = _rebuild_line(tl_el, write_text, lm, ns)
         _apply_subs(tl_el, lm, ns)
         metrics.slow_path += 1
         line_paths[line_id] = "slow_path"
-        if line_losses:
-            losses_by_line[line_id] = line_losses
-            for k, v in line_losses.items():
-                losses[k] = losses.get(k, 0) + v
+        record(line_id, {**line_losses, **_confidence_loss(conf_before, tl_el, ns)})
+        # R5 — a suspected reorder is a DIAGNOSTIC, not a loss: nothing left
+        # the markup, the alignment simply could not vouch for the order it
+        # was handed. It rode in the loss dict, so `sum(format_losses)`
+        # counted a non-loss — R1's disease with a different attribute. It
+        # travels on its own channel now.
+        if move_suspected:
+            word_order_suspected.add(line_id)
 
     _add_processing_entry(root, ns, provider, model, lib_version, config_fingerprint)
     # pretty_print=False: avoid gratuitously reformatting the entire XML
@@ -907,18 +1036,30 @@ def rewrite_alto_file(
         metrics=metrics,
         rewriter_paths=line_paths,
         texts=_extract_texts_from_root(root, ns, set(line_by_id)),
+        # L8 — the same lines read with the mark collapse OFF. Where the two
+        # differ, the file spells a break mark its own way and the decision
+        # spells it in normal form: real, invisible to a comparison of two
+        # collapsed strings, and until now reported as `exact`.
+        texts_verbatim=_extract_texts_from_root(
+            root, ns, set(line_by_id), verbatim=True
+        ),
         losses=losses,
         losses_by_line=losses_by_line,
+        word_order_suspected=frozenset(word_order_suspected),
     )
 
 
 def _extract_texts_from_root(
-    root: etree._Element, ns: str, line_ids: set[str]
+    root: etree._Element, ns: str, line_ids: set[str], *, verbatim: bool = False
 ) -> dict[str, str]:
     """Per-line text of an ALTO tree, via the shared
     ``reconstruct_textline`` helper — so the text seen here matches both
     the parser's ocr_text and the rewriter's UNTOUCHED-detection
-    comparison."""
+    comparison.
+
+    ``verbatim=True`` returns the same walk with the mark collapse OFF —
+    what the file's characters say rather than the logical reading of them
+    (L8). Used only to grade projection fidelity; never as anyone's text."""
     textline_tag = _tag("TextLine", ns)
     result: dict[str, str] = {}
     for tl_el in root.iter(textline_tag):
@@ -931,7 +1072,7 @@ def _extract_texts_from_root(
                     f"duplicate TextLine ID {line_id!r} in rewritten ALTO — "
                     "output-text extraction would be ambiguous (ADR-007)."
                 )
-            result[line_id] = reconstruct_textline(tl_el, ns)
+            result[line_id] = reconstruct_textline(tl_el, ns, verbatim=verbatim)
     return result
 
 

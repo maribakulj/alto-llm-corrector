@@ -5,7 +5,7 @@ the FastAPI server and the SSE stream. They are intentionally NOT in
 ``corrigenda.core.schemas`` because the pure correction pipeline doesn't
 speak HTTP — only the server does. See ARCHITECTURE.md §3.2.
 
-When the eventual `alto-server` package is extracted (Phase 3), this
+When the eventual `alto-server` package is extracted, this
 file moves there verbatim.
 """
 

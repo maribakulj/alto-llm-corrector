@@ -44,7 +44,7 @@ def _keep_model(model: dict[str, Any]) -> bool:
 
 class GoogleProvider:
     async def list_models(self, api_key: str) -> list[ModelInfo]:
-        # Audit-F16 — the ListModels endpoint is PAGINATED (default page
+        # the ListModels endpoint is PAGINATED (default page
         # size 50 + nextPageToken); reading only the first response
         # silently hid every model past page one. Follow the token with
         # a safety bound so a misbehaving vendor can't loop us forever.

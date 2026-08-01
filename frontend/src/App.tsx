@@ -263,7 +263,7 @@ export default function App() {
         <section>
           <h2 className="font-serif text-base font-semibold text-slate-300 mb-3 flex items-center gap-2">
             <span className="font-mono text-amber-500 text-xs">01</span>
-            Upload ALTO files
+            Upload ALTO / PAGE files
           </h2>
           {/* Volatile-storage warning — jobs live in /tmp on this server. */}
           <div
@@ -480,7 +480,7 @@ export default function App() {
         <section className="max-w-6xl mx-auto px-4 py-6">
           <h2 className="font-serif text-base font-semibold text-slate-300 mb-3 flex items-center gap-2">
             <span className="font-mono text-amber-500 text-xs">07</span>
-            Mise en page ALTO
+            Mise en page
           </h2>
           {layoutLoading && (
             <div className="flex items-center gap-2 font-mono text-xs text-slate-500 py-4">

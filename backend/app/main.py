@@ -196,7 +196,7 @@ def create_app() -> FastAPI:
     # sits INSIDE it: an oversize 413 never consumes a slot.
     app.add_middleware(UploadAdmissionMiddleware)
 
-    # 1b. Upload size guard (Audit-F18) — reject over-cap / no-Content-
+    # 1b. Upload size guard — reject over-cap / no-Content-
     # Length POSTs to /api/jobs BEFORE Starlette spools the multipart
     # body to disk. Placed inside CORS (so a 413 still carries CORS
     # headers) but outside form parsing. See app/api/upload_guard.py.
@@ -214,23 +214,44 @@ def create_app() -> FastAPI:
     trusted_proxies = [h.strip() for h in trusted_proxies_raw.split(",") if h.strip()]
     app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=trusted_proxies)
 
-    # Plan V3.3 — explicit deployment profile. "demo" (default) is the
-    # public HF Space stance: no auth, wildcard CORS allowed, in-memory
-    # jobs — documented as such in SECURITY.md. "institutional" asserts
-    # the deployment sits behind SSO/reverse-proxy and REFUSES the
+    # Explicit deployment profile. "demo" (default) is the public HF Space
+    # stance: no auth, wildcard CORS allowed, in-memory jobs — documented
+    # as such in SECURITY.md. "proxy_protected" asserts the deployment
+    # sits behind an authenticating reverse proxy and REFUSES the
     # demo-grade defaults instead of silently running with them.
+    #
+    # It was called "institutional" until 2026-07-28 (D12). The body of
+    # SECURITY.md was always honest about the scope — no user accounts, no
+    # job ownership, no quotas, no database, single-worker — but the NAME
+    # worked against its own text: an operator reads "institutional" as
+    # "ready for an institution", which this profile does not claim.
+    # "proxy_protected" says exactly what is asserted and nothing more.
+    #
+    # The old value is a PUBLIC environment variable, so it keeps working
+    # and warns rather than breaking a running deployment on upgrade.
     profile = os.environ.get("DEPLOYMENT_PROFILE", "demo").strip().lower()
-    if profile not in ("demo", "institutional"):
-        raise RuntimeError(f"DEPLOYMENT_PROFILE must be 'demo' or 'institutional', got {profile!r}")
+    if profile == "institutional":
+        logging.getLogger("app.startup").warning(
+            "DEPLOYMENT_PROFILE=institutional is deprecated and will be "
+            "removed: use DEPLOYMENT_PROFILE=proxy_protected. The behaviour "
+            "is identical — the name was broader than what the profile "
+            "asserts, which is only that an authenticating reverse proxy "
+            "sits in front (see SECURITY.md)."
+        )
+        profile = "proxy_protected"
+    if profile not in ("demo", "proxy_protected"):
+        raise RuntimeError(
+            f"DEPLOYMENT_PROFILE must be 'demo' or 'proxy_protected', got {profile!r}"
+        )
 
     # 3. CORS (outermost) — origins configurable via CORS_ORIGINS env
     # var (comma-separated). Default: wildcard. No credentials —
     # NEVER combine allow_credentials with allow_origins=["*"]
     # (Starlette raises ValueError).
     cors_origins = [o.strip() for o in os.environ.get("CORS_ORIGINS", "*").split(",") if o.strip()]
-    if profile == "institutional" and "*" in cors_origins:
+    if profile == "proxy_protected" and "*" in cors_origins:
         raise RuntimeError(
-            "DEPLOYMENT_PROFILE=institutional requires an explicit CORS_ORIGINS "
+            "DEPLOYMENT_PROFILE=proxy_protected requires an explicit CORS_ORIGINS "
             "allowlist — refusing to start with the wildcard default. Set "
             "CORS_ORIGINS to the frontend origin(s)."
         )

@@ -26,7 +26,7 @@ async def list_models(request: Request, body: ListModelsRequest) -> ListModelsRe
     try:
         provider = get_provider(body.provider)
     except KeyError as exc:
-        # Audit-F17 — render the enum VALUE ('openai'), not the Python
+        # render the enum VALUE ('openai'), not the Python
         # repr ('Provider.OPENAI') the (str, Enum) __format__ yields.
         raise HTTPException(
             status_code=400, detail=f"Unknown provider: {body.provider.value}"
@@ -60,7 +60,7 @@ async def list_models(request: Request, body: ListModelsRequest) -> ListModelsRe
                 status = 502  # upstream 5xx
         raise HTTPException(
             status_code=status,
-            # Audit-F17 — enum VALUE, matching the response model's
+            # enum VALUE, matching the response model's
             # serialization ('openai'), not 'Provider.OPENAI'.
             detail=f"Provider error ({body.provider.value}): {safe}",
         ) from exc

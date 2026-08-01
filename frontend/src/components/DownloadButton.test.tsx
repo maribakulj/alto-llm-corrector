@@ -30,12 +30,12 @@ describe('DownloadButton', () => {
   it('omits the stats grid when stats are null', () => {
     render(<DownloadButton jobId="j1" stats={null} />)
     expect(screen.queryByText(/lines modified/i)).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /download corrected alto/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /download corrected xml/i })).toBeInTheDocument()
   })
 
   it('starts the download for its jobId on click', () => {
     render(<DownloadButton jobId="job-42" stats={null} />)
-    fireEvent.click(screen.getByRole('button', { name: /download corrected alto/i }))
+    fireEvent.click(screen.getByRole('button', { name: /download corrected xml/i }))
     expect(downloadJob).toHaveBeenCalledWith('job-42')
   })
 })

@@ -37,7 +37,7 @@ function SVGOverlay({ page, side, opacity, withBackground }: SVGOverlayProps) {
   if (!W || !H) {
     return (
       <div className="p-6 font-mono text-xs text-slate-500 text-center">
-        Coordonnées ALTO absentes — impossible d'afficher la mise en page.
+        Coordonnées de ligne absentes — impossible d'afficher la mise en page.
       </div>
     )
   }

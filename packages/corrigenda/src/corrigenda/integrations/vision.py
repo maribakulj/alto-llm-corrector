@@ -1,6 +1,6 @@
 """Pixel-pure vision toolkit — the deterministic half of ``corrigenda[vision]``.
 
-ROADMAP V3 Phase 4 splits "the vision producer" into two seams because
+the vision/QE programme splits "the vision producer" into two seams because
 they have opposite natures:
 
 * **this module** resolves, decodes and *crops* page pixels — pure,
@@ -397,7 +397,7 @@ class VisionEditProducer:
         self._confusions = confusions
         self._margin_ratio = margin_ratio
         self._mask_polygon = mask_polygon
-        #: Phase 4 routing descriptor — a vision model: structured output
+        #: routing descriptor — a vision model: structured output
         #: AND vision. The default declares vision=True (so it passes the
         #: require_capabilities consistency gate); a host that knows its
         #: VLM's per-call image cap injects ``max_images`` so the Router can

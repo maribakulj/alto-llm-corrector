@@ -1,4 +1,4 @@
-"""ROADMAP V3 Phase 1 — LossPolicy token_realign gate + sidecar.
+"""LossPolicy token_realign gate + sidecar.
 
 The middle ground between REPORT (project everything, count losses) and
 STRICT (reject every word-count change): a correction projects only

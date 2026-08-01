@@ -40,11 +40,19 @@ python scripts/extract_press19_corpus.py --corpus corpus/37-GT-BNL --lang fr \
     --out scripts/data/press19_real.txt
 ```
 
-## Provenance et licence — À VÉRIFIER
+## Provenance et licence — **CC0 / domaine public**
 
-Fourni par le mainteneur du dépôt ; l'archive d'origine ne contenait **ni
-fichier de licence ni métadonnées de droits**, et les ALTO n'en portent pas
-non plus. Les jeux GT de la BnL sont couramment diffusés en domaine public /
-CC0, **mais ce n'est pas documenté ici** — à confirmer auprès de la BnL avant
-toute rediffusion, et à consigner dans ce fichier. Le reste du dépôt trace ses
-corpus (OCR17+ en CC-BY) ; celui-ci ne l'est pas encore.
+Ground truth de la **Bibliothèque nationale du Luxembourg**, diffusée par la
+BnL au titre de sa stratégie IA. Déclaration de la BnL :
+
+> As part of BnL's AI strategy, we provide the ground truth data that falls
+> into the public domain (CC0, see copyright notice).
+
+Donc : **CC0**, domaine public, rediffusion libre. Les fichiers eux-mêmes ne
+portent aucune métadonnée de droits — c'est une lacune de l'archive d'origine,
+pas une ambiguïté de statut, et cette section est la trace demandée.
+
+Ce corpus **ne part pas dans le paquet distribué** : il vit à la racine du
+dépôt, hors de `packages/corrigenda/`, et `pyproject.toml` déclare un allowlist
+`sdist.include` explicite de quatre entrées qui ne le contient pas. Épinglé par
+`tests/test_packaging_excludes_corpora.py`.

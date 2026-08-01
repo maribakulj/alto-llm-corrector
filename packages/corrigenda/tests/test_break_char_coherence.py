@@ -1,4 +1,4 @@
-"""P5 decision-side (ROADMAP V3 Phase 2) — decision == artefact, always.
+"""P5 decision-side — decision == artefact, always.
 
 Found by the very first oracle run over the OCR17+ real corpus: the
 source line ends in ``-`` (raw Word OCR) while the reference ends in

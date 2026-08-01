@@ -11,7 +11,11 @@ from __future__ import annotations
 from hypothesis import given, settings
 
 from corrigenda.core.identity import LineRef
-from corrigenda.core.units import derive_hyphen_groups, hyphen_group_by_line
+from corrigenda.core.units import (
+    derive_hyphen_groups,
+    hyphen_group_by_line,
+    units_containing,
+)
 from corrigenda.formats.alto.parser import build_document_manifest
 
 from tests._alto_gen import rich_alto_documents
@@ -188,3 +192,164 @@ def test_split_refuses_an_absent_link() -> None:
     l0, l1, l2 = lines
     with pytest.raises(RuntimeError, match="does not continue onto"):
         split_forward_link(l0, l2)
+
+
+# ---------------------------------------------------------------------------
+# `complete` — is the unit I can see the WHOLE unit?
+# ---------------------------------------------------------------------------
+#
+# A consumer that moves a unit as a whole (the router escalating to a second
+# producer, the image-cap batcher) has to distinguish "this is the entire
+# unit" from "this is the part of it that happens to be in front of me".
+# Moving the visible half is precisely the split atomicity forbids. The
+# question is answered by the one derivation that already reads the pointers;
+# a caller re-reading them to ask it again is how the fifth parallel resolver
+# appeared in the first place.
+
+
+def test_a_wholly_resolvable_chain_is_complete() -> None:
+    lines = _chain_lines()
+    groups = derive_hyphen_groups(lines)
+    assert groups, "fixture must produce a group"
+    assert all(g.complete for g in groups)
+
+
+def test_a_dangling_pointer_makes_the_group_incomplete() -> None:
+    lines = _chain_lines()
+    head = next(lm for lm in lines if lm.hyphen_pair_line_id)
+    head.hyphen_pair_line_id = "TL_NOT_HERE"
+
+    groups = derive_hyphen_groups(lines)
+    by_line = hyphen_group_by_line(groups)
+    group = by_line.get(LineRef(page_id=head.page_id, line_id=head.line_id))
+    assert group is None or not group.complete
+
+
+def test_a_page_scoped_derivation_marks_a_cross_page_unit_incomplete() -> None:
+    """The distinction the router depends on: derived over ONE page, a unit
+    that continues onto the next is incomplete — not merely absent, and not
+    silently a smaller unit."""
+    lines = _chain_lines()
+    tail = (
+        next(lm for lm in lines if lm.hyphen_forward_pair_id)
+        if any(lm.hyphen_forward_pair_id for lm in lines)
+        else next(lm for lm in lines if lm.hyphen_pair_line_id)
+    )
+    tail.hyphen_pair_page_id = "NEXT_PAGE"
+    tail.hyphen_forward_pair_page_id = (
+        "NEXT_PAGE" if tail.hyphen_forward_pair_id else None
+    )
+
+    groups = derive_hyphen_groups(lines)
+    by_line = hyphen_group_by_line(groups)
+    group = by_line.get(LineRef(page_id=tail.page_id, line_id=tail.line_id))
+    assert group is None or not group.complete
+
+
+def test_completeness_is_a_property_of_the_derivation_set() -> None:
+    """Derived over the whole document a cross-page unit is complete; over
+    one page it is not. Same pointers, different question — which is why the
+    caller must not answer it from the pointers."""
+    lines = _chain_lines()
+    # Chain L0 -PART1-> L1 -BOTH-> L2. Move the TAIL onto a second page and
+    # qualify both halves of the seam, so the unit is genuinely cross-page
+    # rather than merely broken.
+    _, l1, l2 = lines
+    l2.page_id = "P2"
+    l1.hyphen_forward_pair_page_id = "P2"
+    l2.hyphen_pair_page_id = "P1"
+
+    document_wide = derive_hyphen_groups(lines)
+    spanning = [g for g in document_wide if g.spans_pages]
+    assert spanning, "the seam must produce one cross-page group"
+    assert all(g.complete for g in spanning), (
+        "every pointer resolves when the whole document is in view"
+    )
+
+    page_only = derive_hyphen_groups([lm for lm in lines if lm.page_id == "P1"])
+    by_line = hyphen_group_by_line(page_only)
+    group = by_line.get(LineRef(page_id="P1", line_id=l1.line_id))
+    assert group is not None, "L0-L1 still group on their own page"
+    assert not group.complete, (
+        "but the unit continues off-page, so what this page can see is not "
+        "the whole unit — the router must not move it"
+    )
+
+
+# ---------------------------------------------------------------------------
+# `units_containing` — "…and its partners, atomically"
+# ---------------------------------------------------------------------------
+#
+# Replaces a second fixed-point walk the pipeline carried over the pointer
+# fields. Both encodings answered "which lines travel together"; two answers
+# to that question is one too many, and the pipeline's could drift from the
+# reconciler's view without any test noticing (none did — the whole suite
+# passed unchanged when the walk was swapped out, which is why these exist).
+
+
+def test_a_seed_drags_its_whole_chain() -> None:
+    lines = _chain_lines()
+    l0, l1, l2 = lines
+    got = units_containing([l1], lines)
+    assert {lm.line_id for lm in got} == {l0.line_id, l1.line_id, l2.line_id}
+
+
+def test_seeding_from_either_end_yields_the_same_unit() -> None:
+    lines = _chain_lines()
+    from_head = {lm.line_id for lm in units_containing([lines[0]], lines)}
+    from_tail = {lm.line_id for lm in units_containing([lines[-1]], lines)}
+    assert from_head == from_tail
+
+
+def test_an_ungrouped_seed_comes_back_alone_not_dropped() -> None:
+    """The caller is falling these lines back; losing one would leave it
+    PENDING and fail the run's terminality backstop."""
+    lines = _chain_lines()
+    loner = lines[0].model_copy(
+        update={
+            "line_id": "SOLO",
+            "hyphen_role": HyphenRole.NONE,
+            "hyphen_pair_line_id": None,
+            "hyphen_pair_page_id": None,
+            "hyphen_forward_pair_id": None,
+            "hyphen_forward_pair_page_id": None,
+        }
+    )
+    got = units_containing([loner], [*lines, loner])
+    assert [lm.line_id for lm in got] == ["SOLO"]
+
+
+def test_a_seed_outside_the_pool_is_still_returned() -> None:
+    lines = _chain_lines()
+    stray = lines[0].model_copy(update={"line_id": "OFFPOOL", "page_id": "PZ"})
+    got = units_containing([stray], lines)
+    assert "OFFPOOL" in {lm.line_id for lm in got}
+
+
+def test_the_pool_bounds_what_is_reachable() -> None:
+    """A link out of the pool does not resolve — the same scope the
+    pipeline's lookup maps always had."""
+    lines = _chain_lines()
+    l0, l1, _l2 = lines
+    got = units_containing([l0], [l0, l1])  # l2 withheld
+    assert {lm.line_id for lm in got} == {l0.line_id, l1.line_id}
+
+
+def test_a_cross_page_partner_in_the_pool_is_reached() -> None:
+    """The case the pipeline needed its own walk for: a member on another
+    page, supplied alongside this page's lines."""
+    lines = _chain_lines()
+    _l0, l1, l2 = lines
+    l2.page_id = "P2"
+    l1.hyphen_forward_pair_page_id = "P2"
+    l2.hyphen_pair_page_id = "P1"
+
+    got = units_containing([l1], lines)
+    assert l2.line_id in {lm.line_id for lm in got}
+
+
+def test_every_returned_line_appears_once() -> None:
+    lines = _chain_lines()
+    got = units_containing(lines, [*lines, *lines])
+    refs = [(lm.page_id, lm.line_id) for lm in got]
+    assert len(refs) == len(set(refs))
