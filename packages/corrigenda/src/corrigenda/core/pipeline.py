@@ -43,12 +43,9 @@ from corrigenda.core.hyphenation import (
 )
 from corrigenda.core.identity import (
     LineRef,
-    ensure_unique_identities,
-    ensure_unique_page_ids_across_files,
     line_ref,
 )
 from corrigenda.errors import (
-    ConfigurationError,
     CorrectionAborted,
     CorrigendaError,
 )
@@ -65,6 +62,7 @@ from corrigenda.core.acceptance import (
 )
 from corrigenda.core.batching import _split_for_image_cap
 from corrigenda.core.context import RunContext
+from corrigenda.core.preflight import _preflight
 from corrigenda.core.projection import _fidelity_counts
 from corrigenda.core.rendering import _render_outputs
 from corrigenda.core.report import _build_final_edit_script
@@ -95,8 +93,6 @@ from corrigenda.core.protocols import (
     StructuredCompletionClient,
     ProviderPermanentError,
     ProviderTransientError,
-    require_capabilities,
-    require_page_images,
 )
 from corrigenda.core.pairing import (
     unpaired_break_refs,
@@ -530,67 +526,14 @@ class CorrectionPipeline:
         # the instance.
         ctx = RunContext(should_abort=should_abort)
 
-        # §5.1 — a vision producer without its images is a start-up error,
-        # never a silent image-less call.
-        require_page_images(self.producer, document_manifest.pages, page_images)
-        # §5.2 bis — a producer whose declared capabilities
-        # contradict its wiring (wants images but vision=False) is a
-        # start-up error, not a mid-run surprise.
-        require_capabilities(self.producer)
-        # the escalation (vision) producer is the one that needs
-        # images: preflight it too, so a run that WILL escalate fails at
-        # start-up if its VLM lacks a scan, never mid-run.
-        if self.escalation_producer is not None:
-            require_page_images(
-                self.escalation_producer, document_manifest.pages, page_images
-            )
-            require_capabilities(self.escalation_producer)
-
-        # §3 — the format travels with the document. An injected adapter
-        # that contradicts the format the manifest was parsed as would
-        # only surface at write time (as a confusing projection failure);
-        # refuse it before any correction work is spent. Adapters without
-        # a ``format_name`` (custom implementations) are trusted as-is.
-        declared = document_manifest.source_format
-        adapter_format = getattr(self.format_adapter, "format_name", None)
-        if declared and adapter_format and declared != adapter_format:
-            raise ConfigurationError(
-                f"the injected format_adapter writes {adapter_format!r} but "
-                f"the manifest was parsed as {declared!r} — parse with the "
-                "matching corrigenda parser or inject the matching adapter"
-            )
-
-        # ADR-007 — identity-uniqueness invariant, enforced at the pipeline
-        # door so hand-built manifests get the same guarantee as
-        # parser-built ones: within one source file every page/block/line
-        # ID must be unique (correction-to-line association is keyed by
-        # bare line_id per file), and page_ids must be unique across the
-        # whole document (trace keys, per-page image/dimension lookups).
-        pages_by_file: dict[str, list[PageManifest]] = {}
-        for page in document_manifest.pages:
-            pages_by_file.setdefault(page.source_file, []).append(page)
-        for src_name, src_pages in pages_by_file.items():
-            ensure_unique_identities(src_pages, src_name)
-        ensure_unique_page_ids_across_files(document_manifest.pages)
-        # §4.1 — per-page vision envelope lookups. Pure copying: the
-        # ImageRef stays an opaque string end to end. A key matching no
-        # page is refused: it is almost always a legacy file-name key
-        # from the pre-page_images contract, silently dropping it would
-        # reproduce the old wrong-image behaviour.
-        images = page_images or {}
-        known_pages = {page.page_id for page in document_manifest.pages}
-        unknown = sorted(set(images) - known_pages)
-        if unknown:
-            raise ConfigurationError(
-                f"page_images keys must be page ids; {unknown} match no "
-                "page of this document (file-name keys are no longer "
-                "accepted — pass one ImageRef per page_id)"
-            )
-        ctx.image_ref_by_page_id = dict(images)
-        ctx.page_dims = {
-            page.page_id: (page.page_width, page.page_height)
-            for page in document_manifest.pages
-        }
+        _preflight(
+            producer=self.producer,
+            escalation_producer=self.escalation_producer,
+            format_adapter=self.format_adapter,
+            document_manifest=document_manifest,
+            page_images=page_images,
+            ctx=ctx,
+        )
 
         total_hyphen_pairs = sum(
             sum(
