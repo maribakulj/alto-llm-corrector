@@ -124,7 +124,6 @@ from corrigenda.core.schemas import (
     PageManifest,
     PairingPolicy,
     RetryPolicy,
-    RunProvenance,
     Usage,
 )
 
@@ -506,12 +505,10 @@ class CorrectionPipeline:
         should_abort: Callable[[], bool] | None,
         page_images: dict[str, PageImage] | None,
     ) -> CorrectionResult:
-        """Body of :meth:`run`, working on the run's private manifest copy.
-
-        Six steps, in the only order they can run in: refuse what cannot
-        proceed, index the document, correct every page, finalise the
-        decisions, render the outputs, report. Each step lives in its own
-        module (S2) — this method is the sequence, and nothing else.
+        """Body of :meth:`run`, on the run's private manifest copy — the
+        sequence and nothing else: refuse what cannot proceed, index,
+        correct every page, finalise the decisions, render, report. Each
+        step lives in its own module (S2).
         """
         run_id = run_id or str(uuid.uuid4())
         # One fresh context per execution; no per-run state remains on
@@ -572,7 +569,14 @@ class CorrectionPipeline:
             decisions=decisions,
             traces=index.traces,
             ctx=ctx,
-            provenance=self._run_provenance(document_manifest, source_digests, ctx),
+            provenance=_build_run_provenance(
+                producer_metadata=self.producer_metadata,
+                escalation_producer=self.escalation_producer,
+                config_fingerprint=self.config_fingerprint(),
+                document_manifest=document_manifest,
+                source_digests=source_digests,
+                image_assets=ctx.image_ref_by_page_id,
+            ),
             format_losses=format_losses,
             sidecar_entries=sidecar_entries,
             confidence_policy=self.confidence_policy,
@@ -589,24 +593,6 @@ class CorrectionPipeline:
             source_digests=source_digests,
             total_chunks=total_chunks,
             total_reconciled=total_reconciled,
-        )
-
-    def _run_provenance(
-        self,
-        document_manifest: DocumentManifest,
-        source_digests: dict[str, str],
-        ctx: RunContext,
-    ) -> RunProvenance:
-        """Bind this pipeline's configured identities to the run's inputs
-        (§11). The record itself is built in :mod:`corrigenda.core.provenance`
-        — all this contributes is which producers and which fingerprint."""
-        return _build_run_provenance(
-            producer_metadata=self.producer_metadata,
-            escalation_producer=self.escalation_producer,
-            config_fingerprint=self.config_fingerprint(),
-            document_manifest=document_manifest,
-            source_digests=source_digests,
-            image_assets=ctx.image_ref_by_page_id,
         )
 
     async def _process_pages(

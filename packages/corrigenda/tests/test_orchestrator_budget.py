@@ -35,7 +35,7 @@ PIPELINE = Path(__file__).parent.parent / "src" / "corrigenda" / "core" / "pipel
 _MODULE_TARGET = 800
 
 #: Today's ceiling. Lower it as slices land; never raise it.
-_MODULE_BUDGET = 1450
+_MODULE_BUDGET = 1435
 
 #: The longest a method may be once the split is finished.
 _METHOD_TARGET = 100
