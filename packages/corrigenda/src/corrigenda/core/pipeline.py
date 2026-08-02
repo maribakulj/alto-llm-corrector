@@ -25,22 +25,11 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
-import re
 import uuid
 from collections.abc import Callable
 from typing import Any
 from pathlib import Path
 
-from corrigenda.core.editing import (
-    EditOp,
-    EditScript,
-    ReplaceLine,
-    ReplaceSpan,
-    apply_edit_script,
-)
-from corrigenda.core.hyphenation import (
-    enrich_chunk_lines,
-)
 from corrigenda.core.identity import (
     LineRef,
     line_ref,
@@ -54,7 +43,9 @@ from corrigenda.core.planner import downgrade_granularity, plan_page
 from corrigenda.core.acceptance import (
     _apply_line_acceptance,
 )
+from corrigenda.core.attempt import _attempt_chunk
 from corrigenda.core.batching import _split_for_image_cap
+from corrigenda.core.redaction import sanitize_error
 from corrigenda.core.context import RunContext
 from corrigenda.core.finalize import _finalize_document
 from corrigenda.core.indexing import (
@@ -78,20 +69,16 @@ from corrigenda.core.provenance import (
     _build_run_provenance,
     _digest_sources,
 )
-from corrigenda.core.retry import _classify_retry
 from corrigenda.core.units import (
     units_containing,
 )
-from corrigenda.core.validator import validate_llm_response
 from corrigenda.core.protocols import (
     EditProducer,
     FormatAdapter,
     PipelineObserver,
     ProducerMetadata,
-    ProducerOptions,
     StructuredCompletionClient,
     ProviderPermanentError,
-    ProviderTransientError,
 )
 from corrigenda.core.quality import (
     DEFAULT_ROUTING_POLICY,
@@ -108,6 +95,7 @@ from corrigenda.core.schemas import (
     DEFAULT_LOSS_POLICY,
     DEFAULT_PAIRING_POLICY,
     DEFAULT_RETRY_POLICY,
+    ChunkGranularity,
     ChunkPlannerConfig,
     ChunkRequest,
     DocumentManifest,
@@ -120,83 +108,11 @@ from corrigenda.core.schemas import (
     ConfidencePolicy,
     LossPolicy,
     ProposalBatch,
-    CorrectionRequest,
     PageManifest,
     PairingPolicy,
     RetryPolicy,
     Usage,
 )
-
-# ADR-008 (revised) — recoverability is an ALLOWLIST. Exactly the two
-# families the retry classifier can route are recoverable on the
-# producer-attempt path:
-#   - ProviderTransientError — transport flakiness a conforming provider
-#     wrapped (wrapping is the provider CONTRACT, not a courtesy: the
-#     provider-agnostic pipeline cannot name raw httpx/SDK exceptions,
-#     so an unwrapped one is indistinguishable from a bug and fails the
-#     run rather than degrading to a fake success);
-#   - ValueError — the documented malformed-producer-output family
-#     (ProposalValidationError, HyphenIntegrityError, json.JSONDecodeError all
-#     inherit it; §8.4 keeps them value-shaped for exactly this route).
-# Everything else — RuntimeError, KeyError, a pydantic bug, an SDK
-# exception nobody classified — fails the run: an unknown exception
-# must never become a silently-uncorrected "success".
-_RECOVERABLE_ERROR_TYPES: tuple[type[BaseException], ...] = (
-    ProviderTransientError,
-    ValueError,
-)
-
-# Patterns to redact common secret formats in error messages.
-# Each pattern captures a prefix in the first group so the redacted
-# output keeps human-readable context (e.g. "Bearer ****" instead of
-# just "****"). Patterns are applied in order; first match wins.
-_SECRET_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
-    # HTTP Authorization headers — both schemes
-    (re.compile(r"(Bearer\s+)\S+", re.IGNORECASE), r"\1****"),
-    (re.compile(r"(Basic\s+)[A-Za-z0-9+/=]+", re.IGNORECASE), r"\1****"),
-    # Vendor-prefixed keys (OpenAI sk-, Mistral key-, Anthropic sk-ant-, ...).
-    # Hint = 4 chars after the prefix (sk-AAAA****) — stable test contract.
-    (re.compile(r"(sk-[A-Za-z0-9_-]{4})\S+"), r"\1****"),
-    (re.compile(r"(key-[A-Za-z0-9_-]{4})\S+"), r"\1****"),
-    # Generic key=value patterns in query strings / form bodies / JSON.
-    # Matches `api_key`, `api-key`, `apikey`, `password`, `secret`, `token`
-    # then an optional closing quote (JSON-style "token":), then the
-    # separator, then the value. Stops at the next quote/space/delimiter.
-    (
-        re.compile(
-            r"((?:api[_-]?key|password|passwd|secret|token)"
-            r"[\"']?\s*[=:]\s*[\"']?)[^\s\"'&,}\]]+",
-            re.IGNORECASE,
-        ),
-        r"\1****",
-    ),
-    # Custom HTTP headers: x-api-key, x-auth-token, ...
-    (
-        re.compile(
-            r"(x-(?:api-key|auth-token|access-token)\s*[:=]\s*)\S+",
-            re.IGNORECASE,
-        ),
-        r"\1****",
-    ),
-)
-
-
-def sanitize_error(msg: str, api_key: str | None = None) -> str:
-    """Strip API keys and common secret patterns from an error message.
-
-    The caller can supply the exact ``api_key`` for first-pass redaction;
-    any remaining secret-shaped substrings are then masked by the
-    pattern set above. Patterns cover:
-      - HTTP ``Authorization: Bearer …`` and ``Basic …`` headers
-      - Vendor-prefixed keys (``sk-…``, ``key-…``)
-      - Generic ``api_key=…``, ``password=…``, ``token=…`` pairs
-      - Custom headers (``X-Api-Key:``, ``X-Auth-Token:``, …)
-    """
-    if api_key and len(api_key) > 8 and api_key in msg:
-        msg = msg.replace(api_key, api_key[:4] + "****")
-    for pattern, replacement in _SECRET_PATTERNS:
-        msg = pattern.sub(replacement, msg)
-    return msg
 
 
 class CorrectionPipeline:
@@ -885,13 +801,7 @@ class CorrectionPipeline:
         )
 
         attempts_cap = min(self.retry_policy.max_attempts, max(budget[0], 0))
-        (
-            response,
-            attempts_used,
-            can_downgrade,
-            last_msg,
-            usage,
-        ) = await self._attempt_chunk(
+        outcome = await _attempt_chunk(
             ctx=ctx,
             chunk=chunk,
             producer=producer,
@@ -900,96 +810,138 @@ class CorrectionPipeline:
             all_lines_by_id=line_by_id,
             traces=traces,
             max_attempts=attempts_cap,
+            retry_policy=self.retry_policy,
+            guard_config=self.guard_config,
+            emit=self._emit,
         )
-        budget[0] -= attempts_used
+        budget[0] -= outcome.attempts_used
 
-        if response is not None:
+        if outcome.response is not None:
             return self._finish_successful_chunk(
                 ctx=ctx,
                 chunk=chunk,
                 chunk_lines=chunk_lines,
-                response=response,
+                response=outcome.response,
                 line_by_id=line_by_id,
                 cross_page_partners=cross_page_partners,
                 traces=traces,
-                usage=usage,
+                usage=outcome.usage,
             )
 
         # --- Failure: try a granularity descent (F1). ---
         next_g = downgrade_granularity(chunk.granularity)
-        if can_downgrade and next_g is not None and budget[0] > 0:
-            # F1×F8 — only the chunk's TARGET lines descend. Context lines
-            # are owned by an adjacent chunk; re-planning them here would
-            # correct them at a finer grain and make their rightful window
-            # skip them (acceptance ignores already-corrected lines).
-            target_ids = set(chunk.targets())
-            descent_lines = [lm for lm in chunk_lines if lm.line_id in target_ids]
-            self._emit(
-                ev.ChunkDowngraded(
-                    chunk_id=chunk.chunk_id,
-                    from_granularity=chunk.granularity.value,
-                    to_granularity=next_g.value,
-                    line_count=len(chunk_lines),
-                    target_count=len(descent_lines),
-                    budget_remaining=budget[0],
-                )
+        if outcome.can_downgrade and next_g is not None and budget[0] > 0:
+            return await self._descend_granularity(
+                ctx=ctx,
+                chunk=chunk,
+                next_g=next_g,
+                producer=producer,
+                page=page,
+                chunk_lines=chunk_lines,
+                line_by_id=line_by_id,
+                traces=traces,
+                cross_page_partners=cross_page_partners,
+                budget=budget,
+                should_abort=should_abort,
+                last_msg=outcome.last_msg,
             )
-            sub_plan = plan_page(
-                _subpage_for_lines(page, descent_lines),
-                chunk.document_id,
-                self.config,
-                force_granularity=next_g,
-            )
-            ctx.hyphen_splits.extend(sub_plan.hyphen_splits)
-            total = 0
-            for sub in sub_plan.chunks:
-                # F10 — the descent can spawn many finest-grain chunks;
-                # keep the run cancellable inside it, not only between
-                # top-level chunks.
-                if should_abort is not None and should_abort():
-                    raise CorrectionAborted(
-                        f"run aborted during granularity descent of chunk "
-                        f"{chunk.chunk_id!r} on page {page.page_id!r}"
-                    )
-                if budget[0] <= 0:
-                    # Budget spent mid-descent: OCR-fallback the rest.
-                    sub_lines = [
-                        line_by_id[lid] for lid in sub.line_ids if lid in line_by_id
-                    ]
-                    self._apply_chunk_fallback(
-                        chunk=sub,
-                        chunk_lines=sub_lines,
-                        traces=traces,
-                        sanitised_msg=last_msg or "per_chunk_budget exhausted",
-                        line_by_id=line_by_id,
-                        cross_page_partners=cross_page_partners,
-                    )
-                    ctx.fallback_chunks += 1
-                    continue
-                total += await self._run_chunk(
-                    ctx=ctx,
-                    chunk=sub,
-                    producer=producer,
-                    page=page,
-                    line_by_id=line_by_id,
-                    traces=traces,
-                    cross_page_partners=cross_page_partners,
-                    budget=budget,
-                    should_abort=should_abort,
-                )
-            return total
 
         # --- Terminal fallback (LINE grain, budget gone, or hard error). ---
         self._apply_chunk_fallback(
             chunk=chunk,
             chunk_lines=chunk_lines,
             traces=traces,
-            sanitised_msg=last_msg or "all_attempts_exhausted",
+            sanitised_msg=outcome.last_msg or "all_attempts_exhausted",
             line_by_id=line_by_id,
             cross_page_partners=cross_page_partners,
         )
         ctx.fallback_chunks += 1
         return 0
+
+    async def _descend_granularity(
+        self,
+        *,
+        ctx: RunContext,
+        chunk: ChunkRequest,
+        next_g: ChunkGranularity,
+        producer: EditProducer,
+        page: PageManifest,
+        chunk_lines: list[LineManifest],
+        line_by_id: dict[str, LineManifest],
+        traces: dict[LineRef, LineTrace] | None,
+        cross_page_partners: dict[LineRef, LineManifest] | None,
+        budget: list[int],
+        should_abort: Callable[[], bool] | None,
+        last_msg: str,
+    ) -> int:
+        """Re-plan a failed chunk one granularity finer and retry it (F1).
+
+        F1×F8 — only the chunk's TARGET lines descend. Context lines are
+        owned by an adjacent chunk; re-planning them here would correct
+        them at a finer grain and make their rightful window skip them
+        (acceptance ignores already-corrected lines).
+
+        Returns the pairs reconciled across the whole descent. Sub-chunks
+        share the caller's cumulative ``budget``; when it runs out
+        mid-descent the remaining ones fall back to OCR source rather than
+        borrowing attempts from a chunk that has none left.
+        """
+        target_ids = set(chunk.targets())
+        descent_lines = [lm for lm in chunk_lines if lm.line_id in target_ids]
+        self._emit(
+            ev.ChunkDowngraded(
+                chunk_id=chunk.chunk_id,
+                from_granularity=chunk.granularity.value,
+                to_granularity=next_g.value,
+                line_count=len(chunk_lines),
+                target_count=len(descent_lines),
+                budget_remaining=budget[0],
+            )
+        )
+        sub_plan = plan_page(
+            _subpage_for_lines(page, descent_lines),
+            chunk.document_id,
+            self.config,
+            force_granularity=next_g,
+        )
+        ctx.hyphen_splits.extend(sub_plan.hyphen_splits)
+        total = 0
+        for sub in sub_plan.chunks:
+            # F10 — the descent can spawn many finest-grain chunks; keep
+            # the run cancellable inside it, not only between top-level
+            # chunks.
+            if should_abort is not None and should_abort():
+                raise CorrectionAborted(
+                    f"run aborted during granularity descent of chunk "
+                    f"{chunk.chunk_id!r} on page {page.page_id!r}"
+                )
+            if budget[0] <= 0:
+                # Budget spent mid-descent: OCR-fallback the rest.
+                sub_lines = [
+                    line_by_id[lid] for lid in sub.line_ids if lid in line_by_id
+                ]
+                self._apply_chunk_fallback(
+                    chunk=sub,
+                    chunk_lines=sub_lines,
+                    traces=traces,
+                    sanitised_msg=last_msg or "per_chunk_budget exhausted",
+                    line_by_id=line_by_id,
+                    cross_page_partners=cross_page_partners,
+                )
+                ctx.fallback_chunks += 1
+                continue
+            total += await self._run_chunk(
+                ctx=ctx,
+                chunk=sub,
+                producer=producer,
+                page=page,
+                line_by_id=line_by_id,
+                traces=traces,
+                cross_page_partners=cross_page_partners,
+                budget=budget,
+                should_abort=should_abort,
+            )
+        return total
 
     def _finish_successful_chunk(
         self,
@@ -1119,275 +1071,6 @@ class CorrectionPipeline:
                 trace = traces.get(line_ref(lm))
                 if trace is not None and not trace.fallback_reason:
                     trace.fallback_reason = "hyphen_unit_fallback"
-
-    async def _attempt_chunk(
-        self,
-        *,
-        ctx: RunContext,
-        chunk: ChunkRequest,
-        producer: EditProducer,
-        chunk_lines: list[LineManifest],
-        hyphen_pairs: dict[str, str],
-        all_lines_by_id: dict[str, LineManifest],
-        traces: dict[LineRef, LineTrace] | None,
-        max_attempts: int,
-    ) -> tuple[ProposalBatch | None, int, bool, str, Usage | None]:
-        """Call the edit producer with retries; return the outcome.
-
-        Returns ``(response, attempts_used, can_downgrade, last_msg, usage)``:
-          - ``response`` — the validated :class:`ProposalBatch`, or ``None``
-            on failure;
-          - ``attempts_used`` — how many attempts this call consumed
-            (charged against the per-chunk budget by the caller);
-          - ``can_downgrade`` — on failure, ``True`` when the terminal
-            error was retryable (malformed output / transient) and hence
-            worth retrying at a finer granularity (F1); ``False`` for a
-            non-retryable hard error (e.g. 4xx), which won't heal on
-            smaller chunks;
-          - ``last_msg`` — the sanitised terminal error message.
-
-        This method NEVER applies the OCR fallback — that decision (and
-        the ``warning`` event) belongs to the caller (:meth:`_run_chunk`),
-        which may instead downgrade the granularity.
-
-        Retry strategy (F9): up to ``max_attempts`` attempts (bounded by
-        the caller to the remaining budget); temperature from
-        ``retry_policy.temperatures`` (default 0.0 → 0.3 → 0.5), pinned at
-        0.0 after a ``HyphenIntegrityError``; backoff 0 s for the first
-        hyphen violation, ``attempt * transient_backoff_base`` for
-        transient HTTP, ``attempt * output_backoff_base`` for other
-        malformed output. Each retry emits a ``retry`` event.
-        """
-        hyphen_violation = False
-        attempts_used = 0
-        last_msg = ""
-        # F14 — token usage accumulated across EVERY call of this chunk's
-        # attempt loop, including calls whose response later failed
-        # validation (tokens were spent regardless). Returned on success so
-        # the chunk_completed event reports the chunk's true total, not
-        # just the final successful call.
-        chunk_usage = Usage()
-
-        for attempt in range(1, max_attempts + 1):
-            attempts_used = attempt
-            # F9 — temperature comes from the injected RetryPolicy. A hyphen
-            # violation still pins the next attempt to 0.0 (the LLM mishandled
-            # the pair; a colder attempt sticks closer to source).
-            if hyphen_violation:
-                temperature = 0.0
-            else:
-                temperature = self.retry_policy.temperature_for(attempt)
-
-            # §4.1 — vision envelope, copied only when the producer asks.
-            enriched = enrich_chunk_lines(
-                chunk_lines,
-                all_lines_by_id,
-                include_geometry=getattr(producer, "wants_geometry", False),
-                page_dims=ctx.page_dims,
-            )
-
-            enriched_by_id = {e.line_id: e for e in enriched}
-            for lm in chunk_lines:
-                ei = enriched_by_id.get(lm.line_id)
-                if ei is not None:
-                    _set_trace(traces, lm, model_input_text=ei.ocr_text)
-
-            payload = CorrectionRequest(
-                granularity=chunk.granularity,
-                document_id=chunk.document_id,
-                page_id=chunk.page_id,
-                block_id=chunk.block_id,
-                lines=enriched,
-                image_ref=(
-                    ctx.image_ref_by_page_id.get(chunk.page_id)
-                    if getattr(producer, "wants_image", False)
-                    else None
-                ),
-            )
-
-            try:
-                # P3.7 — the producer gets a per-call envelope, not the
-                # engine's whole RetryPolicy: the ramp (and the hyphen
-                # 0.0 pin) is decided HERE; the probe lets long I/O be
-                # abandoned mid-flight.
-                # count every invocation (this attempt hits the
-                # producer whether or not it succeeds): the real cost.
-                ctx.producer_calls += 1
-                script, usage = await producer.produce(
-                    payload,
-                    options=ProducerOptions(
-                        attempt=attempt,
-                        temperature=temperature,
-                        should_abort=ctx.should_abort,
-                    ),
-                )
-                raw = self._script_to_raw(script, chunk_lines, producer=producer)
-                if usage is not None:
-                    ctx.usage = ctx.usage + usage
-                    chunk_usage = chunk_usage + usage
-
-                lm_by_id = {lm.line_id: lm for lm in chunk_lines}
-                raw_lines = raw.get("lines", []) if isinstance(raw, dict) else []
-                for rl in raw_lines:
-                    if not isinstance(rl, dict):
-                        continue
-                    target = lm_by_id.get(rl.get("line_id", ""))
-                    if target is not None:
-                        _set_trace(
-                            traces,
-                            target,
-                            model_corrected_text=rl.get("corrected_text", ""),
-                        )
-
-                hyphen_subs: dict[str, str] = {}
-                for lm in chunk_lines:
-                    if lm.hyphen_role == HyphenRole.PART1 and lm.hyphen_subs_content:
-                        hyphen_subs[lm.line_id] = lm.hyphen_subs_content
-                    elif (
-                        lm.hyphen_role == HyphenRole.BOTH
-                        and lm.hyphen_forward_subs_content
-                    ):
-                        hyphen_subs[lm.line_id] = lm.hyphen_forward_subs_content
-
-                response = validate_llm_response(
-                    raw,
-                    [lm.line_id for lm in chunk_lines],
-                    hyphen_pairs if hyphen_pairs else None,
-                    {lm.line_id: lm.ocr_text for lm in chunk_lines},
-                    hyphen_subs if hyphen_subs else None,
-                    guard_config=self.guard_config,
-                    # F8 — the 1:1 count is enforced on targets; a missing
-                    # context line's output is not an error (it belongs to
-                    # an adjacent chunk).
-                    target_line_ids=chunk.target_line_ids,
-                )
-                # §4 — capture each TARGET line's producer op alongside the
-                # text that op produced (pre-guard, pre-reconcile). The final
-                # EditScript is NOT emitted from here: a line later reverted
-                # (duplicate / rejected by check_line) or reconciled to
-                # different text must not leave a stale op behind (a
-                # dry-run consumer replaying it would diverge from the
-                # pipeline's own corrected XML). _build_final_edit_script
-                # reconciles these captured ops against the FINAL per-line
-                # state, preserving the producer's op TYPE (e.g. a rules
-                # producer's replace_span) when its output survived unchanged.
-                target_ids = set(chunk.targets())
-                produced_by_line = {o.line_id: o.corrected_text for o in response.lines}
-                ops_by_line: dict[str, list[EditOp]] = {}
-                for op in script.ops:
-                    if op.line_id in target_ids and op.line_id in produced_by_line:
-                        ops_by_line.setdefault(op.line_id, []).append(op)
-                for line_id, line_ops in ops_by_line.items():
-                    # Chunks are page-scoped, so chunk.page_id qualifies
-                    # every target line unambiguously.
-                    ctx.producer_ops[
-                        LineRef(page_id=chunk.page_id, line_id=line_id)
-                    ] = (
-                        line_ops,
-                        produced_by_line[line_id],
-                    )
-                return response, attempts_used, False, "", chunk_usage
-
-            except ProviderPermanentError:
-                # ADR-008 — credentials/model rejected: retrying is pointless
-                # and falling back would fake success. Fatal for the run.
-                raise
-            except Exception as exc:
-                # ADR-008 (attempt-path branch, revised): only the
-                # allowlisted recoverable families degrade to
-                # retry-then-OCR-fallback. Anything else — a programming
-                # error, an unwrapped SDK transport exception, a broken
-                # invariant — FAILS the run: masking it as uncorrected OCR
-                # text would degrade EVERY chunk while still reporting
-                # success. Providers signal transport flakiness by
-                # wrapping it as ProviderTransientError (their contract).
-                if not isinstance(exc, _RECOVERABLE_ERROR_TYPES):
-                    raise
-                # §5.1 — the pipeline no longer holds credentials; the
-                # pattern-based redaction still masks secret-shaped
-                # substrings a producer may leak into the message, and the
-                # consumer layer (which DOES hold the key) sanitises again
-                # on its own error paths.
-                msg = sanitize_error(str(exc))
-                last_msg = msg
-                decision = _classify_retry(
-                    exc=exc,
-                    sanitised_msg=msg,
-                    attempt=attempt,
-                    hyphen_already_seen=hyphen_violation,
-                    policy=self.retry_policy,
-                )
-
-                if attempt < max_attempts and decision.is_retryable:
-                    if decision.is_hyphen_violation:
-                        hyphen_violation = True
-                    if decision.backoff > 0:
-                        await asyncio.sleep(decision.backoff)
-                    self._emit(
-                        ev.Retry(
-                            chunk_id=chunk.chunk_id,
-                            attempt=attempt,
-                            error=decision.error_tag,
-                        )
-                    )
-                    ctx.retry_count += 1
-                    continue
-
-                # Attempts exhausted (or non-retryable error class). Do NOT
-                # fall back here — the caller decides between a granularity
-                # downgrade (F1) and the OCR fallback. ``can_downgrade`` is
-                # True only when the terminal error was retryable.
-                return None, attempts_used, decision.is_retryable, msg, None
-
-        # max_attempts <= 0 (no budget left): nothing attempted.
-        return None, attempts_used, False, last_msg, None
-
-    def _script_to_raw(
-        self,
-        script: EditScript,
-        chunk_lines: list[LineManifest],
-        *,
-        producer: EditProducer,
-    ) -> dict[str, Any]:
-        """Normalise a producer's EditScript into the validator's raw shape.
-
-        - ``replace_line`` ops pass through as-is (duplicates and empty
-          texts included — the validator's structural checks must see them
-          exactly as the historical raw response did).
-        - ``replace_span`` ops are normalised and applied against the
-          chunk's canonical text via :func:`apply_edit_script` (E1–E5); a
-          rejected op leaves its line uncovered.
-        - When the producer declares ``requires_full_coverage = False``
-          (deterministic producers: no op == no edit), uncovered lines are
-          filled with their canonical text so the validator's 1:1 check
-          passes. An LLM producer keeps full-coverage semantics: a dropped
-          target line stays missing → ProposalValidationError → retry.
-        """
-        canonical = {lm.line_id: lm.ocr_text for lm in chunk_lines}
-        entries: list[dict[str, str]] = []
-
-        span_ops = [op for op in script.ops if isinstance(op, ReplaceSpan)]
-        for op in script.ops:
-            if isinstance(op, ReplaceLine):
-                entries.append({"line_id": op.line_id, "corrected_text": op.text})
-        if span_ops:
-            span_result = apply_edit_script(
-                EditScript(ops=list(span_ops)),
-                canonical,
-                chunk_line_ids=set(canonical),
-                guard_config=self.guard_config,
-                line_by_id={lm.line_id: lm for lm in chunk_lines},
-            )
-            for lid, txt in span_result.text_by_id.items():
-                entries.append({"line_id": lid, "corrected_text": txt})
-
-        if not getattr(producer, "requires_full_coverage", True):
-            covered = {e["line_id"] for e in entries}
-            for lid, txt in canonical.items():
-                if lid not in covered:
-                    entries.append({"line_id": lid, "corrected_text": txt})
-
-        return {"lines": entries}
 
     # ------------------------------------------------------------------
     # Chunk helpers extracted from _run_chunk
