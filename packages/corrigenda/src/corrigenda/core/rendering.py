@@ -21,8 +21,13 @@ from corrigenda.core.decisions import DecisionSet
 from corrigenda.core.identity import LineRef, line_ref
 from corrigenda.core.projection import _verify_projection
 from corrigenda.core.provenance import _adapter_for_format
-from corrigenda.core.protocols import FormatAdapter, ProducerMetadata
-from corrigenda.core.schemas import DocumentManifest, LineTrace
+from corrigenda.core.fidelity import ProjectionFidelity
+from corrigenda.core.protocols import (
+    FormatAdapter,
+    ProducerMetadata,
+    RewriteResult,
+)
+from corrigenda.core.schemas import DocumentManifest, LineTrace, PageManifest
 
 
 async def _render_outputs(
@@ -55,9 +60,7 @@ async def _render_outputs(
     queues are not thread-safe).
     """
     # §11 — provenance stamped into every corrected file's processingStep.
-    from corrigenda import __version__ as _lib_version
 
-    config_fingerprint = config_fingerprint
     # Adapter resolution is lazy (first file to write): a run with no
     # output files — every hand-built-manifest dry-run in the test
     # suite passes source_files={} — needs no format at all.
@@ -74,31 +77,14 @@ async def _render_outputs(
         if adapter is None:
             adapter = _adapter_for_format(document_manifest.source_format)
 
-        provider_label, model_label = producer_metadata.provenance_labels()
-        result = await asyncio.to_thread(
-            adapter.rewrite_file,
-            xml_path,
-            pages_for_file,
-            # §11 provenance labels — constructor state since the §5.1
-            # resorption (run() no longer carries provider/model).
-            provider_label,
-            model_label,
-            lib_version=_lib_version,
+        result, fidelity_by_lid = await _rewrite_and_verify(
+            adapter,
+            xml_path=xml_path,
+            source_name=source_name,
+            pages=pages_for_file,
+            producer_metadata=producer_metadata,
             config_fingerprint=config_fingerprint,
-        )
-
-        # Projection invariant: the artefact must SAY what the run
-        # decided. Verified BEFORE the writer sees the bytes — a
-        # divergent artefact is corruption, never a valid output.
-        # What it CAN'T refuse — a whitespace character the format
-        # flattened — comes back as a per-line fidelity level and
-        # goes on the record rather than disappearing.
-        fidelity_by_lid = _verify_projection(
-            source_name,
-            pages_for_file,
-            result.texts,
-            decisions,
-            result.texts_verbatim,
+            decisions=decisions,
         )
         corrected_files[source_name] = result.xml_bytes
 
@@ -117,51 +103,105 @@ async def _render_outputs(
         for key, count in result.losses.items():
             losses_total[key] = losses_total.get(key, 0) + count
 
-        lid_to_ref: dict[str, LineRef] = {}
-        for p in pages_for_file:
-            for lm in p.lines:
-                lid_to_ref[lm.line_id] = line_ref(lm)
-
-        for lid, rpath in result.rewriter_paths.items():
-            tkey = lid_to_ref.get(lid)
-            if tkey:
-                t = traces.get(tkey)
-                if t is not None:
-                    t.rewriter_path = rpath
-
-        # ADR-012 — the rewrite's per-line loss attribution rides the
-        # traces onto the report's projection stage.
-        for lid, line_losses in result.losses_by_line.items():
-            tkey = lid_to_ref.get(lid)
-            if tkey:
-                t = traces.get(tkey)
-                if t is not None:
-                    t.projection_losses = line_losses
-
-        for lid, otxt in result.texts.items():
-            tkey = lid_to_ref.get(lid)
-            if tkey:
-                t = traces.get(tkey)
-                if t is not None:
-                    t.output_alto_text = otxt
-
-        for lid, level in fidelity_by_lid.items():
-            tkey = lid_to_ref.get(lid)
-            if tkey:
-                t = traces.get(tkey)
-                if t is not None:
-                    t.projection_fidelity = level
-
-        # R5 — the alignment's reorder suspicion, on its own channel
-        # rather than inside the loss counters where summing it counted
-        # a non-loss.
-        for lid in result.word_order_suspected:
-            tkey = lid_to_ref.get(lid)
-            if tkey:
-                t = traces.get(tkey)
-                if t is not None:
-                    t.word_order_suspected = True
+        _record_rewrite_on_traces(
+            result,
+            fidelity_by_lid=fidelity_by_lid,
+            pages=pages_for_file,
+            traces=traces,
+        )
 
     # No trace persistence anywhere in the engine: trace.json IS the
     # CorrectionReport (§9), carried on the result for the caller.
     return losses_total, corrected_files
+
+
+async def _rewrite_and_verify(
+    adapter: FormatAdapter,
+    *,
+    xml_path: Path,
+    source_name: str,
+    pages: list[PageManifest],
+    producer_metadata: ProducerMetadata,
+    config_fingerprint: str,
+    decisions: DecisionSet,
+) -> tuple[RewriteResult, dict[str, ProjectionFidelity]]:
+    """Rewrite one file, and refuse the result if it does not say what the
+    run decided.
+
+    The heavy ``rewrite_file`` call — a full lxml parse/rewrite/serialize —
+    runs in a worker thread so a ~100 MiB rewrite does not freeze the host's
+    event loop (SSE keepalives, /health). No observer event is emitted from
+    in here: emit sites must stay ON the loop, since a host's queues are not
+    thread-safe.
+
+    The projection invariant runs BEFORE the bytes go anywhere. A divergent
+    artefact is corruption of the deliverable, never a valid output. What it
+    CANNOT refuse — a whitespace character the format flattened — comes back
+    as a per-line fidelity level and goes on the record instead of
+    disappearing.
+    """
+    from corrigenda import __version__ as _lib_version
+
+    # §11 provenance labels — constructor state since the §5.1 resorption
+    # (run() no longer carries provider/model).
+    provider_label, model_label = producer_metadata.provenance_labels()
+    result = await asyncio.to_thread(
+        adapter.rewrite_file,
+        xml_path,
+        pages,
+        provider_label,
+        model_label,
+        lib_version=_lib_version,
+        config_fingerprint=config_fingerprint,
+    )
+    fidelity_by_lid = _verify_projection(
+        source_name,
+        pages,
+        result.texts,
+        decisions,
+        result.texts_verbatim,
+    )
+    return result, fidelity_by_lid
+
+
+def _record_rewrite_on_traces(
+    result: RewriteResult,
+    *,
+    fidelity_by_lid: dict[str, ProjectionFidelity],
+    pages: list[PageManifest],
+    traces: dict[LineRef, LineTrace],
+) -> None:
+    """Fan one file's rewrite out onto the per-line channels it feeds.
+
+    Five channels, each answering a different question and none
+    substitutable for another: which path the rewriter took, what the
+    artefact ends up saying, how faithfully that carries the decision,
+    what the format dropped and on which line (ADR-012), and whether the
+    token alignment suspected a word reorder — the last deliberately NOT
+    a loss counter, because nothing left the markup and summing it would
+    count a non-loss (R5).
+
+    Keys arriving here are bare line_ids: unique per source FILE
+    (ADR-007), never document-wide, so they are qualified against this
+    file's pages before touching a trace.
+    """
+    lid_to_ref = {lm.line_id: line_ref(lm) for page in pages for lm in page.lines}
+
+    def put(lid: str, **fields: object) -> None:
+        ref = lid_to_ref.get(lid)
+        trace = traces.get(ref) if ref is not None else None
+        if trace is None:
+            return
+        for name, value in fields.items():
+            setattr(trace, name, value)
+
+    for lid, rewriter_path in result.rewriter_paths.items():
+        put(lid, rewriter_path=rewriter_path)
+    for lid, output_text in result.texts.items():
+        put(lid, output_alto_text=output_text)
+    for lid, level in fidelity_by_lid.items():
+        put(lid, projection_fidelity=level)
+    for lid, line_losses in result.losses_by_line.items():
+        put(lid, projection_losses=line_losses)
+    for lid in result.word_order_suspected:
+        put(lid, word_order_suspected=True)

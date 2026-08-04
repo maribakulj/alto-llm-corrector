@@ -62,7 +62,6 @@ _OVERSIZED: dict[str, int] = {
     "hyphenation.py::enrich_chunk_lines": 101,
     "hyphenation.py::reconcile_hyphen_pair": 110,
     "pairing.py::link_hyphen_pairs": 119,
-    "rendering.py::_render_outputs": 140,
     "validator.py::validate_llm_response": 149,
 }
 
