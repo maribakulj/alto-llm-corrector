@@ -21,7 +21,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from corrigenda.core import events as ev
-from corrigenda.core.attempt import _attempt_chunk
+from corrigenda.core.attempt import _AttemptOutcome, _attempt_chunk
 from corrigenda.core.batching import _split_for_image_cap
 from corrigenda.core.context import RunContext
 from corrigenda.core.identity import LineRef
@@ -332,7 +332,43 @@ class PageDriver:
                 usage=outcome.usage,
             )
 
-        # --- Failure: try a granularity descent (F1). ---
+        return await self._handle_chunk_failure(
+            ctx=ctx,
+            chunk=chunk,
+            outcome=outcome,
+            producer=producer,
+            page=page,
+            chunk_lines=chunk_lines,
+            line_by_id=line_by_id,
+            traces=traces,
+            cross_page_partners=cross_page_partners,
+            budget=budget,
+            should_abort=should_abort,
+        )
+
+    async def _handle_chunk_failure(
+        self,
+        *,
+        ctx: RunContext,
+        chunk: ChunkRequest,
+        outcome: _AttemptOutcome,
+        producer: EditProducer,
+        page: PageManifest,
+        chunk_lines: list[LineManifest],
+        line_by_id: dict[str, LineManifest],
+        traces: dict[LineRef, LineTrace] | None,
+        cross_page_partners: dict[LineRef, LineManifest] | None,
+        budget: list[int],
+        should_abort: Callable[[], bool] | None,
+    ) -> int:
+        """No attempt produced a proposal — descend, or fall back.
+
+        A descent is worth it only when the terminal error was one a finer
+        grain could plausibly avoid, there IS a finer grain, and the shared
+        budget can still pay for it. Otherwise the chunk goes back to its
+        OCR text: a hard error (an HTTP 4xx) would hit every sub-chunk
+        identically, and LINE grain has nowhere left to go.
+        """
         next_g = downgrade_granularity(chunk.granularity)
         if outcome.can_downgrade and next_g is not None and budget[0] > 0:
             return await self._descend_granularity(
@@ -349,8 +385,6 @@ class PageDriver:
                 should_abort=should_abort,
                 last_msg=outcome.last_msg,
             )
-
-        # --- Terminal fallback (LINE grain, budget gone, or hard error). ---
         _apply_chunk_fallback(
             emit=self.emit,
             chunk=chunk,

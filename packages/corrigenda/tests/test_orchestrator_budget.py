@@ -19,12 +19,14 @@ Three rules, all mechanical:
   3. **A named function may only shrink**, and once it reaches the target its
      entry must go — otherwise the list stops describing the remaining debt.
 
-``_OVERSIZED`` is that list, and it is longer than the orchestrator: three of
-its entries (``_render_outputs``, ``_route_and_filter_chunks``,
-``_reconcile_chunk_hyphens``) are functions earlier S2 slices moved OUT of
-``pipeline.py`` at their original size. The orchestrator got shorter and the
-100-line target did not get closer, and nothing was measuring the difference.
-It is measured now. Empty is the goal.
+``_OVERSIZED`` is that list. It started at eleven entries, four of which were
+functions S2 itself had moved out of ``pipeline.py`` at their original size —
+the orchestrator got shorter, the 100-line target did not get closer, and
+nothing was measuring the difference. Those four are done. What is left
+predates S2 entirely, and two of the entries (``link_hyphen_pairs``,
+``reconcile_hyphen_pair``) are hyphen-partner resolution, where the plan's
+standing rule says not to go without finishing ``S1`` first. The list is the
+debt, stated; it is not a queue anyone should work through by default.
 
 An entry that names a module is naming where the function lives TODAY. When
 a slice moves one, the key moves with it — that is not a reset, and the size
@@ -60,10 +62,7 @@ _OVERSIZED: dict[str, int] = {
     "hyphenation.py::enrich_chunk_lines": 101,
     "hyphenation.py::reconcile_hyphen_pair": 110,
     "pairing.py::link_hyphen_pairs": 119,
-    "driver.py::_run_chunk": 104,
-    "reconcile.py::_reconcile_chunk_hyphens": 158,
     "rendering.py::_render_outputs": 140,
-    "routing.py::_route_and_filter_chunks": 110,
     "validator.py::validate_llm_response": 149,
 }
 
