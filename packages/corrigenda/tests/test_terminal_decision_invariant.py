@@ -22,6 +22,7 @@ from pathlib import Path
 
 import pytest
 
+from corrigenda.core import pipeline as pipeline_module
 from corrigenda.core.protocols import ProducerMetadata
 from corrigenda import CorrectionPipeline, ValidationError
 from corrigenda.core.decisions import derive_decision_set
@@ -60,10 +61,12 @@ async def test_absorbed_chunk_error_leaves_no_line_undecided(monkeypatch) -> Non
     finalize path, after the producer attempt loop) is absorbed — but
     every target line of that chunk must still end in a terminal state."""
 
-    def _bomb(self, **kwargs):
+    def _bomb(**kwargs):
         raise ValidationError("simulated reconcile-path failure")
 
-    monkeypatch.setattr(CorrectionPipeline, "_finish_successful_chunk", _bomb)
+    # Patched where the engine LOOKS it up (core.pipeline's namespace), not
+    # where core.outcome defines it — the import is by value.
+    monkeypatch.setattr(pipeline_module, "_finish_successful_chunk", _bomb)
 
     doc = build_document_manifest([(_SAMPLE, _SAMPLE.name)])
     observer = _EventLog()
@@ -93,18 +96,16 @@ async def test_absorbed_chunk_error_leaves_no_line_undecided(monkeypatch) -> Non
 async def test_partial_decisions_survive_the_absorb(monkeypatch) -> None:
     """Only STILL-UNDECIDED lines fall back: a line the failing chunk (or
     an earlier chunk) already finalized keeps its correction."""
-    real = CorrectionPipeline._finish_successful_chunk
+    real = pipeline_module._finish_successful_chunk
     calls = {"n": 0}
 
-    def _second_call_bombs(self, **kwargs):
+    def _second_call_bombs(**kwargs):
         calls["n"] += 1
         if calls["n"] > 1:
             raise ValidationError("simulated late-chunk failure")
-        return real(self, **kwargs)
+        return real(**kwargs)
 
-    monkeypatch.setattr(
-        CorrectionPipeline, "_finish_successful_chunk", _second_call_bombs
-    )
+    monkeypatch.setattr(pipeline_module, "_finish_successful_chunk", _second_call_bombs)
 
     # Tiny windows → several chunks per page, so call #1 succeeds and
     # later chunks fail.

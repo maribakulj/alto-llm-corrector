@@ -41,7 +41,7 @@ PIPELINE = CORE / "pipeline.py"
 _MODULE_TARGET = 800
 
 #: Today's ceiling for the orchestrator. Lower it as slices land; never raise.
-_MODULE_BUDGET = 1120
+_MODULE_BUDGET = 970
 
 #: The longest a function may be once the split is finished.
 _FUNCTION_TARGET = 100
@@ -56,8 +56,7 @@ _OVERSIZED: dict[str, int] = {
     "hyphenation.py::enrich_chunk_lines": 101,
     "hyphenation.py::reconcile_hyphen_pair": 110,
     "pairing.py::link_hyphen_pairs": 119,
-    "pipeline.py::_process_page": 165,
-    "pipeline.py::_run_chunk": 109,
+    "pipeline.py::_run_chunk": 104,
     "reconcile.py::_reconcile_chunk_hyphens": 158,
     "rendering.py::_render_outputs": 140,
     "routing.py::_route_and_filter_chunks": 110,
