@@ -9,9 +9,9 @@ would have read exactly like a slice that worked.
 Three rules, all mechanical:
 
   1. **The orchestrator's budget is a ratchet.** ``_MODULE_BUDGET`` may be
-     lowered when a slice lands and never raised. It is not the target — the
-     target is 800 lines — it is the promise that the number in front of us
-     today is the worst it will ever be.
+     lowered when a slice lands and never raised. The 800-line target is
+     reached; the ratchet is what keeps it reached, since the way an
+     orchestrator regrows is one convenient method at a time.
   2. **A function over 100 lines must be named**, anywhere in ``core``, not
      only in the orchestrator. This is the rule that stops the split from
      laundering the problem: moving a 150-line method into a new module is
@@ -25,6 +25,10 @@ its entries (``_render_outputs``, ``_route_and_filter_chunks``,
 ``pipeline.py`` at their original size. The orchestrator got shorter and the
 100-line target did not get closer, and nothing was measuring the difference.
 It is measured now. Empty is the goal.
+
+An entry that names a module is naming where the function lives TODAY. When
+a slice moves one, the key moves with it — that is not a reset, and the size
+may still only shrink.
 """
 
 from __future__ import annotations
@@ -41,7 +45,7 @@ PIPELINE = CORE / "pipeline.py"
 _MODULE_TARGET = 800
 
 #: Today's ceiling for the orchestrator. Lower it as slices land; never raise.
-_MODULE_BUDGET = 970
+_MODULE_BUDGET = 580
 
 #: The longest a function may be once the split is finished.
 _FUNCTION_TARGET = 100
@@ -56,7 +60,7 @@ _OVERSIZED: dict[str, int] = {
     "hyphenation.py::enrich_chunk_lines": 101,
     "hyphenation.py::reconcile_hyphen_pair": 110,
     "pairing.py::link_hyphen_pairs": 119,
-    "pipeline.py::_run_chunk": 104,
+    "driver.py::_run_chunk": 104,
     "reconcile.py::_reconcile_chunk_hyphens": 158,
     "rendering.py::_render_outputs": 140,
     "routing.py::_route_and_filter_chunks": 110,

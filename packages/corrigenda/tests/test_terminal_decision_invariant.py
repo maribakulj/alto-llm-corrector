@@ -22,7 +22,7 @@ from pathlib import Path
 
 import pytest
 
-from corrigenda.core import pipeline as pipeline_module
+from corrigenda.core import driver as driver_module
 from corrigenda.core.protocols import ProducerMetadata
 from corrigenda import CorrectionPipeline, ValidationError
 from corrigenda.core.decisions import derive_decision_set
@@ -64,9 +64,9 @@ async def test_absorbed_chunk_error_leaves_no_line_undecided(monkeypatch) -> Non
     def _bomb(**kwargs):
         raise ValidationError("simulated reconcile-path failure")
 
-    # Patched where the engine LOOKS it up (core.pipeline's namespace), not
-    # where core.outcome defines it — the import is by value.
-    monkeypatch.setattr(pipeline_module, "_finish_successful_chunk", _bomb)
+    # Patched where the chunk driver LOOKS it up (core.driver's namespace),
+    # not where core.outcome defines it — the import is by value.
+    monkeypatch.setattr(driver_module, "_finish_successful_chunk", _bomb)
 
     doc = build_document_manifest([(_SAMPLE, _SAMPLE.name)])
     observer = _EventLog()
@@ -96,7 +96,7 @@ async def test_absorbed_chunk_error_leaves_no_line_undecided(monkeypatch) -> Non
 async def test_partial_decisions_survive_the_absorb(monkeypatch) -> None:
     """Only STILL-UNDECIDED lines fall back: a line the failing chunk (or
     an earlier chunk) already finalized keeps its correction."""
-    real = pipeline_module._finish_successful_chunk
+    real = driver_module._finish_successful_chunk
     calls = {"n": 0}
 
     def _second_call_bombs(**kwargs):
@@ -105,7 +105,7 @@ async def test_partial_decisions_survive_the_absorb(monkeypatch) -> None:
             raise ValidationError("simulated late-chunk failure")
         return real(**kwargs)
 
-    monkeypatch.setattr(pipeline_module, "_finish_successful_chunk", _second_call_bombs)
+    monkeypatch.setattr(driver_module, "_finish_successful_chunk", _second_call_bombs)
 
     # Tiny windows → several chunks per page, so call #1 succeeds and
     # later chunks fail.

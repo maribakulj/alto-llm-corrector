@@ -30,24 +30,13 @@ from collections.abc import Callable
 from typing import Any
 from pathlib import Path
 
-from corrigenda.core.identity import (
-    LineRef,
-)
 from corrigenda.errors import (
     CorrectionAborted,
-    CorrigendaError,
 )
 from corrigenda.core import events as ev
-from corrigenda.core.planner import downgrade_granularity, plan_page
-from corrigenda.core.attempt import _attempt_chunk
-from corrigenda.core.outcome import (
-    _absorb_chunk_error,
-    _apply_chunk_fallback,
-    _finish_successful_chunk,
-)
-from corrigenda.core.batching import _split_for_image_cap
 from corrigenda.core.redaction import sanitize_error
 from corrigenda.core.context import RunContext
+from corrigenda.core.driver import PageDriver
 from corrigenda.core.finalize import _finalize_document
 from corrigenda.core.indexing import (
     DocumentIndex,
@@ -57,11 +46,6 @@ from corrigenda.core.indexing import (
 from corrigenda.core.preflight import _preflight
 from corrigenda.core.rendering import _render_outputs
 from corrigenda.core.report import _build_correction_report
-from corrigenda.core.routing import _route_and_filter_chunks
-from corrigenda.core.reconcile import (
-    _build_hyphen_pairs,
-    _subpage_for_lines,
-)
 from corrigenda.core.result import CorrectionResult, _build_correction_result
 from corrigenda.core.provenance import (
     _build_run_provenance,
@@ -73,7 +57,6 @@ from corrigenda.core.protocols import (
     PipelineObserver,
     ProducerMetadata,
     StructuredCompletionClient,
-    ProviderPermanentError,
 )
 from corrigenda.core.quality import (
     DEFAULT_ROUTING_POLICY,
@@ -90,18 +73,12 @@ from corrigenda.core.schemas import (
     DEFAULT_LOSS_POLICY,
     DEFAULT_PAIRING_POLICY,
     DEFAULT_RETRY_POLICY,
-    ChunkGranularity,
     ChunkPlannerConfig,
-    ChunkRequest,
     DocumentManifest,
     GuardConfig,
-    HyphenRole,
     PageImage,
-    LineManifest,
-    LineTrace,
     ConfidencePolicy,
     LossPolicy,
-    PageManifest,
     PairingPolicy,
     RetryPolicy,
 )
@@ -518,6 +495,7 @@ class CorrectionPipeline:
         unit straddling a page break is still ONE unit, and the page that
         holds one end cannot resolve it from its own lines (ADR-010).
         """
+        driver = self._page_driver()
         total_chunks = 0
         total_reconciled = 0
         for page in document_manifest.pages:
@@ -527,7 +505,7 @@ class CorrectionPipeline:
                 raise CorrectionAborted(
                     f"run aborted before page {page.page_id!r} (page {page.page_index})"
                 )
-            page_chunks, page_reconciled = await self._process_page(
+            page_chunks, page_reconciled = await driver.process_page(
                 ctx=ctx,
                 page=page,
                 document_id=document_manifest.document_id,
@@ -538,6 +516,21 @@ class CorrectionPipeline:
             total_chunks += page_chunks
             total_reconciled += page_reconciled
         return total_chunks, total_reconciled
+
+    def _page_driver(self) -> PageDriver:
+        """Bind this pipeline's configured components into the driver that
+        runs a page. Built per run, holding no run state — the engine's
+        configuration is immutable, so two concurrent runs may share it."""
+        return PageDriver(
+            producer=self.producer,
+            escalation_producer=self.escalation_producer,
+            config=self.config,
+            retry_policy=self.retry_policy,
+            guard_config=self.guard_config,
+            qe_scorer=self.qe_scorer,
+            routing_policy=self.routing_policy,
+            emit=self._emit,
+        )
 
     def run_sync(
         self,
@@ -565,396 +558,6 @@ class CorrectionPipeline:
                 page_images=page_images,
             )
         )
-
-    # ------------------------------------------------------------------
-    # Per-page orchestration
-    # ------------------------------------------------------------------
-
-    async def _process_page(
-        self,
-        *,
-        ctx: RunContext,
-        page: PageManifest,
-        document_id: str,
-        traces: dict[LineRef, LineTrace],
-        cross_page_partners: dict[LineRef, LineManifest] | None,
-        should_abort: Callable[[], bool] | None = None,
-    ) -> tuple[int, int]:
-        line_by_id: dict[str, LineManifest] = {lm.line_id: lm for lm in page.lines}
-
-        page_hyphen_pairs = sum(
-            1
-            for lm in page.lines
-            if lm.hyphen_role in (HyphenRole.PART1, HyphenRole.BOTH)
-        )
-        self._emit(
-            ev.PageStarted(
-                page_id=page.page_id,
-                page_index=page.page_index,
-                line_count=len(page.lines),
-                hyphen_pair_count=page_hyphen_pairs,
-            )
-        )
-
-        routed_chunks = self._plan_page_chunks(
-            ctx=ctx,
-            page=page,
-            document_id=document_id,
-            line_by_id=line_by_id,
-            traces=traces,
-        )
-
-        page_reconciled = 0
-        page_chunks = 0
-        for chunk, producer in routed_chunks:
-            # F10 — cooperative cancellation between chunks. Checked before
-            # the per-chunk try/except so CorrectionAborted propagates out
-            # instead of being swallowed as a chunk error.
-            if should_abort is not None and should_abort():
-                raise CorrectionAborted(
-                    f"run aborted before chunk {chunk.chunk_id!r} on page "
-                    f"{page.page_id!r}"
-                )
-            page_chunks += 1
-            page_reconciled += await self._run_chunk_absorbing(
-                ctx=ctx,
-                chunk=chunk,
-                producer=producer,
-                page=page,
-                line_by_id=line_by_id,
-                traces=traces,
-                cross_page_partners=cross_page_partners,
-                should_abort=should_abort,
-            )
-
-        # Duplicate detection is no page business anymore: the single
-        # document-wide adjacency pass (P3.3) runs after the page loop,
-        # comparing every line's live pre-revert correction on one basis —
-        # chunk seams, descent sub-chunk seams and page seams included.
-
-        page_corrections = sum(
-            1
-            for lm in page.lines
-            if lm.corrected_text is not None and lm.corrected_text != lm.ocr_text
-        )
-        self._emit(
-            ev.PageCompleted(
-                page_id=page.page_id,
-                page_index=page.page_index,
-                corrections=page_corrections,
-                hyphen_pairs_reconciled=page_reconciled,
-            )
-        )
-
-        return page_chunks, page_reconciled
-
-    def _plan_page_chunks(
-        self,
-        *,
-        ctx: RunContext,
-        page: PageManifest,
-        document_id: str,
-        line_by_id: dict[str, LineManifest],
-        traces: dict[LineRef, LineTrace],
-    ) -> list[tuple[ChunkRequest, EditProducer]]:
-        """Decide what this page's producer calls will be.
-
-        Three stages that must run in this order: plan the chunks, route
-        them, then cap the images. Routing pre-decides SKIP lines
-        (confirmed clean, no producer call) and sends ESCALATE lines to the
-        vision producer, returning each chunk paired with the producer that
-        owns it — a no-op when routing is off (the default), so every chunk
-        pairs with the primary producer and every existing run stays
-        byte-identical. The image cap comes AFTER routing because only the
-        chunks that actually reached a vision producer are constrained by
-        it: a producer crops every line it is sent, and providers cap
-        images per call.
-        """
-        plan = plan_page(page, document_id, self.config)
-        ctx.hyphen_splits.extend(plan.hyphen_splits)
-        routed_chunks = _route_and_filter_chunks(
-            qe_scorer=self.qe_scorer,
-            routing_policy=self.routing_policy,
-            producer=self.producer,
-            escalation_producer=self.escalation_producer,
-            page=page,
-            chunks=plan.chunks,
-            line_by_id=line_by_id,
-            ctx=ctx,
-            traces=traces,
-        )
-        routed_chunks = _split_for_image_cap(
-            routed=routed_chunks, line_by_id=line_by_id
-        )
-        self._emit(
-            ev.ChunkPlanned(
-                page_id=page.page_id,
-                chunk_count=len(routed_chunks),
-                granularity=plan.granularity.value,
-            )
-        )
-        return routed_chunks
-
-    async def _run_chunk_absorbing(
-        self,
-        *,
-        ctx: RunContext,
-        chunk: ChunkRequest,
-        producer: EditProducer,
-        page: PageManifest,
-        line_by_id: dict[str, LineManifest],
-        traces: dict[LineRef, LineTrace],
-        cross_page_partners: dict[LineRef, LineManifest] | None,
-        should_abort: Callable[[], bool] | None,
-    ) -> int:
-        """Run one chunk, absorbing the errors a run may survive.
-
-        ADR-008 — only RECOVERABLE domain errors become a ``chunk_error``
-        event and a continue. Cancellation and a permanent provider
-        rejection propagate: the latter would hit every remaining chunk
-        identically, and converting it into per-chunk OCR fallbacks would
-        let the run END AS A SUCCESS with silently uncorrected text.
-        Anything else (a ``KeyError``, a pydantic bug, a broken invariant)
-        is a programming error — continuing would let the run complete
-        "successfully" with lines in an unknown state.
-        """
-        try:
-            return await self._run_chunk(
-                ctx=ctx,
-                chunk=chunk,
-                producer=producer,
-                page=page,
-                line_by_id=line_by_id,
-                traces=traces,
-                cross_page_partners=cross_page_partners,
-                should_abort=should_abort,
-            )
-        except (CorrectionAborted, ProviderPermanentError):
-            raise
-        except Exception as exc:
-            # ADR-006: the pipeline does not log directly; it emits an
-            # event the host application can log/trace.
-            self._emit(
-                ev.ChunkError(
-                    chunk_id=chunk.chunk_id,
-                    message=str(exc)[:200],
-                    exception_type=type(exc).__name__,
-                )
-            )
-            if not isinstance(exc, CorrigendaError):
-                raise
-            if _absorb_chunk_error(
-                exc=exc,
-                chunk=chunk,
-                line_by_id=line_by_id,
-                cross_page_partners=cross_page_partners,
-                traces=traces,
-            ):
-                ctx.fallback_chunks += 1
-            return 0
-
-    # ------------------------------------------------------------------
-    # Per-chunk LLM call + reconciliation
-    # ------------------------------------------------------------------
-
-    async def _run_chunk(
-        self,
-        *,
-        ctx: RunContext,
-        chunk: ChunkRequest,
-        producer: EditProducer,
-        page: PageManifest,
-        line_by_id: dict[str, LineManifest],
-        traces: dict[LineRef, LineTrace] | None = None,
-        cross_page_partners: dict[LineRef, LineManifest] | None = None,
-        budget: list[int] | None = None,
-        should_abort: Callable[[], bool] | None = None,
-    ) -> int:
-        """Process one chunk, and decide what its outcome means.
-
-        Three endings: the producer answered and the chunk is finished; it
-        did not and the same work is worth retrying one granularity finer
-        (F1, :meth:`_descend_granularity`); or it did not and no finer
-        grain would help — a non-retryable error like an HTTP 4xx, LINE
-        grain already reached, or the shared budget spent — and the chunk
-        falls back to OCR source.
-
-        ``budget`` is a 1-element list holding the remaining cumulative
-        attempts for this original chunk's whole descent (default 6, from
-        ``RetryPolicy.per_chunk_budget``); ``None`` at the top level starts
-        a fresh one.
-        """
-        chunk_lines = [line_by_id[lid] for lid in chunk.line_ids if lid in line_by_id]
-        if not chunk_lines:
-            return 0
-
-        if budget is None:
-            budget = [self.retry_policy.per_chunk_budget]
-
-        hyphen_pairs = _build_hyphen_pairs(chunk_lines)
-
-        self._emit(
-            ev.ChunkStarted(
-                chunk_id=chunk.chunk_id,
-                granularity=chunk.granularity.value,
-                line_count=len(chunk_lines),
-            )
-        )
-
-        attempts_cap = min(self.retry_policy.max_attempts, max(budget[0], 0))
-        outcome = await _attempt_chunk(
-            ctx=ctx,
-            chunk=chunk,
-            producer=producer,
-            chunk_lines=chunk_lines,
-            hyphen_pairs=hyphen_pairs,
-            all_lines_by_id=line_by_id,
-            traces=traces,
-            max_attempts=attempts_cap,
-            retry_policy=self.retry_policy,
-            guard_config=self.guard_config,
-            emit=self._emit,
-        )
-        budget[0] -= outcome.attempts_used
-
-        if outcome.response is not None:
-            return _finish_successful_chunk(
-                guard_config=self.guard_config,
-                emit=self._emit,
-                ctx=ctx,
-                chunk=chunk,
-                chunk_lines=chunk_lines,
-                response=outcome.response,
-                line_by_id=line_by_id,
-                cross_page_partners=cross_page_partners,
-                traces=traces,
-                usage=outcome.usage,
-            )
-
-        # --- Failure: try a granularity descent (F1). ---
-        next_g = downgrade_granularity(chunk.granularity)
-        if outcome.can_downgrade and next_g is not None and budget[0] > 0:
-            return await self._descend_granularity(
-                ctx=ctx,
-                chunk=chunk,
-                next_g=next_g,
-                producer=producer,
-                page=page,
-                chunk_lines=chunk_lines,
-                line_by_id=line_by_id,
-                traces=traces,
-                cross_page_partners=cross_page_partners,
-                budget=budget,
-                should_abort=should_abort,
-                last_msg=outcome.last_msg,
-            )
-
-        # --- Terminal fallback (LINE grain, budget gone, or hard error). ---
-        _apply_chunk_fallback(
-            emit=self._emit,
-            chunk=chunk,
-            chunk_lines=chunk_lines,
-            traces=traces,
-            sanitised_msg=outcome.last_msg or "all_attempts_exhausted",
-            line_by_id=line_by_id,
-            cross_page_partners=cross_page_partners,
-        )
-        ctx.fallback_chunks += 1
-        return 0
-
-    async def _descend_granularity(
-        self,
-        *,
-        ctx: RunContext,
-        chunk: ChunkRequest,
-        next_g: ChunkGranularity,
-        producer: EditProducer,
-        page: PageManifest,
-        chunk_lines: list[LineManifest],
-        line_by_id: dict[str, LineManifest],
-        traces: dict[LineRef, LineTrace] | None,
-        cross_page_partners: dict[LineRef, LineManifest] | None,
-        budget: list[int],
-        should_abort: Callable[[], bool] | None,
-        last_msg: str,
-    ) -> int:
-        """Re-plan a failed chunk one granularity finer and retry it (F1).
-
-        F1×F8 — only the chunk's TARGET lines descend. Context lines are
-        owned by an adjacent chunk; re-planning them here would correct
-        them at a finer grain and make their rightful window skip them
-        (acceptance ignores already-corrected lines).
-
-        Returns the pairs reconciled across the whole descent. Sub-chunks
-        share the caller's cumulative ``budget``; when it runs out
-        mid-descent the remaining ones fall back to OCR source rather than
-        borrowing attempts from a chunk that has none left.
-        """
-        target_ids = set(chunk.targets())
-        descent_lines = [lm for lm in chunk_lines if lm.line_id in target_ids]
-        self._emit(
-            ev.ChunkDowngraded(
-                chunk_id=chunk.chunk_id,
-                from_granularity=chunk.granularity.value,
-                to_granularity=next_g.value,
-                line_count=len(chunk_lines),
-                target_count=len(descent_lines),
-                budget_remaining=budget[0],
-            )
-        )
-        sub_plan = plan_page(
-            _subpage_for_lines(page, descent_lines),
-            chunk.document_id,
-            self.config,
-            force_granularity=next_g,
-        )
-        ctx.hyphen_splits.extend(sub_plan.hyphen_splits)
-        total = 0
-        for sub in sub_plan.chunks:
-            # F10 — the descent can spawn many finest-grain chunks; keep
-            # the run cancellable inside it, not only between top-level
-            # chunks.
-            if should_abort is not None and should_abort():
-                raise CorrectionAborted(
-                    f"run aborted during granularity descent of chunk "
-                    f"{chunk.chunk_id!r} on page {page.page_id!r}"
-                )
-            if budget[0] <= 0:
-                # Budget spent mid-descent: OCR-fallback the rest.
-                sub_lines = [
-                    line_by_id[lid] for lid in sub.line_ids if lid in line_by_id
-                ]
-                _apply_chunk_fallback(
-                    emit=self._emit,
-                    chunk=sub,
-                    chunk_lines=sub_lines,
-                    traces=traces,
-                    sanitised_msg=last_msg or "per_chunk_budget exhausted",
-                    line_by_id=line_by_id,
-                    cross_page_partners=cross_page_partners,
-                )
-                ctx.fallback_chunks += 1
-                continue
-            total += await self._run_chunk(
-                ctx=ctx,
-                chunk=sub,
-                producer=producer,
-                page=page,
-                line_by_id=line_by_id,
-                traces=traces,
-                cross_page_partners=cross_page_partners,
-                budget=budget,
-                should_abort=should_abort,
-            )
-        return total
-
-    # ------------------------------------------------------------------
-    # Chunk helpers extracted from _run_chunk
-    # ------------------------------------------------------------------
-
-    # ------------------------------------------------------------------
-    # Output rendering (rewriter + trace assembly)
-    # ------------------------------------------------------------------
 
 
 # --- public surface ---
