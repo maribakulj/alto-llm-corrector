@@ -25,7 +25,7 @@ protocol) can run where lxml isn't installed.
 
 ```python
 import corrigenda
-from corrigenda import RulesProducer, default_french_ocr_rules
+from corrigenda.producers.rules import RulesProducer, default_french_ocr_rules
 
 document = corrigenda.load("page.xml")        # ALTO or PAGE, by namespace
 result = corrigenda.correct_sync(             # `await corrigenda.correct(...)` in async code
@@ -47,7 +47,8 @@ observer, explicit metadata) lives on `CorrectionPipeline`.
 import asyncio
 from pathlib import Path
 
-from corrigenda import CorrectionPipeline, build_document_manifest
+from corrigenda import CorrectionPipeline
+from corrigenda.formats.alto.parser import build_document_manifest
 
 
 class MyProvider:
@@ -102,7 +103,8 @@ it on disk; `should_abort=callable` gives cooperative cancellation.
 ## Deterministic pre-pass (no LLM at all)
 
 ```python
-from corrigenda import CorrectionPipeline, RulesProducer, default_french_ocr_rules
+from corrigenda import CorrectionPipeline
+from corrigenda.producers.rules import RulesProducer, default_french_ocr_rules
 
 pipeline = CorrectionPipeline(
     producer=RulesProducer(default_french_ocr_rules()),   # ſ→s, ﬁ/ﬂ …

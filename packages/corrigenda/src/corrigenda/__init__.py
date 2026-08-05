@@ -19,17 +19,7 @@ producer-bound symbols are exposed LAZILY (PEP 562) so that importing
 
 from typing import TYPE_CHECKING, Any
 
-from corrigenda.core.confidence import (
-    ConfidenceScorer,
-    HeuristicScorer,
-)
-from corrigenda.core.quality import (
-    HeuristicQEScorer,
-    QEScorer,
-    RoutingDecision,
-    RoutingPolicy,
-    route_line,
-)
+from corrigenda.core.quality import RoutingPolicy
 from corrigenda.core.decisions import (
     DecisionSet,
     LineDecision,
@@ -38,17 +28,12 @@ from corrigenda.core.identity import LineRef
 from corrigenda.core.editing import (
     EDIT_PROTOCOL_VERSION,
     EditOp,
-    EditRejection,
-    EditResult,
     EditScript,
     LinePrecondition,
     MatchAnchor,
     RangeAnchor,
     ReplaceLine,
     ReplaceSpan,
-    apply_edit_script,
-    line_digest,
-    normalize_anchor,
 )
 from corrigenda.core.pipeline import (
     CorrectionPipeline,
@@ -56,41 +41,39 @@ from corrigenda.core.pipeline import (
     sanitize_error,
 )
 from corrigenda.core.protocols import (
-    BaseProvider,
     EditProducer,
-    ModelCatalog,
     PipelineObserver,
     ProducerMetadata,
     ProducerOptions,
-    StructuredCompletionClient,
-    require_capabilities,
-    require_page_images,
 )
+from corrigenda.core.fidelity import ProjectionFidelity
+from corrigenda.core.hyphenation import ReconcileMetrics
 from corrigenda.core.schemas import (
     BlockManifest,
     ChunkGranularity,
     ChunkPlannerConfig,
+    ConfidencePolicy,
+    Coords,
     CorrectionReport,
+    CorrectionRequest,
     DecisionReason,
     DecisionStage,
     DocumentManifest,
     GuardConfig,
     HyphenRole,
+    HyphenSplit,
     ImageAsset,
     ImageRef,
     ImageTransform,
-    PageImage,
+    LineConfidence,
+    LineContext,
+    LineGeometry,
     LineManifest,
     LineOutcome,
     LineStatus,
     LineTrace,
-    LineContext,
-    LineProposal,
-    ConfidencePolicy,
-    LineConfidence,
     LossPolicy,
-    ModelCapabilities,
-    ModelInfo,
+    PageImage,
     PageManifest,
     PairingPolicy,
     ProducerProvenance,
@@ -113,40 +96,10 @@ from corrigenda.errors import (
 )
 
 if TYPE_CHECKING:  # typed view of the lazy symbols below
-    from corrigenda.formats.alto.parser import (
-        build_document_manifest as build_document_manifest,
-    )
-    from corrigenda.formats.alto.parser import parse_alto_file as parse_alto_file
-    from corrigenda.formats.alto.rewriter import (
-        extract_output_texts as extract_output_texts,
-    )
-    from corrigenda.formats.alto.rewriter import (
-        rewrite_alto_file as rewrite_alto_file,
-    )
-    from corrigenda.formats.alto.adapter import (
-        AltoFormatAdapter as AltoFormatAdapter,
-    )
-    from corrigenda.formats.page.adapter import (
-        PageFormatAdapter as PageFormatAdapter,
-    )
-    from corrigenda.formats.page.parser import parse_page_file as parse_page_file
-    from corrigenda.formats.page.rewriter import (
-        rewrite_page_file as rewrite_page_file,
-    )
     from corrigenda.facade import LoadedDocument as LoadedDocument
     from corrigenda.facade import correct as correct
     from corrigenda.facade import correct_sync as correct_sync
     from corrigenda.facade import load as load
-    from corrigenda.integrations.llm import (
-        OUTPUT_JSON_SCHEMA as OUTPUT_JSON_SCHEMA,
-    )
-    from corrigenda.integrations.llm import SYSTEM_PROMPT as SYSTEM_PROMPT
-    from corrigenda.producers.llm_edit import LLMEditProducer as LLMEditProducer
-    from corrigenda.producers.rules import RulesProducer as RulesProducer
-    from corrigenda.producers.rules import SubstitutionRule as SubstitutionRule
-    from corrigenda.producers.rules import (
-        default_french_ocr_rules as default_french_ocr_rules,
-    )
 
 __version__ = "0.9.0"
 
@@ -165,24 +118,10 @@ __version__ = "0.9.0"
 #: pull in lxml (formats) or producer surfaces, so they materialise only
 #: on first attribute access — `import corrigenda` alone stays pure.
 _LAZY: dict[str, str] = {
-    "build_document_manifest": "corrigenda.formats.alto.parser",
-    "parse_alto_file": "corrigenda.formats.alto.parser",
-    "extract_output_texts": "corrigenda.formats.alto.rewriter",
-    "rewrite_alto_file": "corrigenda.formats.alto.rewriter",
-    "AltoFormatAdapter": "corrigenda.formats.alto.adapter",
-    "PageFormatAdapter": "corrigenda.formats.page.adapter",
-    "parse_page_file": "corrigenda.formats.page.parser",
-    "rewrite_page_file": "corrigenda.formats.page.rewriter",
-    "OUTPUT_JSON_SCHEMA": "corrigenda.integrations.llm",
-    "SYSTEM_PROMPT": "corrigenda.integrations.llm",
     "LoadedDocument": "corrigenda.facade",
     "correct": "corrigenda.facade",
     "correct_sync": "corrigenda.facade",
     "load": "corrigenda.facade",
-    "LLMEditProducer": "corrigenda.producers.llm_edit",
-    "RulesProducer": "corrigenda.producers.rules",
-    "SubstitutionRule": "corrigenda.producers.rules",
-    "default_french_ocr_rules": "corrigenda.producers.rules",
 }
 
 
@@ -200,54 +139,91 @@ def __dir__() -> list[str]:
 
 
 __all__ = [
-    # Parser / rewriter (lazy — formats)
-    "build_document_manifest",
-    "parse_alto_file",
-    "extract_output_texts",
-    "rewrite_alto_file",
-    "parse_page_file",
-    "rewrite_page_file",
-    "AltoFormatAdapter",
-    "PageFormatAdapter",
-    # Happy path (§2, P3.12 — lazy: formats)
+    # ---------------------------------------------------------------
+    # The façade (§2, P3.12) — lazy, because `load` reaches a format.
+    # ---------------------------------------------------------------
     "load",
     "correct",
     "correct_sync",
     "LoadedDocument",
-    # Pipeline
-    "CorrectionPipeline",
+    "__version__",
+    # ---------------------------------------------------------------
+    # What the façade RETURNS, transitively (V5). Computed, not chosen:
+    # start from `load`/`correct`/`correct_sync`'s return annotations and
+    # follow the types. A caller typing the value it was handed must be
+    # able to import every name in it.
+    # ---------------------------------------------------------------
     "CorrectionResult",
-    # Decisions (ADR-011) — the run's outcome, read off the result
+    "CorrectionReport",
     "DecisionSet",
     "LineDecision",
     "LineRef",
-    # Edit protocol (§4) — pure core
-    "EDIT_PROTOCOL_VERSION",
+    "DocumentManifest",
+    "PageManifest",
+    "BlockManifest",
+    "LineManifest",
+    "Coords",
+    "LineStatus",
+    "HyphenRole",
+    "HyphenSplit",
+    "LineTrace",
+    "Usage",
+    "ReconcileMetrics",
+    # Report v2 (§9, P3.5) — the staged per-line outcome
+    "LineOutcome",
+    "ProposalStage",
+    "ProposalFeatures",
+    "DecisionStage",
+    "DecisionReason",
+    "ProjectionStage",
+    "ProjectionFidelity",
+    "LineConfidence",
+    "SidecarEntry",
+    # Provenance (§11, P3.9)
+    "ProducerProvenance",
+    "RunProvenance",
+    # The edit script the run applied (§4)
     "EditScript",
     "EditOp",
     "ReplaceLine",
     "ReplaceSpan",
     "MatchAnchor",
     "RangeAnchor",
-    "EditResult",
-    "EditRejection",
     "LinePrecondition",
-    "apply_edit_script",
-    "line_digest",
-    "normalize_anchor",
-    # Producers (§5)
+    "EDIT_PROTOCOL_VERSION",
+    # ---------------------------------------------------------------
+    # The producer seam. The README's first sentence promises "any
+    # custom EditProducer", so what implementing one requires is
+    # first-class here — protocol, payload, options, identity — and
+    # closed the same way: everything the protocol's signatures name.
+    # ---------------------------------------------------------------
     "EditProducer",
-    "ProducerMetadata",
+    "CorrectionRequest",
     "ProducerOptions",
-    "require_capabilities",
-    "require_page_images",
-    "RulesProducer",
-    "SubstitutionRule",
-    "default_french_ocr_rules",
-    "LLMEditProducer",
-    # Errors (§8.4) — CorrigendaError/ProposalValidationError are the
-    # canonical names (P3.11); the old names are 0.9.x deprecation
-    # aliases of the SAME classes, removed at the top-level reduction.
+    "ProducerMetadata",
+    "LineContext",
+    "LineGeometry",
+    "ChunkGranularity",
+    "ImageAsset",
+    "ImageRef",
+    "ImageTransform",
+    "PageImage",
+    # The engine you hand a producer to, and what it reports through.
+    "CorrectionPipeline",
+    "PipelineObserver",
+    # ---------------------------------------------------------------
+    # Injectable policies (§8.2). Frozen fields, fingerprinted.
+    # ---------------------------------------------------------------
+    "ChunkPlannerConfig",
+    "RetryPolicy",
+    "GuardConfig",
+    "PairingPolicy",
+    "LossPolicy",
+    "ConfidencePolicy",
+    "RoutingPolicy",
+    # ---------------------------------------------------------------
+    # Errors (§8.4)
+    # ---------------------------------------------------------------
     "CorrigendaError",
     "CorrectionError",
     "ParseError",
@@ -255,59 +231,8 @@ __all__ = [
     "ProposalValidationError",
     "ValidationError",
     "CorrectionAborted",
-    # Ports
-    "BaseProvider",
-    "ModelCatalog",
-    "PipelineObserver",
-    "StructuredCompletionClient",
-    # LLM contract (lazy — producers)
-    "OUTPUT_JSON_SCHEMA",
-    "SYSTEM_PROMPT",
+    # ---------------------------------------------------------------
+    # Kept deliberately: a security utility is made easy to find.
+    # ---------------------------------------------------------------
     "sanitize_error",
-    # Schemas (domain only)
-    "BlockManifest",
-    "ChunkGranularity",
-    "ChunkPlannerConfig",
-    "CorrectionReport",
-    "DocumentManifest",
-    "GuardConfig",
-    "HyphenRole",
-    "ImageAsset",
-    "ImageRef",
-    "ImageTransform",
-    "PageImage",
-    "LineManifest",
-    "LineStatus",
-    "LineTrace",
-    "LineContext",
-    "LineProposal",
-    "ConfidencePolicy",
-    "ConfidenceScorer",
-    "HeuristicScorer",
-    "HeuristicQEScorer",
-    "QEScorer",
-    "RoutingDecision",
-    "RoutingPolicy",
-    "route_line",
-    "LineConfidence",
-    "LossPolicy",
-    "ModelCapabilities",
-    "ModelInfo",
-    "PageManifest",
-    "PairingPolicy",
-    "RetryPolicy",
-    "Usage",
-    # Report v2 (§9, P3.5)
-    "LineOutcome",
-    "ProposalStage",
-    "ProposalFeatures",
-    "DecisionStage",
-    "DecisionReason",
-    "ProjectionStage",
-    # Provenance (§11, P3.9)
-    "ProducerProvenance",
-    "RunProvenance",
-    "SidecarEntry",
-    # Version
-    "__version__",
 ]

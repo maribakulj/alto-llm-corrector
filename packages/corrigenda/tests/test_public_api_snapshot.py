@@ -1,30 +1,40 @@
-"""Public-API snapshot — an inventory held still, NOT the 1.0 contract.
+"""Public-API snapshot — the computed closure, held still.
 
-This file used to call the list below ``PUBLIC_API_1_0`` and describe it as
-"the frozen 1.0 surface". That was false in a way worth naming, because the
-name is what a reader trusts: the 95 entries were never ratified as a
-contract, they **accreted**. Each was added because something needed it that
-day. `docs/PLAN.md` (`S3`) computes what the surface should be — the
-transitive closure of what the façade returns, 54 symbols — and the
-reduction has not happened yet. A test asserting the accretion is the 1.0
-promise contradicted the plan and would have made the cut look like a
-regression.
+The list below is no longer an inventory of what accreted. It is what `S3b`
+cut the surface down to (2026-08-01): **68 symbols, computed rather than
+chosen**, and the computation is reproducible — start from what
+``load``/``correct``/``correct_sync`` return and from what
+:class:`EditProducer` and :class:`PipelineObserver` name in their
+signatures, then follow the type annotations transitively.
 
-So, plainly: **the surface is provisional.** The 0.9.x series is explicitly
-free to break it (`docs/versioning.md`), and it will be cut once the
-structural work that decides the final shape (`S2`) has landed.
+Two closures, because the library makes two promises. The README's first
+sentence says corrections come "by LLM, rules engine, or **any custom
+EditProducer**", so the producer seam is a promise as much as the result
+is, and both are closed here: a caller typing the value it was handed, and
+an implementer typing the protocol it fills, can import every name they
+need from ``corrigenda``.
 
-What this snapshot is for, meanwhile, is the ratchet. The list got to 95 by
-accretion; the only thing that stops it reaching 110 while the cut waits is
-that no name can join it silently. Four pins:
+What is deliberately NOT here is the third seam. ``format_adapter`` is an
+optional injection whose closure drags in ``RewriteResult``,
+``RewriteMetrics``, ``AlignedPair``, ``TokenAlignment`` — the rewriter's
+internal accounting vocabulary, which `R5`/`R8`/`L8` have been moving all
+year. Blessing it under SemVer at 1.0 would promise a stability nothing
+supports. It stays at its module path, which `docs/versioning.md` documents
+as a supported door.
+
+The former surface was 95, and the four numbers worth keeping straight are
+in `docs/PLAN.md`: the plan's own estimate was 54, which turned out not to
+be reproducible — it counted the advanced door's entry points without their
+closure, which would have left exactly the holes `S3b` exists to close.
+
+Four pins:
 
   1. ``corrigenda.__all__`` is EXACTLY the list below. Adding a symbol is a
      deliberate act (update the snapshot + CHANGELOG) — and during the
-     feature freeze, extending the public API is suspended outright, so an
-     addition needs a reason that survives review.
-  2. The surface does not GROW. Stated separately from (1) because it is the
-     property that matters while the reduction is pending, and it should
-     fail with that sentence rather than a diff of 95 strings.
+     feature freeze, extending the public API is suspended outright.
+  2. The surface does not GROW. Stated separately from (1) because it is
+     the property that survives the cut, and it should fail with that
+     sentence rather than a diff of 68 strings.
   3. Every listed symbol actually resolves — eager or lazy (PEP 562) — and
      every lazy-map key is part of ``__all__``.
   4. The signatures of the top entry points (``run``, ``run_sync``,
@@ -48,121 +58,79 @@ import corrigenda
 #: The provisional top-level surface. `S3` reduces this to the computed
 #: closure (54); until then it is pinned so that it can only shrink or move
 #: deliberately. Do not read this list as a promise to consumers.
+#: The top-level surface, as computed by `S3b`. A symbol removed from here
+#: is NOT deleted — it stays importable from its own module, which is the
+#: other supported door (`docs/versioning.md`).
 CURRENT_TOP_LEVEL_SURFACE = sorted(
     [
-        # Version
-        "__version__",
-        # Parsers / rewriters / adapters (lazy — formats)
-        "build_document_manifest",
-        "parse_alto_file",
-        "extract_output_texts",
-        "rewrite_alto_file",
-        "parse_page_file",
-        "rewrite_page_file",
-        "AltoFormatAdapter",
-        "PageFormatAdapter",
-        # Happy path (§2, P3.12 — lazy: formats)
-        "load",
-        "correct",
-        "correct_sync",
-        "LoadedDocument",
-        # Pipeline
-        "CorrectionPipeline",
-        "CorrectionResult",
-        # Decisions (ADR-011, slice E)
-        "DecisionSet",
-        "LineDecision",
-        "LineRef",
-        # Edit protocol (§4)
-        "EDIT_PROTOCOL_VERSION",
-        "EditScript",
-        "EditOp",
-        "ReplaceLine",
-        "ReplaceSpan",
-        "MatchAnchor",
-        "RangeAnchor",
-        "EditResult",
-        "EditRejection",
-        "LinePrecondition",
-        "apply_edit_script",
-        "line_digest",
-        "normalize_anchor",
-        # Producers (§5)
-        "EditProducer",
-        "ProducerMetadata",
-        "ProducerOptions",
-        "require_capabilities",
-        "require_page_images",
-        "RulesProducer",
-        "SubstitutionRule",
-        "default_french_ocr_rules",
-        "LLMEditProducer",
-        # Errors (§8.4) — canonical names since P3.11; the old names are
-        # 0.9.x deprecation aliases of the SAME classes.
-        "CorrigendaError",
-        "CorrectionError",
-        "ParseError",
-        "DuplicateIdError",  # P0-5 — additive, subclasses ParseError
-        "ProposalValidationError",
-        "ValidationError",
-        "CorrectionAborted",
-        # Ports
-        "BaseProvider",
-        "ModelCatalog",
-        "PipelineObserver",
-        "StructuredCompletionClient",
-        # LLM contract (lazy — producers)
-        "OUTPUT_JSON_SCHEMA",
-        "SYSTEM_PROMPT",
-        "sanitize_error",
-        # Schemas (domain)
         "BlockManifest",
         "ChunkGranularity",
         "ChunkPlannerConfig",
+        "ConfidencePolicy",
+        "Coords",
+        "CorrectionAborted",
+        "CorrectionError",
+        "CorrectionPipeline",
         "CorrectionReport",
+        "CorrectionRequest",
+        "CorrectionResult",
+        "CorrigendaError",
+        "DecisionReason",
+        "DecisionSet",
+        "DecisionStage",
         "DocumentManifest",
+        "DuplicateIdError",
+        "EDIT_PROTOCOL_VERSION",
+        "EditOp",
+        "EditProducer",
+        "EditScript",
         "GuardConfig",
         "HyphenRole",
-        "LineManifest",
-        "LineStatus",
-        "LineTrace",
-        "LineContext",
-        "LineProposal",
-        "LossPolicy",
-        "ModelCapabilities",
-        "ModelInfo",
-        "PageManifest",
-        "PairingPolicy",
-        "RetryPolicy",
-        "Usage",
-        # Report v2 (§9, P3.5)
-        "LineOutcome",
-        "ProposalStage",
-        "ProposalFeatures",
-        "DecisionStage",
-        "DecisionReason",
-        "ProjectionStage",
-        # Provenance (§11, P3.9)
-        "ProducerProvenance",
-        "RunProvenance",
-        # token_realign sidecar — additive
-        "SidecarEntry",
-        # Confidence block — additive
-        "ConfidencePolicy",
-        "ConfidenceScorer",
-        "HeuristicScorer",
-        "LineConfidence",
-        # QE + routing — additive
-        "HeuristicQEScorer",
-        "QEScorer",
-        "RoutingDecision",
-        "RoutingPolicy",
-        "route_line",
-        # Structured page image — additive
+        "HyphenSplit",
         "ImageAsset",
         "ImageRef",
         "ImageTransform",
+        "LineConfidence",
+        "LineContext",
+        "LineDecision",
+        "LineGeometry",
+        "LineManifest",
+        "LineOutcome",
+        "LinePrecondition",
+        "LineRef",
+        "LineStatus",
+        "LineTrace",
+        "LoadedDocument",
+        "LossPolicy",
+        "MatchAnchor",
         "PageImage",
+        "PageManifest",
+        "PairingPolicy",
+        "ParseError",
+        "PipelineObserver",
+        "ProducerMetadata",
+        "ProducerOptions",
+        "ProducerProvenance",
+        "ProjectionFidelity",
+        "ProjectionStage",
+        "ProposalFeatures",
+        "ProposalStage",
+        "ProposalValidationError",
+        "RangeAnchor",
+        "ReconcileMetrics",
+        "ReplaceLine",
+        "ReplaceSpan",
+        "RetryPolicy",
+        "RoutingPolicy",
+        "RunProvenance",
+        "SidecarEntry",
+        "Usage",
+        "ValidationError",
+        "__version__",
+        "correct",
+        "correct_sync",
+        "load",
+        "sanitize_error",
     ]
 )
 
@@ -176,15 +144,16 @@ def test_public_api_is_exactly_the_snapshot():
     )
 
 
-def test_the_surface_does_not_grow_while_the_reduction_is_pending():
-    """The ratchet. `S3` cuts this list to 54; nothing may push it upward in
-    the meantime, and the feature freeze suspends public-API extension
-    anyway. A shrink is the point and passes here — pin (1) catches it."""
+def test_the_surface_does_not_grow():
+    """The ratchet, and it outlives the cut. A surface reaches 95 by
+    accretion one convenient symbol at a time, which is exactly how it got
+    there the first time; nothing may push it upward now that it has been
+    computed. A shrink still passes here — pin (1) catches it."""
     assert len(corrigenda.__all__) <= len(CURRENT_TOP_LEVEL_SURFACE), (
         f"the top-level surface grew to {len(corrigenda.__all__)} symbols. "
-        "It reached 95 by accretion once already, which is what S3 exists to "
-        "undo — adding to it now makes that cut larger. Export from the "
-        "symbol's own module instead, or close S3 first."
+        "It reached 95 by accretion once already and S3b cut it back to a "
+        "computed closure — a symbol that is in neither closure does not "
+        "belong here. Export it from its own module instead."
     )
 
 

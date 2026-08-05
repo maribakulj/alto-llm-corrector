@@ -12,7 +12,8 @@ from pathlib import Path
 
 import pytest
 
-from corrigenda import CorrectionPipeline, ConfidencePolicy, HeuristicScorer
+from corrigenda import CorrectionPipeline, ConfidencePolicy
+from corrigenda.core.confidence import HeuristicScorer
 from corrigenda.core.alignment import align_tokens
 from corrigenda.formats.alto.parser import build_document_manifest
 from corrigenda.formats.page.parser import (

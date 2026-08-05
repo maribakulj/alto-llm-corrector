@@ -10,11 +10,11 @@ from __future__ import annotations
 
 import pytest
 
-from corrigenda import (
+from corrigenda import RoutingPolicy
+from corrigenda.core.quality import (
     HeuristicQEScorer,
     QEScorer,
     RoutingDecision,
-    RoutingPolicy,
     route_line,
 )
 

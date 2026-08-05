@@ -133,7 +133,9 @@ def _alnum(token: str) -> bool:
     return any(c.isalnum() for c in token)
 
 
-def collect(records: list[dict], scorer: MaskedLMQEScorer, heuristic: HeuristicQEScorer):
+def collect(
+    records: list[dict], scorer: MaskedLMQEScorer, heuristic: HeuristicQEScorer
+):
     """Per token: (dalembert surprisal, heuristic flag, label). Per line:
     (dalembert line score, heuristic line score, any-error label)."""
     tok_surprisal: list[float] = []
@@ -184,8 +186,7 @@ def evaluate(data: dict, midpoint: float, scale: float) -> dict:
             "line_auc": round(auc(data["line_dalembert"], data["line_label"]), 4),
             **calibration(list(zip(tok_p, map(float, data["tok_label"]), strict=True))),
             **{
-                "line_"
-                + k: v
+                "line_" + k: v
                 for k, v in calibration(
                     list(
                         zip(
@@ -204,8 +205,7 @@ def evaluate(data: dict, midpoint: float, scale: float) -> dict:
                 list(zip(data["tok_heur"], map(float, data["tok_label"]), strict=True))
             ),
             **{
-                "line_"
-                + k: v
+                "line_" + k: v
                 for k, v in calibration(
                     list(
                         zip(
@@ -237,7 +237,9 @@ def main(argv: list[str] | None = None) -> int:
     scorer = MaskedLMQEScorer(model_dir=args.model_dir, word_reducer=args.reducer)
     heuristic = HeuristicQEScorer()
 
-    real = qe_data.generate(args.corpus, mode="real", seed=args.seed, rate_percent=args.rate)
+    real = qe_data.generate(
+        args.corpus, mode="real", seed=args.seed, rate_percent=args.rate
+    )
     synth = qe_data.generate(
         args.corpus, mode="synthetic", seed=args.seed, rate_percent=args.rate
     )

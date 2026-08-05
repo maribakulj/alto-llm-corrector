@@ -88,12 +88,9 @@ vendors or track a server job's lifecycle; they live in the consumer.
 import asyncio
 from pathlib import Path
 
-from corrigenda import (
-    BaseProvider,
-    CorrectionPipeline,
-    PipelineObserver,
-    build_document_manifest,
-)
+from corrigenda import CorrectionPipeline, PipelineObserver
+from corrigenda.core.protocols import BaseProvider
+from corrigenda.formats.alto.parser import build_document_manifest
 
 
 class IdentityProvider:

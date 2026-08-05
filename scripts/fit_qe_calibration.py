@@ -114,9 +114,7 @@ def main(argv: list[str] | None = None) -> int:
         return _sigmoid((s - midpoint) / scale)
 
     line_words = [sl for sl in clean_lines] + [sl for sl, _ in dirty]
-    line_labels = [0] * len(clean_lines) + [
-        1 if any(ll) else 0 for _, ll in dirty
-    ]
+    line_labels = [0] * len(clean_lines) + [1 if any(ll) else 0 for _, ll in dirty]
     line_max = [max(prob(s) for s in sl) for sl in line_words]
     line_mean = [sum(prob(s) for s in sl) / len(sl) for sl in line_words]
     auc_max, auc_mean = auc(line_max, line_labels), auc(line_mean, line_labels)

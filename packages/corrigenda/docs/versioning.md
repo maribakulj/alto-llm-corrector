@@ -46,11 +46,31 @@ mechanism — both resolve to the same objects.
 
 - **`corrigenda.*`** — everything listed in `corrigenda.__all__`. Under
   strict SemVer *from 1.0.0*; provisional until then (see above).
+
+  Since `S3b` (2026-08-01) that list is **computed, not chosen**: 68
+  symbols, being the transitive closure of two promises — what
+  `load`/`correct`/`correct_sync` return, and what a custom
+  `EditProducer` must name to implement the protocol the README's first
+  sentence advertises. A name is in `__all__` because one of those two
+  closures reaches it, and for no other reason. It was 95 before, reached
+  by accretion.
 - **The submodule paths** documented in the README (`corrigenda.core.*`,
   `corrigenda.formats.alto` / `corrigenda.formats.page`,
   `corrigenda.producers.*`). Supported and documented — this is the door
-  the repository itself uses (695 module-path imports against 64
-  top-level ones), and the one a symbol demoted by `S3` keeps.
+  the repository itself uses (788 module-path imports against 56
+  top-level ones), and the one a symbol demoted by `S3b` keeps.
+
+  Two things live here on purpose rather than by omission. The **format
+  adapter seam** (`FormatAdapter`, `RewriteResult`, `RewriteMetrics`,
+  `AlignedPair`, `TokenAlignment`) is the rewriter's own accounting
+  vocabulary: injecting an adapter is an optional argument most callers
+  never pass, and `R5`/`R8`/`L8` have all moved these types recently.
+  Promising their stability under SemVer would be a promise nothing
+  supports. The **concrete producers and parsers** (`RulesProducer`,
+  `LLMEditProducer`, `build_document_manifest`, `parse_alto_file`, …) are
+  implementations, not contracts: the contract they satisfy —
+  `EditProducer`, `FormatAdapter` — is what a consumer should type
+  against.
 - The `CorrectionReport` JSON schema (see below).
 - The four frozen policies' fields and their defaults (§8.2) — a default
   change alters `policy_fingerprint()` and is at least MINOR, with a
