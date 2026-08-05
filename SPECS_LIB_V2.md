@@ -514,32 +514,43 @@ Chaque entrée : constat → règle normative. Toutes sont **v1.0** sauf mention
 
 ### 8.1 Surface
 
-> **Statut (2026-07-28) — la surface de sommet est PROVISOIRE.**
+> **Statut (2026-08-01) — la surface de sommet est CALCULÉE, et provisoire
+> jusqu'au gel.**
 >
-> `corrigenda.__all__` porte **95 symboles**. Ce nombre n'a jamais été
-> ratifié : il a été **accumulé**, un ajout à la fois, chacun justifié le
-> jour où il a été fait. `docs/PLAN.md` (`S3`) a calculé ce qu'il devrait
-> être — la clôture transitive de ce que la façade retourne, **54** — et la
-> réduction est **différée à la fin du nettoyage**, parce que `S2` (scinder
-> `core/pipeline.py`) peut encore déplacer ce qui mérite d'être exposé.
-> Couper avant, c'est migrer les imports deux fois.
+> `corrigenda.__all__` portait **95 symboles**, jamais ratifiés : accumulés
+> un ajout à la fois, chacun justifié le jour où il a été fait. `S3b` l'a
+> réduite aux **68** qu'atteignent deux clôtures transitives, calculées et
+> non choisies :
 >
-> En attendant, deux choses tiennent, et elles suffisent :
-> la série `0.9.x` est explicitement libre de casser la surface
-> (`packages/corrigenda/docs/versioning.md`), et un test de cliquet
-> (`tests/test_public_api_snapshot.py`) interdit qu'elle **grandisse**.
-> Rien n'est gelé sous SemVer avant `1.0.0` — et `1.0.0` ne sera pas taguée
-> avant que `S3` soit fermé (critère de sortie `V5`).
+> 1. **ce que la façade retourne** — en partant des annotations de retour de
+>    `load` / `correct` / `correct_sync` et en suivant les types, pour qu'un
+>    appelant puisse nommer la valeur qu'on lui rend ;
+> 2. **ce que la couture producteur oblige à nommer** — parce que le README
+>    promet « any custom `EditProducer` », et qu'une promesse d'extension
+>    sans les types pour l'écrire n'en est pas une.
+>
+> Reste dehors délibérément : la couture `FormatAdapter` (`RewriteResult`,
+> `RewriteMetrics`, `AlignedPair`, `TokenAlignment`). C'est une injection
+> optionnelle que la plupart des appelants ne passent jamais, et le
+> vocabulaire de comptabilité interne du réécrivain — `R5`, `R8` et `L8`
+> l'ont tous déplacé cette année. Le geler sous SemVer à `1.0` promettrait
+> une stabilité que rien ne soutient.
+>
+> Provisoire garde son sens : la série `0.9.x` est explicitement libre de
+> couper encore (`packages/corrigenda/docs/versioning.md`) si une clôture se
+> révèle fausse. Ce que le cliquet
+> (`tests/test_public_api_snapshot.py`) garantit, c'est que la liste ne peut
+> pas **regrandir**. Rien n'est gelé sous SemVer avant `1.0.0`.
 >
 > **Deux portes, deux garanties** (déjà énoncé dans `versioning.md`, répété
 > ici parce que c'est la section normative) :
 >
 > - `corrigenda.*` — la porte d'entrée. Sous SemVer strict **à partir de
->   `1.0.0`**, et réduite à la clôture calculée avant cette date.
+>   `1.0.0`**, et déjà réduite à la clôture calculée.
 > - `corrigenda.core.*`, `corrigenda.formats.*`, `corrigenda.producers.*` —
 >   les chemins de modules. Supportés et documentés ; c'est la porte que le
->   dépôt emprunte lui-même (**695 imports par chemin de module contre 64
->   depuis le sommet**), et un symbole rétrogradé par `S3` y reste
+>   dépôt emprunte lui-même (**864 imports par chemin de module contre 65
+>   depuis le sommet**), et un symbole rétrogradé par `S3b` y reste
 >   importable. Ce n'est donc pas une suppression, c'est un déplacement.
 >
 > Le bloc ci-dessous reste la photographie d'origine de la v2.0 : il dit
@@ -592,16 +603,27 @@ reconcile_hyphen_pair(...), check_line(...), plan_page(...)
 
 ### 8.2 Politiques
 
-`RetryPolicy`, `GuardConfig`, `ChunkPlannerConfig`, `PairingPolicy` :
-objets frozen Pydantic, tous avec un défaut reproduisant le comportement
-actuel. **Empreinte de configuration** (`policy_fingerprint()` : hash stable
+`RetryPolicy`, `GuardConfig`, `ChunkPlannerConfig`, `PairingPolicy`,
+`LossPolicy` (ADR-012), `ConfidencePolicy`, `RoutingPolicy` : objets frozen
+Pydantic, tous avec un défaut reproduisant le comportement actuel. Elles
+étaient quatre à la rédaction de cette section ; les trois dernières sont
+arrivées avec la comptabilité des pertes, les confiances et le routage
+sélectif. **Empreinte de configuration** (`policy_fingerprint()` : hash stable
 du dump JSON trié) exposée pour la provenance (§11).
+
+L'empreinte composite `config_fingerprint()` en couvre **cinq** :
+`chunk_planner`, `guard`, `loss`, `pairing`, `retry`. `ConfidencePolicy` et
+`RoutingPolicy` en sont dehors **tant qu'elles ne peuvent pas changer les
+octets livrés** — les confiances restent report-only jusqu'au déverrouillage
+de `write_wc`, et le routage par défaut envoie chaque ligne au producteur.
+Les faire entrer plus tôt ferait varier l'empreinte estampillée sans que la
+sortie varie, ce qui la rendrait illisible comme preuve.
 
 Note (ratifiée 2026-07-07) : `CorrectionPipeline(pairing_policy=…)` est un
 paramètre de **provenance uniquement** — l'appariement des paires de
 coupure se fait au parse, avant le pipeline, et le pipeline ne ré-apparie
-jamais. Il existe pour que `config_fingerprint()` couvre les quatre
-politiques ci-dessus. Contrat appelant : passer la **même** `PairingPolicy`
+jamais. Il existe pour que `config_fingerprint()` couvre les politiques
+qui décident du texte livré. Contrat appelant : passer la **même** `PairingPolicy`
 qu'au parse ; le pipeline ne peut pas le vérifier, et une politique
 différente rendrait l'empreinte estampillée mensongère.
 
@@ -726,7 +748,7 @@ PAGE XML (contrairement à `alto-core`, qui devient faux en v1.1).
 la belle alternative métaphorique. Décision avant le premier tag — on ne
 renomme pas un paquet publié.
 
-Le paquet reste dans le monorepo `alto-llm-corrector`
+Le paquet reste dans le monorepo `corrigenda`
 (`packages/<nom>/`) ; le backend le consomme par dépendance de chemin comme
 aujourd'hui, les externes par PyPI.
 

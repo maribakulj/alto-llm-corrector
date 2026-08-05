@@ -9,9 +9,28 @@ pinned: false
 
 # Corrigenda
 
-Post-OCR text correction of **ALTO and PAGE XML** files using LLM providers (OpenAI, Anthropic, Mistral, Google Gemini).
+**The deliverable is a Python library** — `corrigenda`, in
+[`packages/corrigenda/`](packages/corrigenda/): post-OCR text correction of
+**ALTO and PAGE XML**, structure-safe, with no server and no vendor wired in.
+That is the thing that gets published, versioned and supported.
 
-Upload one or more ALTO or PAGE XML files, choose a provider and model, and get the corrected XML back — in its original format and namespace, with hyphenation pairs preserved intact across line boundaries.
+**The rest of this repository is a demonstration of it, and it is temporary.**
+The FastAPI backend and the React frontend exist to show the library working
+on a real file, in a browser, without anyone installing Python — a shop
+window, not a second product. **They will be removed when the library reaches
+its final form.** Nothing in them is packaged, published or under SemVer, and
+the library does not import them: the coupling is one-way and stays that way
+(`SPECS_LIB_V2.md` §15).
+
+Read that as a promise about the library, not a warning about the demo: the
+demo can be deleted without the library losing anything, and that is exactly
+the property being maintained.
+
+---
+
+## What the demo does
+
+Upload one or more ALTO or PAGE XML files, choose a provider and model, and get the corrected XML back — in its original format and namespace, with hyphenation pairs preserved intact across line boundaries. Providers: OpenAI, Anthropic, Mistral, Google Gemini.
 
 **What it does:** corrects OCR errors in the text of a line — ALTO `<String CONTENT="..."/>`, PAGE `<TextEquiv><Unicode>` — never its geometry.
 **What it does not:** OCR, resegmentation, line merging/splitting, translation, or text modernisation.
@@ -26,30 +45,43 @@ for the version matrix and what each one validates against.
 
 ## Documentation map
 
-The correction engine is a standalone library (`packages/corrigenda/`);
-this repo is that library **plus** a FastAPI + React app around it.
+Two lifetimes, and it is worth knowing which one a document has. **Library
+docs outlive the demo**; demo docs go with it. Everything under
+`docs/history/` is already dead and fenced off.
 
-**Normative (kept current — everything else is history):**
+**The library — kept current, survives the demo's removal:**
 
 | Doc | Scope |
 |---|---|
-| `README.md` (this file) | The app: what it does, how to run and deploy it |
+| [`packages/corrigenda/README.md`](packages/corrigenda/README.md) | The library's own front page — this is what a PyPI reader sees, and it stands alone |
 | `SPECS_LIB_V2.md` | Normative spec for the `corrigenda` library — what it **must be** |
 | [`docs/PLAN.md`](docs/PLAN.md) | **The single live plan** — what remains, in what order, and what `1.0` requires. There is exactly one; do not write a second |
 | [`docs/audit/`](docs/audit/) | Findings, with evidence — what has been **observed**. Carries no plan |
-| `packages/corrigenda/docs/` | Library guides: `quickstart`, `formats`, `format-support`, `edit-protocol`, `versioning`, and [`reading-a-report`](packages/corrigenda/docs/reading-a-report.md) — what each number in a run's report does **and does not** mean |
+| `packages/corrigenda/docs/` | Library guides: [`quickstart`](packages/corrigenda/docs/quickstart.md), [`formats`](packages/corrigenda/docs/formats.md) (how the two backends are built), [`format-support`](packages/corrigenda/docs/format-support.md) (which versions, and what validates), [`edit-protocol`](packages/corrigenda/docs/edit-protocol.md), [`versioning`](packages/corrigenda/docs/versioning.md), and [`reading-a-report`](packages/corrigenda/docs/reading-a-report.md) — what each number in a run's report does **and does not** mean |
 | `packages/corrigenda/CHANGELOG.md` | The library's released changes (SemVer) |
-| [`docs/API.md`](docs/API.md) | Backend HTTP API map (the OpenAPI schema is the contract) |
-| [`docs/adr/`](docs/adr/) | Architecture decision records — why a design is what it is |
-| [`SECURITY.md`](SECURITY.md) | Deployment profiles, threat model, vulnerability reporting |
-| `CONTRIBUTING.md`, `CLAUDE.md` | Contributor + assistant guidance |
+| [`docs/adr/`](docs/adr/) | Architecture decision records — why a design is what it is. Some record demo decisions (002, 003, 004); those retire with it |
+
+**The demo — accurate today, removed with the app:**
+
+| Doc | Scope |
+|---|---|
+| `README.md` (this file, below the map) | Running and deploying the demo |
+| [`docs/API.md`](docs/API.md) | The demo backend's HTTP API map (the OpenAPI schema is the contract) |
+| [`SECURITY.md`](SECURITY.md) | Deployment profiles and threat model — the demo's, not the library's. A library has no CORS policy |
+
+**Both:**
+
+| Doc | Scope |
+|---|---|
+| `CONTRIBUTING.md`, `CLAUDE.md` | Contributor + assistant guidance for the whole repository |
 
 **Status:** pre-`0.10.0`, no git tag yet. The library is a research-grade beta:
 read `docs/PLAN.md` for the known open defects and the criteria a `1.0` has to
-meet before it can claim to be one. In particular the **top-level import
-surface is provisional** — `corrigenda.__all__` will be cut from 95 symbols to
-the computed 54 before any freeze, and demoted symbols stay importable from
-their own module (`packages/corrigenda/docs/versioning.md`).
+meet before it can claim to be one. The **top-level import surface is
+provisional until `1.0.0`** but no longer accidental: `S3b` cut it from 95
+accumulated symbols to the **68** two computed closures reach, and demoted
+symbols stay importable from their own module
+([`packages/corrigenda/docs/versioning.md`](packages/corrigenda/docs/versioning.md)).
 
 **Historical:** everything under [`docs/history/`](docs/history/) is
 frozen design & audit trail (original specs, migration and audit logs).

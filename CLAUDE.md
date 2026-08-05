@@ -4,7 +4,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Corrigenda is a post-OCR text-correction **library** (`packages/corrigenda/`, supports ALTO and PAGE XML) plus a demo **web app** (FastAPI backend + React frontend) around it, using LLM providers (OpenAI, Anthropic, Mistral, Google Gemini). Users upload ALTO/PAGE XML, pick a provider/model, and get corrected XML back. It does NOT do OCR, resegmentation, line merging/splitting, translation, or text modernization.
+Corrigenda is a post-OCR text-correction **library** (`packages/corrigenda/`, ALTO and PAGE XML). It does NOT do OCR, resegmentation, line merging/splitting, translation, or text modernization.
+
+**The library is the deliverable; the web app is a temporary demo of it.** The FastAPI backend + React frontend (using OpenAI, Anthropic, Mistral, Google Gemini) exist to show the library working in a browser, and **will be removed when the library reaches its final form**. Consequences that bind day-to-day work:
+
+- Dependencies flow **one way only** — the demo imports the library, never the reverse. A demo need that seems to require the library to name or special-case it is either a missing injection point (fix it generically in the library) or out of scope (`SPECS_LIB_V2.md` §12, §15).
+- Only `packages/corrigenda/` is packaged, versioned and under SemVer. `backend/` and `frontend/` are neither.
+- `docs/API.md` and `SECURITY.md` describe the DEMO and retire with it; `packages/corrigenda/docs/` is the library's and survives.
 
 Normative docs: `README.md`, `SPECS_LIB_V2.md` (the contract — what the library must be), `docs/PLAN.md` (**the single live plan** — what remains and in what order), `packages/corrigenda/docs/`, `docs/API.md`, `SECURITY.md`, `CONTRIBUTING.md`. Findings live in `docs/audit/` and carry no plan. Everything under `docs/history/` is frozen history — never trust it for current module locations, and never update it to match code.
 
@@ -66,12 +72,15 @@ The correction flow is: **Parse → Chunk → Enrich → LLM Call → Validate �
 2. `core/planner.py` — Splits lines into LLM-sized chunks using adaptive granularity: PAGE → BLOCK → WINDOW → LINE. Hyphen pairs are atomic and must never be split across chunks
 3. `core/hyphenation.py` — **Hyphenation Reconciler**. Enriches chunks with hyphenation metadata before the LLM call, then reconciles corrected text back onto physical line pairs after the response. Core invariant: the app decides, the LLM informs — lines are never merged or moved
 4. `core/validator.py` — Validates LLM JSON responses (line count, IDs, no newlines). Extra check: hyphen pairs must not have been merged by the LLM
-5. `core/pipeline.py` — `CorrectionPipeline`, the engine. Retry logic (3 attempts per chunk, then granularity downgrade, then fallback to OCR source text), guards (`core/guards.py`), edit protocol (`core/editing.py`), cooperative cancellation via `should_abort`. **`run()` never mutates its input (private deep copy, ADR-011); instances are reentrant — read outcomes off `result.decisions`**
-6. `formats/alto/rewriter.py` — Rewrites ALTO XML with corrected text, reconstructing HYP/SUBS_* elements for hyphen pairs. Never modifies TextLine geometry attributes (ID, HPOS, VPOS, WIDTH, HEIGHT)
+5. `core/pipeline.py` — `CorrectionPipeline`, the **façade**: construction, the config fingerprint, and the six steps of a run (preflight → index → drive pages → finalise → render → report). Since `S2` it orchestrates and reimplements nothing — 568 lines, ratchet-guarded by `tests/test_orchestrator_budget.py`. **`run()` never mutates its input (private deep copy, ADR-011); instances are reentrant — read outcomes off `result.decisions`**
+6. `core/driver.py` — `PageDriver`, the inner loop: plan a page's chunks, route them, run each, descend a granularity when retrying at this one is hopeless. Immutable config, no run state
+7. `core/attempt.py` — one chunk asked of a producer until it answers or the budget runs out: request, call, validation, and what a retry costs (3 attempts, temperature ramp)
+8. `core/outcome.py` — the three ways a chunk ends and what each does to its lines: success, fallback, absorbed error. Guards live in `core/guards.py`, the edit protocol in `core/editing.py`
+9. `formats/alto/rewriter.py` — Rewrites ALTO XML with corrected text, reconstructing HYP/SUBS_* elements for hyphen pairs. Never modifies TextLine geometry attributes (ID, HPOS, VPOS, WIDTH, HEIGHT)
 
 Line identity is always **(page_id, line_id)** — line_id alone repeats across files. This holds in the library, the API read models, and the frontend (`frontend/src/lib/lineKey.ts`).
 
-### Backend (`backend/app/`)
+### Demo backend (`backend/app/`) — temporary, see Project Overview
 
 - `api/jobs.py` — job endpoints; upload-slot reservation before reading bodies; uploads stream to disk in 1 MiB chunks
 - `api/signed_urls.py` — capability tokens travel ONLY in the `X-Job-Token` header; header-less surfaces (EventSource, `<img>`) use short-lived signed `?sig=` credentials scoped to job + purpose
@@ -80,7 +89,7 @@ Line identity is always **(page_id, line_id)** — line_id alone repeats across 
 - `jobs/cancellation.py` — per-job cancel events for `POST /api/jobs/{id}/cancel`
 - `providers/` — `BaseProvider` implementations (`list_models()`, `complete_structured()`), structured JSON output with provider-specific fallbacks; system prompt in `base.py` (rule 13: correct hyphenated lines individually)
 
-### API surface
+### API surface (the demo's)
 
 See `docs/API.md`; the OpenAPI schema is the contract (CI drift-checks `frontend/openapi.snapshot.json` and `frontend/src/types/api.generated.ts`; frontend REST types alias the generated ones).
 

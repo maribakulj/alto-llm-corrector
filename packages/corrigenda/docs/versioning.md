@@ -8,17 +8,17 @@ break is still a deliberate act (snapshot-test change + CHANGELOG entry).
 `1.0.0rc1` freezes the API; `1.0.0` is tagged only after the independent
 external review of the public API required by the release plan.
 
-**The top-level surface is provisional and will shrink before that
-freeze.** `corrigenda.__all__` holds 95 symbols today, accumulated one
-addition at a time rather than designed; `docs/PLAN.md` (`S3`) computed
-what it should be — the transitive closure of what the façade returns,
-54 — and schedules the cut for the end of the current cleanup, once the
-structural work that decides the final shape has landed. A demoted
-symbol is **not removed**: it stays importable from its own module (see
-*What is public* below), so a migration is an import rewrite, not a
-rewrite. Meanwhile the snapshot test refuses any *growth* of the list.
-Treat `__all__` as an inventory until `S3` closes; the entry points
-pinned by that same test are the part you can rely on today.
+**The top-level surface has been cut, and is provisional until the
+freeze.** `corrigenda.__all__` held 95 symbols, accumulated one addition
+at a time rather than designed. `S3b` (2026-08-01) reduced it to the
+**68** that two computed closures reach — see *What is public* below for
+what those closures are and why the format-adapter seam is deliberately
+outside them. A demoted symbol was **not removed**: it stays importable
+from its own module, so migrating is an import rewrite, not a rewrite.
+
+Provisional still means provisional: 0.9.x may cut further if a closure
+turns out to be wrong. What the snapshot test guarantees meanwhile is
+that the list cannot *grow* back.
 
 ## SemVer, strictly
 
@@ -57,7 +57,7 @@ mechanism — both resolve to the same objects.
 - **The submodule paths** documented in the README (`corrigenda.core.*`,
   `corrigenda.formats.alto` / `corrigenda.formats.page`,
   `corrigenda.producers.*`). Supported and documented — this is the door
-  the repository itself uses (788 module-path imports against 56
+  the repository itself uses (864 module-path imports against 65
   top-level ones), and the one a symbol demoted by `S3b` keeps.
 
   Two things live here on purpose rather than by omission. The **format
@@ -72,9 +72,14 @@ mechanism — both resolve to the same objects.
   `EditProducer`, `FormatAdapter` — is what a consumer should type
   against.
 - The `CorrectionReport` JSON schema (see below).
-- The four frozen policies' fields and their defaults (§8.2) — a default
-  change alters `policy_fingerprint()` and is at least MINOR, with a
-  CHANGELOG entry.
+- The seven frozen policies' fields and their defaults (§8.2) —
+  `ChunkPlannerConfig`, `RetryPolicy`, `GuardConfig`, `PairingPolicy`,
+  `LossPolicy`, `ConfidencePolicy`, `RoutingPolicy`. A default change
+  alters that policy's `policy_fingerprint()` and is at least MINOR, with
+  a CHANGELOG entry. Five of them also feed the composite
+  `config_fingerprint()` stamped into corrected XML; the two that cannot
+  yet change output bytes (`ConfidencePolicy`, `RoutingPolicy`) stay out
+  of it deliberately.
 
 Anything prefixed with `_` (modules, functions, attributes) is private,
 whatever module it lives in.
