@@ -175,15 +175,22 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: pip
       - name: Install build tooling
-        run: pip install build
+        # twine>=7 pinned deliberately: it is the first release that accepts
+        # the Metadata-Version 2.4 `License-File` field hatchling emits.
+        run: pip install build "twine>=7"
       - name: Build wheel + sdist
         run: python -m build
+      - name: Check distribution metadata
+        # Was skipped, on a reason that has since expired: twine < 7
+        # rejected the Metadata-Version 2.4 `License-File` field hatchling
+        # emits, so the check was a false negative on wheel quality. twine 7
+        # accepts it (verified against this exact wheel), so the gate is back
+        # — a metadata regression should fail here, not at upload time.
+        run: python -m twine check dist/*
       - name: Verify wheel is installable + importable
         # Smoke-install the wheel into a fresh venv and exercise the
         # public API. Catches missing files in the wheel, broken
-        # dependencies, or import-time errors. (We skip `twine check`
-        # because it rejects PEP 639's `license-file` metadata field
-        # that hatchling emits — false positive on wheel quality.)
+        # dependencies, or import-time errors.
         #
         # _smoke_imports.py is the single source of truth shared with
         # the publish workflow and scripts/release-corrigenda.sh — it

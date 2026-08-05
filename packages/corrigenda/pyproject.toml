@@ -80,11 +80,18 @@ path = "src/corrigenda/__init__.py"
 packages = ["src/corrigenda"]
 
 [tool.hatch.build.targets.sdist]
+# Leading slashes are load-bearing: hatchling matches these as PATTERNS, so
+# an unanchored `README.md` matches every README at any depth — it was
+# silently shipping `tests/corpus_gt/README.md` and
+# `tests/external_corpus/pinned/README.md`. No corpus DATA ever left (the
+# XML matched nothing), but an allowlist that admits files nobody listed is
+# not an allowlist. `tests/test_packaging_excludes_corpora.py` now reads the
+# BUILT sdist rather than this declaration.
 include = [
-    "src/corrigenda",
-    "README.md",
-    "CHANGELOG.md",
-    "LICENSE",
+    "/src/corrigenda",
+    "/README.md",
+    "/CHANGELOG.md",
+    "/LICENSE",
 ]
 
 # ---------------------------------------------------------------------------

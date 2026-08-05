@@ -939,7 +939,7 @@ mesurer avant de corriger.
 
 | id | item |
 |---|---|
-| P1 | Répétition sur TestPyPI (le workflow n'a jamais été exercé, 0 tag git) |
+| P1 | Répétition sur TestPyPI (le workflow n'a jamais été exercé, 0 tag git) | **répétée en local (2026-08-01), upload non fait** — il demande l'OIDC de GitHub Actions. Toute la chaîne du workflow rejouée : `python -m build`, `twine check` (PASSED sur les deux artefacts), smoke-install de la wheel (`_smoke_imports.py` : 68 symboles publics), SBOM CycloneDX + l'assertion anti-pollution, cohérence `__version__` ↔ CHANGELOG, forme du tag attendu (`corrigenda-v0.9.0`). **Deux constats, corrigés** : (a) le sdist livré ne correspondait pas à son allowlist — hatchling traite les entrées comme des MOTIFS, donc `README.md` attrapait `tests/corpus_gt/README.md` et `tests/external_corpus/pinned/README.md` ; aucune donnée de corpus n'est jamais partie, mais le test de packaging vérifiait la *déclaration* et non l'artefact. Entrées ancrées (`/README.md`), test réécrit pour lire le sdist et la wheel CONSTRUITS. (b) la CI sautait `twine check` sur une raison périmée (twine < 7 rejetait `License-File` de Metadata 2.4) : twine 7 l'accepte, vérifié sur cette wheel, la porte est rétablie | reste : dispatcher le workflow sur `testpypi` depuis GitHub, ce qui exige le tag donc `P2` |
 | P2 | Premier tag `0.10.0`, SBOM, publier l'artefact testé |
 | P3 | `1.0.0` uniquement : revue humaine externe indépendante de l'API publique, après `V1`-`V9` |
 
