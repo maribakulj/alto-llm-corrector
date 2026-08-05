@@ -109,6 +109,18 @@ class Coords(BaseModel):
     on the PAGE side, so the source polygon is a read-only provenance field.
     """
 
+    # ADR-011 slice E, made structural (`S4`, partial). The engine works on
+    # a deep copy and never writes here — freezing says so in the type
+    # instead of leaving it to hold by the discipline of one call site.
+    #
+    # Not yet frozen, and each for its own measured reason: `LineManifest`
+    # IS the run's working state (246 assignment sites — corrected_text,
+    # status, the hyphen pointers), and `PageManifest`/`BlockManifest` are
+    # written once by the page-id disambiguation in `core.pairing`, which
+    # rewrites hyphen pointer fields in the same pass and so belongs to
+    # `S1`'s territory.
+    model_config = ConfigDict(frozen=True)
+
     hpos: int
     vpos: int
     width: int
@@ -205,6 +217,18 @@ class PageManifest(BaseModel):
 
 class DocumentManifest(BaseModel):
     """A multi-page document: the top-level structure the pipeline consumes."""
+
+    # ADR-011 slice E, made structural (`S4`, partial). The engine works on
+    # a deep copy and never writes here — freezing says so in the type
+    # instead of leaving it to hold by the discipline of one call site.
+    #
+    # Not yet frozen, and each for its own measured reason: `LineManifest`
+    # IS the run's working state (246 assignment sites — corrected_text,
+    # status, the hyphen pointers), and `PageManifest`/`BlockManifest` are
+    # written once by the page-id disambiguation in `core.pairing`, which
+    # rewrites hyphen pointer fields in the same pass and so belongs to
+    # `S1`'s territory.
+    model_config = ConfigDict(frozen=True)
 
     document_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     source_files: list[str]

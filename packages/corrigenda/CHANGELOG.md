@@ -94,6 +94,17 @@ The **top-level import surface** will break once more before the first tag:
 
 ### Added
 
+- **`Coords` and `DocumentManifest` are frozen (`S4`, partial).** ADR-011
+  slice E made `run()` work on a deep copy so a caller's document is never
+  written; that guarantee held by the discipline of one call site, and now
+  holds by the type. Measured before changing anything: those two carry zero
+  assignment sites in `src/`. `LineManifest` carries 246 — it IS the run's
+  working state — and `PageManifest`/`BlockManifest` are written once each by
+  the page-id disambiguation, so they stay mutable until `S4` introduces a
+  distinct working type. A hand-built manifest is now made with
+  `model_copy(update={"source_format": None})` rather than by un-stamping a
+  parsed one.
+
 - **A `typecheck` extra, so `mypy --strict` means one thing.** `lxml-stubs` was
   installed by hand in the CI workflow and declared in no manifest, and without
   it mypy types `_Element.attrib` as `Any` — a local strict run checked less
