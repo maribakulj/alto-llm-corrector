@@ -935,8 +935,8 @@ restent intacts.
 
 ### Suivi
 
-Dernière mise à jour : 2026-08-06 — session 3. Lots `RM-0` et `RM-1` clos ;
-`RM-2` en cours, phase filet close.
+Dernière mise à jour : 2026-08-06 — session 4. Lots `RM-0` et `RM-1` clos ;
+`RM-2` en cours, filet et table de précédence clos, migration à venir.
 Branche : `claude/technical-repository-audit-61yzfb`.
 
 - **Done** — `RM-11` (session 1) : règle « pas de 6ᵉ chemin » de `CLAUDE.md`
@@ -972,7 +972,21 @@ Branche : `claude/technical-repository-audit-61yzfb`.
   assignent, 3 défèrent derrière `if not trace.fallback_reason`. Le cliquet
   d'exclusivité épingle 22 écritures / 7 fonctions / 5 modules, ne peut que
   descendre, et exempte `core/decide.py` avant son existence.
-- **In progress** — `RM-01`, phase 1/3 (table de précédence) : suivante.
+- **Done** — `RM-01` phase 1/3 (session 4) : la règle de précédence est une
+  décision motivée, `docs/adr/013-fallback-reason-precedence.md`, et non plus
+  un motif à re-déduire de trois `if`. Livrable en ADR plutôt qu'en constante
+  dans un `core/decide.py` neuf : le dépôt tient déjà une discipline ADR
+  testée, créer le module vide allumerait trop tôt l'exemption du cliquet
+  d'exclusivité, une constante sans logique serait du poids mort dans un
+  paquet que `RM-04` dégonfle, et `ADR-013` est citable depuis le code là où
+  `RM-01` ne l'est pas. **Décision : garder le partage 4/3** — l'écrivain
+  unique de `RM-01` diffère sur les sept chemins, ce qui est un changement de
+  comportement sur les quatre sites assignants **invisible parce que `I-1`
+  les rend inatteignables deux fois**. Couverture des 7 sites complétée (4 →
+  7) ; le cas tranchant est réécrit avec la même assertion et la lecture
+  inverse — il était épinglé comme défaut à corriger, il est épinglé comme
+  correction à protéger.
+- **In progress** — `RM-01`, phase 2/3 (migration des sites) : suivante.
 - **Blocked** — aucun. `RM-04` débloqué le 2026-08-06 (option A).
 - **Remaining** — `RM-01`, `RM-04`, `RM-07`, `RM-03`, `RM-06`, `RM-05b`,
   `RM-09`.
@@ -992,16 +1006,27 @@ Branche : `claude/technical-repository-audit-61yzfb`.
   against a real corpus ». Même famille que la clause dupliquée de
   `RoutingPolicy` fermée par `RM-11` — un mot a manifestement été substitué
   en masse dans les docstrings à un moment. À ramasser avec `RM-06`.
-- **New bugs discovered** — l'attribution d'une révocation peut être fausse,
-  et c'est désormais épinglé plutôt que supposé : `_apply_unit_reverts`
-  écrit `corrected_text` et `status` **sans condition** mais la raison
-  seulement si la trace est vide. Une ligne déjà porteuse d'une raison est
-  donc révoquée **par cette passe** pendant que la piste d'audit continue
-  d'attribuer sa chute à la précédente — un `token_realign` rapporté comme
-  `adjacent_duplicate`. `CorrectionResult.fallback_reasons` compte donc
-  faux d'autant de lignes qu'il y en a de signalées deux fois. Ce n'est pas
-  une altération du texte (les deux causes révoquent), donc hors `L*` ;
-  c'est une décision que `RM-01` doit prendre **délibérément**.
+- **~~New bugs discovered~~ — RETIRÉ (session 4, vérifié faux).** La session 3
+  annonçait que l'attribution d'une révocation pouvait être fausse et que
+  `CorrectionResult.fallback_reasons` comptait faux d'autant de lignes
+  signalées deux fois. **C'est inexact.** Le constat de code était juste
+  (`_apply_unit_reverts` écrit texte et statut sans condition, la raison
+  seulement dans une trace vide) ; l'inférence ne l'était pas. Elle supposait
+  qu'une ligne puisse porter une raison **tout en tenant encore une
+  correction**, ce qui n'arrive pas :
+
+  > **I-1 — une ligne porteuse d'un `fallback_reason` est déjà revenue à sa
+  > source : son texte final égale son texte OCR.**
+
+  Mesuré, pas supposé : producteur adverse sur `X0000002`, `sample`, les
+  quatre fixtures PAGE et `corpus_gt`, sous trois politiques de perte — **756
+  lignes décidées, les 8 familles de raisons, zéro ligne** porteuse d'une
+  raison en tenant une correction. Une seconde révocation est donc
+  **idempotente** sur le texte ; la passe qui a réellement retiré la
+  correction est la première, et différer est ce qui garde la raison
+  **vraie**. Le dernier-écrivain-gagne nommerait une passe qui n'a rien fait.
+  Tranché et écrit en `ADR-013` ; `I-1` est désormais un test.
+- **New bugs discovered** — aucun en session 4.
 - **Tests added** — session 2, `tests/test_orchestrator_budget.py` : `RM-02`
   ajoute `test_no_unnamed_function_exceeds_the_parameter_target`,
   `test_known_overparameterised_functions_only_shrink`,
@@ -1016,6 +1041,13 @@ Branche : `claude/technical-repository-audit-61yzfb`.
   4/3), `test_decision_write_exclusivity.py` (cliquet des 22 écritures).
   Premier répertoire de tests groupé par **invariant** et non par vague —
   amorce de `RM-05b`.
+- **Tests added** — session 4, `tests/decision/test_fallback_reason_precedence.py`
+  passe de 6 à 21 cas : un pin par site (1-3 `_apply_line_acceptance`, 6
+  `_refresh_pair_traces` × 3 branches), le mécanisme qui empêche les sites
+  assignants de se croiser (l'acceptation saute toute ligne déjà décidée), et
+  **`I-1` bout-en-bout** paramétré sur 2 corpus × 3 politiques de perte, avec
+  une garde contre le vert par vacuité : si le producteur adverse cesse de
+  produire des fallbacks, le test échoue au lieu de passer sans rien vérifier.
 - **Risks remaining** — `RM-01` reste ouvert, et la session 3 a relevé son
   enjeu : la classe de défaut visée n'est pas seulement une ligne
   `CORRECTED` portant son texte source (`L9`), c'est une **correction non
@@ -1040,6 +1072,7 @@ Arités mesurées `self`/`cls` exclus : ce qu'un APPELANT doit assembler.
 | Écritures de décision (`corrected_text`/`status`) | 22 énoncés, 7 fonctions, 5 modules | 22, épinglées | 0 hors `core/decide.py` |
 | Écritures de `fallback_reason` | 4 sans condition / 3 différées | 4/3, épinglé | 1 écrivain |
 | Ordre des passes de finalisation | contrat en docstring, 0 garde | 0 garde, 1 `xfail` strict | refusé si faux |
+| `I-1` (raison ⇒ ligne revenue à sa source) | vraie, non énoncée, 0 test | énoncée (`ADR-013`), 6 tests | tenue par `RM-01` |
 | Paramètres, maximum du paquet | 19 (`for_provider`) | 19 | ≤ 8 |
 | Fonctions > 8 paramètres | 13 | 13, épinglées | 0 hors liste |
 | Fonctions > 100 lignes, `core/` | 7 (toutes épinglées) | 7 | ≤ 7 |
