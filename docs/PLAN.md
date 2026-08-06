@@ -868,8 +868,8 @@ s'exécute pas dans cette vague.
 | ID | Titre | Nature | Gravité | Fichiers | Dépend de | Statut |
 |---|---|---|---|---|---|---|
 | `RM-11` | Contradictions documentaires : `CLAUDE.md` vs ce plan sur `S1` ; 2 docstrings fausses ; 1 clause dupliquée | vérité | secondaire | `CLAUDE.md`, `core/outcome.py`, `core/quality.py`, `tests/test_import_contract.py` | — | **fait (2026-08-06)** |
-| `RM-02` | Ratchet goodhartisé : mesure la longueur, pas le couplage ; périmètre limité à `core/` | outillage | important | `tests/test_orchestrator_budget.py` | — | à faire |
-| `RM-10` | `_rebuild_line` (203 l.) et `rewrite_alto_file` (161 l.) hors de toute mesure | mesure | important | `formats/alto/rewriter.py` (lecture seule) | `RM-02` | à faire |
+| `RM-02` | Ratchet goodhartisé : mesure la longueur, pas le couplage ; périmètre limité à `core/` | outillage | important | `tests/test_orchestrator_budget.py` | — | **fait (2026-08-06)** |
+| `RM-10` | `_rebuild_line` (203 l.) et `rewrite_alto_file` (161 l.) hors de toute mesure | mesure | important | `formats/alto/rewriter.py` (lecture seule) | `RM-02` | **fait (2026-08-06)** |
 | `RM-05a` | Aucun test ne protège l'ordre des passes de `core/finalize.py` | tests | important | `tests/decision/` (nouveau) | — | à faire |
 | `RM-01` | L'écriture de la décision terminale d'une ligne est dispersée sur 5 modules ; l'ordre des passes est porté par une docstring | **bugfix** | **critique** | `core/outcome.py`, `core/acceptance.py`, `core/reconcile.py`, `core/routing.py`, `core/finalize.py` | `RM-02`, `RM-05a` | à faire |
 | `RM-04` | ~20 % du code du paquet n'est exécuté par aucun chemin par défaut et est gelé par ce plan | nettoyage | important | `integrations/`, `core/routing.py`, `core/quality.py`, `core/confidence.py`, `core/batching.py`, `__init__.py` | `RM-11` + ratification | à faire (option A) |
@@ -935,37 +935,66 @@ restent intacts.
 
 ### Suivi
 
-Dernière mise à jour : 2026-08-06 — session 1.
+Dernière mise à jour : 2026-08-06 — session 2. Lots `RM-0` et `RM-1` clos.
 Branche : `claude/technical-repository-audit-61yzfb`.
 
-- **Done** — `RM-11` : règle « pas de 6ᵉ chemin » de `CLAUDE.md` reformulée en
-  propriété (deux encodages, pas un compte historique) ; docstring de
-  `_fall_back_to_source` qui se disait « the single place » corrigée ; clause
-  dupliquée de `RoutingPolicy` réparée et alignée sur `core/pipeline.py` ;
-  en-tête de `tests/test_import_contract.py` qui situait `_adapter_for_format`
-  dans `core/pipeline.py` corrigé vers `core/provenance.py`.
+- **Done** — `RM-11` (session 1) : règle « pas de 6ᵉ chemin » de `CLAUDE.md`
+  reformulée en propriété (deux encodages, pas un compte historique) ;
+  docstring de `_fall_back_to_source` qui se disait « the single place »
+  corrigée ; clause dupliquée de `RoutingPolicy` réparée et alignée sur
+  `core/pipeline.py` ; en-tête de `tests/test_import_contract.py` qui situait
+  `_adapter_for_format` dans `core/pipeline.py` corrigé vers
+  `core/provenance.py`.
+- **Done** — `RM-02` + `RM-10` (session 2) : `_PARAMETER_TARGET = 8` rejoint
+  `_FUNCTION_TARGET`, avec la même sémantique de cliquet et 13 fonctions
+  épinglées à leur arité mesurée (`_OVERPARAMETERISED`) ; le scan passe de
+  `core/*.py` à `src/corrigenda/**/*.py`, et 6 fonctions de `formats/`
+  rejoignent `_OVERSIZED` à leur taille mesurée. **Épingler n'est pas
+  s'engager à couper** : `formats/alto/rewriter.py` reste hors d'atteinte.
+  Sensibilité vérifiée dans les deux sens puis annulée (un 10ᵉ argument sur
+  `PageDriver._run_chunk` → rouge ; une fonction longue et large ajoutée à
+  `formats/page/_text.py` → rouge sur les deux gardes, cas que l'ancien scan
+  ne voyait pas). Aucun fichier de `src/` modifié.
 - **In progress** — aucun.
 - **Blocked** — aucun. `RM-04` débloqué le 2026-08-06 (option A).
-- **Remaining** — `RM-02`, `RM-10`, `RM-05a`, `RM-01`, `RM-04`, `RM-07`,
-  `RM-03`, `RM-06`, `RM-05b`, `RM-09`.
-- **New bugs discovered** — aucun.
-- **Tests added** — aucun (lot de vérité documentaire).
+- **Remaining** — `RM-05a`, `RM-01`, `RM-04`, `RM-07`, `RM-03`, `RM-06`,
+  `RM-05b`, `RM-09`.
+- **New bugs discovered** — un, trouvé en étendant le ratchet et corrigé dans
+  le même geste (l'instrument était en cause, pas `src/`) : la clé était le
+  nom nu de la fonction, donc un fichier déclarant deux fois le même nom
+  n'en mesurait qu'un. `core/confidence.py::score_line` et
+  `core/quality.py::needs_correction` existent chacun en double (protocole,
+  puis implémentation) et une moitié de chaque paire échappait au test. Clés
+  désormais qualifiées, et les quatre définitions sont épinglées.
+- **Tests added** — `tests/test_orchestrator_budget.py` : `RM-02` ajoute
+  `test_no_unnamed_function_exceeds_the_parameter_target`,
+  `test_known_overparameterised_functions_only_shrink`,
+  `test_finished_signatures_are_not_still_listed` ; `RM-10` ajoute
+  `test_the_scan_sees_the_whole_package` ; le trou de clés ajoute
+  `test_keys_are_unique_per_definition`. 11 → 34 cas dans le module.
 - **Risks remaining** — `RM-01` reste ouvert : la classe de défaut qu'il vise
   (une ligne `CORRECTED` portant son texte source) est déjà survenue une fois,
-  cf. `L9` et `core/reconcile.py`.
+  cf. `L9` et `core/reconcile.py`. Second risque, propre à `RM-1` : les 13
+  entrées de `_OVERPARAMETERISED` sont un plafond, pas un objectif — `RM-03`
+  ne doit en faire descendre que ce qu'il traverse, et n'a aucune raison de
+  toucher `integrations/` ou `producers/`.
 
 ### Mesures de référence — base 2026-08-06, à recomparer à la clôture
 
-| Métrique | Base | Cible |
-|---|---|---|
-| Sites d'écriture de la décision d'une ligne | 11, sur 5 modules | 1 |
-| Paramètres, maximum dans `core/` | 20 (`for_provider`) | ≤ 8 |
-| Fonctions de `core/` > 100 lignes | 7 (toutes épinglées) | ≤ 7 |
-| Fonctions de `formats/` sous mesure | 0 | toutes |
-| Symboles dans `__init__.__all__` | 68 | à définir par `RM-04` |
-| Imports de symboles privés depuis `tests/` | 277 | en baisse |
-| Ratio (commentaires + docstrings) / code, lib | 0,79 | non ciblé, mesuré |
-| Couverture bibliothèque | ≥ 85 % | ≥ 85 % |
+Arités mesurées `self`/`cls` exclus : ce qu'un APPELANT doit assembler.
+
+| Métrique | Base | Courant | Cible |
+|---|---|---|---|
+| Sites d'écriture de la décision d'une ligne | 11, sur 5 modules | 11 | 1 |
+| Paramètres, maximum du paquet | 19 (`for_provider`) | 19 | ≤ 8 |
+| Fonctions > 8 paramètres | 13 | 13, épinglées | 0 hors liste |
+| Fonctions > 100 lignes, `core/` | 7 (toutes épinglées) | 7 | ≤ 7 |
+| Fonctions > 100 lignes, paquet entier | 13, dont 6 hors mesure | 13, épinglées | ≤ 13 |
+| Définitions sous mesure | 0 hors `core/` | 348, paquet entier | tout `src/` |
+| Symboles dans `__init__.__all__` | 68 | 68 | à définir par `RM-04` |
+| Imports de symboles privés depuis `tests/` | 277 | 277 | en baisse |
+| Ratio (commentaires + docstrings) / code, lib | 0,79 | 0,79 | non ciblé, mesuré |
+| Couverture bibliothèque | 96,4 % (seuil 85 %) | 96,4 % | ≥ 85 % |
 
 ---
 
