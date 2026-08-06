@@ -16,10 +16,13 @@ Répartition des rôles, à tenir :
 - **`docs/history/`** est gelé. Ne jamais s'y fier pour l'état courant, et ne
   jamais y renvoyer depuis un document normatif.
 
-Dernière mise à jour : 2026-07-27, après contre-audit d'une analyse externe.
-Cette révision **ne change pas le diagnostic** du 25 juillet — elle relève le
-niveau de trois réponses (`L`, `S1`, tests), ajoute quatre items de vérité
-documentaire, et écrit la règle de gel.
+Dernière mise à jour : 2026-08-06, après un audit structurel externe (§ `RM`).
+Cette révision **ne change ni le diagnostic ni les priorités** : elle ajoute une
+vague `RM` de dette *structurelle* — un défaut latent, un instrument de mesure
+faussé, et de la réduction — qui ne ferme aucun item `L`, `R` ou `M` mais rend
+`S1` praticable. Révision précédente : 2026-07-27, contre-audit d'une analyse
+externe, qui relevait le niveau de trois réponses (`L`, `S1`, tests), ajoutait
+quatre items de vérité documentaire, et écrivait la règle de gel.
 
 ---
 
@@ -847,6 +850,125 @@ symboles sous SemVer. Il ne bloque en revanche pas `0.10.0`, que
 
 ---
 
+## RM — Remédiation structurelle (audit du 2026-08-06)
+
+Origine : un audit statique externe du dépôt, lu à `26d6f53`. Il **ne rouvre
+aucun** item `L`, `R`, `M` ou `G` et ne conteste aucune priorité. Il constate
+autre chose : le prix de la discipline elle-même. Un seul de ses onze constats
+est un défaut au sens strict (`RM-01`) ; les autres sont de la dette dont
+l'effet est un coût d'évolution, et qui tombe sur `S1`.
+
+Les onze items tiennent tous dans les catégories que la règle de gel autorise —
+correctifs, refactorisation **réductrice**, mesure, documentation de vérité,
+tests. Aucun n'en sort. `RM-08` est explicitement **transmis à `S1`** et ne
+s'exécute pas dans cette vague.
+
+### Carte
+
+| ID | Titre | Nature | Gravité | Fichiers | Dépend de | Statut |
+|---|---|---|---|---|---|---|
+| `RM-11` | Contradictions documentaires : `CLAUDE.md` vs ce plan sur `S1` ; 2 docstrings fausses ; 1 clause dupliquée | vérité | secondaire | `CLAUDE.md`, `core/outcome.py`, `core/quality.py`, `tests/test_import_contract.py` | — | **fait (2026-08-06)** |
+| `RM-02` | Ratchet goodhartisé : mesure la longueur, pas le couplage ; périmètre limité à `core/` | outillage | important | `tests/test_orchestrator_budget.py` | — | à faire |
+| `RM-10` | `_rebuild_line` (203 l.) et `rewrite_alto_file` (161 l.) hors de toute mesure | mesure | important | `formats/alto/rewriter.py` (lecture seule) | `RM-02` | à faire |
+| `RM-05a` | Aucun test ne protège l'ordre des passes de `core/finalize.py` | tests | important | `tests/decision/` (nouveau) | — | à faire |
+| `RM-01` | L'écriture de la décision terminale d'une ligne est dispersée sur 5 modules ; l'ordre des passes est porté par une docstring | **bugfix** | **critique** | `core/outcome.py`, `core/acceptance.py`, `core/reconcile.py`, `core/routing.py`, `core/finalize.py` | `RM-02`, `RM-05a` | à faire |
+| `RM-04` | ~20 % du code du paquet n'est exécuté par aucun chemin par défaut et est gelé par ce plan | nettoyage | important | `integrations/`, `core/routing.py`, `core/quality.py`, `core/confidence.py`, `core/batching.py`, `__init__.py` | `RM-11` + ratification | à faire (option A) |
+| `RM-07` | `core` connaît les formats : `core/losses.py` porte la table des attributs ALTO ; le contrat d'import plafonne à `== 3` au lieu de nommer une règle | réducteur | important | `core/losses.py`, `core/provenance.py`, `tests/test_import_contract.py` | — | à faire |
+| `RM-03` | Drilling de paramètres : 10 à 20 arguments sur le chemin chaud | réducteur | important | `core/driver.py`, `core/attempt.py`, `core/outcome.py`, `core/pipeline.py` | `RM-01`, `RM-02` | à faire |
+| `RM-06` | ~480 tags de vocabulaire privé, dont certains pointent vers `docs/history/` | vérité | secondaire | tout `src/` | `RM-11` | à faire |
+| `RM-05b` | 124 fichiers de test organisés par vague de remédiation ; 277 imports de symboles privés | tests | important | `tests/` | `RM-05a` | à faire |
+| `RM-09` | `core/schemas.py` fourre-tout : 1 538 l., 44 importateurs, 4 familles de types | nettoyage | secondaire | `core/schemas.py` → `core/schemas/` | — | à faire |
+| `RM-08` | Cinq projections voisines de l'unité de césure (`_page_local_units` / `_units_visible_on_page` quasi identiques) | réducteur | important | `core/reconcile.py`, `core/units.py` | **`S1`** | **hors vague → `S1`** |
+
+### Ordre, et pourquoi
+
+Quatre dépendances seulement, toutes réelles :
+
+1. **`RM-11` d'abord.** `CLAUDE.md` affirmait cinq résolveurs de partenaire
+   quand ce plan en mesure zéro. C'est le document qui gouverne le travail
+   quotidien ; tant qu'il est faux, chaque session part d'une carte erronée.
+2. **`RM-02` avant `RM-03`.** Le ratchet actuel récompense le découpage qui
+   augmente le nombre de paramètres — c'est lui qui a produit
+   `_descend_granularity` à 13 arguments. Réparer les signatures sans réparer
+   d'abord la métrique garantit que le prochain découpage les reproduira.
+   `RM-10` est le même geste, étendu à `formats/`.
+3. **`RM-05a` avant `RM-01`.** Le défaut n'est pas détectable par la suite
+   actuelle : elle vérifie l'état *final* d'un run, pas sa dépendance à l'ordre
+   des passes. Le test doit exister **et échouer** avant qu'on touche au code.
+   Sous-dépendance : la **table de précédence des raisons de fallback** est un
+   livrable de mesure, écrit avant la centralisation — le code encode
+   aujourd'hui une priorité « premier arrivé » par des `if not
+   trace.fallback_reason` répartis sur cinq fichiers.
+4. **Ratification avant `RM-04`.** Il retire des symboles de `__all__`, que
+   `S3b` vient de figer à 68 par calcul de clôture. `docs/versioning.md`
+   autorise la série `0.9.x` à casser, mais dépenser cette cartouche est un
+   arbitrage de produit. **Tranché le 2026-08-06 : option A** — extra
+   `corrigenda[research]`, les modules restent dans l'arbre et sortent de
+   `__all__` et de la couverture obligatoire. L'option B (paquet
+   `corrigenda-lab` séparé) est réservée au cas où la levée du gel dépasse
+   `0.10.0`.
+
+`RM-09` arrive tard bien qu'il soit le moins risqué : avec 44 importateurs il
+produit le plus gros diff de la vague. Fait en dernier, avec un
+`schemas/__init__.py` qui réexporte tout, il ne touche aucun importateur.
+
+### Lots
+
+- **Lot RM-0 — vérité** : `RM-11`. Fait.
+- **Lot RM-1 — instrument** : `RM-02`, `RM-10`. Aucun fichier de `src/`.
+- **Lot RM-2 — le défaut** : `RM-05a` → table de précédence → `RM-01`.
+  Le seul correctif de la vague, et le seul lot à risque élevé.
+- **Lot RM-3 — dégonfler** : `RM-04`, option A.
+- **Lot RM-4 — frontière** : `RM-07`.
+- **Lot RM-5 — signatures** : `RM-03`. Interdit tant que RM-1 n'est pas mergé
+  et RM-2 pas fermé.
+- **Lot RM-6 — nettoyages progressifs** : `RM-06`, `RM-05b`, `RM-09`.
+
+### Ce que la vague ne touche pas
+
+`core/pairing.py`, `core/units.py`, `core/hyphenation.py` et la résolution de
+partenaire de `core/reconcile.py` — territoire `S1`. `formats/alto/rewriter.py`
+est **mesuré** (`RM-10`), jamais découpé : 203 lignes sur le chemin qui produit
+le fichier livré, et le corpus de parité octet n'est pas encore assez large.
+Les seuils de `GuardConfig` (non calibrés) et l'allowlist d'erreurs `ADR-008`
+restent intacts.
+
+### Suivi
+
+Dernière mise à jour : 2026-08-06 — session 1.
+Branche : `claude/technical-repository-audit-61yzfb`.
+
+- **Done** — `RM-11` : règle « pas de 6ᵉ chemin » de `CLAUDE.md` reformulée en
+  propriété (deux encodages, pas un compte historique) ; docstring de
+  `_fall_back_to_source` qui se disait « the single place » corrigée ; clause
+  dupliquée de `RoutingPolicy` réparée et alignée sur `core/pipeline.py` ;
+  en-tête de `tests/test_import_contract.py` qui situait `_adapter_for_format`
+  dans `core/pipeline.py` corrigé vers `core/provenance.py`.
+- **In progress** — aucun.
+- **Blocked** — aucun. `RM-04` débloqué le 2026-08-06 (option A).
+- **Remaining** — `RM-02`, `RM-10`, `RM-05a`, `RM-01`, `RM-04`, `RM-07`,
+  `RM-03`, `RM-06`, `RM-05b`, `RM-09`.
+- **New bugs discovered** — aucun.
+- **Tests added** — aucun (lot de vérité documentaire).
+- **Risks remaining** — `RM-01` reste ouvert : la classe de défaut qu'il vise
+  (une ligne `CORRECTED` portant son texte source) est déjà survenue une fois,
+  cf. `L9` et `core/reconcile.py`.
+
+### Mesures de référence — base 2026-08-06, à recomparer à la clôture
+
+| Métrique | Base | Cible |
+|---|---|---|
+| Sites d'écriture de la décision d'une ligne | 11, sur 5 modules | 1 |
+| Paramètres, maximum dans `core/` | 20 (`for_provider`) | ≤ 8 |
+| Fonctions de `core/` > 100 lignes | 7 (toutes épinglées) | ≤ 7 |
+| Fonctions de `formats/` sous mesure | 0 | toutes |
+| Symboles dans `__init__.__all__` | 68 | à définir par `RM-04` |
+| Imports de symboles privés depuis `tests/` | 277 | en baisse |
+| Ratio (commentaires + docstrings) / code, lib | 0,79 | non ciblé, mesuré |
+| Couverture bibliothèque | ≥ 85 % | ≥ 85 % |
+
+---
+
 ## T — Programme de tests (nouveau)
 
 868 fonctions de test bibliothèque, 400 backend — et les deux défauts
@@ -996,6 +1118,16 @@ assemblé hors du contrôle d'exécution.
 
 **Lot 4 — vers `1.0`.** `T1`-`T3` et `M5` en continu dès le lot 1 (ils trouvent
 les défauts des lots suivants) ; `M1`-`M3`, `M7` ; `G1`-`G3` ; `D12` ; `P3`.
+
+**Vague `RM` — structurelle, s'intercale avant `S1`.** `RM-0` (vérité) est fait.
+`RM-1` (instrument) et `RM-2` (le défaut `RM-01`) précèdent tout autre travail
+sur `core/` : le premier répare la métrique qui gouverne les découpages, le
+second ferme la seule classe de défaut latent de la vague. `RM-3` à `RM-6`
+peuvent s'intercaler librement. **`RM-1` et `RM-2` doivent précéder `S1`** —
+`S1` est le plus gros refactor restant sur `core/`, et l'engager avec une
+métrique qui récompense le drilling et sans garde sur l'ordre des passes
+reproduirait dans la famille césure ce que `S2` a produit dans
+l'orchestration. `RM-08` est un constat d'entrée de `S1`, pas un item séparé.
 
 `Gate 0` en parallèle sur Desktop, du premier jour au dernier — c'est le seul
 item qui peut bloquer `P2` sans avertissement.

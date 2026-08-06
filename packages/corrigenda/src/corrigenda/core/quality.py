@@ -123,9 +123,9 @@ class RoutingPolicy(FrozenPolicy):
 
     Between the two (or when a bound is ``None``) the line routes to LLM.
     A frozen §8.2-style policy so a run that used routing can fingerprint
-    it — though it is NOT in the composite ``config_fingerprint`` until
-    the pipeline actually consumes it (once the pipeline consumes it), by the same rule
-    that kept ConfidencePolicy out until write_wc.
+    it — though it is NOT in the composite ``config_fingerprint`` until a
+    run actually skips or escalates a line, by the same rule that kept
+    ConfidencePolicy out until write_wc.
     """
 
     skip_at_or_below: float | None = Field(default=None, ge=0.0, le=1.0)

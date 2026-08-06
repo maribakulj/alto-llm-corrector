@@ -4,13 +4,17 @@ Rules enforced:
   1. ``corrigenda.core`` (and ``errors``) never import lxml, formats or
      producers — statically NOR at import time (subprocess-verified: no
      ``lxml`` in ``sys.modules`` after importing every core module).
-  2. Exactly TWO pinned lazy functions, both composition boundaries in
-     ``core/pipeline.py``, both with function-local imports only:
-     ``_adapter_for_format`` (resolves the adapter the MANIFEST declares
-     — one import per supported format, no implicit default) and
-     ``for_provider`` (lazy ``LLMEditProducer`` wrap — the §5.1
-     resorption moved the prompt/schema seam into the producer, so the
-     old ``_default_llm_contract`` exception is gone).
+  2. Exactly TWO pinned lazy functions, both composition boundaries,
+     both with function-local imports only:
+     ``_adapter_for_format`` in ``core/provenance.py`` (resolves the
+     adapter the MANIFEST declares — one import per supported format,
+     no implicit default) and ``for_provider`` in ``core/pipeline.py``
+     (lazy ``LLMEditProducer`` wrap — the §5.1 resorption moved the
+     prompt/schema seam into the producer, so the old
+     ``_default_llm_contract`` exception is gone). The pin is on the
+     function NAMES, not on the file they live in: ``S2`` moved
+     ``_adapter_for_format`` out of ``core/pipeline.py`` and this
+     docstring went on naming the old home.
   3. ``formats`` never imports producers; ``producers`` never imports
      formats or lxml.
 """

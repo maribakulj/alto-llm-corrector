@@ -128,8 +128,16 @@ def _fall_back_to_source(
 ) -> None:
     """Put these lines back to their OCR text, terminally.
 
-    The single place a line's fallback is written, so the manifest state
-    and the trace can never disagree about it.
+    Writes the three fields a fallback consists of together —
+    ``corrected_text``, ``status`` and the trace's ``fallback_reason`` —
+    so a line's manifest state and its trace cannot disagree about it.
+
+    It is NOT the only place they are written, and saying so was false:
+    ``_extend_to_units`` below, ``core/acceptance.py``,
+    ``core/reconcile.py`` and ``core/routing.py`` write the same fields
+    on their own paths. What keeps them coherent today is the ORDER of
+    the document-wide passes (``core/finalize.py``), which no test
+    enforces. Making this the single writer is `RM-01`.
     """
     for lm in lines:
         lm.corrected_text = lm.ocr_text

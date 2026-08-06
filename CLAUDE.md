@@ -19,7 +19,7 @@ There is exactly ONE plan. Three competing, unratified ones were consolidated in
 Two standing rules from that plan, in force until it says otherwise:
 
 - **Feature freeze.** No new producer, format, routing policy, cost optimisation, confidence writing, or public-API extension until the `L*` (line integrity) and `R*` (loss accounting) items are closed. Fixes, *reducing* refactors, corpora, measurement, tests and truth-in-documentation are always allowed.
-- **No sixth path.** Five concurrent hyphen-partner resolvers already exist because an earlier unification landed as an addition. A fix that needs a new one is the signal to finish `S1` first, not to add it.
+- **One derivation, one family of directed primitives.** Hyphen-partner resolution has exactly two encodings and must keep exactly two: the directed primitives in `core/pairing.py` (the only reader of the pointer fields) and the unit derivation in `core/units.py` (`derive_hyphen_groups`). An earlier unification landed as an addition and left five parallel resolvers; that is down to zero duplicates (`docs/PLAN.md`, row `S1`), but the unit is **not yet authoritative** — pointer fields are still the storage of record. A fix that needs a third encoding, or a new projection of the derivation, is the signal to finish `S1` first, not to add one.
 
 ## Tech Stack
 
