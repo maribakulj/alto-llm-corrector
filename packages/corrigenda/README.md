@@ -2,11 +2,16 @@
 
 Structure-safe post-OCR correction of heritage transcriptions — **ALTO**
 and **PAGE XML** — by LLM, rules engine, or any custom `EditProducer`.
-The algorithmic core of
-[alto-llm-corrector](https://github.com/maribakulj/alto-llm-corrector),
-consumable without the FastAPI server, the job store, or the bundled LLM
-providers. *Corrigenda*: the printed errata leaf bound into books —
-literally what this library produces.
+No server, no job store, no vendor wired in: the library computes and
+returns values, and everything about *running* a correction service
+belongs to whoever calls it. *Corrigenda*: the printed errata leaf bound
+into books — literally what this library produces.
+
+It is developed in the [corrigenda](https://github.com/maribakulj/corrigenda)
+repository, which also carries a FastAPI + React demonstration of it. That
+demo is **not part of this package** — it is not published, and it will be
+removed once the library reaches its final form. Nothing here imports it;
+the coupling only runs the other way.
 
 ## Status
 
@@ -42,17 +47,20 @@ independent external API review first; see
   per-line acceptance policy, and the pure `CorrectionPipeline` that
   ties them together (`run()` async, `run_sync()` façade).
 - `corrigenda.core.schemas` — Pydantic models for documents, pages, blocks and
-  lines, plus the four **frozen, injectable policies**: `RetryPolicy`
+  lines, plus the seven **frozen, injectable policies**: `RetryPolicy`
   (attempt cap / temperature ramp / per-chunk budget — `.default()` is
   byte-compatible with the historical behaviour, `.deterministic()` pins
   every temperature to 0), `GuardConfig` (every anti-migration threshold),
-  `ChunkPlannerConfig`, and `PairingPolicy` (hyphen-pairing seam). Each
-  exposes `policy_fingerprint()`; the pipeline combines them into
+  `ChunkPlannerConfig`, `PairingPolicy` (hyphen-pairing seam),
+  `LossPolicy` (what a run does when a correction cannot project without
+  losing word granularity — ADR-012), `ConfidencePolicy` and
+  `RoutingPolicy`. Each exposes `policy_fingerprint()`; the pipeline combines them into
   `config_fingerprint()`, stamped into the corrected XML's
   `processingStep` for provenance.
-- `corrigenda.errors` — one root, `CorrectionError`, over `ParseError`,
+- `corrigenda.errors` — one root, `CorrigendaError`, over `ParseError`,
   `ValidationError` (both also `ValueError`) and `CorrectionAborted`
   (raised by the cooperative `should_abort` cancellation probe).
+  `CorrectionError` is the same class under its older name.
 - `CorrectionResult` — the run's whole deliverable (ADR-011): the
   corrected XML per source file (`result.corrected_files`), the
   immutable per-line `DecisionSet` (`result.decisions`), a public,
@@ -79,8 +87,9 @@ vendors or track a server job's lifecycle; they live in the consumer.
   an adapter like XerLLM).
 - No filesystem writes, ever — reading source ALTO files is the only
   I/O; outputs travel on `CorrectionResult` (ADR-011).
-- No FastAPI, no SSE, no job store — those live in the `alto-server`
-  package.
+- No FastAPI, no SSE, no job store. Those belong to the consumer: the
+  repository's demo backend implements them for itself, and a future
+  extraction of them would be its own distribution, not this one.
 
 ## Minimal working example
 
@@ -88,12 +97,9 @@ vendors or track a server job's lifecycle; they live in the consumer.
 import asyncio
 from pathlib import Path
 
-from corrigenda import (
-    BaseProvider,
-    CorrectionPipeline,
-    PipelineObserver,
-    build_document_manifest,
-)
+from corrigenda import CorrectionPipeline, PipelineObserver
+from corrigenda.core.protocols import BaseProvider
+from corrigenda.formats.alto.parser import build_document_manifest
 
 
 class IdentityProvider:

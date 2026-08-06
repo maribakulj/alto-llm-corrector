@@ -52,6 +52,17 @@ vision = [
     "pillow>=10.0,<12.0",
 ]
 
+# Type-checking toolchain. Not a runtime extra: it exists so that
+# `mypy --strict src/corrigenda` means the same thing locally and in CI.
+# lxml-stubs is load-bearing — without it `_Element.attrib` degrades to
+# `Any` and strict mode silently checks less than the corrigenda-types job
+# does. The mypy pin is exact so a new release never turns a green local
+# run red in CI (or the reverse).
+typecheck = [
+    "mypy==1.15.0",
+    "lxml-stubs",
+]
+
 [project.urls]
 Homepage = "https://github.com/maribakulj/corrigenda"
 Issues = "https://github.com/maribakulj/corrigenda/issues"
@@ -69,11 +80,18 @@ path = "src/corrigenda/__init__.py"
 packages = ["src/corrigenda"]
 
 [tool.hatch.build.targets.sdist]
+# Leading slashes are load-bearing: hatchling matches these as PATTERNS, so
+# an unanchored `README.md` matches every README at any depth — it was
+# silently shipping `tests/corpus_gt/README.md` and
+# `tests/external_corpus/pinned/README.md`. No corpus DATA ever left (the
+# XML matched nothing), but an allowlist that admits files nobody listed is
+# not an allowlist. `tests/test_packaging_excludes_corpora.py` now reads the
+# BUILT sdist rather than this declaration.
 include = [
-    "src/corrigenda",
-    "README.md",
-    "CHANGELOG.md",
-    "LICENSE",
+    "/src/corrigenda",
+    "/README.md",
+    "/CHANGELOG.md",
+    "/LICENSE",
 ]
 
 # ---------------------------------------------------------------------------

@@ -105,8 +105,12 @@ async def test_contradictory_adapter_fails_at_run_start(tmp_path) -> None:
 async def test_unstamped_manifest_needs_an_explicit_adapter() -> None:
     """A hand-built manifest carries no format; deriving ALTO silently
     (the historical default) is exactly the trap being removed."""
-    doc = build_alto([(_SAMPLE_ALTO, _SAMPLE_ALTO.name)])
-    doc.source_format = None  # simulate a hand-built manifest
+    # A hand-built manifest carries no format. `DocumentManifest` is frozen
+    # (S4), so this makes a NEW unstamped document rather than un-stamping
+    # the parsed one — which is what a hand-built manifest is anyway.
+    doc = build_alto([(_SAMPLE_ALTO, _SAMPLE_ALTO.name)]).model_copy(
+        update={"source_format": None}
+    )
 
     with pytest.raises(ConfigurationError, match="format_adapter"):
         await _pipeline().run(

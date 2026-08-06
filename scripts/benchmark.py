@@ -44,16 +44,15 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "packages" / "corrigenda" / "src"))
 
 import corrigenda  # noqa: E402
-from corrigenda import (  # noqa: E402
+from corrigenda import (
     CorrectionResult,
     EditScript,
     ProducerMetadata,
     ProducerOptions,
     ReplaceLine,
-    RulesProducer,
     Usage,
-    default_french_ocr_rules,
 )
+from corrigenda.producers.rules import RulesProducer, default_french_ocr_rules
 from corrigenda.core.pipeline import CorrectionPipeline  # noqa: E402
 from corrigenda.core.schemas import ConfidencePolicy, CorrectionRequest  # noqa: E402
 

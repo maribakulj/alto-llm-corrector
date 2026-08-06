@@ -49,7 +49,7 @@ ReplaceSpan(line_id="tl_2", anchor=MatchAnchor(match="ſ"), text="s")
   the first of several repeats inexpressible).
 
 ```python
-from corrigenda import normalize_anchor
+from corrigenda.core.editing import normalize_anchor
 normalize_anchor(MatchAnchor(match="lo"), "helo world")   # (RangeAnchor(3, 5), None)
 normalize_anchor(MatchAnchor(match="o"), "helo world")    # (None, "anchor_ambiguous")
 ```
@@ -73,7 +73,7 @@ today's response as `replace_line` ops **byte-for-byte identical** (proved
 on the corpus in `tests/test_editing.py`).
 
 ```python
-from corrigenda import apply_edit_script
+from corrigenda.core.editing import apply_edit_script
 result = apply_edit_script(
     EditScript(ops=[ReplaceSpan(line_id="l1", anchor=RangeAnchor(0, 1), text="s")]),
     canonical_by_id={"l1": "ſciences"},
@@ -103,7 +103,8 @@ class EditProducer(Protocol):
   reference-test producer.
 
 ```python
-from corrigenda import RulesProducer, default_french_ocr_rules, apply_edit_script
+from corrigenda.core.editing import apply_edit_script
+from corrigenda.producers.rules import RulesProducer, default_french_ocr_rules
 prod = RulesProducer(default_french_ocr_rules())          # ſ→s, ﬁ/ﬂ ligatures
 script = prod.build_edit_script({"l1": "ſoleil"})
 apply_edit_script(script, {"l1": "ſoleil"}).text_by_id     # {"l1": "soleil"}

@@ -839,15 +839,15 @@ async def test_chunk_error_event_payload_shape(
     `chunk_error` is the safety net for exceptions that escape
     `_run_chunk`'s retry/fallback envelope (e.g. a bug in
     `_build_hyphen_pairs` before the try block). Patching `_run_chunk`
-    directly is the most targeted way to exercise the catch site at
-    corrigenda.core.pipeline.
+    directly is the most targeted way to exercise the catch site, which
+    lives on the chunk driver (corrigenda.core.driver.PageDriver).
     """
-    from corrigenda.core.pipeline import CorrectionPipeline
+    from corrigenda.core.driver import PageDriver
 
     async def _explode(self, **kwargs):
         raise OSError("disk on fire")
 
-    monkeypatch.setattr(CorrectionPipeline, "_run_chunk", _explode)
+    monkeypatch.setattr(PageDriver, "_run_chunk", _explode)
 
     store, job_id = _make_store_and_job()
     queue = store.subscribe(job_id)

@@ -23,11 +23,11 @@ import asyncio
 import sys
 from pathlib import Path
 
-from corrigenda import (
-    CorrectionPipeline,
+from corrigenda import CorrectionPipeline
+from corrigenda.formats.alto.parser import build_document_manifest
+from corrigenda.producers.rules import (
     RulesProducer,
     SubstitutionRule,
-    build_document_manifest,
     default_french_ocr_rules,
 )
 

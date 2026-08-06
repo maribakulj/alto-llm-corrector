@@ -2,15 +2,24 @@
 
 ## Repo layout
 
-One Python distribution and two applications around it:
+**One deliverable, and a demonstration of it that is scheduled to go.**
 
-- **`packages/corrigenda/`** — the correction library, the only
+- **`packages/corrigenda/`** — the correction library. The only
   *packaged* Python distribution (hatchling; PyPI publication is
   prepared by `.github/workflows/publish-corrigenda.yml` but has not
-  happened yet — no tag, no release).
-- **`backend/`** — FastAPI app, imported as a flat `app` package via
-  `PYTHONPATH` (deliberately **not** a built package yet; see the note
-  in `backend/pyproject.toml`).
+  happened yet — no tag, no release), and the only thing that outlives
+  this repository's current shape.
+- **`backend/`** — the demo's FastAPI app, imported as a flat `app`
+  package via `PYTHONPATH` (deliberately **not** a built package; see
+  the note in `backend/pyproject.toml`). It exists to show the library
+  working, and is removed with the demo.
+
+  The practical rule this implies, and the one worth holding on to: a
+  change is only allowed to flow **from** the library **to** the demo.
+  If a demo need seems to require the library to import, name or
+  special-case it, the need is either a missing injection point in the
+  library (fix it there, generically) or out of scope
+  (`SPECS_LIB_V2.md` §12 and §15) — never a dependency edge.
 - **`frontend/`** — React + TypeScript + Vite (`corrigenda-frontend`,
   private).
 

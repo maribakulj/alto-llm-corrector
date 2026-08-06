@@ -41,7 +41,7 @@ async def test_result_carries_the_rewritten_bytes() -> None:
     """The result's bytes are the decided artefact: re-extracting the
     per-line texts from them (public round-trip helper) reproduces every
     decision's final text, in the formats' whitespace-normal form."""
-    from corrigenda import extract_output_texts
+    from corrigenda.formats.alto.rewriter import extract_output_texts
 
     doc = build_document_manifest([(_SAMPLE, _SAMPLE.name)])
     result = await _pipeline().run(

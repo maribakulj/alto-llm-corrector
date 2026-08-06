@@ -88,18 +88,49 @@ def _route_and_filter_chunks(
         return [(chunk, producer) for chunk in chunks]
     assert qe_scorer is not None  # _routing_enabled guarantees it
 
-    can_escalate = escalation_producer is not None
+    skip, escalate = _score_page_into_tiers(
+        qe_scorer=qe_scorer,
+        routing_policy=routing_policy,
+        page=page,
+        line_by_id=line_by_id,
+        can_escalate=escalation_producer is not None,
+    )
+    _confirm_skipped_lines(skip, line_by_id=line_by_id, traces=traces)
+    ctx.lines_skipped += len(skip)
+    ctx.escalated_lines += len(escalate)
+    return _work_items(
+        chunks,
+        skip=skip,
+        escalate=escalate,
+        producer=producer,
+        escalation_producer=escalation_producer,
+    )
+
+
+def _score_page_into_tiers(
+    *,
+    qe_scorer: QEScorer,
+    routing_policy: RoutingPolicy,
+    page: PageManifest,
+    line_by_id: dict[str, LineManifest],
+    can_escalate: bool,
+) -> tuple[set[str], set[str]]:
+    """Score every line of the page and sort it into the two tiers that
+    change what happens to it: ``(skip, escalate)``.
+
+    A hyphen member is NEVER skipped — a half-skipped pair could not
+    reconcile. It may still escalate, but only with its whole unit, so
+    both halves reach one producer together: measured on real 19th-c.
+    press OCR, leaving units behind was the hybrid's entire residual
+    error. A unit whose links leave the page (or dangle) cannot be
+    gathered from this page's plan and is left to the primary producer.
+    """
     skip: set[str] = set()
     escalate: set[str] = set()
     page_units = _page_local_units(line_by_id)
     for lm in page.lines:
         decision = route_line(qe_scorer.needs_correction(lm.ocr_text), routing_policy)
         if lm.hyphen_role is not HyphenRole.NONE:
-            # Atomicity: a hyphen member is NEVER skipped (a half-skipped
-            # pair could not reconcile). It may still escalate — but only
-            # with its whole unit, so the pair reaches one producer
-            # together. Measured on real 19th-c. press OCR, leaving units
-            # behind was the hybrid's entire residual error.
             if decision is RoutingDecision.ESCALATE and can_escalate:
                 unit = page_units.get(lm.line_id)
                 if unit is not None:
@@ -109,7 +140,22 @@ def _route_and_filter_chunks(
             skip.add(lm.line_id)
         elif decision is RoutingDecision.ESCALATE and can_escalate:
             escalate.add(lm.line_id)
+    return skip, escalate
 
+
+def _confirm_skipped_lines(
+    skip: set[str],
+    *,
+    line_by_id: dict[str, LineManifest],
+    traces: dict[LineRef, LineTrace],
+) -> None:
+    """Decide the skipped lines: their OCR text IS their final text.
+
+    The trace's ``model_input_text`` is deliberately left ``None`` — that
+    absence is the auditable signature of a skip, and the only thing that
+    distinguishes it from a producer that was asked and answered
+    identically.
+    """
     for line_id in skip:
         lm = line_by_id[line_id]
         lm.corrected_text = lm.ocr_text
@@ -120,26 +166,41 @@ def _route_and_filter_chunks(
             projected_text=lm.ocr_text,
             validation_status=LineStatus.CORRECTED.value,
         )
-    ctx.lines_skipped += len(skip)
-    ctx.escalated_lines += len(escalate)
 
+
+def _work_items(
+    chunks: list[ChunkRequest],
+    *,
+    skip: set[str],
+    escalate: set[str],
+    producer: EditProducer,
+    escalation_producer: EditProducer | None,
+) -> list[tuple[ChunkRequest, EditProducer]]:
+    """Rebuild the plan as ``(chunk, producer)`` pairs.
+
+    A skipped line leaves ``target_line_ids`` but stays in ``line_ids``:
+    it is still context for its neighbours. A chunk with no targets left
+    is dropped entirely — that is the economics, one producer call not
+    spent. Escalated targets are split into a sibling chunk with the same
+    context and disjoint targets, so the VLM corrects only the lines that
+    earned its cost.
+    """
     routed: list[tuple[ChunkRequest, EditProducer]] = []
     for chunk in chunks:
         targets = [t for t in chunk.targets() if t not in skip]
         if not targets:
-            continue  # every target skipped — no producer call at all
+            continue
         primary_targets = [t for t in targets if t not in escalate]
         escalate_targets = [t for t in targets if t in escalate]
         if primary_targets:
-            if primary_targets == chunk.targets():
-                routed.append((chunk, producer))  # untouched
-            else:
-                routed.append(
-                    (
-                        chunk.model_copy(update={"target_line_ids": primary_targets}),
-                        producer,
-                    )
+            routed.append(
+                (chunk, producer)
+                if primary_targets == chunk.targets()
+                else (
+                    chunk.model_copy(update={"target_line_ids": primary_targets}),
+                    producer,
                 )
+            )
         if escalate_targets:
             assert escalation_producer is not None  # can_escalate
             routed.append(

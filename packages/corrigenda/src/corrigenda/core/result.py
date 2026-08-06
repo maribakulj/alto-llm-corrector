@@ -1,9 +1,10 @@
 """What a run returns, and what a caller may do with it (ADR-011).
 
 The engine never writes: it computes values and hands them back. This module
-holds that value. Lifted out of the orchestrator (S2) because a result object
-is not execution control — it is the shape of an answer, and a reader looking
-for "what do I get back?" should not have to scroll past the retry loop.
+holds that value, and the assembly of it. Lifted out of the orchestrator (S2)
+because a result object is not execution control — it is the shape of an
+answer, and a reader looking for "what do I get back?" should not have to
+scroll past the retry loop.
 """
 
 from __future__ import annotations
@@ -12,10 +13,12 @@ import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from corrigenda.core.context import RunContext
 from corrigenda.core.decisions import DecisionSet
 from corrigenda.core.identity import LineRef
 from corrigenda.core.editing import EditScript
 from corrigenda.core.hyphenation import ReconcileMetrics
+from corrigenda.core.report import _build_final_edit_script
 from corrigenda.core.schemas import CorrectionReport, LineTrace, Usage
 
 
@@ -118,3 +121,47 @@ class CorrectionResult:
             )
             written.append(sidecar_path)
         return written
+
+
+def _build_correction_result(
+    *,
+    ctx: RunContext,
+    decisions: DecisionSet,
+    traces: dict[LineRef, LineTrace],
+    report: CorrectionReport,
+    corrected_files: dict[str, bytes],
+    source_digests: dict[str, str],
+    total_chunks: int,
+    total_reconciled: int,
+) -> CorrectionResult:
+    """Copy what the run accumulated into the value it returns.
+
+    The counters come off the :class:`RunContext` (which does not survive
+    the run), but the LINE-level fallback accounting is read from the
+    :class:`DecisionSet` (ADR-011): it covers every path that leaves a
+    line at its OCR text — chunk fallback, guard rejection, duplicate
+    revert — not just the chunks whose attempts were exhausted.
+    """
+    return CorrectionResult(
+        total_chunks=total_chunks,
+        total_reconciled=total_reconciled,
+        retry_count=ctx.retry_count,
+        fallback_chunks=ctx.fallback_chunks,
+        fallback_lines=decisions.fallback_lines,
+        fallback_reasons=decisions.fallback_reason_counts(),
+        traces=traces,
+        reconcile_metrics=ctx.reconcile_metrics,
+        usage=ctx.usage,
+        report=report,
+        edit_script=_build_final_edit_script(
+            decisions, ctx, source_digests=source_digests
+        ),
+        decisions=decisions,
+        corrected_files=corrected_files,
+        # routing economics: lines skipped (no producer call) and the
+        # run's total producer-call count.
+        lines_skipped=ctx.lines_skipped,
+        # lines routed to the escalation (vision) producer.
+        escalated_lines=ctx.escalated_lines,
+        producer_calls=ctx.producer_calls,
+    )

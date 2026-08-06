@@ -82,7 +82,9 @@ def export(
     (out / "qe_model.json").write_text(
         json.dumps(manifest, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
     )
-    print(f"wrote model.onnx, tokenizer.json, qe_model.json (mask id {tok.mask_token_id})")
+    print(
+        f"wrote model.onnx, tokenizer.json, qe_model.json (mask id {tok.mask_token_id})"
+    )
     if calibration:
         print(f"  calibration: {calibration}")
 

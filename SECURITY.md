@@ -1,5 +1,16 @@
 # Security Policy
 
+> **Scope.** Everything below concerns the FastAPI + React **demo** that
+> ships in this repository — its deployment profiles, its CORS stance, its
+> capability tokens. The `corrigenda` library has none of these: it opens
+> no socket, stores no credential and writes no file. A vulnerability in
+> the library is a correctness bug in a function; the threat model here is
+> the demo's. The demo retires when the library reaches its final form,
+> and this document with it.
+>
+> **Reporting a vulnerability applies to both** — see the reporting
+> section below whichever part you found it in.
+
 ## Reporting a vulnerability
 
 Please report suspected vulnerabilities **privately** via GitHub's

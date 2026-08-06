@@ -49,7 +49,68 @@ The **top-level import surface** will break once more before the first tag:
 
 ## [Unreleased]
 
+### Changed — BREAKING
+
+- **The top-level surface is 95 → 68 symbols, and it is now computed
+  (`S3b`).** `corrigenda.__all__` had reached 95 by accretion: each name was
+  added because something needed it that day, and nothing ever took one
+  away. It is now the transitive closure of two promises and nothing else —
+  what `load`/`correct`/`correct_sync` return, so a caller can type the value
+  it was handed; and what a custom `EditProducer` must name to implement the
+  protocol the README advertises in its first sentence. Both closures are
+  reproducible by walking type annotations, and the snapshot test states how.
+
+  **Nothing was deleted.** All 33 demoted symbols stay importable from their
+  own module, which `docs/versioning.md` documents as the other supported
+  door and which the repository itself uses 788 times against 56:
+
+  | was | now |
+  |---|---|
+  | `from corrigenda import RulesProducer, SubstitutionRule, default_french_ocr_rules` | `from corrigenda.producers.rules import …` |
+  | `from corrigenda import LLMEditProducer` | `from corrigenda.producers.llm_edit import …` |
+  | `from corrigenda import build_document_manifest, parse_alto_file, rewrite_alto_file, extract_output_texts` | `from corrigenda.formats.alto.parser` / `.rewriter import …` |
+  | `from corrigenda import parse_page_file, rewrite_page_file` | `from corrigenda.formats.page.parser` / `.rewriter import …` |
+  | `from corrigenda import AltoFormatAdapter, PageFormatAdapter` | `from corrigenda.formats.alto.adapter` / `page.adapter import …` |
+  | `from corrigenda import apply_edit_script, normalize_anchor, line_digest, EditResult, EditRejection` | `from corrigenda.core.editing import …` |
+  | `from corrigenda import BaseProvider, ModelCatalog, StructuredCompletionClient, require_capabilities, require_page_images` | `from corrigenda.core.protocols import …` |
+  | `from corrigenda import QEScorer, HeuristicQEScorer, RoutingDecision, route_line` | `from corrigenda.core.quality import …` |
+  | `from corrigenda import ConfidenceScorer, HeuristicScorer` | `from corrigenda.core.confidence import …` |
+  | `from corrigenda import ModelInfo, ModelCapabilities, LineProposal` | `from corrigenda.core.schemas import …` |
+  | `from corrigenda import SYSTEM_PROMPT, OUTPUT_JSON_SCHEMA` | `from corrigenda.integrations.llm import …` |
+
+  Six names were ADDED, because both closures reach them and a caller could
+  not import them: `Coords`, `HyphenSplit`, `ProjectionFidelity`,
+  `ReconcileMetrics` (reachable from the result), plus `CorrectionRequest`
+  and `LineGeometry` (reachable from the producer protocol). Those four
+  holes are the defect this item exists to close — a value you are handed
+  whose type you cannot name.
+
+  What is deliberately left at its module path, and why: the format-adapter
+  seam (`FormatAdapter`, `RewriteResult`, `RewriteMetrics`, `AlignedPair`,
+  `TokenAlignment`). Injecting an adapter is an optional argument most
+  callers never pass, and those types are the rewriter's internal accounting
+  vocabulary — `R5`, `R8` and `L8` all moved them this year. Freezing them
+  under SemVer at 1.0 would promise a stability nothing supports.
+
 ### Added
+
+- **`Coords` and `DocumentManifest` are frozen (`S4`, partial).** ADR-011
+  slice E made `run()` work on a deep copy so a caller's document is never
+  written; that guarantee held by the discipline of one call site, and now
+  holds by the type. Measured before changing anything: those two carry zero
+  assignment sites in `src/`. `LineManifest` carries 246 — it IS the run's
+  working state — and `PageManifest`/`BlockManifest` are written once each by
+  the page-id disambiguation, so they stay mutable until `S4` introduces a
+  distinct working type. A hand-built manifest is now made with
+  `model_copy(update={"source_format": None})` rather than by un-stamping a
+  parsed one.
+
+- **A `typecheck` extra, so `mypy --strict` means one thing.** `lxml-stubs` was
+  installed by hand in the CI workflow and declared in no manifest, and without
+  it mypy types `_Element.attrib` as `Any` — a local strict run checked less
+  than the gate it was meant to reproduce, silently. `pip install
+  corrigenda[typecheck]` now installs the pinned mypy plus the stubs, and the
+  CI job installs the extra instead of carrying its own pin.
 
 - **`CorrectionReport.hyphen_splits` — the engine's one deliberately
   destructive operation is no longer invisible (R6).** When a hyphen chain is

@@ -13,9 +13,9 @@ from typing import Any
 
 import pytest
 
-from corrigenda import (
+from corrigenda import CorrectionPipeline
+from corrigenda.core.protocols import (
     BaseProvider,
-    CorrectionPipeline,
     ModelCatalog,
     StructuredCompletionClient,
 )

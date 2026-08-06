@@ -57,9 +57,6 @@ def test_top_level_public_api_is_importable():
     directly to enforce the same contract from CI/release tooling.
     """
     from corrigenda import (
-        OUTPUT_JSON_SCHEMA,
-        SYSTEM_PROMPT,
-        BaseProvider,
         BlockManifest,
         ChunkGranularity,
         ChunkPlannerConfig,
@@ -71,16 +68,15 @@ def test_top_level_public_api_is_importable():
         LineStatus,
         LineTrace,
         LineContext,
-        LineProposal,
-        ModelInfo,
         PageManifest,
         PipelineObserver,
-        build_document_manifest,
-        extract_output_texts,
-        parse_alto_file,
-        rewrite_alto_file,
         sanitize_error,
     )
+    from corrigenda.core.protocols import BaseProvider
+    from corrigenda.core.schemas import LineProposal, ModelInfo
+    from corrigenda.formats.alto.parser import build_document_manifest, parse_alto_file
+    from corrigenda.formats.alto.rewriter import extract_output_texts, rewrite_alto_file
+    from corrigenda.integrations.llm import OUTPUT_JSON_SCHEMA, SYSTEM_PROMPT
 
     # Just touch each one so flake/mypy can't optimise the import away.
     assert all(

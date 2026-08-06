@@ -1,18 +1,21 @@
 """Assembling what a run REPORTS, separately from how it ran (S2).
 
 The plan's target for splitting the orchestrator names this seam explicitly:
-report assembly must not be entangled with execution control. This module is
-the first piece of it — turning the ops a run actually applied into the
-``EditScript`` the report carries.
+report assembly must not be entangled with execution control. Two pieces
+here — the ``EditScript`` of what the run actually applied, and the §9
+:class:`CorrectionReport` itself.
 
-Free function: it reads the run's recorded ops and decisions and needs
-nothing from the engine.
+Free functions throughout: everything is read off the run's recorded ops,
+its terminal decisions, the working traces and the accumulated
+:class:`RunContext`. Nothing needs the engine, and nothing here can change
+what the run did — a report that could would not be a report.
 """
 
 from __future__ import annotations
 
+from corrigenda.core.confidence import ConfidenceScorer, build_line_confidence
 from corrigenda.core.context import RunContext
-from corrigenda.core.decisions import DecisionSet
+from corrigenda.core.decisions import DecisionSet, build_line_outcomes
 from corrigenda.core.editing import (
     EDIT_PROTOCOL_VERSION,
     EditOp,
@@ -21,7 +24,19 @@ from corrigenda.core.editing import (
     ReplaceLine,
     line_digest,
 )
-from corrigenda.core.schemas import LineStatus
+from corrigenda.core.identity import LineRef
+from corrigenda.core.pairing import unpaired_break_refs
+from corrigenda.core.projection import _fidelity_counts
+from corrigenda.core.schemas import (
+    ConfidencePolicy,
+    CorrectionReport,
+    DocumentManifest,
+    LineManifest,
+    LineStatus,
+    LineTrace,
+    RunProvenance,
+    SidecarEntry,
+)
 
 
 def _build_final_edit_script(
@@ -99,3 +114,111 @@ def _build_final_edit_script(
         source_digests=source_digests or {},
         preconditions=preconditions,
     )
+
+
+def _attach_line_confidences(
+    report: CorrectionReport,
+    *,
+    policy: ConfidencePolicy,
+    scorers: tuple[ConfidenceScorer, ...],
+    all_lines: dict[LineRef, LineManifest],
+    ctx: RunContext,
+) -> None:
+    """Score every outcome's FINAL decided text (report-only).
+
+    Runs AFTER the outcomes are built, so a line scores what actually
+    decided it, whatever path got there — a reconciled hyphen member and a
+    line the guard reverted are both scored on the text the artefact will
+    carry, not on the proposal. ``write_wc`` stays locked until
+    calibration: this reaches the report and nothing else.
+    """
+    if policy.mode == "drop":
+        return
+    for outcome in report.lines:
+        ref = LineRef(page_id=outcome.page_id, line_id=outcome.line_id)
+        scored_line = all_lines.get(ref)
+        # The producer's verified self-assessment rides the captured ops
+        # (uncertainty channel); min over a line's ops when several
+        # declared one.
+        producer_conf: float | None = None
+        captured_line = ctx.producer_ops.get(ref)
+        if captured_line is not None:
+            declared_confidences: list[float] = [
+                pc
+                for op in captured_line[0]
+                if (pc := getattr(op, "producer_confidence", None)) is not None
+            ]
+            if declared_confidences:
+                producer_conf = min(declared_confidences)
+        outcome.confidence = build_line_confidence(
+            source_text=outcome.source_text,
+            final_text=outcome.decision.final_text,
+            ocr_confidence=(
+                scored_line.ocr_confidence if scored_line is not None else None
+            ),
+            producer_confidence=producer_conf,
+            scorers=scorers,
+        )
+
+
+def _build_correction_report(
+    *,
+    run_id: str,
+    document_manifest: DocumentManifest,
+    decisions: DecisionSet,
+    traces: dict[LineRef, LineTrace],
+    ctx: RunContext,
+    provenance: RunProvenance,
+    format_losses: dict[str, int],
+    sidecar_entries: list[SidecarEntry],
+    confidence_policy: ConfidencePolicy,
+    confidence_scorers: tuple[ConfidenceScorer, ...],
+    all_lines: dict[LineRef, LineManifest],
+) -> CorrectionReport:
+    """The §9 report: everything the run has to SAY about what it did."""
+    report = CorrectionReport(
+        run_id=run_id,
+        total_lines=len(decisions.decisions),
+        # P3.5 / ADR-011 slice C — the report builder reads the
+        # DecisionSet (terminal stage) + the working traces
+        # (proposal/projection stages), staged per line (§9 v2).
+        lines=build_line_outcomes(decisions, traces),
+        # ADR-011 — the rewrite's granularity-loss counters surface on
+        # the report. None when no MARKUP was dropped (or nothing was
+        # written) — never read as "the run lost nothing": a flattened
+        # character is counted on the fidelity scale below (R8).
+        format_losses=format_losses or None,
+        # How faithfully each rewritten line carries its decision,
+        # counted by level. A non-zero "normalized" is the run telling
+        # its host that a significant whitespace character did not
+        # survive the format — the thing the invariant used to compare
+        # away before anyone could count it.
+        projection_fidelity=_fidelity_counts(traces) or None,
+        # A break whose partner this run never found: silent until now,
+        # and not the same thing as a fallback — the line WAS corrected,
+        # just alone and without its pair-drift guards.
+        unpaired_breaks=len(unpaired_break_refs(document_manifest.pages)) or None,
+        # R6 — the units this run CUT to fit the request cap. Distinct
+        # from unpaired_breaks: there the link was never there, here the
+        # engine severed one on purpose, and the split resets the tail's
+        # role to NONE so it cannot show up in that count either.
+        hyphen_splits=ctx.hyphen_splits or None,
+        # P3.9 (§11) — the run's full provenance record.
+        provenance=provenance,
+        # F14/§11 — the aggregated usage is part of the persisted
+        # artefact, not just the transient result. None when nothing
+        # was reported: a zero Usage would be indistinguishable from
+        # "the provider reported zero tokens".
+        usage=(ctx.usage if ctx.usage.total_tokens or ctx.usage.response_ids else None),
+        # corrections the token_realign gate refused to
+        # project, preserved for review instead of lost.
+        sidecar=sidecar_entries or None,
+    )
+    _attach_line_confidences(
+        report,
+        policy=confidence_policy,
+        scorers=confidence_scorers,
+        all_lines=all_lines,
+        ctx=ctx,
+    )
+    return report

@@ -1,4 +1,11 @@
-# Backend HTTP API
+# Backend HTTP API — the demo's, not the library's
+
+> **Scope.** This describes the FastAPI app that demonstrates `corrigenda`
+> in a browser. It is not part of the published library and retires with
+> the demo: a library has no endpoints, no job store and no tokens. If you
+> are integrating `corrigenda` into your own service, none of this is your
+> contract — [`packages/corrigenda/docs/quickstart.md`](../packages/corrigenda/docs/quickstart.md)
+> is. Read on if you are running or modifying the demo.
 
 **Source of truth: the OpenAPI schema**, served live at `/docs` and
 `/openapi.json`, and committed as `frontend/openapi.snapshot.json`

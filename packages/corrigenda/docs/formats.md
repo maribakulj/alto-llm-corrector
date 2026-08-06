@@ -75,10 +75,12 @@ PAGE-specific losses surface on `CorrectionReport.format_losses`.
 ## Provenance (§11)
 
 Every corrected file records the pass: provider/model labels, the library
-version and the run's `config_fingerprint()` — a stable hash over the
-four frozen policies (RetryPolicy, GuardConfig, ChunkPlannerConfig,
-PairingPolicy). A consumer holding the same policy objects can recompute
-and verify it. ALTO records the pass in whichever container the source
+version and the run's `config_fingerprint()` — a stable hash over the five
+policies that can change the delivered bytes (`RetryPolicy`, `GuardConfig`, `ChunkPlannerConfig`, `PairingPolicy` and `LossPolicy`). A consumer holding
+the same policy objects can recompute and verify it. `ConfidencePolicy`
+and `RoutingPolicy` are frozen policies too, but stay outside the composite
+while they cannot alter output: a fingerprint that moved without the output
+moving would be unreadable as evidence. ALTO records the pass in whichever container the source
 carries: a `postProcessingStep` inside an existing `<OCRProcessing>` (what
 real ABBYY/Tesseract/Gallica exports use), or a `processingStep` under the
 ALTO 4.0 generic `<Processing>`. PAGE uses the P7 slots.

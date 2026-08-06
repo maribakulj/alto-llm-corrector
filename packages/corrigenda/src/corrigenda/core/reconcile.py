@@ -333,78 +333,144 @@ def _reconcile_chunk_hyphens(
     ``hyphen_partner_missing`` event for each unresolvable partner
     so observers can surface the diagnostic.
     """
-    # 1. Collect the joins this chunk owns. Outgoing ones (this line
-    #    continues onto another) unless they leave the page; incoming
-    #    ones (another line continues onto this one) only when they
-    #    do. Every join is therefore owned exactly once, by whichever
-    #    side can see both members.
-    joins: dict[LineRef, tuple[LineManifest, LineManifest, bool]] = {}
+    joins, pool = _claim_joins(
+        chunk_id=chunk_id,
+        chunk_lines=chunk_lines,
+        line_by_id=line_by_id,
+        cross_page_partners=cross_page_partners,
+        emit=emit,
+    )
+    return _walk_units_reconciling(
+        joins,
+        pool,
+        guard_config=guard_config,
+        ctx=ctx,
+        text_by_id=text_by_id,
+        traces=traces,
+    )
+
+
+#: A join this chunk owns: ``(tail, head, is_forward)``. ``is_forward``
+#: names the SLOT the tail links through, and only a BOTH tail uses its
+#: FORWARD slot (see pairing.py) — it is not a direction.
+_Join = tuple[LineManifest, LineManifest, bool]
+
+
+def _claim_joins(
+    *,
+    chunk_id: str,
+    chunk_lines: list[LineManifest],
+    line_by_id: dict[str, LineManifest],
+    cross_page_partners: dict[LineRef, LineManifest] | None,
+    emit: Callable[[ev.EngineEvent], None],
+) -> tuple[dict[LineRef, _Join], dict[LineRef, LineManifest]]:
+    """Collect the joins this chunk owns, and the pool they live in.
+
+    Outgoing joins (this line continues onto another) unless they leave
+    the page; incoming ones (another line continues onto this one) only
+    when they do. Every join is therefore owned exactly once, by
+    whichever side can see both members — tail-ownership on a page,
+    head-ownership across one (L3).
+
+    Emits ``hyphen_partner_missing`` for each partner it cannot resolve,
+    so an observer sees the diagnostic instead of a silent skip.
+    """
+    joins: dict[LineRef, _Join] = {}
     pool: dict[LineRef, LineManifest] = {line_ref(lm): lm for lm in chunk_lines}
 
     def _claim(tail: LineManifest, head: LineManifest) -> None:
         pool[line_ref(tail)] = tail
         pool[line_ref(head)] = head
-        # ``is_forward`` names the SLOT the tail links through, and
-        # only a BOTH tail uses its FORWARD slot (see pairing.py).
-        joins[line_ref(tail)] = (
-            tail,
-            head,
-            tail.hyphen_role == HyphenRole.BOTH,
+        joins[line_ref(tail)] = (tail, head, tail.hyphen_role == HyphenRole.BOTH)
+
+    def _resolve(ref: LineRef, lm: LineManifest, direction: str) -> LineManifest | None:
+        partner = _lookup_ref(
+            ref,
+            page_id=lm.page_id,
+            line_by_id=line_by_id,
+            cross_page_partners=cross_page_partners,
         )
+        if partner is None:
+            emit(
+                ev.HyphenPartnerMissing(
+                    chunk_id=chunk_id,
+                    line_id=lm.line_id,
+                    missing_partner_id=ref.line_id,
+                    direction=direction,
+                )
+            )
+        return partner
 
     for lm in chunk_lines:
-        # The role→slot map is NOT re-derived here. It used to be, in
-        # a ternary two lines long, sitting beside a helper that
-        # already owned it — and "forward" naming the SLOT rather
-        # than the direction is exactly the kind of thing a second
-        # copy gets subtly wrong (ADR-010).
+        # The role→slot map is NOT re-derived here. It used to be, in a
+        # ternary two lines long, sitting beside a helper that already
+        # owned it — and "forward" naming the SLOT rather than the
+        # direction is exactly the kind of thing a second copy gets
+        # subtly wrong (ADR-010).
         out_ref = forward_partner_ref(lm)
         if out_ref is not None and out_ref.page_id == lm.page_id:
-            head = _lookup_ref(
+            head = _resolve(
                 out_ref,
-                page_id=lm.page_id,
-                line_by_id=line_by_id,
-                cross_page_partners=cross_page_partners,
+                lm,
+                "forward" if lm.hyphen_role == HyphenRole.BOTH else "backward",
             )
-            if head is None:
-                emit(
-                    ev.HyphenPartnerMissing(
-                        chunk_id=chunk_id,
-                        line_id=lm.line_id,
-                        missing_partner_id=out_ref.line_id,
-                        direction=(
-                            "forward"
-                            if lm.hyphen_role == HyphenRole.BOTH
-                            else "backward"
-                        ),
-                    )
-                )
-            else:
+            if head is not None:
                 _claim(lm, head)
 
         in_ref = backward_partner_ref(lm)
         if in_ref is not None and in_ref.page_id != lm.page_id:
-            tail = _lookup_ref(
-                in_ref,
-                page_id=lm.page_id,
-                line_by_id=line_by_id,
-                cross_page_partners=cross_page_partners,
-            )
-            if tail is None:
-                emit(
-                    ev.HyphenPartnerMissing(
-                        chunk_id=chunk_id,
-                        line_id=lm.line_id,
-                        missing_partner_id=in_ref.line_id,
-                        direction="backward",
-                    )
-                )
-            else:
+            tail = _resolve(in_ref, lm, "backward")
+            if tail is not None:
                 _claim(tail, lm)
 
-    # 2. One walk per unit, members in reading order. Every join's
-    #    tail and partner are both in the pool, so the derivation
-    #    groups them and the walk visits every join exactly once.
+    return joins, pool
+
+
+def _refresh_pair_traces(
+    tail: LineManifest,
+    head: LineManifest,
+    *,
+    outcome: str,
+    traces: dict[LineRef, LineTrace] | None,
+) -> None:
+    """Refresh BOTH members' traces, not only the chunk's own.
+
+    A cross-page join is decided on the HEAD's page, and an incoherent
+    pair reverts the TAIL — whose page closed already, so nothing
+    downstream would fix its trace. A FALLBACK with no reason on the
+    trace surfaces as a decision with no reason at all, since
+    ``derive_decision_set`` reads the reason from there.
+    """
+    for side in (tail, head):
+        fell = side.status is LineStatus.FALLBACK
+        _set_trace(
+            traces,
+            side,
+            projected_text=side.corrected_text,
+            validation_status="fallback" if fell else "corrected",
+        )
+        if not fell:
+            continue
+        trace = traces.get(line_ref(side)) if traces is not None else None
+        if trace is not None and not trace.fallback_reason:
+            trace.fallback_reason = f"hyphen_pair_{outcome}"
+
+
+def _walk_units_reconciling(
+    joins: dict[LineRef, _Join],
+    pool: dict[LineRef, LineManifest],
+    *,
+    guard_config: GuardConfig,
+    ctx: RunContext,
+    text_by_id: dict[str, str],
+    traces: dict[LineRef, LineTrace] | None,
+) -> int:
+    """One walk per unit, members in reading order.
+
+    Every claimed join has both its tail and its head in the pool, so THE
+    derivation groups them and this walk visits each join exactly once.
+    Returns the number reconciled.
+    """
     reconciled_count = 0
     written_heads: set[LineRef] = set()
     for group in derive_hyphen_groups(pool.values()):
@@ -424,31 +490,7 @@ def _reconcile_chunk_hyphens(
                 config=guard_config,
             )
             _record_reconcile_outcome(ctx, outcome)
-            # Both members' traces are refreshed here, not only the
-            # chunk's own. A cross-page join is decided on the HEAD's
-            # page, and an incoherent pair reverts the TAIL — whose
-            # page closed already, so nothing downstream would fix
-            # its trace. A FALLBACK with no reason on the trace
-            # surfaces as a decision with no reason at all
-            # (derive_decision_set reads the reason from there).
-            # NB ``side``, not ``member``: the enclosing loop's
-            # ``member`` is a LineRef, and shadowing it here type-checks
-            # as a conflict for good reason — it is read at the top of
-            # this loop body.
-            for side in (tail, head):
-                fell = side.status is LineStatus.FALLBACK
-                _set_trace(
-                    traces,
-                    side,
-                    projected_text=side.corrected_text,
-                    validation_status="fallback" if fell else "corrected",
-                )
-                if not fell:
-                    continue
-                trace = traces.get(line_ref(side)) if traces is not None else None
-                if trace is not None and not trace.fallback_reason:
-                    trace.fallback_reason = f"hyphen_pair_{outcome}"
+            _refresh_pair_traces(tail, head, outcome=outcome, traces=traces)
             written_heads.add(head_ref)
             reconciled_count += 1
-
     return reconciled_count
