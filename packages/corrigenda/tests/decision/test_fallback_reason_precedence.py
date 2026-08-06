@@ -1,44 +1,67 @@
-"""Which reason survives when two passes revert the same line (`RM-01`).
+"""Which reason survives when two passes revert the same line (ADR-013).
 
-Characterisation, not aspiration: every assertion here records what the
-code does TODAY, so that `RM-01` — which will move all of these writes
-behind one entry point — can prove it changed nothing it did not mean to.
-Some of what is pinned below is arguably wrong. It is still pinned.
+Characterisation: every assertion records what the code does TODAY, so
+that `RM-01` — which moves all seven writes behind one entry point — can
+prove it changed nothing it did not mean to.
 
-The rule is not "first writer wins" or "last writer wins". It is BOTH,
-depending on the site, and the split is what makes the behaviour hard to
-predict from a call site:
+The split looks arbitrary and is not. Four sites assign
+``fallback_reason`` unconditionally (``_apply_line_acceptance`` × 3,
+``_fall_back_to_source``); three defer behind ``if not
+trace.fallback_reason`` (``_extend_to_units``, ``_refresh_pair_traces``,
+``_apply_unit_reverts``). ADR-013 is why that is right, and it rests on
+one invariant this file also pins, end to end and over real corpora:
 
-  * four writes are UNCONDITIONAL — ``_apply_line_acceptance`` (three of
-    them) and ``_fall_back_to_source`` pass ``fallback_reason`` straight
-    to ``_set_trace``, which assigns. Last writer wins.
-  * three writes DEFER — ``_extend_to_units``, ``_refresh_pair_traces``
-    and ``_apply_unit_reverts`` each guard with ``if not
-    trace.fallback_reason``. First writer wins.
+  **I-1 — a line carrying a ``fallback_reason`` has already been
+  reverted: its final text equals its source text.**
 
-And the asymmetry that matters most is not between the two groups, it is
-inside the deferring one: those three passes change ``corrected_text``
-and ``status`` **unconditionally** while changing the reason only when
-there is room. A line can therefore be reverted by a pass whose name
-appears nowhere in its reason — the text says one thing happened, the
-audit trail says another. :func:`test_a_second_revert_keeps_the_first_
-reason_though_it_did_the_reverting` is that case, and it is the single
-most useful line in this file for whoever executes `RM-01`.
+I-1 makes a second revert IDEMPOTENT on text. The pass that actually took
+the correction away is therefore the first one, and deferring is what
+keeps the recorded reason true rather than merely conservative — a
+last-writer-wins rule would name a pass that changed nothing. And the
+four assigning sites cannot collide at all: ``_apply_line_acceptance``
+skips any line that already holds a decision, which is pinned below too.
+
+An earlier note in the `RM` audit read this as a defect — "a
+``token_realign`` gate reported as an ``adjacent_duplicate``, so
+``fallback_reasons`` counts wrong". Checked against 756 decided lines
+across six configurations, that is false, and the retraction is in
+``docs/PLAN.md``. What was missing was never a fix; it was the invariant
+that says the behaviour is correct.
+
+When `RM-01` lands, the single writer must defer on ALL seven paths, and
+these tests are how it proves the consumer-visible reason did not move.
 """
 
 from __future__ import annotations
 
 import ast
+import random
 from pathlib import Path
+from typing import Any
 
-from corrigenda.core.acceptance import _apply_unit_reverts
+import pytest
+
+from corrigenda.core.acceptance import _apply_line_acceptance, _apply_unit_reverts
 from corrigenda.core.identity import line_ref
 from corrigenda.core.outcome import _extend_to_units, _fall_back_to_source
-from corrigenda.core.schemas import HyphenRole, LineStatus
+from corrigenda.core.pipeline import CorrectionPipeline
+from corrigenda.core.reconcile import _refresh_pair_traces
+from corrigenda.core.schemas import (
+    Coords,
+    GuardConfig,
+    HyphenRole,
+    LineManifest,
+    LineStatus,
+    LossPolicy,
+)
+from corrigenda.formats.loader import build_document_manifest
 
 from tests.decision._state import document, line
 
 SRC = Path(__file__).parent.parent.parent / "src" / "corrigenda"
+REPO = SRC.parent.parent.parent.parent
+EXAMPLES = REPO / "examples"
+CORPUS_GT = SRC.parent.parent / "tests" / "corpus_gt"
 
 
 def _one_line(reason: str | None = None):
@@ -64,13 +87,103 @@ def _linked_pair(partner_reason: str | None = None):
 
 
 # ---------------------------------------------------------------------------
-# The unconditional writer
+# Sites 1-4 — the assigning writers, and why they never collide
 # ---------------------------------------------------------------------------
 
 
+def _pending(index: int, ocr: str, **kwargs: Any) -> LineManifest:
+    """A line acceptance has not decided yet — ``corrected_text is None``.
+
+    ``_apply_line_acceptance`` skips anything already decided, so a line
+    built by :func:`tests.decision._state.line` (which sets a correction)
+    would never reach the guards at all.
+    """
+    return LineManifest(
+        line_id=f"L{index}",
+        page_id="p1",
+        block_id="b1",
+        line_order_global=index,
+        line_order_in_block=index,
+        coords=Coords(hpos=0, vpos=index * 10, width=100, height=10),
+        ocr_text=ocr,
+        **kwargs,
+    )
+
+
+def _accept(lines: list[LineManifest], proposals: dict[str, str]):
+    manifest, all_lines, traces = document(lines)
+    _apply_line_acceptance(
+        guard_config=GuardConfig(),
+        chunk_lines=lines,
+        text_by_id=proposals,
+        all_lines_by_id={lm.line_id: lm for lm in lines},
+        traces=traces,
+    )
+    return traces
+
+
+def test_acceptance_writes_the_guards_own_reason() -> None:
+    """Site 3 — a proposal too far from source is refused, and the guard's
+    verdict is what lands on the trace."""
+    lines = [_pending(1, "le chat noir dort")]
+    traces = _accept(lines, {"L1": "ZZZZ QQQQ WWWW"})
+    assert traces[line_ref(lines[0])].fallback_reason == "too_different_from_source"
+    assert lines[0].corrected_text == lines[0].ocr_text
+
+
+def test_acceptance_writes_the_orphan_hyphen_reason() -> None:
+    """Site 1 — a PART1 whose source ends on a break mark and whose
+    correction does not: the mark would be lost, so the line goes back."""
+    lines = [_pending(1, "par-", hyphen_role=HyphenRole.PART1)]
+    traces = _accept(lines, {"L1": "par"})
+    assert traces[line_ref(lines[0])].fallback_reason == "orphan_hyphen_completed"
+
+
+def test_acceptance_writes_the_fallen_partner_reason() -> None:
+    """Site 2 — a hyphen member whose partner already fell back keeps its
+    source text too (ADR-010), and says why."""
+    tail = _pending(
+        1,
+        "par-",
+        hyphen_role=HyphenRole.PART1,
+        hyphen_pair_line_id="L2",
+        corrected_text="par-",
+        status=LineStatus.FALLBACK,
+    )
+    head = _pending(2, "tir", hyphen_role=HyphenRole.PART2, hyphen_pair_line_id="L1")
+    traces = _accept([tail, head], {"L2": "tir"})
+    assert traces[line_ref(head)].fallback_reason == "hyphen_partner_fell_back"
+
+
+def test_acceptance_skips_a_line_that_already_holds_a_decision() -> None:
+    """Why sites 1-4 cannot collide with anything, including each other.
+
+    ``_apply_line_acceptance`` opens with ``if lm.corrected_text is not
+    None: continue``. A line carrying a reason carries a decision (I-1),
+    so acceptance never reaches it a second time — the four assigning
+    sites are unconditional because they are also unreachable twice."""
+    lines = [line(1, "aaa", "AAA")]  # already decided
+    manifest, all_lines, traces = document(lines)
+    traces[line_ref(lines[0])].fallback_reason = "first_reason"
+    _apply_line_acceptance(
+        guard_config=GuardConfig(),
+        chunk_lines=lines,
+        text_by_id={"L1": "ZZZZ QQQQ WWWW"},
+        all_lines_by_id={lm.line_id: lm for lm in lines},
+        traces=traces,
+    )
+    assert traces[line_ref(lines[0])].fallback_reason == "first_reason"
+    assert lines[0].corrected_text == "AAA"
+
+
 def test_fall_back_to_source_overwrites_an_existing_reason() -> None:
-    """``_fall_back_to_source`` assigns through ``_set_trace``: whatever a
-    previous pass recorded is replaced."""
+    """Site 4 — ``_fall_back_to_source`` assigns through ``_set_trace``:
+    whatever a previous pass recorded is replaced.
+
+    Reachable only by calling it directly, as here: in a run it is the
+    chunk-exhaustion path, which runs before any document-wide pass. The
+    single writer of `RM-01` will defer instead, and ADR-013 argues that
+    is not a behaviour change because this collision does not occur."""
     lines, _all_lines, traces = _one_line("first_reason")
     _fall_back_to_source(lines, traces, reason="second_reason")
     assert traces[line_ref(lines[0])].fallback_reason == "second_reason"
@@ -122,39 +235,206 @@ def test_unit_revert_leaves_a_members_own_earlier_reason_alone() -> None:
     assert traces[line_ref(head)].fallback_reason == "earlier_reason_of_the_member"
 
 
-def test_a_second_revert_keeps_the_first_reason_though_it_did_the_reverting() -> None:
-    """The sharp case, and the reason this file exists.
+def test_pair_trace_refresh_names_the_pair_when_the_trace_is_empty() -> None:
+    """Site 6 — a member reverted by pair reconciliation, with nothing on
+    its trace, is attributed to the pair."""
+    tail, head, _all_lines, traces = _linked_pair()
+    for member in (tail, head):
+        member.corrected_text = member.ocr_text
+        member.status = LineStatus.FALLBACK
+    _refresh_pair_traces(tail, head, outcome="fallback", traces=traces)
+    assert traces[line_ref(tail)].fallback_reason == "hyphen_pair_fallback"
+    assert traces[line_ref(head)].fallback_reason == "hyphen_pair_fallback"
+
+
+def test_pair_trace_refresh_defers_to_an_existing_reason() -> None:
+    """Site 6, the deferring half — session 3 had this covered statically
+    only. A member that already explained itself keeps its own words."""
+    tail, head, _all_lines, traces = _linked_pair("earlier_reason_of_the_member")
+    for member in (tail, head):
+        member.corrected_text = member.ocr_text
+        member.status = LineStatus.FALLBACK
+    _refresh_pair_traces(tail, head, outcome="fallback", traces=traces)
+    assert traces[line_ref(head)].fallback_reason == "earlier_reason_of_the_member"
+    assert traces[line_ref(tail)].fallback_reason == "hyphen_pair_fallback"
+
+
+def test_pair_trace_refresh_writes_no_reason_to_a_surviving_member() -> None:
+    """A coherent pair keeps its correction, so there is nothing to
+    explain — the reason stays empty and the status reads ``corrected``."""
+    tail, head, _all_lines, traces = _linked_pair()
+    _refresh_pair_traces(tail, head, outcome="coherent", traces=traces)
+    assert traces[line_ref(tail)].fallback_reason is None
+    assert traces[line_ref(head)].validation_status == "corrected"
+
+
+def test_a_second_revert_keeps_the_first_reason_because_the_first_did_it() -> None:
+    """The case ADR-013 turns on, and the one this file exists to pin.
 
     ``_apply_unit_reverts`` writes ``corrected_text`` and ``status``
-    unconditionally but the reason only when the trace is empty. A line
-    that already carried a reason is therefore reverted BY THIS PASS while
-    the audit trail goes on attributing it to the earlier one.
+    unconditionally, the reason only into an empty trace. Read alone that
+    looks like a line being reverted by one pass and attributed to
+    another.
 
-    Pinned as-is. It is defensible ("the first cause is the real cause")
-    and it is also how a run reports a ``token_realign`` gate as an
-    ``adjacent_duplicate`` — a consumer counting reasons gets a number
-    that is off by however many lines were flagged twice. `RM-01` should
-    decide this deliberately rather than inherit it; whatever it decides,
-    this test has to be updated ON PURPOSE.
+    It is not, and I-1 is why: the line already carried a reason, so it
+    was already at its source text, so THIS revert changed nothing a
+    reader can see. The pass that took the correction away is the earlier
+    one, and its reason is the true one — not the stale one. The
+    behaviour below is correct, and pinning it protects it from a
+    well-meaning `RM-01` that "fixes" it into last-writer-wins and starts
+    naming passes that did nothing.
+
+    The invariant that makes this argument is not asserted here in the
+    abstract: :func:`test_a_reason_implies_the_line_is_back_at_source`
+    checks it over the corpora.
     """
     lines, all_lines, traces = _one_line("first_reason")
+    # I-1 in this fixture: a line with a reason is already at source.
+    lines[0].corrected_text = lines[0].ocr_text
+    lines[0].status = LineStatus.FALLBACK
+    before = lines[0].corrected_text
+
     result = _apply_unit_reverts(
-        reverts={line_ref(lines[0]): "the_reason_that_actually_reverted_it"},
+        reverts={line_ref(lines[0]): "a_later_pass_flagged_it_too"},
         all_lines=all_lines,
         traces=traces,
     )
 
-    # The revert happened, and this pass is the one that did it.
-    assert lines[0].corrected_text == lines[0].ocr_text
+    # The later pass reports the flag it raised …
+    assert result[line_ref(lines[0])] == "a_later_pass_flagged_it_too"
+    # … but it changed nothing: the revert was idempotent.
+    assert lines[0].corrected_text == before
     assert lines[0].status is LineStatus.FALLBACK
-    assert result[line_ref(lines[0])] == "the_reason_that_actually_reverted_it"
-
-    # The trace still names the earlier cause. This is the gap.
+    # … so the recorded reason still names what actually happened.
     assert traces[line_ref(lines[0])].fallback_reason == "first_reason"
 
 
 # ---------------------------------------------------------------------------
-# The asymmetry itself, pinned statically
+# I-1, over real files — the invariant the whole rule rests on
+# ---------------------------------------------------------------------------
+
+
+class _AdversarialProducer:
+    """A provider that breaks lines the way the guards are built to catch.
+
+    Deterministic (seeded): duplicates a neighbour, absorbs across a seam,
+    drops the break mark, re-segments, and sometimes answers far enough
+    from source to be refused outright. The point is to reach every reason
+    family in one run — a polite provider produces no fallbacks and would
+    make I-1 vacuously true.
+    """
+
+    def __init__(self, seed: int = 0) -> None:
+        self._rng = random.Random(seed)
+
+    async def list_models(self, api_key: str) -> list[Any]:  # pragma: no cover
+        return []
+
+    async def complete_structured(
+        self,
+        *,
+        api_key: str,
+        model: str,
+        system_prompt: str,
+        user_payload: dict[str, Any],
+        json_schema: dict[str, Any],
+        temperature: float = 0.0,
+    ) -> tuple[dict[str, Any], None]:
+        out = []
+        previous = None
+        for entry in user_payload.get("lines", []):
+            text = entry.get("ocr_text", "")
+            roll = self._rng.random()
+            if roll < 0.15 and previous:
+                text = previous  # adjacent duplicate
+            elif roll < 0.30:
+                text = "ZZZZ QQQQ WWWW"  # too different from source
+            elif roll < 0.40 and previous:
+                text = f"{previous} {text}"  # absorbs the previous line
+            elif roll < 0.55:
+                text = text.rstrip("-¬⸗­")  # break mark dropped
+            elif roll < 0.70:
+                text = text.replace(" ", "") + " x"  # re-segmentation
+            previous = entry.get("ocr_text", "")
+            out.append({"line_id": entry["line_id"], "corrected_text": text})
+        return {"lines": out}, None
+
+
+class _Silent:
+    def on_event(self, event_type: Any, payload: dict[str, Any]) -> None:
+        pass
+
+
+_CORPORA = [
+    pytest.param([EXAMPLES / "sample.xml"], id="alto-sample"),
+    pytest.param(sorted(CORPUS_GT.glob("*.src.page.xml")), id="page-corpus-gt"),
+]
+
+_POLICIES = [
+    pytest.param(LossPolicy(), id="report"),
+    pytest.param(LossPolicy(min_alignment_score=0.6), id="token_realign"),
+    pytest.param(LossPolicy(strict=True), id="strict"),
+]
+
+
+@pytest.mark.parametrize("paths", _CORPORA)
+@pytest.mark.parametrize("loss_policy", _POLICIES)
+def test_a_reason_implies_the_line_is_back_at_source(
+    paths: list[Path], loss_policy: LossPolicy
+) -> None:
+    """**I-1** — no line carries a ``fallback_reason`` while holding a
+    correction.
+
+    This is the load-bearing fact under ADR-013: it is what makes a
+    second revert idempotent, and therefore what makes the FIRST reason
+    the true one. It is not obvious and it is not documented anywhere in
+    the code — it holds because every site writes the revert on the
+    statement before the reason, and because ``guards.check_line``
+    returns ``text=source_ocr`` on all five of its rejection branches.
+
+    Nothing enforced it before this test. `RM-01` must keep it green: a
+    single writer that records a reason without reverting, or that
+    reverts without recording, breaks the rule ADR-013 rests on rather
+    than merely changing a string.
+    """
+    if not paths:
+        pytest.skip("corpus absent")
+    manifest = build_document_manifest([(p, p.name) for p in paths])
+    pipeline = CorrectionPipeline.for_provider(
+        _AdversarialProducer(),
+        api_key="k",
+        model="m",
+        observer=_Silent(),
+        loss_policy=loss_policy,
+    )
+    result = pipeline.run_sync(
+        document_manifest=manifest,
+        source_files={p.name: p for p in paths},
+    )
+
+    source = {line_ref(lm): lm.ocr_text for page in manifest.pages for lm in page.lines}
+    offenders = {
+        ref: (decision.fallback_reason, decision.final_text, source[ref])
+        for ref, decision in result.decisions.by_ref.items()
+        if decision.fallback_reason and decision.final_text != source[ref]
+    }
+    assert not offenders, (
+        f"I-1 broken on {len(offenders)} line(s): {list(offenders.items())[:3]}. "
+        "A line that carries a fallback reason must already be back at its "
+        "source text — ADR-013's whole argument for first-writer-wins "
+        "depends on it."
+    )
+
+    # A run with no fallback at all would satisfy I-1 vacuously.
+    assert any(d.fallback_reason for d in result.decisions.by_ref.values()), (
+        "the adversarial producer stopped producing fallbacks — this "
+        "corpus no longer exercises I-1, so fix the producer rather than "
+        "trusting the green"
+    )
+
+
+# ---------------------------------------------------------------------------
+# The split itself, pinned statically
 # ---------------------------------------------------------------------------
 
 
@@ -194,11 +474,15 @@ def _reason_writes() -> tuple[int, int]:
 
 
 def test_the_precedence_rule_is_split_four_ways_against_three() -> None:
-    """Four writes assign, three defer. That split IS the precedence rule,
-    and it lives nowhere but in the shape of seven ``if`` statements.
+    """Four writes assign, three defer — the census behind ADR-013.
 
-    When `RM-01` lands there should be ONE writer and this test should be
-    deleted, not adjusted."""
+    The seven sites are pinned behaviourally above; this counts them, so
+    that an eighth cannot appear unnoticed between two of the named
+    tests. ADR-013 settles which way the split should go when `RM-01`
+    collapses it: the single writer defers on all seven paths.
+
+    When that lands there is ONE writer, and this test should be deleted
+    rather than adjusted — a census of one is not a rule."""
     guarded, unguarded = _reason_writes()
     assert (guarded, unguarded) == (3, 4), (
         f"the precedence split moved to {guarded} deferring / {unguarded} "
