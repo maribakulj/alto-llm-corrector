@@ -870,7 +870,7 @@ s'exécute pas dans cette vague.
 | `RM-11` | Contradictions documentaires : `CLAUDE.md` vs ce plan sur `S1` ; 2 docstrings fausses ; 1 clause dupliquée | vérité | secondaire | `CLAUDE.md`, `core/outcome.py`, `core/quality.py`, `tests/test_import_contract.py` | — | **fait (2026-08-06)** |
 | `RM-02` | Ratchet goodhartisé : mesure la longueur, pas le couplage ; périmètre limité à `core/` | outillage | important | `tests/test_orchestrator_budget.py` | — | **fait (2026-08-06)** |
 | `RM-10` | `_rebuild_line` (203 l.) et `rewrite_alto_file` (161 l.) hors de toute mesure | mesure | important | `formats/alto/rewriter.py` (lecture seule) | `RM-02` | **fait (2026-08-06)** |
-| `RM-05a` | Aucun test ne protège l'ordre des passes de `core/finalize.py` | tests | important | `tests/decision/` (nouveau) | — | à faire |
+| `RM-05a` | Aucun test ne protège l'ordre des passes de `core/finalize.py` | tests | important | `tests/decision/` (nouveau) | — | **fait (2026-08-06)** |
 | `RM-01` | L'écriture de la décision terminale d'une ligne est dispersée sur 5 modules ; l'ordre des passes est porté par une docstring | **bugfix** | **critique** | `core/outcome.py`, `core/acceptance.py`, `core/reconcile.py`, `core/routing.py`, `core/finalize.py` | `RM-02`, `RM-05a` | à faire |
 | `RM-04` | ~20 % du code du paquet n'est exécuté par aucun chemin par défaut et est gelé par ce plan | nettoyage | important | `integrations/`, `core/routing.py`, `core/quality.py`, `core/confidence.py`, `core/batching.py`, `__init__.py` | `RM-11` + ratification | à faire (option A) |
 | `RM-07` | `core` connaît les formats : `core/losses.py` porte la table des attributs ALTO ; le contrat d'import plafonne à `== 3` au lieu de nommer une règle | réducteur | important | `core/losses.py`, `core/provenance.py`, `tests/test_import_contract.py` | — | à faire |
@@ -935,7 +935,8 @@ restent intacts.
 
 ### Suivi
 
-Dernière mise à jour : 2026-08-06 — session 2. Lots `RM-0` et `RM-1` clos.
+Dernière mise à jour : 2026-08-06 — session 3. Lots `RM-0` et `RM-1` clos ;
+`RM-2` en cours, phase filet close.
 Branche : `claude/technical-repository-audit-61yzfb`.
 
 - **Done** — `RM-11` (session 1) : règle « pas de 6ᵉ chemin » de `CLAUDE.md`
@@ -955,10 +956,26 @@ Branche : `claude/technical-repository-audit-61yzfb`.
   `PageDriver._run_chunk` → rouge ; une fonction longue et large ajoutée à
   `formats/page/_text.py` → rouge sur les deux gardes, cas que l'ancien scan
   ne voyait pas). Aucun fichier de `src/` modifié.
-- **In progress** — aucun.
+- **Done** — `RM-05a` (session 3) : `tests/decision/`, trois tests, aucun
+  fichier de `src/` touché. Le test d'ordre **passe** et il est pire que
+  prévu : permuter deux des trois passes ne renumérote pas un rapport, il
+  change le **texte livré**. Deux lignes adjacentes proposant la même
+  correction depuis des sources différentes sont un doublon, et l'ordre
+  canonique les révoque toutes les deux ; la porte `token_realign` passée en
+  premier révoque celle dont le compte de mots change, ce qui **efface la
+  preuve du doublon**, et la seconde livre alors une correction que l'ordre
+  canonique rejetait — en `corrected`, sans raison, sans entrée sidecar. Un
+  échange, une hallucination livrée. Le `xfail` (strict) porte la propriété
+  due : un ordre faux doit être **refusé**, pas produire d'autres octets ; il
+  épingle l'exigence, pas le mécanisme. La caractérisation des raisons pose
+  la règle réelle — ni premier ni dernier écrivain, **les deux** : 4 écritures
+  assignent, 3 défèrent derrière `if not trace.fallback_reason`. Le cliquet
+  d'exclusivité épingle 22 écritures / 7 fonctions / 5 modules, ne peut que
+  descendre, et exempte `core/decide.py` avant son existence.
+- **In progress** — `RM-01`, phase 1/3 (table de précédence) : suivante.
 - **Blocked** — aucun. `RM-04` débloqué le 2026-08-06 (option A).
-- **Remaining** — `RM-05a`, `RM-01`, `RM-04`, `RM-07`, `RM-03`, `RM-06`,
-  `RM-05b`, `RM-09`.
+- **Remaining** — `RM-01`, `RM-04`, `RM-07`, `RM-03`, `RM-06`, `RM-05b`,
+  `RM-09`.
 - **New bugs discovered** — un, trouvé en étendant le ratchet et corrigé dans
   le même geste (l'instrument était en cause, pas `src/`) : la clé était le
   nom nu de la fonction, donc un fichier déclarant deux fois le même nom
@@ -966,18 +983,53 @@ Branche : `claude/technical-repository-audit-61yzfb`.
   `core/quality.py::needs_correction` existent chacun en double (protocole,
   puis implémentation) et une moitié de chaque paire échappait au test. Clés
   désormais qualifiées, et les quatre définitions sont épinglées.
-- **Tests added** — `tests/test_orchestrator_budget.py` : `RM-02` ajoute
-  `test_no_unnamed_function_exceeds_the_parameter_target`,
+- **New bugs discovered** — deux phrases brouillées de plus dans `core/
+  schemas.py`, **non corrigées** (P6 : hors périmètre d'une session
+  tests-only, et `src/` ne devait pas bouger) : `LossPolicy.
+  min_alignment_score` dit « Calibration against a real corpus is the job of
+  a calibration against a real corpus » ; `ConfidencePolicy` dit « locked
+  until the calibration against a real corpus harness proves the values
+  against a real corpus ». Même famille que la clause dupliquée de
+  `RoutingPolicy` fermée par `RM-11` — un mot a manifestement été substitué
+  en masse dans les docstrings à un moment. À ramasser avec `RM-06`.
+- **New bugs discovered** — l'attribution d'une révocation peut être fausse,
+  et c'est désormais épinglé plutôt que supposé : `_apply_unit_reverts`
+  écrit `corrected_text` et `status` **sans condition** mais la raison
+  seulement si la trace est vide. Une ligne déjà porteuse d'une raison est
+  donc révoquée **par cette passe** pendant que la piste d'audit continue
+  d'attribuer sa chute à la précédente — un `token_realign` rapporté comme
+  `adjacent_duplicate`. `CorrectionResult.fallback_reasons` compte donc
+  faux d'autant de lignes qu'il y en a de signalées deux fois. Ce n'est pas
+  une altération du texte (les deux causes révoquent), donc hors `L*` ;
+  c'est une décision que `RM-01` doit prendre **délibérément**.
+- **Tests added** — session 2, `tests/test_orchestrator_budget.py` : `RM-02`
+  ajoute `test_no_unnamed_function_exceeds_the_parameter_target`,
   `test_known_overparameterised_functions_only_shrink`,
   `test_finished_signatures_are_not_still_listed` ; `RM-10` ajoute
   `test_the_scan_sees_the_whole_package` ; le trou de clés ajoute
   `test_keys_are_unique_per_definition`. 11 → 34 cas dans le module.
-- **Risks remaining** — `RM-01` reste ouvert : la classe de défaut qu'il vise
-  (une ligne `CORRECTED` portant son texte source) est déjà survenue une fois,
-  cf. `L9` et `core/reconcile.py`. Second risque, propre à `RM-1` : les 13
-  entrées de `_OVERPARAMETERISED` sont un plafond, pas un objectif — `RM-03`
-  ne doit en faire descendre que ce qu'il traverse, et n'a aucune raison de
-  toucher `integrations/` ou `producers/`.
+- **Tests added** — session 3, `tests/decision/` (5 fichiers, 19 cas dont 1
+  `xfail` strict et 1 `skip` conditionné à l'existence de `core/decide.py`) :
+  `test_finalize_pass_order.py` (l'ordre change le texte livré ; un ordre
+  faux n'est pas refusé), `test_fallback_reason_precedence.py`
+  (caractérisation des 7 écritures de raison + épinglage statique du partage
+  4/3), `test_decision_write_exclusivity.py` (cliquet des 22 écritures).
+  Premier répertoire de tests groupé par **invariant** et non par vague —
+  amorce de `RM-05b`.
+- **Risks remaining** — `RM-01` reste ouvert, et la session 3 a relevé son
+  enjeu : la classe de défaut visée n'est pas seulement une ligne
+  `CORRECTED` portant son texte source (`L9`), c'est une **correction non
+  validée qui part dans le fichier** dès que deux passes s'exécutent dans le
+  mauvais ordre. Démontré, pas supposé.
+- **Risks remaining** — propre à `RM-1` : les 13 entrées de
+  `_OVERPARAMETERISED` sont un plafond, pas un objectif — `RM-03` ne doit en
+  faire descendre que ce qu'il traverse, et n'a aucune raison de toucher
+  `integrations/` ou `producers/`.
+- **Risks remaining** — propre à `RM-05a` : les trois tests visent des
+  fonctions privées et sont **délibérément tournés vers l'implémentation**.
+  C'est le prix d'un filet posé avant la correction ; `RM-01` doit les
+  réécrire, pas les contourner, et le `xfail` strict est ce qui force la
+  question à se reposer le jour où le garde arrive.
 
 ### Mesures de référence — base 2026-08-06, à recomparer à la clôture
 
@@ -985,7 +1037,9 @@ Arités mesurées `self`/`cls` exclus : ce qu'un APPELANT doit assembler.
 
 | Métrique | Base | Courant | Cible |
 |---|---|---|---|
-| Sites d'écriture de la décision d'une ligne | 11, sur 5 modules | 11 | 1 |
+| Écritures de décision (`corrected_text`/`status`) | 22 énoncés, 7 fonctions, 5 modules | 22, épinglées | 0 hors `core/decide.py` |
+| Écritures de `fallback_reason` | 4 sans condition / 3 différées | 4/3, épinglé | 1 écrivain |
+| Ordre des passes de finalisation | contrat en docstring, 0 garde | 0 garde, 1 `xfail` strict | refusé si faux |
 | Paramètres, maximum du paquet | 19 (`for_provider`) | 19 | ≤ 8 |
 | Fonctions > 8 paramètres | 13 | 13, épinglées | 0 hors liste |
 | Fonctions > 100 lignes, `core/` | 7 (toutes épinglées) | 7 | ≤ 7 |
