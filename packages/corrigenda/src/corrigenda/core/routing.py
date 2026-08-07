@@ -12,6 +12,7 @@ policy, not about a run.
 
 from __future__ import annotations
 
+from corrigenda.core import decide
 from corrigenda.core.context import RunContext
 from corrigenda.core.identity import LineRef
 from corrigenda.core.protocols import EditProducer
@@ -26,11 +27,9 @@ from corrigenda.core.schemas import (
     ChunkRequest,
     HyphenRole,
     LineManifest,
-    LineStatus,
     LineTrace,
     PageManifest,
 )
-from corrigenda.core.traces import _set_trace
 
 
 def _routing_enabled(
@@ -151,21 +150,21 @@ def _confirm_skipped_lines(
 ) -> None:
     """Decide the skipped lines: their OCR text IS their final text.
 
+    A skip is an ACCEPTANCE, not a fallback — the QE scorer judged the
+    line already clean, so its source text is a decision rather than a
+    retreat from one, and it goes through :func:`decide.accept` with the
+    line's own text. Nothing about the write differs from an accepted
+    correction; what differs is upstream, and stays upstream.
+
     The trace's ``model_input_text`` is deliberately left ``None`` — that
     absence is the auditable signature of a skip, and the only thing that
     distinguishes it from a producer that was asked and answered
-    identically.
+    identically. :func:`decide.accept` does not touch it, which is why
+    the seam holds.
     """
     for line_id in skip:
         lm = line_by_id[line_id]
-        lm.corrected_text = lm.ocr_text
-        lm.status = LineStatus.CORRECTED
-        _set_trace(
-            traces,
-            lm,
-            projected_text=lm.ocr_text,
-            validation_status=LineStatus.CORRECTED.value,
-        )
+        decide.accept(lm, lm.ocr_text, traces=traces)
 
 
 def _work_items(
