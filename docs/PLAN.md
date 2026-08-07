@@ -935,8 +935,8 @@ restent intacts.
 
 ### Suivi
 
-Dernière mise à jour : 2026-08-06 — session 4. Lots `RM-0` et `RM-1` clos ;
-`RM-2` en cours, filet et table de précédence clos, migration à venir.
+Dernière mise à jour : 2026-08-06 — session 5. Lots `RM-0` et `RM-1` clos ;
+`RM-2` en cours, filet et table clos, migration à 4 sites sur 7.
 Branche : `claude/technical-repository-audit-61yzfb`.
 
 - **Done** — `RM-11` (session 1) : règle « pas de 6ᵉ chemin » de `CLAUDE.md`
@@ -986,7 +986,34 @@ Branche : `claude/technical-repository-audit-61yzfb`.
   7) ; le cas tranchant est réécrit avec la même assertion et la lecture
   inverse — il était épinglé comme défaut à corriger, il est épinglé comme
   correction à protéger.
-- **In progress** — `RM-01`, phase 2/3 (migration des sites) : suivante.
+- **Done** — `RM-01` phase 2/3, première moitié (session 5) : `core/decide.py`
+  existe et **4 sites sur 7 y passent**, un commit par site — 22 → **15**
+  écritures de décision hors du writer unique. Trois verbes plutôt qu'un,
+  parce qu'il y a trois choses différentes à dire d'une ligne : `accept`
+  (une correction tient), `fall_back` (une correction est retirée),
+  `renormalise` (une décision déjà prise tient, seule son orthographe
+  change).
+
+  **Le seul changement de comportement de la migration a été mesuré avant
+  d'être fait.** `_fall_back_to_source` assignait `fallback_reason` ;
+  `decide.fall_back` diffère (`ADR-013`). Les deux règles ne divergent que
+  sur une collision, donc la question était : une collision est-elle
+  atteignable ? Instrumenté sur tous les corpus du dépôt, avec un producteur
+  échouant ~20 % de ses appels pour forcer le chemin d'épuisement — **145
+  fallbacks sur 190 lignes, zéro collision**. Ce que `I-1` prédisait, et ce
+  que les corpus disent maintenant.
+
+  Deux questions tranchées et écrites là où le code est.
+  `routing._confirm_skipped_lines` → `accept` : un skip est une
+  **acceptation**, pas un repli, et ce que `accept` **ne** touche pas
+  (`model_input_text`) est ce qui garde la signature auditable du skip.
+  `finalize._preserve_break_chars` → `renormalise`, ni `accept` ni dehors :
+  la passe ne décide rien, elle réorthographie une décision prise, et
+  `accept` estamperait `CORRECTED` sur des lignes dont elle n'a pas à fixer
+  le statut.
+- **In progress** — `RM-01`, phase 2/3, seconde moitié : `acceptance.py` (9
+  écritures) et `reconcile.py` (6). `_reconcile_one_pair` écrit aussi
+  `hyphen_subs_content` et n'est pas un `fall_back` simple.
 - **Blocked** — aucun. `RM-04` débloqué le 2026-08-06 (option A).
 - **Remaining** — `RM-01`, `RM-04`, `RM-07`, `RM-03`, `RM-06`, `RM-05b`,
   `RM-09`.
@@ -1027,6 +1054,15 @@ Branche : `claude/technical-repository-audit-61yzfb`.
   **vraie**. Le dernier-écrivain-gagne nommerait une passe qui n'a rien fait.
   Tranché et écrit en `ADR-013` ; `I-1` est désormais un test.
 - **New bugs discovered** — aucun en session 4.
+- **New bugs discovered** — session 5, **non corrigé** (P6, hors périmètre) :
+  `LineTrace.projected_text` peut être périmé pour un consommateur.
+  `_finalize_chunk_traces` le fixe au `corrected_text` du moment, puis
+  `_preserve_break_chars` réécrit `corrected_text` sans le rafraîchir. Le
+  champ est écrit à 6 endroits et **lu nulle part dans `src/`** — c'est de
+  l'information pure pour l'hôte, et `LineTrace` est dans la surface
+  publique. Sans effet sur le texte livré ni sur les décisions, donc hors
+  `L*`. `decide.renormalise` a délibérément gardé le comportement
+  historique (aucune écriture de trace) plutôt que de corriger au passage.
 - **Tests added** — session 2, `tests/test_orchestrator_budget.py` : `RM-02`
   ajoute `test_no_unnamed_function_exceeds_the_parameter_target`,
   `test_known_overparameterised_functions_only_shrink`,
@@ -1069,8 +1105,8 @@ Arités mesurées `self`/`cls` exclus : ce qu'un APPELANT doit assembler.
 
 | Métrique | Base | Courant | Cible |
 |---|---|---|---|
-| Écritures de décision (`corrected_text`/`status`) | 22 énoncés, 7 fonctions, 5 modules | 22, épinglées | 0 hors `core/decide.py` |
-| Écritures de `fallback_reason` | 4 sans condition / 3 différées | 4/3, épinglé | 1 écrivain |
+| Écritures de décision (`corrected_text`/`status`) | 22 énoncés, 7 fonctions, 5 modules | **15**, 3 fonctions, 2 modules | 0 hors `core/decide.py` |
+| Écritures de `fallback_reason` | 4 sans condition / 3 différées | **3/3**, épinglé | 1 écrivain |
 | Ordre des passes de finalisation | contrat en docstring, 0 garde | 0 garde, 1 `xfail` strict | refusé si faux |
 | `I-1` (raison ⇒ ligne revenue à sa source) | vraie, non énoncée, 0 test | énoncée (`ADR-013`), 6 tests | tenue par `RM-01` |
 | Paramètres, maximum du paquet | 19 (`for_provider`) | 19 | ≤ 8 |
