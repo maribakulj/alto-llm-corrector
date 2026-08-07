@@ -1,33 +1,24 @@
 """Who is allowed to write a line's decision (`RM-01`).
 
 A line's terminal decision is three fields — ``corrected_text``,
-``status``, and the trace's ``fallback_reason`` — and today 22 statements
-across 7 functions in 5 modules write the first two. Nothing says which
-of them is authoritative; what keeps them coherent is the order the
-document-wide passes happen to run in, which is itself unenforced (see
-``test_finalize_pass_order.py``). The repository has already paid for
-this once: `L9` was two lines keeping their source text while reporting
-as ``CORRECTED``, and the shape that allowed it is still here.
+``status``, and the trace's ``fallback_reason``. Twenty-two statements
+across seven functions in five modules wrote the first two when this
+ratchet was set, and nothing said which was authoritative; what kept them
+coherent was the order the document-wide passes happen to run in, itself
+unenforced (see ``test_finalize_pass_order.py``). The repository has
+already paid for this once: `L9` was two lines keeping their source text
+while reporting as ``CORRECTED``.
 
-This test is the ratchet for closing that. The allowlist below is the
-debt, measured. `RM-01` empties it by routing every write through a
-single ``core/decide.py``, one site per commit, and this file goes from
-22 to 0 without ever needing a number raised.
+The allowlist below is what is left. `RM-01` empties it by routing every
+write through ``core/decide.py``, one site per commit, and it goes to 0
+without a number ever being raised.
 
 Same semantics as ``test_orchestrator_budget.py``, deliberately: an entry
 may shrink, never grow; an entry that reaches zero must be deleted rather
 than left at zero; a write in a function that is not listed fails
-immediately. ``core/decide.py`` is exempt in advance — it does not exist
-yet, and writing the exemption now means `RM-01` adds a module instead of
-also editing this rule.
-
-One entry is not a fallback and should be looked at on its own when the
-time comes: ``core/finalize.py::_preserve_break_chars`` rewrites the text
-of an ACCEPTED correction rather than reverting anything. Whether it
-belongs behind ``decide.accept()`` or stays a normalisation applied
-before decisions materialise is a real question, not an oversight — it is
-listed here because it writes the field, and the point of the list is
-that nothing writing the field is invisible.
+immediately. ``core/decide.py`` is exempt — it is the destination, and
+the exemption was written before the module existed so that `RM-01` adds
+a file rather than also amending this rule.
 """
 
 from __future__ import annotations
@@ -49,19 +40,19 @@ _DECISION_FIELDS = frozenset({"corrected_text", "status"})
 _SOLE_WRITER = "core/decide.py"
 
 #: Every function writing a decision field, with its statement count.
-#: Measured 2026-08-06 at `cf6cfc1`. `RM-01` takes these to zero.
+#: Measured 2026-08-06 at `cf6cfc1` (22 writes, 7 functions). `RM-01`
+#: takes these to zero, one site per commit.
 _WRITE_SITES: dict[str, int] = {
     "core/acceptance.py::_apply_line_acceptance": 7,
     "core/acceptance.py::_apply_unit_reverts": 2,
     "core/finalize.py::_preserve_break_chars": 1,
     "core/outcome.py::_extend_to_units": 2,
-    "core/outcome.py::_fall_back_to_source": 2,
     "core/reconcile.py::_reconcile_one_pair": 6,
     "core/routing.py::_confirm_skipped_lines": 2,
 }
 
 #: The debt, in one number. It may only go down.
-_TOTAL_WRITES = 22
+_TOTAL_WRITES = 20
 
 
 def _write_sites() -> dict[str, int]:
@@ -158,12 +149,16 @@ def test_the_total_is_the_debt_and_only_goes_down() -> None:
     )
 
 
-def test_the_sole_writer_is_exempt_once_it_exists() -> None:
-    """The exemption is written before the module is, so `RM-01` adds a
-    file instead of also editing this test. When ``core/decide.py`` lands
-    it may write decisions freely; nothing else may."""
-    assert _SOLE_WRITER not in _write_sites()
-    decide = SRC / _SOLE_WRITER
-    if not decide.exists():
+def test_only_the_sole_writer_is_exempt() -> None:
+    """``core/decide.py`` may write decisions freely; nothing else may.
+
+    Deliberately holds at the END state too: when ``_WRITE_SITES`` is
+    empty the scan returns nothing and the exemption is still the only
+    one. A test that asserted "migration under way" would start failing
+    exactly when `RM-01` finished."""
+    assert not [key for key in _write_sites() if key.startswith(_SOLE_WRITER)]
+    if not (SRC / _SOLE_WRITER).exists():
         pytest.skip("core/decide.py does not exist yet — RM-01 creates it")
-    assert _write_sites(), "with decide.py in place, migration is under way"
+    assert (
+        (SRC / _SOLE_WRITER).read_text(encoding="utf-8").count(".corrected_text = ")
+    ), "the sole writer must actually write the field it is exempt for"

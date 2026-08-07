@@ -176,17 +176,35 @@ def test_acceptance_skips_a_line_that_already_holds_a_decision() -> None:
     assert lines[0].corrected_text == "AAA"
 
 
-def test_fall_back_to_source_overwrites_an_existing_reason() -> None:
-    """Site 4 — ``_fall_back_to_source`` assigns through ``_set_trace``:
-    whatever a previous pass recorded is replaced.
+def test_fall_back_to_source_defers_to_an_existing_reason() -> None:
+    """Site 4 — MIGRATED to ``decide.fall_back`` (`RM-01` phase 2), so it
+    now defers instead of assigning.
 
-    Reachable only by calling it directly, as here: in a run it is the
-    chunk-exhaustion path, which runs before any document-wide pass. The
-    single writer of `RM-01` will defer instead, and ADR-013 argues that
-    is not a behaviour change because this collision does not occur."""
+    The assertion is inverted ON PURPOSE and this is the one deliberate
+    behaviour change of the migration. ADR-013 argues it is invisible: a
+    line carrying a reason is already at its source text (I-1), so no
+    collision reachable in a run can distinguish the two rules. Measured
+    before the change over every corpus in the repository, with a
+    producer failing ~20 % of its calls outright to force the
+    chunk-exhaustion path — 145 fallbacks over 190 lines, **zero**
+    collisions.
+
+    The old pin (``== "second_reason"``) is gone rather than kept as a
+    second case: it recorded a rule the code no longer follows."""
     lines, _all_lines, traces = _one_line("first_reason")
     _fall_back_to_source(lines, traces, reason="second_reason")
-    assert traces[line_ref(lines[0])].fallback_reason == "second_reason"
+    assert traces[line_ref(lines[0])].fallback_reason == "first_reason"
+
+
+def test_fall_back_to_source_still_reverts_text_and_status() -> None:
+    """Deferring the REASON must not defer the revert — ADR-010's unit
+    atomicity depends on text and status changing unconditionally."""
+    lines, _all_lines, traces = _one_line("first_reason")
+    lines[0].corrected_text = "A CORRECTION"
+    lines[0].status = LineStatus.CORRECTED
+    _fall_back_to_source(lines, traces, reason="second_reason")
+    assert lines[0].corrected_text == lines[0].ocr_text
+    assert lines[0].status is LineStatus.FALLBACK
 
 
 # ---------------------------------------------------------------------------
@@ -474,7 +492,10 @@ def _reason_writes() -> tuple[int, int]:
 
 
 def test_the_precedence_rule_is_split_four_ways_against_three() -> None:
-    """Four writes assign, three defer — the census behind ADR-013.
+    """The census behind ADR-013, moving as `RM-01` migrates.
+
+    Trajectory: (3 deferring, 4 assigning) at session 3, then one pair
+    per migrated site as ``decide.fall_back`` absorbs them.
 
     The seven sites are pinned behaviourally above; this counts them, so
     that an eighth cannot appear unnoticed between two of the named
@@ -484,7 +505,7 @@ def test_the_precedence_rule_is_split_four_ways_against_three() -> None:
     When that lands there is ONE writer, and this test should be deleted
     rather than adjusted — a census of one is not a rule."""
     guarded, unguarded = _reason_writes()
-    assert (guarded, unguarded) == (3, 4), (
+    assert (guarded, unguarded) == (4, 3), (
         f"the precedence split moved to {guarded} deferring / {unguarded} "
         "assigning writes. If that was deliberate, update the behavioural "
         "pins above in the same commit — they are what says which reason a "

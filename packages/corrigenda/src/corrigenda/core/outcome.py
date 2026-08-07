@@ -37,7 +37,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from corrigenda.core import events as ev
+from corrigenda.core import decide, events as ev
 from corrigenda.core.acceptance import _apply_line_acceptance
 from corrigenda.core.context import RunContext
 from corrigenda.core.identity import LineRef, line_ref
@@ -128,27 +128,17 @@ def _fall_back_to_source(
 ) -> None:
     """Put these lines back to their OCR text, terminally.
 
-    Writes the three fields a fallback consists of together —
-    ``corrected_text``, ``status`` and the trace's ``fallback_reason`` —
-    so a line's manifest state and its trace cannot disagree about it.
-
-    It is NOT the only place they are written, and saying so was false:
-    ``_extend_to_units`` below, ``core/acceptance.py``,
-    ``core/reconcile.py`` and ``core/routing.py`` write the same fields
-    on their own paths. What keeps them coherent today is the ORDER of
-    the document-wide passes (``core/finalize.py``), which no test
-    enforces. Making this the single writer is `RM-01`.
+    The chunk-exhaustion path: every attempt spent, or an error a finer
+    granularity would not heal. Writes through :func:`decide.fall_back`,
+    so ``reason`` now lands only on a trace that carries none — this site
+    used to assign unconditionally, and ADR-013 is why the difference is
+    invisible (a line that already has a reason is already at its source
+    text, so no earlier attribution can be a stale one). Measured before
+    the change on every corpus in the repository, with a producer failing
+    ~20 % of calls outright: zero collisions.
     """
     for lm in lines:
-        lm.corrected_text = lm.ocr_text
-        lm.status = LineStatus.FALLBACK
-        _set_trace(
-            traces,
-            lm,
-            projected_text=lm.ocr_text,
-            validation_status="fallback",
-            fallback_reason=reason,
-        )
+        decide.fall_back(lm, reason=reason, traces=traces)
 
 
 def _extend_to_units(
