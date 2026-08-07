@@ -871,7 +871,7 @@ s'exécute pas dans cette vague.
 | `RM-02` | Ratchet goodhartisé : mesure la longueur, pas le couplage ; périmètre limité à `core/` | outillage | important | `tests/test_orchestrator_budget.py` | — | **fait (2026-08-06)** |
 | `RM-10` | `_rebuild_line` (203 l.) et `rewrite_alto_file` (161 l.) hors de toute mesure | mesure | important | `formats/alto/rewriter.py` (lecture seule) | `RM-02` | **fait (2026-08-06)** |
 | `RM-05a` | Aucun test ne protège l'ordre des passes de `core/finalize.py` | tests | important | `tests/decision/` (nouveau) | — | **fait (2026-08-06)** |
-| `RM-01` | L'écriture de la décision terminale d'une ligne est dispersée sur 5 modules ; l'ordre des passes est porté par une docstring | **bugfix** | **critique** | `core/outcome.py`, `core/acceptance.py`, `core/reconcile.py`, `core/routing.py`, `core/finalize.py` | `RM-02`, `RM-05a` | à faire |
+| `RM-01` | L'écriture de la décision terminale d'une ligne est dispersée sur 5 modules ; l'ordre des passes est porté par une docstring | **bugfix** | **critique** | `core/decide.py` (nouveau), `core/outcome.py`, `core/acceptance.py`, `core/reconcile.py`, `core/routing.py`, `core/finalize.py` | `RM-02`, `RM-05a` | **fait (2026-08-06)** |
 | `RM-04` | ~20 % du code du paquet n'est exécuté par aucun chemin par défaut et est gelé par ce plan | nettoyage | important | `integrations/`, `core/routing.py`, `core/quality.py`, `core/confidence.py`, `core/batching.py`, `__init__.py` | `RM-11` + ratification | à faire (option A) |
 | `RM-07` | `core` connaît les formats : `core/losses.py` porte la table des attributs ALTO ; le contrat d'import plafonne à `== 3` au lieu de nommer une règle | réducteur | important | `core/losses.py`, `core/provenance.py`, `tests/test_import_contract.py` | — | à faire |
 | `RM-03` | Drilling de paramètres : 10 à 20 arguments sur le chemin chaud | réducteur | important | `core/driver.py`, `core/attempt.py`, `core/outcome.py`, `core/pipeline.py` | `RM-01`, `RM-02` | à faire |
@@ -1011,9 +1011,33 @@ Branche : `claude/technical-repository-audit-61yzfb`.
   la passe ne décide rien, elle réorthographie une décision prise, et
   `accept` estamperait `CORRECTED` sur des lignes dont elle n'a pas à fixer
   le statut.
-- **In progress** — `RM-01`, phase 2/3, seconde moitié : `acceptance.py` (9
-  écritures) et `reconcile.py` (6). `_reconcile_one_pair` écrit aussi
-  `hyphen_subs_content` et n'est pas un `fall_back` simple.
+- **Done** — `RM-01` **fermé** (session 6) : les 3 sites restants migrés, un
+  commit par site. **22 → 0** écriture de décision hors `core/decide.py`, et
+  **4 → 0** écriture non conditionnelle de `fallback_reason` dans tout
+  `core/`. Les deux pièges annoncés se sont levés par **preuve**, pas par
+  exception : les 5 branches de rejet de `check_line` retournent
+  `source_ocr` avec une raison non nulle (donc `fall_back` y écrit
+  exactement le texte que le site écrivait), et `classify_reconcile_outcome`
+  ne retourne `"fallback"` **que si** `final_p1 == ocr_1 and final_p2 ==
+  ocr_2` — la classification est *définie* par cette égalité. Aucune
+  exception écrite n'a été nécessaire. Les deux garanties sont épinglées
+  (`test_acceptance_translation.py`, `test_reconcile_translation.py`) parce
+  qu'elles sont invisibles au site d'appel. `hyphen_subs_content` reste dans
+  `_reconcile_one_pair` : ce n'est pas un champ de décision, c'est de l'état
+  de césure, et le déplacer mettrait du territoire `S1` dans `RM-01`.
+- **Done** — le **garde d'ordre** (session 6) : `_FinalizeOrder`, jeton de
+  séquencement **par run**, créé dans `_finalize_document`, jamais partagé.
+  Écarté : un drapeau d'état sur le manifeste (remettrait de l'état de run
+  sur un objet partagé, ce qu'`ADR-011` a retiré) et « un point d'entrée
+  unique » (`_finalize_document` l'est déjà et ne refuse rien — les passes
+  restent importables). `RuntimeError` et non `CorrigendaError` : un ordre
+  faux est un bug moteur, et `CorrigendaError` est la famille que la boucle
+  de chunk absorbe (`ADR-008`). Le jeton est **optionnel** — `None` =
+  non vérifié — parce que c'est la seule façon pour le test de
+  démonstration de tourner l'ordre faux ; l'échappatoire est fermée de
+  l'autre côté par un test statique qui lit `_finalize_document` et échoue
+  si une passe y est appelée sans jeton. **Le `xfail` strict est levé ; il
+  ne reste aucun `xfail` dans la suite.**
 - **Blocked** — aucun. `RM-04` débloqué le 2026-08-06 (option A).
 - **Remaining** — `RM-01`, `RM-04`, `RM-07`, `RM-03`, `RM-06`, `RM-05b`,
   `RM-09`.
@@ -1054,6 +1078,7 @@ Branche : `claude/technical-repository-audit-61yzfb`.
   **vraie**. Le dernier-écrivain-gagne nommerait une passe qui n'a rien fait.
   Tranché et écrit en `ADR-013` ; `I-1` est désormais un test.
 - **New bugs discovered** — aucun en session 4.
+- **New bugs discovered** — aucun en session 6.
 - **New bugs discovered** — session 5, **non corrigé** (P6, hors périmètre) :
   `LineTrace.projected_text` peut être périmé pour un consommateur.
   `_finalize_chunk_traces` le fixe au `corrected_text` du moment, puis
@@ -1105,13 +1130,14 @@ Arités mesurées `self`/`cls` exclus : ce qu'un APPELANT doit assembler.
 
 | Métrique | Base | Courant | Cible |
 |---|---|---|---|
-| Écritures de décision (`corrected_text`/`status`) | 22 énoncés, 7 fonctions, 5 modules | **15**, 3 fonctions, 2 modules | 0 hors `core/decide.py` |
-| Écritures de `fallback_reason` | 4 sans condition / 3 différées | **3/3**, épinglé | 1 écrivain |
-| Ordre des passes de finalisation | contrat en docstring, 0 garde | 0 garde, 1 `xfail` strict | refusé si faux |
+| Écritures de décision (`corrected_text`/`status`) | 22 énoncés, 7 fonctions, 5 modules | **0** hors `core/decide.py` | atteint |
+| Écritures de `fallback_reason` | 4 sans condition / 3 différées | **0 / 2**, un seul écrivain | atteint |
+| Ordre des passes de finalisation | contrat en docstring, 0 garde | **refusé si faux** (`_FinalizeOrder`) | atteint |
+| `xfail` dans la suite | 1 (strict, `RM-01`) | **0** | 0 |
+| Fonctions > 100 lignes, `core/` | 7 (toutes épinglées) | **6** | ≤ 7 |
 | `I-1` (raison ⇒ ligne revenue à sa source) | vraie, non énoncée, 0 test | énoncée (`ADR-013`), 6 tests | tenue par `RM-01` |
 | Paramètres, maximum du paquet | 19 (`for_provider`) | 19 | ≤ 8 |
 | Fonctions > 8 paramètres | 13 | 13, épinglées | 0 hors liste |
-| Fonctions > 100 lignes, `core/` | 7 (toutes épinglées) | 7 | ≤ 7 |
 | Fonctions > 100 lignes, paquet entier | 13, dont 6 hors mesure | 13, épinglées | ≤ 13 |
 | Définitions sous mesure | 0 hors `core/` | 348, paquet entier | tout `src/` |
 | Symboles dans `__init__.__all__` | 68 | 68 | à définir par `RM-04` |
