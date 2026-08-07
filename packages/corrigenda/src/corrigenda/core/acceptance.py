@@ -12,6 +12,7 @@ never falls back alone (ADR-010).
 
 from __future__ import annotations
 
+from corrigenda.core import decide
 from corrigenda.core.alignment import align_tokens
 from corrigenda.core.guards import (
     check_adjacent_duplicates,
@@ -326,16 +327,5 @@ def _apply_unit_reverts(
         lm = all_lines.get(ref)
         if lm is None:
             continue
-        lm.corrected_text = lm.ocr_text
-        lm.status = LineStatus.FALLBACK
-        _set_trace(
-            traces,
-            lm,
-            projected_text=lm.ocr_text,
-            validation_status=lm.status.value,
-        )
-        if traces is not None:
-            trace = traces.get(ref)
-            if trace is not None and not trace.fallback_reason:
-                trace.fallback_reason = reason
+        decide.fall_back(lm, reason=reason, traces=traces)
     return to_revert

@@ -44,12 +44,11 @@ _SOLE_WRITER = "core/decide.py"
 #: takes these to zero, one site per commit.
 _WRITE_SITES: dict[str, int] = {
     "core/acceptance.py::_apply_line_acceptance": 7,
-    "core/acceptance.py::_apply_unit_reverts": 2,
     "core/reconcile.py::_reconcile_one_pair": 6,
 }
 
 #: The debt, in one number. It may only go down.
-_TOTAL_WRITES = 15
+_TOTAL_WRITES = 13
 
 
 def _write_sites() -> dict[str, int]:
