@@ -71,9 +71,7 @@ def _apply_line_acceptance(
             and ends_with_break_mark(lm.ocr_text)
             and not ends_with_break_mark(corrected)
         ):
-            lm.corrected_text = lm.ocr_text
-            lm.status = LineStatus.FALLBACK
-            _set_trace(traces, lm, fallback_reason="orphan_hyphen_completed")
+            decide.fall_back(lm, reason="orphan_hyphen_completed", traces=traces)
             continue
 
         # ADR-010 (unit fallback atomicity): a hyphen member whose
@@ -99,9 +97,7 @@ def _apply_line_acceptance(
             )
         )
         if fallen_partner:
-            lm.corrected_text = lm.ocr_text
-            lm.status = LineStatus.FALLBACK
-            _set_trace(traces, lm, fallback_reason="hyphen_partner_fell_back")
+            decide.fall_back(lm, reason="hyphen_partner_fell_back", traces=traces)
             continue
 
         prev_ocr = (
@@ -117,15 +113,18 @@ def _apply_line_acceptance(
         result = check_line(
             lm.ocr_text, corrected, prev_ocr, next_ocr, config=guard_config
         )
-        lm.corrected_text = result.text
+        if result.accepted:
+            decide.accept(lm, result.text, traces=traces)
+        else:
+            # Every rejection branch of ``check_line`` returns
+            # ``text=source_ocr`` and a non-None reason, so ``fall_back``
+            # writes exactly the text this site used to write. Pinned by
+            # ``tests/decision/test_acceptance_translation.py`` — the
+            # translation is only safe while that holds.
+            decide.fall_back(lm, reason=result.reason or "rejected", traces=traces)
         # P3.5 — the guard's once-computed metrics ride the trace to
         # the report's decision stage, accepted or not.
         _set_trace(traces, lm, proposal_features=result.features)
-        if result.accepted:
-            lm.status = LineStatus.CORRECTED
-        else:
-            lm.status = LineStatus.FALLBACK
-            _set_trace(traces, lm, fallback_reason=result.reason)
 
 
 def _global_adjacency_pass(

@@ -43,12 +43,11 @@ _SOLE_WRITER = "core/decide.py"
 #: Measured 2026-08-06 at `cf6cfc1` (22 writes, 7 functions). `RM-01`
 #: takes these to zero, one site per commit.
 _WRITE_SITES: dict[str, int] = {
-    "core/acceptance.py::_apply_line_acceptance": 7,
     "core/reconcile.py::_reconcile_one_pair": 6,
 }
 
 #: The debt, in one number. It may only go down.
-_TOTAL_WRITES = 13
+_TOTAL_WRITES = 6
 
 
 def _write_sites() -> dict[str, int]:
