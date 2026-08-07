@@ -46,13 +46,12 @@ _WRITE_SITES: dict[str, int] = {
     "core/acceptance.py::_apply_line_acceptance": 7,
     "core/acceptance.py::_apply_unit_reverts": 2,
     "core/finalize.py::_preserve_break_chars": 1,
-    "core/outcome.py::_extend_to_units": 2,
     "core/reconcile.py::_reconcile_one_pair": 6,
     "core/routing.py::_confirm_skipped_lines": 2,
 }
 
 #: The debt, in one number. It may only go down.
-_TOTAL_WRITES = 20
+_TOTAL_WRITES = 18
 
 
 def _write_sites() -> dict[str, int]:

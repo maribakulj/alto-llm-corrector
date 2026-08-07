@@ -40,13 +40,13 @@ from collections.abc import Callable
 from corrigenda.core import decide, events as ev
 from corrigenda.core.acceptance import _apply_line_acceptance
 from corrigenda.core.context import RunContext
-from corrigenda.core.identity import LineRef, line_ref
+from corrigenda.core.identity import LineRef
 from corrigenda.core.reconcile import (
     _reconcile_chunk_hyphens,
     _unit_pool,
 )
 from corrigenda.core.redaction import sanitize_error
-from corrigenda.core.traces import _finalize_chunk_traces, _set_trace
+from corrigenda.core.traces import _finalize_chunk_traces
 from corrigenda.core.units import units_containing
 from corrigenda.core.schemas import (
     ChunkRequest,
@@ -159,13 +159,7 @@ def _extend_to_units(
     for lm in units_containing(targets, _unit_pool(line_by_id, cross_page_partners)):
         if lm.line_id in target_ids:
             continue
-        lm.corrected_text = lm.ocr_text
-        lm.status = LineStatus.FALLBACK
-        _set_trace(traces, lm, projected_text=lm.ocr_text, validation_status="fallback")
-        if traces is not None:
-            trace = traces.get(line_ref(lm))
-            if trace is not None and not trace.fallback_reason:
-                trace.fallback_reason = "hyphen_unit_fallback"
+        decide.fall_back(lm, reason="hyphen_unit_fallback", traces=traces)
 
 
 def _apply_chunk_fallback(

@@ -505,7 +505,7 @@ def test_the_precedence_rule_is_split_four_ways_against_three() -> None:
     When that lands there is ONE writer, and this test should be deleted
     rather than adjusted — a census of one is not a rule."""
     guarded, unguarded = _reason_writes()
-    assert (guarded, unguarded) == (4, 3), (
+    assert (guarded, unguarded) == (3, 3), (
         f"the precedence split moved to {guarded} deferring / {unguarded} "
         "assigning writes. If that was deliberate, update the behavioural "
         "pins above in the same commit — they are what says which reason a "
