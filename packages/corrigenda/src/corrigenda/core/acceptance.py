@@ -12,6 +12,8 @@ never falls back alone (ADR-010).
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
+
 from corrigenda.core import decide
 from corrigenda.core.alignment import align_tokens
 from corrigenda.core.guards import (
@@ -34,6 +36,76 @@ from corrigenda.core.schemas import (
     LossPolicy,
     SidecarEntry,
 )
+
+
+@dataclass
+class _FinalizeOrder:
+    """Proof that the document-wide passes ran in the order they must.
+
+    ``core/finalize.py`` runs three passes whose ORDER is their whole
+    content, and until now that contract lived in a docstring: calling
+    them out of order was not refused, not detected, and not reported —
+    it silently produced different output. Not different counters:
+    different TEXT. The loss gate run before the adjacency pass reverts
+    one line of a duplicate pair, which erases the evidence of
+    duplication, so the other line ships a correction the canonical
+    order rejects (``tests/decision/test_finalize_pass_order.py``).
+
+    So the contract becomes a token. Each pass declares what must have
+    run before it and refuses otherwise. One instance per run, created
+    in :func:`_finalize_document` and never shared, so the guard cannot
+    become the global state ADR-011 spent a slice removing — two
+    concurrent runs each carry their own.
+
+    Lives here rather than in ``finalize`` because two of the three
+    ordered passes are in this module and ``finalize`` already imports
+    it; the reverse would be a cycle.
+
+    A wrong order is an engine bug, not bad input, so it raises
+    ``RuntimeError`` — deliberately NOT a ``CorrigendaError``, which the
+    chunk loop is allowed to absorb (ADR-008). Same choice, same reason,
+    as ``units.split_forward_link``.
+
+    ``order=None`` on every pass means unchecked. Production never does
+    that — a static test asserts :func:`_finalize_document` threads a
+    token into all three — but a test that needs to DEMONSTRATE the
+    divergence has to be able to run the wrong order on purpose.
+    """
+
+    _done: list[str] = field(default_factory=list)
+
+    def entering(self, step: str, *, requires: tuple[str, ...] = ()) -> None:
+        missing = [name for name in requires if name not in self._done]
+        if missing:
+            raise RuntimeError(
+                f"finalisation pass {step!r} ran before {missing} — the "
+                "document-wide passes have a required order and this one "
+                f"is not it (ran so far: {self._done}). See "
+                "core/finalize.py for what each pass depends on."
+            )
+        if step in self._done:
+            raise RuntimeError(
+                f"finalisation pass {step!r} ran twice in one run — each "
+                "pass reverts against what the previous left behind, so a "
+                "repeat is not idempotent."
+            )
+        self._done.append(step)
+
+
+def _entering(
+    order: _FinalizeOrder | None,
+    step: str,
+    *,
+    requires: tuple[str, ...] = (),
+) -> None:
+    """Announce a pass to the run's order token, if there is one.
+
+    ``None`` means unchecked — only tests pass it (see
+    ``tests/decision/test_finalize_pass_order.py``, which has to be able
+    to run the wrong order to show what the guard prevents).
+    """
+    if order is not None:
+        order.entering(step, requires=requires)
 
 
 def _apply_line_acceptance(
@@ -133,6 +205,7 @@ def _global_adjacency_pass(
     document_manifest: DocumentManifest,
     all_lines: dict[LineRef, LineManifest],
     traces: dict[LineRef, LineTrace] | None,
+    order: _FinalizeOrder | None = None,
 ) -> None:
     """ONE adjacent-duplicate pass over the whole document (P3.3).
 
@@ -147,6 +220,7 @@ def _global_adjacency_pass(
     correction, and a run of three identical corrections straddling
     any seam is seen whole on one comparison basis.
     """
+    _entering(order, "adjacency")
     reverts: dict[LineRef, str] = {}
     segment: list[tuple[LineRef, str, str]] = []
     prev_file: str | None = None
@@ -185,6 +259,7 @@ def _loss_policy_pass(
     document_manifest: DocumentManifest,
     all_lines: dict[LineRef, LineManifest],
     traces: dict[LineRef, LineTrace] | None,
+    order: _FinalizeOrder | None = None,
 ) -> list[SidecarEntry]:
     """Loss policy gates (ADR-012 strict; token_realign).
 
@@ -209,6 +284,7 @@ def _loss_policy_pass(
     Under REPORT (default) this pass is a no-op: the loss projects,
     is counted, and is attributed per line.
     """
+    _entering(order, "loss_policy", requires=("adjacency", "break_chars"))
     if loss_policy.strict:
         reverts: dict[LineRef, str] = {}
         for page in document_manifest.pages:
@@ -267,11 +343,26 @@ def _loss_policy_pass(
         traces=traces,
         atomicity_reason="token_realign_pair_atomicity",
     )
+    return _sidecar_entries(reverted, snapshots=snapshots, evidence=evidence)
+
+
+def _sidecar_entries(
+    reverted: dict[LineRef, str],
+    *,
+    snapshots: dict[LineRef, tuple[str, str]],
+    evidence: dict[LineRef, tuple[float, bool]],
+) -> list[SidecarEntry]:
+    """The corrections the token_realign gate set aside, for review.
+
+    A reverted line with no snapshot is a unit member pulled down by a
+    flagged partner (ADR-010) whose own text was never corrected — there
+    is nothing to preserve, so it contributes no entry.
+    """
     entries: list[SidecarEntry] = []
     for ref, reason in reverted.items():
         snapshot = snapshots.get(ref)
         if snapshot is None:
-            continue  # unit member whose own text was never corrected
+            continue
         source_text, corrected_text = snapshot
         score, moved = evidence.get(ref, (None, False))
         entries.append(

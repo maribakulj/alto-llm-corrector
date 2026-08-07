@@ -88,13 +88,19 @@ _PARAMETER_TARGET = 8
 #: ceiling. An entry may shrink, never grow; removing one is how a slice
 #: records that it finished.
 #:
-#: The seven ``core/`` entries all predate `S2`. Two of them
+#: The ``core/`` entries all predate `S2`. Two of them
 #: (``link_hyphen_pairs``, ``reconcile_hyphen_pair``) are hyphen-partner
 #: resolution, where the plan's standing rule says not to go without
 #: finishing `S1` first. The six ``formats/`` entries were added by `RM-10`
 #: at their measured size — they had never been under any gate.
+#:
+#: ``_loss_policy_pass`` left the list on 2026-08-06, and how it left is
+#: the rule working as intended rather than a slice aimed at it: `RM-01`'s
+#: order guard added four lines to it, the ratchet refused, and the remedy
+#: it prescribes — lift a stage out, never raise the budget — took the
+#: function from 107 to 91 by giving the sidecar construction its own
+#: name.
 _OVERSIZED: dict[str, int] = {
-    "core/acceptance.py::_loss_policy_pass": 107,
     "core/editing.py::_apply_line_ops": 114,
     "core/editing.py::apply_edit_script": 103,
     "core/hyphenation.py::enrich_chunk_lines": 101,

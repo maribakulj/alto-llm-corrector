@@ -1,36 +1,48 @@
-"""The order of the finalisation passes decides what ships — and nothing
-enforces it (`RM-01`).
+"""The order of the finalisation passes decides what ships, and is now
+enforced (`RM-01`).
 
 ``core/finalize.py`` runs three document-wide passes and its docstring says
-outright that "their ORDER is the whole content of this module". That is an
-honest statement of a real contract, and it is the only thing holding it: no
-type, no assertion, no test. A contributor who inserts a fourth pass, or who
-reorders two while moving code between modules, breaks a rule that exists
-only in prose — and the suite stays green, because every other test in this
-package checks the FINAL state of a run that used the right order.
+outright that "their ORDER is the whole content of this module". Until
+`RM-01` that was the only thing holding it: no type, no assertion, no test.
+A contributor who inserted a fourth pass, or reordered two while moving
+code between modules, broke a rule that existed only in prose — and the
+suite stayed green, because every other test in this package checks the
+FINAL state of a run that used the right order.
 
-These two tests split that into what is true today and what should be true.
+:func:`test_pass_order_changes_the_delivered_text` is why that mattered.
+Permuting two passes does not renumber a report: it changes the corrected
+TEXT of a line, and ships a correction the canonical order rejects.
 
-:func:`test_pass_order_changes_the_delivered_text` PASSES. It is the
-evidence: permuting two passes changes the corrected text of a line, not
-merely a counter or a reason.
+:func:`test_wrong_pass_order_is_refused` is the guard. It was written as a
+strict ``xfail`` in session 3, held the requirement while the mechanism was
+undecided, and the marker came off when
+:class:`~corrigenda.core.acceptance._FinalizeOrder` landed — which is what
+``strict`` was for.
 
-:func:`test_wrong_pass_order_is_refused` XFAILS. It is the property `RM-01`
-owes: a wrong order should be refused rather than silently producing
-different output. It is ``strict``, so the day the guard lands this test
-turns XPASS and fails — which is how the marker retires itself instead of
-being forgotten.
+The demonstration and the guard coexist because the token is OPTIONAL:
+``order=None`` means unchecked, which is the only way a test can still run
+the wrong order on purpose and show what the guard prevents. Production
+never passes ``None`` — :func:`test_finalize_document_threads_the_order`
+reads the source and fails if any pass is called without it.
 """
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
-from corrigenda.core.acceptance import _global_adjacency_pass, _loss_policy_pass
+from corrigenda.core.acceptance import (
+    _FinalizeOrder,
+    _global_adjacency_pass,
+    _loss_policy_pass,
+)
 from corrigenda.core.finalize import _preserve_break_chars
 from corrigenda.core.schemas import GuardConfig, LossPolicy
 
 from tests.decision._state import document, line, snapshot
+
+SRC = Path(__file__).parent.parent.parent / "src" / "corrigenda"
 
 #: A gate that is OFF by default (`RM-04` territory) but on a supported
 #: setting. It is the cheapest way to make the loss pass do something on
@@ -58,25 +70,27 @@ def _two_lines_one_gated():
     )
 
 
-def _run_canonical():
+def _run_canonical(order: _FinalizeOrder | None = None):
     manifest, all_lines, traces = _two_lines_one_gated()
     _global_adjacency_pass(
         guard_config=_GUARDS,
         document_manifest=manifest,
         all_lines=all_lines,
         traces=traces,
+        order=order,
     )
-    _preserve_break_chars(manifest)
+    _preserve_break_chars(manifest, order)
     sidecar = _loss_policy_pass(
         loss_policy=_GATED,
         document_manifest=manifest,
         all_lines=all_lines,
         traces=traces,
+        order=order,
     )
     return snapshot(manifest, traces), sidecar
 
 
-def _run_loss_first():
+def _run_loss_first(order: _FinalizeOrder | None = None):
     """The loss gate before the adjacency pass — one swap, nothing else."""
     manifest, all_lines, traces = _two_lines_one_gated()
     sidecar = _loss_policy_pass(
@@ -84,14 +98,16 @@ def _run_loss_first():
         document_manifest=manifest,
         all_lines=all_lines,
         traces=traces,
+        order=order,
     )
     _global_adjacency_pass(
         guard_config=_GUARDS,
         document_manifest=manifest,
         all_lines=all_lines,
         traces=traces,
+        order=order,
     )
-    _preserve_break_chars(manifest)
+    _preserve_break_chars(manifest, order)
     return snapshot(manifest, traces), sidecar
 
 
@@ -145,28 +161,68 @@ def test_pass_order_changes_the_delivered_text() -> None:
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "RM-01 — the order of the finalisation passes is a contract held by "
-        "a docstring in core/finalize.py and by nothing else. Calling them "
-        "out of order is not refused, not detected, and not reported: it "
-        "just produces different output. Remove this marker when the guard "
-        "exists."
-    ),
-)
 def test_wrong_pass_order_is_refused() -> None:
-    """A wrong order should fail loudly, not ship different bytes.
+    """A wrong order fails loudly instead of shipping different bytes.
 
-    The assertion below is the property, not a description of today: run
-    the loss gate before the adjacency pass and *something* should object.
-    Nothing does, which is the whole of `RM-01`'s first half.
-
-    What "refused" ends up meaning is `RM-01`'s design call — a sequencing
-    token the passes consume, a state flag on the manifest, or a single
-    entry point that owns the order and is the only way to call them. This
-    test pins the requirement, not the mechanism, so it stays valid
-    whichever is chosen.
+    The loss gate declares that adjacency and break-char preservation must
+    have run; asked to go first, it refuses. ``RuntimeError`` rather than a
+    ``CorrigendaError`` on purpose — a wrong pass order is an engine bug,
+    and ``CorrigendaError`` is the family the chunk loop is allowed to
+    absorb (ADR-008).
     """
-    with pytest.raises(Exception):
-        _run_loss_first()
+    with pytest.raises(RuntimeError, match="ran before"):
+        _run_loss_first(_FinalizeOrder())
+
+
+def test_the_canonical_order_is_accepted() -> None:
+    """The guard must not be a guard against everything."""
+    canonical, sidecar = _run_canonical(_FinalizeOrder())
+    assert canonical["L1"][1] == "fallback"
+    assert sidecar == []
+
+
+def test_a_pass_cannot_run_twice_in_one_run() -> None:
+    """Each pass reverts against what the previous left behind, so a repeat
+    is not idempotent — running the whole sequence twice on one token is a
+    bug, not a no-op."""
+    order = _FinalizeOrder()
+    _run_canonical(order)
+    with pytest.raises(RuntimeError, match="ran twice"):
+        _run_canonical(order)
+
+
+def test_finalize_document_threads_the_order() -> None:
+    """The token is optional so a test can opt out; production may not.
+
+    Reads ``_finalize_document`` and fails if it calls a pass without an
+    ``order``. Without this, the escape hatch that lets
+    :func:`test_pass_order_changes_the_delivered_text` exist would also let
+    a future edit drop the guard silently.
+    """
+    import ast
+
+    source = (SRC / "core" / "finalize.py").read_text(encoding="utf-8")
+    fn = next(
+        node
+        for node in ast.walk(ast.parse(source))
+        if isinstance(node, ast.FunctionDef) and node.name == "_finalize_document"
+    )
+    called = {
+        node.func.id: node
+        for node in ast.walk(fn)
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+    }
+    for name in (
+        "_global_adjacency_pass",
+        "_preserve_break_chars",
+        "_loss_policy_pass",
+    ):
+        call = called.get(name)
+        assert call is not None, f"_finalize_document no longer calls {name}"
+        passes_order = any(kw.arg == "order" for kw in call.keywords) or any(
+            isinstance(a, ast.Name) and a.id == "order" for a in call.args
+        )
+        assert passes_order, (
+            f"_finalize_document calls {name} without an order token — the "
+            "production path must always be checked; only tests may opt out."
+        )
