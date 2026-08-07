@@ -27,6 +27,7 @@ page loop and the report, is what made the ordering look incidental.
 
 from __future__ import annotations
 
+from corrigenda.core import decide
 from corrigenda.core.acceptance import _global_adjacency_pass, _loss_policy_pass
 from corrigenda.core.decisions import DecisionSet, derive_decision_set
 from corrigenda.core.identity import LineRef
@@ -48,11 +49,23 @@ def _preserve_break_chars(document_manifest: DocumentManifest) -> None:
     Only the decided text is normalised: the proposal stage in the traces
     keeps the producer's RAW text, so what the producer actually said stays
     auditable.
+
+    Goes through :func:`decide.renormalise` and NOT ``decide.accept``,
+    which is the question ADR-013 left for `RM-01` to answer. This pass
+    decides nothing: it does not choose between a proposal and a source,
+    it respells a choice already made, and it never runs on a line that
+    fell back — a reverted line has ``corrected_text == ocr_text``, which
+    the guard above skips. Routing it through ``accept`` would stamp
+    ``CORRECTED`` on lines whose status it has no business setting, which
+    is a behaviour change bought for the tidiness of two verbs instead of
+    three. The narrow verb keeps the call honest about what happened.
     """
     for page in document_manifest.pages:
         for lm in page.lines:
             if lm.corrected_text is not None and lm.corrected_text != lm.ocr_text:
-                lm.corrected_text = preserve_break_char(lm.ocr_text, lm.corrected_text)
+                decide.renormalise(
+                    lm, preserve_break_char(lm.ocr_text, lm.corrected_text)
+                )
 
 
 def _finalize_document(
