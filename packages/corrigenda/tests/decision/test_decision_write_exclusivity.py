@@ -9,9 +9,16 @@ unenforced (see ``test_finalize_pass_order.py``). The repository has
 already paid for this once: `L9` was two lines keeping their source text
 while reporting as ``CORRECTED``.
 
-The allowlist below is what is left. `RM-01` empties it by routing every
-write through ``core/decide.py``, one site per commit, and it goes to 0
-without a number ever being raised.
+The allowlist below is what is left, and as of `RM-01` phase 3 it is
+**empty**: every write goes through ``core/decide.py``. It got there one
+site per commit, 22 → 15 → 13 → 6 → 0, without a number ever being
+raised.
+
+From here the file changes job. It stopped being a burn-down and became
+a boundary: the interesting assertion is no longer "the list shrank" but
+``test_no_unlisted_function_writes_a_decision``, which now fails on the
+FIRST statement anywhere in the package that writes ``corrected_text`` or
+``status`` outside the sole writer.
 
 Same semantics as ``test_orchestrator_budget.py``, deliberately: an entry
 may shrink, never grow; an entry that reaches zero must be deleted rather
@@ -39,15 +46,14 @@ _DECISION_FIELDS = frozenset({"corrected_text", "status"})
 #: `RM-01` adds a file rather than also amending this test.
 _SOLE_WRITER = "core/decide.py"
 
-#: Every function writing a decision field, with its statement count.
-#: Measured 2026-08-06 at `cf6cfc1` (22 writes, 7 functions). `RM-01`
-#: takes these to zero, one site per commit.
-_WRITE_SITES: dict[str, int] = {
-    "core/reconcile.py::_reconcile_one_pair": 6,
-}
+#: Every function writing a decision field outside the sole writer, with
+#: its statement count. Measured at 22 writes across 7 functions when the
+#: ratchet was set (2026-08-06, `cf6cfc1`); emptied by `RM-01` phase 3.
+#: It must STAY empty — an entry here now is a regression, not a plan.
+_WRITE_SITES: dict[str, int] = {}
 
 #: The debt, in one number. It may only go down.
-_TOTAL_WRITES = 6
+_TOTAL_WRITES = 0
 
 
 def _write_sites() -> dict[str, int]:
