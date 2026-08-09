@@ -10,7 +10,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from corrigenda import CorrectionPipeline, LineRef, RoutingPolicy
+from corrigenda import CorrectionPipeline, LineRef
+from corrigenda.core.quality import RoutingPolicy
 from corrigenda.core.quality import HeuristicQEScorer, QEScorer
 from corrigenda.formats.alto.parser import build_document_manifest
 
