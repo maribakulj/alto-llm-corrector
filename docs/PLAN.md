@@ -872,7 +872,7 @@ s'exécute pas dans cette vague.
 | `RM-10` | `_rebuild_line` (203 l.) et `rewrite_alto_file` (161 l.) hors de toute mesure | mesure | important | `formats/alto/rewriter.py` (lecture seule) | `RM-02` | **fait (2026-08-06)** |
 | `RM-05a` | Aucun test ne protège l'ordre des passes de `core/finalize.py` | tests | important | `tests/decision/` (nouveau) | — | **fait (2026-08-06)** |
 | `RM-01` | L'écriture de la décision terminale d'une ligne est dispersée sur 5 modules ; l'ordre des passes est porté par une docstring | **bugfix** | **critique** | `core/decide.py` (nouveau), `core/outcome.py`, `core/acceptance.py`, `core/reconcile.py`, `core/routing.py`, `core/finalize.py` | `RM-02`, `RM-05a` | **fait (2026-08-06)** |
-| `RM-04` | ~20 % du code du paquet n'est exécuté par aucun chemin par défaut et est gelé par ce plan | nettoyage | important | `integrations/`, `core/routing.py`, `core/quality.py`, `core/confidence.py`, `core/batching.py`, `__init__.py` | `RM-11` + ratification | à faire (option A) |
+| `RM-04` | ~20 % du code du paquet n'est exécuté par aucun chemin par défaut et est gelé par ce plan | nettoyage | important | `__init__.py`, `pyproject.toml`, `CHANGELOG.md` | `RM-11` + ratification | **fait (2026-08-06), périmètre corrigé** |
 | `RM-07` | `core` connaît les formats : `core/losses.py` porte la table des attributs ALTO ; le contrat d'import plafonne à `== 3` au lieu de nommer une règle | réducteur | important | `core/losses.py`, `core/provenance.py`, `tests/test_import_contract.py` | — | à faire |
 | `RM-03` | Drilling de paramètres : 10 à 20 arguments sur le chemin chaud | réducteur | important | `core/driver.py`, `core/attempt.py`, `core/outcome.py`, `core/pipeline.py` | `RM-01`, `RM-02` | à faire |
 | `RM-06` | ~480 tags de vocabulaire privé, dont certains pointent vers `docs/history/` | vérité | secondaire | tout `src/` | `RM-11` | à faire |
@@ -1038,7 +1038,32 @@ Branche : `claude/technical-repository-audit-61yzfb`.
   l'autre côté par un test statique qui lit `_finalize_document` et échoue
   si une passe y est appelée sans jeton. **Le `xfail` strict est levé ; il
   ne reste aucun `xfail` dans la suite.**
-- **Blocked** — aucun. `RM-04` débloqué le 2026-08-06 (option A).
+- **Done** — `RM-04` (session 7), **et son périmètre était surestimé de
+  moitié** : la mesure a précédé le déplacement, et elle a coupé l'item en
+  deux. `integrations/qe.py` et `integrations/vision.py` — **818 des 1600
+  lignes** — étaient **déjà** derrière `corrigenda[qe]` / `corrigenda[vision]`
+  et **déjà** hors de la barre de couverture, avant la vague. Le mécanisme
+  d'option A était en place ; ce qui manquait, c'était **ce qui tient la
+  frontière**. Une entrée `pyproject.toml` et un `omit` de couverture
+  n'empêchent aucun module du chemin d'installation de base d'en importer un,
+  et un seul import transforme une dépendance optionnelle en dépendance
+  obligatoire au runtime — la panne tombant sur qui a installé exactement ce
+  que les métadonnées annonçaient. Le test de frontière est écrit et vérifié
+  en sous-processus (import du paquet **et** run par défaut complet, parce
+  qu'un scan statique ne voit pas un import paresseux sur le chemin chaud).
+- **Périmètre retiré de `RM-04`, mesuré** : `core/routing.py`,
+  `core/quality.py`, `core/confidence.py`, `core/batching.py` **ne peuvent
+  pas** sortir de la couverture. Sur un run par défaut avec producteur
+  factice : batching **27 %**, confidence **21 %**, quality **49 %**, routing
+  **22 %**. Ils sont importés par `core/driver.py` et `core/pipeline.py`, et
+  leurs chemins no-op s'exécutent à chaque run. Les omettre ne mettrait pas
+  du code de recherche derrière une porte, cela **cesserait de mesurer du
+  code qui part dans la wheel**. Le « 20 % non exercé » de l'audit était un
+  compte d'**énoncés** juste ; ce n'était pas un compte de **modules
+  séparables**, et `RM-04` ne peut déplacer que les seconds. Réduire ces
+  quatre-là demande de retirer les 5 boutons correspondants du constructeur
+  — rupture bien plus large, à instruire séparément, pas à glisser ici.
+- **Blocked** — aucun.
 - **Remaining** — `RM-01`, `RM-04`, `RM-07`, `RM-03`, `RM-06`, `RM-05b`,
   `RM-09`.
 - **New bugs discovered** — un, trouvé en étendant le ratchet et corrigé dans
@@ -1078,7 +1103,7 @@ Branche : `claude/technical-repository-audit-61yzfb`.
   **vraie**. Le dernier-écrivain-gagne nommerait une passe qui n'a rien fait.
   Tranché et écrit en `ADR-013` ; `I-1` est désormais un test.
 - **New bugs discovered** — aucun en session 4.
-- **New bugs discovered** — aucun en session 6.
+- **New bugs discovered** — aucun en session 7 ; aucun en session 6.
 - **New bugs discovered** — session 5, **non corrigé** (P6, hors périmètre) :
   `LineTrace.projected_text` peut être périmé pour un consommateur.
   `_finalize_chunk_traces` le fixe au `corrected_text` du moment, puis
@@ -1102,6 +1127,11 @@ Branche : `claude/technical-repository-audit-61yzfb`.
   4/3), `test_decision_write_exclusivity.py` (cliquet des 22 écritures).
   Premier répertoire de tests groupé par **invariant** et non par vague —
   amorce de `RM-05b`.
+- **Tests added** — session 7, `tests/test_research_boundary.py` (8 cas) :
+  le paquet et un run par défaut ne chargent aucun module derrière un extra
+  (sous-processus), et les 6 chemins d'import des 4 scripts de calibration
+  résolvent toujours — « derrière une porte » ne doit jamais devenir
+  « déplacé ».
 - **Tests added** — session 4, `tests/decision/test_fallback_reason_precedence.py`
   passe de 6 à 21 cas : un pin par site (1-3 `_apply_line_acceptance`, 6
   `_refresh_pair_traces` × 3 branches), le mécanisme qui empêche les sites
@@ -1140,7 +1170,8 @@ Arités mesurées `self`/`cls` exclus : ce qu'un APPELANT doit assembler.
 | Fonctions > 8 paramètres | 13 | 13, épinglées | 0 hors liste |
 | Fonctions > 100 lignes, paquet entier | 13, dont 6 hors mesure | 13, épinglées | ≤ 13 |
 | Définitions sous mesure | 0 hors `core/` | 348, paquet entier | tout `src/` |
-| Symboles dans `__init__.__all__` | 68 | 68 | à définir par `RM-04` |
+| Symboles dans `__init__.__all__` | 68 | **66** | atteint (`RM-04`) |
+| Modules derrière un extra, frontière tenue | 2 gelés, 0 test | 2 gelés, **3 tests** | tenue |
 | Imports de symboles privés depuis `tests/` | 277 | 277 | en baisse |
 | Ratio (commentaires + docstrings) / code, lib | 0,79 | 0,79 | non ciblé, mesuré |
 | Couverture bibliothèque | 96,4 % (seuil 85 %) | 96,4 % | ≥ 85 % |
