@@ -35,6 +35,7 @@ from corrigenda.core.protocols import EditProducer, ProviderPermanentError
 from corrigenda.core.quality import QEScorer, RoutingPolicy
 from corrigenda.core.reconcile import _build_hyphen_pairs, _subpage_for_lines
 from corrigenda.core.routing import _route_and_filter_chunks
+from corrigenda.core.workspace import PageWorkspace
 from corrigenda.core.schemas import (
     ChunkGranularity,
     ChunkPlannerConfig,
@@ -85,7 +86,14 @@ class PageDriver:
         cross_page_partners: dict[LineRef, LineManifest] | None,
         should_abort: Callable[[], bool] | None = None,
     ) -> tuple[int, int]:
-        line_by_id: dict[str, LineManifest] = {lm.line_id: lm for lm in page.lines}
+        # `RM-03` — the three indices this page's work reads, bound once
+        # here and passed as one thing from now on. They used to travel
+        # separately through nine signatures.
+        workspace = PageWorkspace(
+            line_by_id={lm.line_id: lm for lm in page.lines},
+            cross_page_partners=cross_page_partners,
+            traces=traces,
+        )
 
         page_hyphen_pairs = sum(
             1
@@ -105,8 +113,7 @@ class PageDriver:
             ctx=ctx,
             page=page,
             document_id=document_id,
-            line_by_id=line_by_id,
-            traces=traces,
+            workspace=workspace,
         )
 
         page_reconciled = 0
@@ -126,9 +133,7 @@ class PageDriver:
                 chunk=chunk,
                 producer=producer,
                 page=page,
-                line_by_id=line_by_id,
-                traces=traces,
-                cross_page_partners=cross_page_partners,
+                workspace=workspace,
                 should_abort=should_abort,
             )
 
@@ -159,8 +164,7 @@ class PageDriver:
         ctx: RunContext,
         page: PageManifest,
         document_id: str,
-        line_by_id: dict[str, LineManifest],
-        traces: dict[LineRef, LineTrace],
+        workspace: PageWorkspace,
     ) -> list[tuple[ChunkRequest, EditProducer]]:
         """Decide what this page's producer calls will be.
 
@@ -184,12 +188,11 @@ class PageDriver:
             escalation_producer=self.escalation_producer,
             page=page,
             chunks=plan.chunks,
-            line_by_id=line_by_id,
             ctx=ctx,
-            traces=traces,
+            workspace=workspace,
         )
         routed_chunks = _split_for_image_cap(
-            routed=routed_chunks, line_by_id=line_by_id
+            routed=routed_chunks, line_by_id=workspace.line_by_id
         )
         self.emit(
             ev.ChunkPlanned(
@@ -207,9 +210,7 @@ class PageDriver:
         chunk: ChunkRequest,
         producer: EditProducer,
         page: PageManifest,
-        line_by_id: dict[str, LineManifest],
-        traces: dict[LineRef, LineTrace],
-        cross_page_partners: dict[LineRef, LineManifest] | None,
+        workspace: PageWorkspace,
         should_abort: Callable[[], bool] | None,
     ) -> int:
         """Run one chunk, absorbing the errors a run may survive.
@@ -229,9 +230,7 @@ class PageDriver:
                 chunk=chunk,
                 producer=producer,
                 page=page,
-                line_by_id=line_by_id,
-                traces=traces,
-                cross_page_partners=cross_page_partners,
+                workspace=workspace,
                 should_abort=should_abort,
             )
         except (CorrectionAborted, ProviderPermanentError):
@@ -248,13 +247,7 @@ class PageDriver:
             )
             if not isinstance(exc, CorrigendaError):
                 raise
-            if _absorb_chunk_error(
-                exc=exc,
-                chunk=chunk,
-                line_by_id=line_by_id,
-                cross_page_partners=cross_page_partners,
-                traces=traces,
-            ):
+            if _absorb_chunk_error(exc=exc, chunk=chunk, workspace=workspace):
                 ctx.fallback_chunks += 1
             return 0
 
@@ -265,9 +258,7 @@ class PageDriver:
         chunk: ChunkRequest,
         producer: EditProducer,
         page: PageManifest,
-        line_by_id: dict[str, LineManifest],
-        traces: dict[LineRef, LineTrace] | None = None,
-        cross_page_partners: dict[LineRef, LineManifest] | None = None,
+        workspace: PageWorkspace,
         budget: list[int] | None = None,
         should_abort: Callable[[], bool] | None = None,
     ) -> int:
@@ -285,6 +276,7 @@ class PageDriver:
         ``RetryPolicy.per_chunk_budget``); ``None`` at the top level starts
         a fresh one.
         """
+        line_by_id = workspace.line_by_id
         chunk_lines = [line_by_id[lid] for lid in chunk.line_ids if lid in line_by_id]
         if not chunk_lines:
             return 0
@@ -310,7 +302,7 @@ class PageDriver:
             chunk_lines=chunk_lines,
             hyphen_pairs=hyphen_pairs,
             all_lines_by_id=line_by_id,
-            traces=traces,
+            traces=workspace.traces,
             max_attempts=attempts_cap,
             retry_policy=self.retry_policy,
             guard_config=self.guard_config,
@@ -326,9 +318,7 @@ class PageDriver:
                 chunk=chunk,
                 chunk_lines=chunk_lines,
                 response=outcome.response,
-                line_by_id=line_by_id,
-                cross_page_partners=cross_page_partners,
-                traces=traces,
+                workspace=workspace,
                 usage=outcome.usage,
             )
 
@@ -339,9 +329,7 @@ class PageDriver:
             producer=producer,
             page=page,
             chunk_lines=chunk_lines,
-            line_by_id=line_by_id,
-            traces=traces,
-            cross_page_partners=cross_page_partners,
+            workspace=workspace,
             budget=budget,
             should_abort=should_abort,
         )
@@ -355,9 +343,7 @@ class PageDriver:
         producer: EditProducer,
         page: PageManifest,
         chunk_lines: list[LineManifest],
-        line_by_id: dict[str, LineManifest],
-        traces: dict[LineRef, LineTrace] | None,
-        cross_page_partners: dict[LineRef, LineManifest] | None,
+        workspace: PageWorkspace,
         budget: list[int],
         should_abort: Callable[[], bool] | None,
     ) -> int:
@@ -378,9 +364,7 @@ class PageDriver:
                 producer=producer,
                 page=page,
                 chunk_lines=chunk_lines,
-                line_by_id=line_by_id,
-                traces=traces,
-                cross_page_partners=cross_page_partners,
+                workspace=workspace,
                 budget=budget,
                 should_abort=should_abort,
                 last_msg=outcome.last_msg,
@@ -389,10 +373,8 @@ class PageDriver:
             emit=self.emit,
             chunk=chunk,
             chunk_lines=chunk_lines,
-            traces=traces,
+            workspace=workspace,
             sanitised_msg=outcome.last_msg or "all_attempts_exhausted",
-            line_by_id=line_by_id,
-            cross_page_partners=cross_page_partners,
         )
         ctx.fallback_chunks += 1
         return 0
@@ -406,9 +388,7 @@ class PageDriver:
         producer: EditProducer,
         page: PageManifest,
         chunk_lines: list[LineManifest],
-        line_by_id: dict[str, LineManifest],
-        traces: dict[LineRef, LineTrace] | None,
-        cross_page_partners: dict[LineRef, LineManifest] | None,
+        workspace: PageWorkspace,
         budget: list[int],
         should_abort: Callable[[], bool] | None,
         last_msg: str,
@@ -457,16 +437,16 @@ class PageDriver:
             if budget[0] <= 0:
                 # Budget spent mid-descent: OCR-fallback the rest.
                 sub_lines = [
-                    line_by_id[lid] for lid in sub.line_ids if lid in line_by_id
+                    workspace.line_by_id[lid]
+                    for lid in sub.line_ids
+                    if lid in workspace.line_by_id
                 ]
                 _apply_chunk_fallback(
                     emit=self.emit,
                     chunk=sub,
                     chunk_lines=sub_lines,
-                    traces=traces,
+                    workspace=workspace,
                     sanitised_msg=last_msg or "per_chunk_budget exhausted",
-                    line_by_id=line_by_id,
-                    cross_page_partners=cross_page_partners,
                 )
                 ctx.fallback_chunks += 1
                 continue
@@ -475,9 +455,7 @@ class PageDriver:
                 chunk=sub,
                 producer=producer,
                 page=page,
-                line_by_id=line_by_id,
-                traces=traces,
-                cross_page_partners=cross_page_partners,
+                workspace=workspace,
                 budget=budget,
                 should_abort=should_abort,
             )

@@ -48,6 +48,7 @@ from corrigenda.core.reconcile import (
 from corrigenda.core.redaction import sanitize_error
 from corrigenda.core.traces import _finalize_chunk_traces
 from corrigenda.core.units import units_containing
+from corrigenda.core.workspace import PageWorkspace
 from corrigenda.core.schemas import (
     ChunkRequest,
     GuardConfig,
@@ -67,9 +68,7 @@ def _finish_successful_chunk(
     chunk: ChunkRequest,
     chunk_lines: list[LineManifest],
     response: ProposalBatch,
-    line_by_id: dict[str, LineManifest],
-    cross_page_partners: dict[LineRef, LineManifest] | None,
-    traces: dict[LineRef, LineTrace] | None,
+    workspace: PageWorkspace,
     usage: Usage | None = None,
 ) -> int:
     """Reconcile / accept / finalize a chunk whose producer call succeeded.
@@ -93,19 +92,17 @@ def _finish_successful_chunk(
         chunk_id=chunk.chunk_id,
         chunk_lines=target_lines,
         text_by_id=text_by_id,
-        line_by_id=line_by_id,
-        cross_page_partners=cross_page_partners,
-        traces=traces,
+        workspace=workspace,
     )
     _apply_line_acceptance(
         guard_config=guard_config,
         chunk_lines=target_lines,
         text_by_id=text_by_id,
-        all_lines_by_id=line_by_id,
-        traces=traces,
-        cross_page_partners=cross_page_partners,
+        all_lines_by_id=workspace.line_by_id,
+        traces=workspace.traces,
+        cross_page_partners=workspace.cross_page_partners,
     )
-    _finalize_chunk_traces(chunk_lines=target_lines, traces=traces)
+    _finalize_chunk_traces(chunk_lines=target_lines, traces=workspace.traces)
 
     emit(
         ev.ChunkCompleted(
@@ -143,10 +140,7 @@ def _fall_back_to_source(
 
 def _extend_to_units(
     targets: list[LineManifest],
-    traces: dict[LineRef, LineTrace] | None,
-    *,
-    line_by_id: dict[str, LineManifest] | None,
-    cross_page_partners: dict[LineRef, LineManifest] | None,
+    workspace: PageWorkspace,
 ) -> None:
     """ADR-010 — pull the rest of each fallen line's hyphen unit down with
     it, keeping the reason each member already carries.
@@ -156,10 +150,11 @@ def _extend_to_units(
     a decision from its consequence.
     """
     target_ids = {lm.line_id for lm in targets}
-    for lm in units_containing(targets, _unit_pool(line_by_id, cross_page_partners)):
+    pool = _unit_pool(workspace.line_by_id, workspace.cross_page_partners)
+    for lm in units_containing(targets, pool):
         if lm.line_id in target_ids:
             continue
-        decide.fall_back(lm, reason="hyphen_unit_fallback", traces=traces)
+        decide.fall_back(lm, reason="hyphen_unit_fallback", traces=workspace.traces)
 
 
 def _apply_chunk_fallback(
@@ -167,10 +162,8 @@ def _apply_chunk_fallback(
     emit: Callable[[ev.EngineEvent], None],
     chunk: ChunkRequest,
     chunk_lines: list[LineManifest],
-    traces: dict[LineRef, LineTrace] | None,
+    workspace: PageWorkspace,
     sanitised_msg: str,
-    line_by_id: dict[str, LineManifest] | None = None,
-    cross_page_partners: dict[LineRef, LineManifest] | None = None,
 ) -> None:
     """Revert the chunk's TARGET lines to their OCR text and warn.
 
@@ -190,24 +183,17 @@ def _apply_chunk_fallback(
     targets = [lm for lm in chunk_lines if lm.line_id in target_ids]
     _fall_back_to_source(
         targets,
-        traces,
+        workspace.traces,
         reason=f"all_attempts_exhausted: {sanitised_msg[:120]}",
     )
-    _extend_to_units(
-        targets,
-        traces,
-        line_by_id=line_by_id,
-        cross_page_partners=cross_page_partners,
-    )
+    _extend_to_units(targets, workspace)
 
 
 def _absorb_chunk_error(
     *,
     exc: Exception,
     chunk: ChunkRequest,
-    line_by_id: dict[str, LineManifest],
-    cross_page_partners: dict[LineRef, LineManifest] | None,
-    traces: dict[LineRef, LineTrace] | None,
+    workspace: PageWorkspace,
 ) -> bool:
     """Decide the lines a failed chunk left in limbo, and say whether any
     were found.
@@ -227,6 +213,7 @@ def _absorb_chunk_error(
     dragged it down. A mixed pair may not survive the absorb, and the
     report should say why both halves fell, not just one.
     """
+    line_by_id = workspace.line_by_id
     undecided = [
         line_by_id[lid]
         for lid in chunk.targets()
@@ -234,9 +221,10 @@ def _absorb_chunk_error(
     ]
     if not undecided:
         return False
+    pool = _unit_pool(line_by_id, workspace.cross_page_partners)
     _fall_back_to_source(
-        units_containing(undecided, _unit_pool(line_by_id, cross_page_partners)),
-        traces,
+        units_containing(undecided, pool),
+        workspace.traces,
         reason=f"chunk_error_absorbed: {sanitize_error(str(exc))[:120]}",
     )
     return True

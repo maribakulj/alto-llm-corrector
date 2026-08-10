@@ -54,6 +54,7 @@ from corrigenda.core.schemas import (
     LineStatus,
     LossPolicy,
 )
+from corrigenda.core.workspace import PageWorkspace
 from corrigenda.formats.loader import build_document_manifest
 
 from tests.decision._state import document, line
@@ -218,9 +219,11 @@ def test_extend_to_units_never_overwrites() -> None:
     lines, _all_lines, traces = _one_line("first_reason")
     _extend_to_units(
         lines,
-        traces,
-        line_by_id={lm.line_id: lm for lm in lines},
-        cross_page_partners=None,
+        PageWorkspace(
+            line_by_id={lm.line_id: lm for lm in lines},
+            cross_page_partners=None,
+            traces=traces,
+        ),
     )
     assert traces[line_ref(lines[0])].fallback_reason == "first_reason"
 

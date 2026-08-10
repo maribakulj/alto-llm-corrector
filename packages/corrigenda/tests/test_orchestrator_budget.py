@@ -118,23 +118,26 @@ _OVERSIZED: dict[str, int] = {
 #: Every function still over :data:`_PARAMETER_TARGET`, each with its current
 #: ceiling. Same ratchet semantics as :data:`_OVERSIZED`.
 #:
-#: Read this list next to that one. Nine of these thirteen are on the chunk
-#: path — ``pipeline`` → ``driver`` → ``attempt`` → ``outcome`` → the
-#: acceptance and reconcile helpers — and they are wide for one reason:
-#: `S2` turned what used to be ``self.retry_policy`` and friends into
-#: arguments, and the same handful of per-run indices now travels the whole
-#: chain by hand. `RM-03` is the item that narrows them.
+#: Read this list next to that one. It started at thirteen, nine of them on
+#: the chunk path, wide for one reason: `S2` turned what used to be
+#: ``self.retry_policy`` and friends into arguments, and the same handful of
+#: per-run indices then travelled the whole chain by hand.
+#:
+#: `RM-03` bound three of those indices into
+#: :class:`~corrigenda.core.workspace.PageWorkspace` and four entries left
+#: this list outright. What remains is a different debt with a different
+#: answer: the two ``pipeline`` constructors are configuration surface, not
+#: threading, and ``_attempt_chunk``/``_build_correction_report`` assemble
+#: from many sources rather than passing one thing along. `RM-03`
+#: deliberately did not touch ``integrations/`` or ``producers/`` — the
+#: list is a ceiling, not a queue.
 _OVERPARAMETERISED: dict[str, int] = {
     "core/attempt.py::_attempt_chunk": 11,
-    "core/driver.py::PageDriver._descend_granularity": 12,
-    "core/driver.py::PageDriver._handle_chunk_failure": 11,
-    "core/driver.py::PageDriver._run_chunk": 9,
-    "core/outcome.py::_finish_successful_chunk": 10,
+    "core/driver.py::PageDriver._descend_granularity": 10,
+    "core/driver.py::PageDriver._handle_chunk_failure": 9,
     "core/pipeline.py::CorrectionPipeline.__init__": 14,
     "core/pipeline.py::CorrectionPipeline.for_provider": 19,
-    "core/reconcile.py::_reconcile_chunk_hyphens": 9,
     "core/report.py::_build_correction_report": 11,
-    "core/routing.py::_route_and_filter_chunks": 9,
     "formats/alto/rewriter.py::_emit_string": 11,
     "integrations/vision.py::VisionEditProducer.__init__": 11,
     "producers/llm_edit.py::LLMEditProducer.__init__": 9,

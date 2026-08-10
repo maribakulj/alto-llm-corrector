@@ -34,6 +34,7 @@ from corrigenda.core.schemas import (
 )
 from corrigenda.core.traces import _set_trace
 from corrigenda.core.units import derive_hyphen_groups
+from corrigenda.core.workspace import PageWorkspace
 
 
 def _subpage_for_lines(page: PageManifest, lines: list[LineManifest]) -> PageManifest:
@@ -312,9 +313,7 @@ def _reconcile_chunk_hyphens(
     chunk_id: str,
     chunk_lines: list[LineManifest],
     text_by_id: dict[str, str],
-    line_by_id: dict[str, LineManifest],
-    cross_page_partners: dict[LineRef, LineManifest] | None,
-    traces: dict[LineRef, LineTrace] | None = None,
+    workspace: PageWorkspace,
 ) -> int:
     """Unit-driven hyphen reconciliation (ADR-010).
 
@@ -346,8 +345,8 @@ def _reconcile_chunk_hyphens(
     joins, pool = _claim_joins(
         chunk_id=chunk_id,
         chunk_lines=chunk_lines,
-        line_by_id=line_by_id,
-        cross_page_partners=cross_page_partners,
+        line_by_id=workspace.line_by_id,
+        cross_page_partners=workspace.cross_page_partners,
         emit=emit,
     )
     return _walk_units_reconciling(
@@ -356,7 +355,7 @@ def _reconcile_chunk_hyphens(
         guard_config=guard_config,
         ctx=ctx,
         text_by_id=text_by_id,
-        traces=traces,
+        traces=workspace.traces,
     )
 
 
