@@ -1063,6 +1063,41 @@ Branche : `claude/technical-repository-audit-61yzfb`.
   séparables**, et `RM-04` ne peut déplacer que les seconds. Réduire ces
   quatre-là demande de retirer les 5 boutons correspondants du constructeur
   — rupture bien plus large, à instruire séparément, pas à glisser ici.
+- **Done** — `RM-07` (session 8) : `core` n'énumère plus les formats. Le
+  partage de `core/losses.py` a été **mesuré, pas jugé** — le réécriveur PAGE
+  n'importait que `COUNTS_INVALIDATION` et `INVALIDATION_COUNTER` et n'a
+  jamais eu besoin de la table ; ALTO en importait cinq, dont trois que seule
+  la table peut répondre. La moitié partagée est donc ce que les deux formats
+  lisent et qu'aucun ne possède ; tout ce que la table répond part avec elle
+  dans `formats/alto/losses.py`. **Aucune valeur n'a changé** :
+  `test_loss_accounting_is_real.py` est le différentiel qui compare le
+  réécriveur à la table sur les trois chemins d'écriture, vert à la nouvelle
+  adresse, plus la parité octet et la parité de rapport PAGE.
+  `_adapter_for_format` rejoint `formats/loader.py`, à côté de la dispatch de
+  parseurs qui répond à la même question. `core/rendering.py` atteint toujours
+  un format — le moteur doit bien en toucher un pour écrire — mais **ne sait
+  plus lesquels existent** : il demande au loader. Le seam est resté,
+  l'énumération a bougé. Bilan : **3 imports interdits dans `core` → 1**.
+- **Done** — le contrat d'import énonce une **règle** au lieu d'un compte
+  (session 8). `assert len(violations) == 3` était un plafond : il disait
+  combien d'effraction était tolérée sans dire par qui, donc une nouvelle
+  violation n'importe où dans `core` restait légale tant qu'une ancienne
+  disparaissait dans le même commit. C'est désormais une carte nommée
+  (`_render_outputs`, `for_provider`), qui échoue dans les deux sens — une
+  fonction non nommée qui atteint un format, et une fonction nommée qui a
+  cessé de le faire. Une seconde règle interdit l'import de niveau module.
+- **Décision tranchée** — la boucle `from corrigenda import __version__`
+  (`core/rendering.py`, `core/provenance.py`) **reste ouverte**, et sur le
+  fond : elle porte **un** symbole, une chaîne de niveau module ; un import
+  paresseux ne peut ni interbloquer ni rendre un objet à moitié initialisé.
+  La fermer veut dire déplacer `__version__` dans son module, donc éditer
+  `[tool.hatch.version] path` (la source de version de la wheel) **et** le job
+  CI qui grep `__init__.py` — la chaîne de publication, pour zéro gain de
+  comportement, dans un item dont le sujet est « le cœur ignore les
+  **formats** ». Mais elle est désormais **bornée** plutôt que simplement
+  connue : les deux fichiers sont épinglés par nom et l'ensemble des symboles
+  portés est épinglé à `{"__version__"}` — un troisième site ou un second
+  symbole est une décision différente, pas la même.
 - **Blocked** — aucun.
 - **Remaining** — `RM-01`, `RM-04`, `RM-07`, `RM-03`, `RM-06`, `RM-05b`,
   `RM-09`.
@@ -1103,6 +1138,13 @@ Branche : `claude/technical-repository-audit-61yzfb`.
   **vraie**. Le dernier-écrivain-gagne nommerait une passe qui n'a rien fait.
   Tranché et écrit en `ADR-013` ; `I-1` est désormais un test.
 - **New bugs discovered** — aucun en session 4.
+- **New bugs discovered** — session 8, **non corrigé** (P6) :
+  `LOSS_MATRIX_VERSION` n'est **lu par personne**. Son commentaire dit « les
+  consommateurs du rapport y accrochent leurs attentes, pas à la version de
+  la bibliothèque » — or il n'apparaît dans aucun champ de
+  `CorrectionReport`, dans aucun test, dans aucun script. C'est un contrat
+  versionné qui n'est émis nulle part : soit il rejoint le rapport, soit le
+  commentaire cesse de promettre. À trancher avec `R*`, pas ici.
 - **New bugs discovered** — aucun en session 7 ; aucun en session 6.
 - **New bugs discovered** — session 5, **non corrigé** (P6, hors périmètre) :
   `LineTrace.projected_text` peut être périmé pour un consommateur.
@@ -1127,6 +1169,12 @@ Branche : `claude/technical-repository-audit-61yzfb`.
   4/3), `test_decision_write_exclusivity.py` (cliquet des 22 écritures).
   Premier répertoire de tests groupé par **invariant** et non par vague —
   amorce de `RM-05b`.
+- **Tests added** — session 8, `tests/test_import_contract.py` : la règle
+  nommée remplace le compte (`test_only_the_named_sites_reach_a_format_or_producer`),
+  l'interdit d'import de niveau module (`test_no_core_module_reaches_out_at_import_time`),
+  et la borne sur l'auto-import du paquet
+  (`test_the_package_self_import_stays_where_it_was_measured`). Sensibilité
+  vérifiée puis annulée : un 3ᵉ site d'accès depuis `core` échoue **par nom**.
 - **Tests added** — session 7, `tests/test_research_boundary.py` (8 cas) :
   le paquet et un run par défaut ne chargent aucun module derrière un extra
   (sous-processus), et les 6 chemins d'import des 4 scripts de calibration
@@ -1172,6 +1220,8 @@ Arités mesurées `self`/`cls` exclus : ce qu'un APPELANT doit assembler.
 | Définitions sous mesure | 0 hors `core/` | 348, paquet entier | tout `src/` |
 | Symboles dans `__init__.__all__` | 68 | **66** | atteint (`RM-04`) |
 | Modules derrière un extra, frontière tenue | 2 gelés, 0 test | 2 gelés, **3 tests** | tenue |
+| Imports interdits dans `core/` | 3, plafonnés par un compte | **1**, nommé par une règle | 1 (seam d'écriture) |
+| Noms de format cités dans `core/` | ALTO ×12 attributs + dispatch | **0** | 0 |
 | Imports de symboles privés depuis `tests/` | 277 | 277 | en baisse |
 | Ratio (commentaires + docstrings) / code, lib | 0,79 | 0,79 | non ciblé, mesuré |
 | Couverture bibliothèque | 96,4 % (seuil 85 %) | 96,4 % | ≥ 85 % |
