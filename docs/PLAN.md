@@ -874,7 +874,7 @@ s'exécute pas dans cette vague.
 | `RM-01` | L'écriture de la décision terminale d'une ligne est dispersée sur 5 modules ; l'ordre des passes est porté par une docstring | **bugfix** | **critique** | `core/decide.py` (nouveau), `core/outcome.py`, `core/acceptance.py`, `core/reconcile.py`, `core/routing.py`, `core/finalize.py` | `RM-02`, `RM-05a` | **fait (2026-08-06)** |
 | `RM-04` | ~20 % du code du paquet n'est exécuté par aucun chemin par défaut et est gelé par ce plan | nettoyage | important | `__init__.py`, `pyproject.toml`, `CHANGELOG.md` | `RM-11` + ratification | **fait (2026-08-06), périmètre corrigé** |
 | `RM-07` | `core` connaît les formats : `core/losses.py` porte la table des attributs ALTO ; le contrat d'import plafonne à `== 3` au lieu de nommer une règle | réducteur | important | `core/losses.py`, `core/provenance.py`, `tests/test_import_contract.py` | — | à faire |
-| `RM-03` | Drilling de paramètres : 10 à 20 arguments sur le chemin chaud | réducteur | important | `core/driver.py`, `core/attempt.py`, `core/outcome.py`, `core/pipeline.py` | `RM-01`, `RM-02` | à faire |
+| `RM-03` | Drilling de paramètres : 10 à 20 arguments sur le chemin chaud | réducteur | important | `core/workspace.py` (nouveau), `core/driver.py`, `core/outcome.py`, `core/reconcile.py`, `core/routing.py`, `core/pipeline.py`, `core/retry.py` | `RM-01`, `RM-02` | **fait (2026-08-06)** |
 | `RM-06` | ~480 tags de vocabulaire privé, dont certains pointent vers `docs/history/` | vérité | secondaire | tout `src/` | `RM-11` | à faire |
 | `RM-05b` | 124 fichiers de test organisés par vague de remédiation ; 277 imports de symboles privés | tests | important | `tests/` | `RM-05a` | à faire |
 | `RM-09` | `core/schemas.py` fourre-tout : 1 538 l., 44 importateurs, 4 familles de types | nettoyage | secondaire | `core/schemas.py` → `core/schemas/` | — | à faire |
@@ -1098,6 +1098,36 @@ Branche : `claude/technical-repository-audit-61yzfb`.
   connue : les deux fichiers sont épinglés par nom et l'ensemble des symboles
   portés est épinglé à `{"__version__"}` — un troisième site ou un second
   symbole est une décision différente, pas la même.
+- **Done** — `RM-03` (session 9), trois gestes. **`PageWorkspace`** : les
+  trois index qui voyageaient ensemble (`line_by_id` 24 occurrences,
+  `cross_page_partners` 38, `traces` 35) sont liés une fois par page. Le
+  périmètre a été **mesuré avant d'être choisi** — les 9 fonctions portant
+  les trois sont *exactement* le chemin de chunk, ce qui fait de la
+  frontière un constat et non une préférence. Gelé, sans méthode, et la
+  limite de cette affirmation est écrite : les dicts à l'intérieur sont
+  l'état vivant du run, `traces` est écrit par `decide.py`, et les
+  regrouper ne les rend pas immuables — ce que ça rend impossible, c'est de
+  les **séparer**. Le piège nommé (en refaire le fourre-tout qu'`ADR-011` a
+  retiré) est fermé par un test et non par une résolution :
+  `test_page_workspace_is_not_a_bag.py` échoue sur un 4ᵉ champ, sur le
+  dégel, et sur **toute** méthode — cette dernière règle étant la subtile,
+  une méthode qui muterait serait un second écrivain de décision déguisé en
+  objet, invisible au cliquet d'exclusivité qui scanne l'affectation
+  d'attribut et non l'intention.
+- **Done** — `for_provider` **19 → 9** paramètres nommés. La recopie
+  manuelle de 13 arguments n'était pas seulement longue : c'était une
+  **seconde déclaration** de la signature d'`__init__`, que rien ne
+  contraignait à concorder — un bouton ajouté au constructeur et oublié ici
+  était silencieusement inatteignable par la porte que le README met devant
+  tout usager LLM. `observer` reste **nommé** à contre-courant, et c'est le
+  snapshot d'API publique qui l'a attrapé : transférer un argument *requis*
+  déplace l'erreur du site d'appel vers le constructeur. Le pin a résisté
+  pour une vraie raison, ce qui est ce à quoi sert un pin.
+- **Done** — `budget: list[int]` → `ChunkBudget`. Une cellule mutable
+  déguisée en liste, correcte (une descente dépense la **même** bourse) et
+  coûtant deux questions au lecteur à chacun de ses 8 sites. Délibérément
+  **non gelé**, à l'inverse de `PageWorkspace` un commit plus tôt, et le
+  contraste est le propos : un workspace se lit, un budget se dépense.
 - **Blocked** — aucun.
 - **Remaining** — `RM-01`, `RM-04`, `RM-07`, `RM-03`, `RM-06`, `RM-05b`,
   `RM-09`.
@@ -1145,7 +1175,7 @@ Branche : `claude/technical-repository-audit-61yzfb`.
   `CorrectionReport`, dans aucun test, dans aucun script. C'est un contrat
   versionné qui n'est émis nulle part : soit il rejoint le rapport, soit le
   commentaire cesse de promettre. À trancher avec `R*`, pas ici.
-- **New bugs discovered** — aucun en session 7 ; aucun en session 6.
+- **New bugs discovered** — aucun en session 9 ; aucun en session 7 ni 6.
 - **New bugs discovered** — session 5, **non corrigé** (P6, hors périmètre) :
   `LineTrace.projected_text` peut être périmé pour un consommateur.
   `_finalize_chunk_traces` le fixe au `corrected_text` du moment, puis
@@ -1169,6 +1199,9 @@ Branche : `claude/technical-repository-audit-61yzfb`.
   4/3), `test_decision_write_exclusivity.py` (cliquet des 22 écritures).
   Premier répertoire de tests groupé par **invariant** et non par vague —
   amorce de `RM-05b`.
+- **Tests added** — session 9, `tests/test_page_workspace_is_not_a_bag.py`
+  (4 cas) : champs exacts, gel, aucune méthode, et le gel exercé plutôt
+  qu'introspecté.
 - **Tests added** — session 8, `tests/test_import_contract.py` : la règle
   nommée remplace le compte (`test_only_the_named_sites_reach_a_format_or_producer`),
   l'interdit d'import de niveau module (`test_no_core_module_reaches_out_at_import_time`),
@@ -1192,10 +1225,16 @@ Branche : `claude/technical-repository-audit-61yzfb`.
   `CORRECTED` portant son texte source (`L9`), c'est une **correction non
   validée qui part dans le fichier** dès que deux passes s'exécutent dans le
   mauvais ordre. Démontré, pas supposé.
-- **Risks remaining** — propre à `RM-1` : les 13 entrées de
-  `_OVERPARAMETERISED` sont un plafond, pas un objectif — `RM-03` ne doit en
-  faire descendre que ce qu'il traverse, et n'a aucune raison de toucher
-  `integrations/` ou `producers/`.
+- **Risks remaining** — (levé) propre à `RM-1` : la consigne « plafond, pas
+  file d'attente » a été tenue — `integrations/vision.py`,
+  `producers/llm_edit.py` et `formats/alto/rewriter.py::_emit_string` sont
+  intacts. Il reste **8 entrées**, et ce qui reste est une dette d'une autre
+  nature avec une autre réponse : les deux constructeurs de `pipeline` sont
+  de la **surface de configuration**, pas du threading, et `_attempt_chunk`
+  / `_build_correction_report` **assemblent** depuis plusieurs sources au
+  lieu de faire suivre une seule chose. Aucun `PageWorkspace` ne les aidera ;
+  les réduire demande de trancher ce que le pipeline expose, ce qui touche
+  `RM-04` et le gel. À instruire, pas à enchaîner.
 - **Risks remaining** — propre à `RM-05a` : les trois tests visent des
   fonctions privées et sont **délibérément tournés vers l'implémentation**.
   C'est le prix d'un filet posé avant la correction ; `RM-01` doit les
@@ -1214,8 +1253,9 @@ Arités mesurées `self`/`cls` exclus : ce qu'un APPELANT doit assembler.
 | `xfail` dans la suite | 1 (strict, `RM-01`) | **0** | 0 |
 | Fonctions > 100 lignes, `core/` | 7 (toutes épinglées) | **6** | ≤ 7 |
 | `I-1` (raison ⇒ ligne revenue à sa source) | vraie, non énoncée, 0 test | énoncée (`ADR-013`), 6 tests | tenue par `RM-01` |
-| Paramètres, maximum du paquet | 19 (`for_provider`) | 19 | ≤ 8 |
-| Fonctions > 8 paramètres | 13 | 13, épinglées | 0 hors liste |
+| Paramètres, maximum du paquet | 19 (`for_provider`) | **11** | ≤ 8 |
+| Fonctions > 8 paramètres | 13 | **8**, épinglées | 0 hors liste |
+| Fonctions > 8 params sur le chemin de chunk | 9 | **3** | 0 |
 | Fonctions > 100 lignes, paquet entier | 13, dont 6 hors mesure | 13, épinglées | ≤ 13 |
 | Définitions sous mesure | 0 hors `core/` | 348, paquet entier | tout `src/` |
 | Symboles dans `__init__.__all__` | 68 | **66** | atteint (`RM-04`) |
