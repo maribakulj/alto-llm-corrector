@@ -123,7 +123,7 @@ def classify_projection_fidelity(
     given, is that same line read with the format's own character
     substitutions turned off; where it differs from ``extracted`` the file
     spells something its own way and no comparison against ``extracted``
-    can see it (L8). Pass ``None`` for a format that substitutes nothing.
+    can see it. Pass ``None`` for a format that substitutes nothing.
 
     ``None`` means the two diverge in their words — not a level, a
     corrupted deliverable. The caller must fail the run on ``None``; every

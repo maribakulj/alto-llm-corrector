@@ -1,6 +1,6 @@
 """Deciding whether a proposal may stand, and what falls back with it.
 
-Four passes the orchestrator used to carry as methods (S2). Each takes the
+Four passes the orchestrator used to carry as methods. Each takes the
 policy it consults as an explicit argument rather than reading it off the
 engine — which is what makes them readable on their own: "given THIS guard
 config, is this line acceptable?" is a question about a line and a policy,
@@ -134,7 +134,7 @@ def _apply_line_acceptance(
         if corrected is None:
             continue
 
-        # L5 — the repertoire, not the ASCII hyphen. This guard read
+        # The repertoire, not the ASCII hyphen. This guard read
         # `endswith("-")`, so a line ending in ⸗ or ¬ whose correction
         # dropped the mark was NOT pulled back: 32 of the 363
         # hyphenated lines in the repo's corpora end in one of those.
@@ -155,7 +155,7 @@ def _apply_line_acceptance(
         # transitive unit. Widening this to the whole chain is
         # defensible under unit atomicity but changes behaviour on
         # 3+-member chains, so it belongs behind a measurement, not
-        # inside a refactor (noted in docs/PLAN.md under S1).
+        # inside a refactor.
         fallen_partner = any(
             partner is not None and partner.status is LineStatus.FALLBACK
             for partner in (
@@ -194,7 +194,7 @@ def _apply_line_acceptance(
             # ``tests/decision/test_acceptance_translation.py`` — the
             # translation is only safe while that holds.
             decide.fall_back(lm, reason=result.reason or "rejected", traces=traces)
-        # P3.5 — the guard's once-computed metrics ride the trace to
+        # The guard's once-computed metrics ride the trace to
         # the report's decision stage, accepted or not.
         _set_trace(traces, lm, proposal_features=result.features)
 
@@ -207,7 +207,7 @@ def _global_adjacency_pass(
     traces: dict[LineRef, LineTrace] | None,
     order: _FinalizeOrder | None = None,
 ) -> None:
-    """ONE adjacent-duplicate pass over the whole document (P3.3).
+    """ONE adjacent-duplicate pass over the whole document.
 
     The canonical sequence is pages in manifest order, lines in page
     order, broken at source-file transitions: file A's last physical

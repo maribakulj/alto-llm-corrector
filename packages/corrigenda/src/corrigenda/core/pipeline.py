@@ -123,10 +123,10 @@ class CorrectionPipeline:
         self.producer = producer
         self.observer = observer
         self.config = config or ChunkPlannerConfig()
-        # F9 — retry ramp / attempt cap / per-chunk budget. Default reproduces
+        # Retry ramp / attempt cap / per-chunk budget. Default reproduces
         # the historical temperature ramp (0.0/0.3/0.5) and 3-attempt cap.
         self.retry_policy = retry_policy or DEFAULT_RETRY_POLICY
-        # F13 — all anti-migration / acceptance thresholds. Default reproduces
+        # All anti-migration / acceptance thresholds. Default reproduces
         # the historical constants byte-for-byte.
         self.guard_config = guard_config or DEFAULT_GUARD_CONFIG
         # §11 — provenance only. Hyphen pairing happens at PARSE time, before
@@ -177,7 +177,7 @@ class CorrectionPipeline:
         # run start. There is no implicit default format.
         self.format_adapter = format_adapter
         # §11 — provenance identity stamped into the corrected XML's
-        # processingStep (P3.7-4: ProducerMetadata replaces the bare
+        # processingStep (ProducerMetadata replaces the bare
         # provider_name/model strings — a rules producer has no "model").
         # Explicit constructor metadata wins; else the producer's own
         # declaration (optional `metadata` attribute, same convention as
@@ -214,7 +214,7 @@ class CorrectionPipeline:
     ) -> CorrectionPipeline:
         """Build a pipeline around a raw ``StructuredCompletionClient`` (§5.1).
 
-        P3.7 split — the core only requires ``complete_structured``: a
+        The core only requires ``complete_structured``: a
         client with no ``list_models`` is fully supported (model
         discovery is application vocabulary, see ``ModelCatalog``).
 
@@ -305,8 +305,8 @@ class CorrectionPipeline:
         return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
 
     def _emit(self, event: ev.EngineEvent) -> None:
-        """Render a typed event onto the wire-shaped observer port
-        (P3.6): the dataclass is the payload's single definition; the
+        """Render a typed event onto the wire-shaped observer port:
+        the dataclass is the payload's single definition; the
         observer keeps receiving ``(event_type, payload_dict)``."""
         self.observer.on_event(event.type, event.payload())
 
@@ -360,7 +360,7 @@ class CorrectionPipeline:
         their own job/request id. Generated as a uuid4 when omitted; it
         never leaks back into the public events.
 
-        ``should_abort`` (F10) is an optional cancellation probe. It is
+        ``should_abort`` is an optional cancellation probe. It is
         polled between pages and between chunks; when it returns ``True``
         the run raises :class:`CorrectionAborted` and no result is
         produced. A provider call already in flight is not interrupted —
@@ -397,7 +397,7 @@ class CorrectionPipeline:
         """Body of :meth:`run`, on the run's private manifest copy — the
         sequence and nothing else: refuse what cannot proceed, index,
         correct every page, finalise the decisions, render, report. Each
-        step lives in its own module (S2).
+        step lives in its own module.
         """
         run_id = run_id or str(uuid.uuid4())
         # One fresh context per execution; no per-run state remains on
@@ -448,7 +448,7 @@ class CorrectionPipeline:
             decisions=decisions,
         )
 
-        # P3.9/P3.10 — one digest computation feeds BOTH the provenance
+        # One digest computation feeds BOTH the provenance
         # record and the final edit script's preconditions.
         source_digests = _digest_sources(source_files)
 
@@ -503,7 +503,7 @@ class CorrectionPipeline:
         total_chunks = 0
         total_reconciled = 0
         for page in document_manifest.pages:
-            # F10 — cooperative cancellation between pages, before any work
+            # Cooperative cancellation between pages, before any work
             # on this page and before any output is written.
             if should_abort is not None and should_abort():
                 raise CorrectionAborted(

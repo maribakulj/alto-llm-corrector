@@ -1,6 +1,6 @@
 """Writing onto a line's trace, when there is one.
 
-Lifted out of the orchestrator (S2) because several modules now need this
+Lifted out of the orchestrator because several modules now need this
 and none of them should reach into the pipeline for it.
 """
 
@@ -40,7 +40,7 @@ def _finalize_chunk_traces(
     host opted in by passing a non-None ``traces`` dict).
 
     Duplicate detection is not chunk business anymore: the single
-    document-wide adjacency pass (P3.3) runs after the page loop, so the
+    document-wide adjacency pass runs after the page loop, so the
     state projected here is provisional until that pass ran.
     """
     for lm in chunk_lines:

@@ -4,7 +4,7 @@ The last stage before a run hands anything back: the format adapter rewrites
 each source file, the projection invariant checks that the bytes carry the
 run's decisions, and the per-line traces gain what the rewrite actually did.
 
-Free function (S2). Everything the engine used to supply is an argument now —
+Free function. Everything the engine used to supply is an argument now —
 the adapter, the producer's identity, the config fingerprint stamped into the
 provenance, and the observer callback. Rendering is a step over a manifest
 and a set of decisions, not a property of a run.
@@ -184,7 +184,7 @@ def _record_rewrite_on_traces(
     what the format dropped and on which line (ADR-012), and whether the
     token alignment suspected a word reorder — the last deliberately NOT
     a loss counter, because nothing left the markup and summing it would
-    count a non-loss (R5).
+    count a non-loss.
 
     Keys arriving here are bare line_ids: unique per source FILE
     (ADR-007), never document-wide, so they are qualified against this

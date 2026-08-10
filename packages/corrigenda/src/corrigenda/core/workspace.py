@@ -8,8 +8,8 @@ signatures from :meth:`PageDriver.process_page` down to
 ``outcome._extend_to_units``, and were counted 24, 38 and 35 times across
 the source.
 
-That is not three arguments, it is one thing spelled three times. `S2`
-split the orchestrator by turning what used to be ``self.line_by_id``
+That is not three arguments, it is one thing spelled three times. The
+orchestrator split turned what used to be ``self.line_by_id``
 into a parameter, which was right in intent and produced
 ``_descend_granularity`` at twelve arguments. `RM-02` made that visible
 by measuring arity next to length; this is the item that acts on it.

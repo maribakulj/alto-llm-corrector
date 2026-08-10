@@ -5,7 +5,7 @@ sends ESCALATE lines to the heavier producer, returning each chunk paired
 with the producer that owns it. A no-op when routing is off — every chunk
 pairs with the primary producer and every existing run stays byte-identical.
 
-Free functions (S2), each taking the scorer and policy it consults rather
+Free functions, each taking the scorer and policy it consults rather
 than reading them off the engine: routing is a decision about chunks and a
 policy, not about a run.
 """

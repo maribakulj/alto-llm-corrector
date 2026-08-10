@@ -77,13 +77,13 @@ def _unit_reach(
     both directions: it cannot see a link that leaves from an EARLIER line in
     the window, and it cannot see a partner that is not the immediately next
     line. The second became reachable the moment the linker learned to step
-    over blank lines (L5) — a pair linked across a blank failed the test, the
+    over blank lines — a pair linked across a blank failed the test, the
     window closed between the two, and no single window held both members, so
     the target assignment fell through to its per-line fallback and the pair
-    was corrected in two different chunks (L7).
+    was corrected in two different chunks.
 
     Absorbing the predicate here also retires it: it was the third
-    formulation of "who is my partner?" that S1 left standing, and it had
+    formulation of "who is my partner?" left standing, and it had
     exactly one production caller.
 
     A partner off this page (a cross-page pair) or behind ``start`` is not a
@@ -125,7 +125,7 @@ def _assign_window_targets(
     windows: list[list[str]],
     line_by_id: dict[str, LineManifest],
 ) -> list[list[str]]:
-    """Assign every line to exactly one target window (F8).
+    """Assign every line to exactly one target window.
 
     Overlapping windows mean a boundary line appears in two windows; pre-F8
     it was corrected in whichever window ran first (its context there was
@@ -375,7 +375,7 @@ def _try_window(
             next_start = start + 1
         start = next_start
 
-    # F8 — each line is a target in exactly one window (its last, best-context
+    # Each line is a target in exactly one window (its last, best-context
     # window); overlaps become pure context in the other window.
     line_by_id = {lm.line_id: lm for lm in lines}
     targets_per_window = _assign_window_targets(window_line_ids, line_by_id)
@@ -411,16 +411,16 @@ def _plan_line(
     lines = page.lines
     chunks: list[ChunkRequest] = []
     splits: list[HyphenSplit] = []
-    # A LOOKUP, not a resolver (the S1 distinction): id -> position on this
+    # A LOOKUP, not a resolver, and the distinction matters: id -> position on this
     # page. The chain follow used to require the partner to be the literally
     # NEXT line, which is a different question from "where is my partner?"
     # and answers it wrongly whenever anything sits between the two — a
-    # blank line, most concretely, now that the linker steps over those
-    # (L5). A non-adjacent pair then failed the adjacency test, the chain
+    # blank line, most concretely, now that the linker steps over those.
+    # A non-adjacent pair then failed the adjacency test, the chain
     # stopped, the two members landed in DIFFERENT chunks, and the link was
     # left live: the validator skips a pair that is not wholly in-chunk and
     # the reconciler could write across the boundary. Silent, and with no
-    # HyphenSplit to show for it (L7).
+    # HyphenSplit to show for it.
     index_by_id = {lm.line_id: position for position, lm in enumerate(lines)}
     i = 0
     while i < len(lines):

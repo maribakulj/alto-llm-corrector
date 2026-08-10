@@ -3,7 +3,7 @@
 Pure: given an exception, the attempt number and the per-chunk hyphen latch,
 say whether to retry, how long to wait, and what to call it. No chunk, no
 observer, no traces — which is what makes it testable on its own and what
-made it worth lifting out of the 3200-line orchestrator (S2).
+made it worth lifting out of the 3200-line orchestrator.
 """
 
 from __future__ import annotations
@@ -95,7 +95,7 @@ def _classify_retry(
 
 @dataclass
 class ChunkBudget:
-    """Attempts left for one original chunk and its whole descent (F9).
+    """Attempts left for one original chunk and its whole descent.
 
     Was ``budget: list[int]`` — a one-element list used as a mutable cell,
     because a descent has to spend from the SAME purse as the chunk that

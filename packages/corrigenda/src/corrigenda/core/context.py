@@ -1,6 +1,6 @@
 """All mutable state of ONE pipeline execution.
 
-Lifted out of the orchestrator (S2). It is a VALUE — what a run accumulates
+Lifted out of the orchestrator. It is a VALUE — what a run accumulates
 as it goes — not execution control, and keeping it beside the retry loop was
 also a circular-import waiting to happen: the report assembly needs to read
 this state, and could not import it from the module that imports the report
@@ -65,9 +65,9 @@ class RunContext:
     #: file's, corrupting the dry-run edit_script.
     producer_ops: dict[LineRef, tuple[list[EditOp], str]] = field(default_factory=dict)
     #: The run's cooperative cancellation probe, forwarded to producers
-    #: via :class:`ProducerOptions` (P3.7) so long I/O can be abandoned.
+    #: via :class:`ProducerOptions` so long I/O can be abandoned.
     should_abort: Callable[[], bool] | None = None
-    #: R6 — every forward hyphen link the LINE planner severed this run
+    #: Every forward hyphen link the LINE planner severed this run
     #: (ADR-010 unit SPLIT). Accumulated here because the cut happens deep
     #: in planning, once per page and again per granularity descent, while
     #: the only place it is worth SAYING is the report: a split leaves a

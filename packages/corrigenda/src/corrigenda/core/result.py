@@ -1,7 +1,7 @@
 """What a run returns, and what a caller may do with it (ADR-011).
 
 The engine never writes: it computes values and hands them back. This module
-holds that value, and the assembly of it. Lifted out of the orchestrator (S2)
+holds that value, and the assembly of it. Lifted out of the orchestrator
 because a result object is not execution control — it is the shape of an
 answer, and a reader looking for "what do I get back?" should not have to
 scroll past the retry loop.
@@ -50,7 +50,7 @@ class CorrectionResult:
     fallback_reasons: dict[str, int]
     traces: dict[LineRef, LineTrace]
     reconcile_metrics: ReconcileMetrics
-    #: F14 — aggregate token consumption across every producer call in the
+    #: Aggregate token consumption across every producer call in the
     #: run (zero when no provider reported usage).
     usage: Usage
     #: §9 — public, versioned correction report (same line traces, promoted
@@ -62,7 +62,7 @@ class CorrectionResult:
     #: ``replace_span`` ops here too.
     edit_script: EditScript
     #: ADR-011 — the run's immutable :class:`DecisionSet`: one terminal
-    #: decision per line in document reading order. Since slice E the
+    #: decision per line in document reading order. Since ADR-011 slice E the
     #: input manifest is never mutated, so THIS is where a caller reads
     #: what the run decided (``decisions.by_ref[LineRef(...)]``).
     decisions: DecisionSet

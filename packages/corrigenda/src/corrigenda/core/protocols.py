@@ -85,7 +85,7 @@ class ProviderPermanentError(ProviderError):
 
 @runtime_checkable
 class StructuredCompletionClient(Protocol):
-    """The ONLY LLM capability the core consumes (P3.7 split).
+    """The ONLY LLM capability the core consumes.
 
     Implementations call out to their provider's API (or run a local
     model) and return the JSON shape declared by ``OUTPUT_JSON_SCHEMA``.
@@ -105,7 +105,7 @@ class StructuredCompletionClient(Protocol):
         json_schema: dict[str, Any],
         temperature: float = 0.0,
     ) -> tuple[dict[str, Any], Usage | None]:
-        """Return ``(parsed_json, usage)`` (F14).
+        """Return ``(parsed_json, usage)``.
 
         ``parsed_json`` matches ``OUTPUT_JSON_SCHEMA``; ``usage`` reports
         token consumption for the call, or ``None`` when the provider
@@ -116,7 +116,7 @@ class StructuredCompletionClient(Protocol):
 
 @runtime_checkable
 class ModelCatalog(Protocol):
-    """Model discovery — APPLICATION vocabulary (P3.7 split).
+    """Model discovery — APPLICATION vocabulary.
 
     The engine never lists models: a run is handed one resolved model
     string. Catalog lookups belong to the host (the demo backend's
@@ -141,7 +141,7 @@ class BaseProvider(StructuredCompletionClient, ModelCatalog, Protocol):
 
 @dataclass(frozen=True)
 class ProducerOptions:
-    """Per-call envelope the engine hands a producer (P3.7, §5.1).
+    """Per-call envelope the engine hands a producer (§5.1).
 
     Replaces the full ``RetryPolicy`` on the ``produce()`` seam: the
     ENGINE owns the retry/downgrade strategy — a producer only needs to
@@ -167,7 +167,7 @@ class ProducerOptions:
 
 @dataclass(frozen=True)
 class ProducerMetadata:
-    """Provenance identity of an :class:`EditProducer` (P3.7, §11).
+    """Provenance identity of an :class:`EditProducer` (§11).
 
     Replaces the bare ``provider_name``/``model`` strings with GENERIC
     producer vocabulary — a rules engine has no "model". ``name`` says
@@ -349,7 +349,7 @@ class RewriteResult:
     aggregates them over the run); empty when the rewrite dropped no
     markup. "Empty" is not "lossless" — a character the format cannot carry
     is a loss of TEXT and is graded on the projection fidelity scale
-    instead (R8, :mod:`corrigenda.core.fidelity`).
+    instead (:mod:`corrigenda.core.fidelity`).
     """
 
     xml_bytes: bytes
@@ -357,7 +357,7 @@ class RewriteResult:
     #: line_id → "untouched" / "subs_only" / "fast_path" / "slow_path"
     rewriter_paths: dict[str, str]
     texts: dict[str, str]
-    #: L8 — the same lines read with the format's mark substitutions OFF:
+    #: The same lines read with the format's mark substitutions OFF:
     #: what the artefact's characters SAY, not the logical reading of them.
     #: Empty when a format has no such substitution to declare, and read
     #: only to grade projection fidelity — never as anyone's text. Without
@@ -366,14 +366,14 @@ class RewriteResult:
     #: comparison had gone through the same collapse.
     texts_verbatim: dict[str, str] = field(default_factory=dict)
     losses: dict[str, int] = field(default_factory=dict)
-    #: R5 — line ids whose token alignment SUSPECTED a word reorder. A
+    #: Line ids whose token alignment SUSPECTED a word reorder. A
     #: diagnostic, never acted on (lines never merge, words never move), and
     #: deliberately not a loss: nothing left the markup. It used to ride in
     #: ``losses`` as ``word_order_suspected``, so any consumer summing the
-    #: loss counters counted a non-loss — the same defect as R1 with a
-    #: different attribute.
+    #: loss counters counted a non-loss — the same defect the loss table
+    #: settles, with a different attribute.
     word_order_suspected: frozenset[str] = frozenset()
-    #: P3.8 (ADR-012) — per-line attribution of ``losses``: line_id →
+    #: ADR-012 — per-line attribution of ``losses``: line_id →
     #: that line's own loss counters (only lines that lost something
     #: appear). Summing the values reproduces ``losses``.
     losses_by_line: dict[str, dict[str, int]] = field(default_factory=dict)

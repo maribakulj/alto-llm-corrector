@@ -1,4 +1,4 @@
-"""What a format loss IS, for both formats (R0, `RM-07`).
+"""What a format loss IS, for both formats (`RM-07`).
 
 The loss counters grew one fix at a time: someone noticed an attribute
 disappearing, added a counter, moved on. Nothing ever stated what each
@@ -39,9 +39,9 @@ The distinction that makes the table work, and that the counters missed:
     follow the tokens, and when it goes, something an archive cared about
     is gone.
 
-Only SEMANTIC attributes can be lost. That is the whole of R1: SUBS_TYPE
-and SUBS_CONTENT were being counted as lost when they are re-established
-from the manifest on the very same pass.
+Only SEMANTIC attributes can be lost. That is the whole of the false
+half above: SUBS_TYPE and SUBS_CONTENT were being counted as lost when
+they are re-established from the manifest on the very same pass.
 """
 
 from __future__ import annotations
@@ -52,7 +52,7 @@ from enum import Enum
 #: the report's consumers key their expectations to this, not to the
 #: library version.
 #:
-#: ``"2"`` (2026-07-28): R4 settled. ``INVALIDATED`` attributes are now
+#: ``"2"`` (2026-07-28): ``INVALIDATED`` attributes are now
 #: counted, per line, under one key shared by both formats. No attribute
 #: changed fate; what changed is what the report says about a fate, which
 #: is the same thing to a consumer reading counters.
@@ -89,7 +89,7 @@ class AttributeFate(str, Enum):
 
 
 #: Whether the report carries a counter when an ``INVALIDATED`` attribute
-#: goes. **Settled 2026-07-28** (R4), after being left explicit rather than
+#: goes. **Settled 2026-07-28**, after being left explicit rather than
 #: decided by silence: yes — but counted **per line, not per occurrence**.
 #:
 #: The two arguments were both right about different units. FOR counting: an
@@ -114,7 +114,8 @@ COUNTS_INVALIDATION = True
 INVALIDATION_UNIT = "line"
 
 #: The single key both formats emit for it. ALTO had none and PAGE called it
-#: ``conf_dropped``; one name, one unit, in both, is the parity half of R4.
+#: ``conf_dropped``; one name, one unit, in both, is the parity half of
+#: the same decision.
 #: "invalidated" rather than "dropped" on purpose — the attribute did not
 #: fall through a gap, it was removed because a correction made it false.
 INVALIDATION_COUNTER = "confidence_invalidated"

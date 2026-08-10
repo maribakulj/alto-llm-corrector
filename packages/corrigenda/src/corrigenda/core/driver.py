@@ -5,7 +5,7 @@ page's chunks, route them, run each one, retry it, descend a granularity
 when retrying at this one is hopeless, and decide what its ending does to
 its lines. None of that is what a *pipeline* does — a pipeline preflights,
 indexes, drives, finalises, renders and reports. This is what the fourth of
-those means (S2).
+those means.
 
 :class:`PageDriver` is built once per run from the engine's immutable
 configuration, so the loop reads its policies off a value rather than off
@@ -65,9 +65,9 @@ class PageDriver:
     escalation_producer: EditProducer | None
     #: Chunk planning: granularity selection, sizes, windows.
     config: ChunkPlannerConfig
-    #: F9 — retry ramp, attempt cap, per-chunk budget.
+    #: Retry ramp, attempt cap, per-chunk budget.
     retry_policy: RetryPolicy
-    #: F13 — acceptance and anti-migration thresholds.
+    #: Acceptance and anti-migration thresholds.
     guard_config: GuardConfig
     #: The QE scorer behind hybrid-selective routing; None turns it off.
     qe_scorer: QEScorer | None
@@ -120,7 +120,7 @@ class PageDriver:
         page_reconciled = 0
         page_chunks = 0
         for chunk, producer in routed_chunks:
-            # F10 — cooperative cancellation between chunks. Checked before
+            # Cooperative cancellation between chunks. Checked before
             # the per-chunk try/except so CorrectionAborted propagates out
             # instead of being swallowed as a chunk error.
             if should_abort is not None and should_abort():
@@ -139,7 +139,7 @@ class PageDriver:
             )
 
         # Duplicate detection is no page business anymore: the single
-        # document-wide adjacency pass (P3.3) runs after the page loop,
+        # document-wide adjacency pass runs after the page loop,
         # comparing every line's live pre-revert correction on one basis —
         # chunk seams, descent sub-chunk seams and page seams included.
 
@@ -267,7 +267,7 @@ class PageDriver:
 
         Three endings: the producer answered and the chunk is finished; it
         did not and the same work is worth retrying one granularity finer
-        (F1, :meth:`_descend_granularity`); or it did not and no finer
+        (:meth:`_descend_granularity`); or it did not and no finer
         grain would help — a non-retryable error like an HTTP 4xx, LINE
         grain already reached, or the shared budget spent — and the chunk
         falls back to OCR source.
@@ -396,9 +396,9 @@ class PageDriver:
         should_abort: Callable[[], bool] | None,
         last_msg: str,
     ) -> int:
-        """Re-plan a failed chunk one granularity finer and retry it (F1).
+        """Re-plan a failed chunk one granularity finer and retry it.
 
-        F1×F8 — only the chunk's TARGET lines descend. Context lines are
+        Only the chunk's TARGET lines descend. Context lines are
         owned by an adjacent chunk; re-planning them here would correct
         them at a finer grain and make their rightful window skip them
         (acceptance ignores already-corrected lines).
@@ -429,7 +429,7 @@ class PageDriver:
         ctx.hyphen_splits.extend(sub_plan.hyphen_splits)
         total = 0
         for sub in sub_plan.chunks:
-            # F10 — the descent can spawn many finest-grain chunks; keep
+            # The descent can spawn many finest-grain chunks; keep
             # the run cancellable inside it, not only between top-level
             # chunks.
             if should_abort is not None and should_abort():

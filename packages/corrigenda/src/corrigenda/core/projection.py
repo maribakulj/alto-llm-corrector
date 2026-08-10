@@ -1,6 +1,6 @@
 """The projection invariant: the artefact must SAY what the run decided.
 
-Lifted out of the orchestrator (S2) because it is a pure comparison between
+Lifted out of the orchestrator because it is a pure comparison between
 two texts and a DecisionSet — it needs no pipeline, no producer and no
 observer, and reading it next to the retry loop hid that.
 """
@@ -57,7 +57,7 @@ def _verify_projection(
     :class:`~corrigenda.core.fidelity.ProjectionFidelity`) so the caller
     can put it on the record instead.
 
-    ``verbatim_texts`` (L8) is the same lines read with the format's own
+    ``verbatim_texts`` is the same lines read with the format's own
     character substitutions off. A format that substitutes nothing passes
     ``None``; where it differs from ``output_texts`` the file spells a
     character its own way and the line grades ``source_spelling`` instead of

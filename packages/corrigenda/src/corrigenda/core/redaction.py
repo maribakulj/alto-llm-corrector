@@ -5,10 +5,10 @@ something a producer said, and it travels: into events, into the report,
 into a host's logs. Redaction therefore cannot live at the edge that
 happens to print it — it has to happen where the message is made.
 
-Lifted out of the orchestrator (S2): pattern matching over a string is
+Lifted out of the orchestrator: pattern matching over a string is
 neither orchestration nor policy. ``sanitize_error`` stays importable from
-:mod:`corrigenda.core.pipeline` — that is its pinned public location
-(S3a), the same arrangement :class:`CorrectionResult` has.
+:mod:`corrigenda.core.pipeline` — that is its pinned public location,
+the same arrangement :class:`CorrectionResult` has.
 """
 
 from __future__ import annotations

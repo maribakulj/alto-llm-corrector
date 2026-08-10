@@ -1,7 +1,7 @@
 """Immutable decision record of a run (ADR-011, slices C+E).
 
 The engine expresses its decisions by mutating its PRIVATE working copy
-of the manifests (since slice E the caller's document is never
+of the manifests (since ADR-011 slice E the caller's document is never
 touched); this module defines THE decision model and materializes it
 exactly once — after the global consistency pass, when every line's
 decision is final. Everything downstream of the run reads the
@@ -147,7 +147,7 @@ def build_line_outcomes(
 ) -> list[LineOutcome]:
     """Project the run into the report's staged per-line outcomes (§9 v2).
 
-    The DecisionSet is the authority for the terminal stage (P3.5 — the
+    The DecisionSet is the authority for the terminal stage (the
     report builder reads decisions, not manifests); the working traces
     contribute the producer stage and the projection stage, each absent
     when the line never reached them (no producer call / no rendered
@@ -179,7 +179,7 @@ def build_line_outcomes(
                     # decision: exact, or what the format cost, or a
                     # whitespace character that was substituted away.
                     fidelity=trace.projection_fidelity,
-                    # R5 — a diagnostic, not a loss: it used to travel
+                    # A diagnostic, not a loss: it used to travel
                     # inside `losses` above, where summing the counters
                     # added a non-loss to the total.
                     word_order_suspected=trace.word_order_suspected,

@@ -4,7 +4,7 @@ Between "every page has been through the producer" and "the outputs exist"
 sit four document-wide passes, and their ORDER is the whole content of this
 module — each one depends on running against what the previous left behind:
 
-  1. the adjacent-duplicate consistency pass (P3.3), which needs every
+  1. the adjacent-duplicate consistency pass, which needs every
      line still holding its pre-revert accepted correction, so it must be
      the first thing to revert anything;
   2. break-character preservation (P5), which normalises the accepted text
@@ -20,7 +20,7 @@ module — each one depends on running against what the previous left behind:
      still PENDING: outputs exist only for a document where every line
      carries a terminal decision.
 
-Free function (S2). None of it is execution control — no producer, no
+Free function. None of it is execution control — no producer, no
 retry, no observer — and reading it inline in the orchestrator, between the
 page loop and the report, is what made the ordering look incidental.
 
