@@ -1109,8 +1109,8 @@ class Usage(BaseModel):
 
 # HTTP DTOs (ListModelsRequest/Response, CreateJobResponse,
 # JobStatusResponse, SSEEvent) live in the consumer package — see
-# `app.schemas.http` in the backend. ARCHITECTURE.md §3.2 keeps the
-# server-layer payloads out of corrigenda.
+# `app.schemas.http` in the backend. Server-layer payloads stay out of the
+# library: it assumes no execution environment and no transport (§15).
 
 
 # ---------------------------------------------------------------------------

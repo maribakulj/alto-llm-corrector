@@ -23,8 +23,8 @@ class HyphenIntegrityError(ProposalValidationError):
     ``except ValueError`` catches keep working. Carrying the type
     explicitly lets the pipeline's retry classifier use ``isinstance(exc,
     HyphenIntegrityError)`` instead of substring-matching
-    ``"hyphen_integrity_violation"`` in the exception message — a fragile
-    coupling that prior audit §7.1 flagged. The retry SSE event still
+    ``"hyphen_integrity_violation"`` in the exception message — a coupling
+    to prose that no test protects. The retry SSE event still
     emits the literal ``"hyphen_integrity_violation"`` tag for the
     frontend consumer.
     """
