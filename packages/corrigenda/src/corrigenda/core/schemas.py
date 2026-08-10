@@ -652,7 +652,8 @@ class LossPolicy(FrozenPolicy):
     #: token_realign threshold in [0, 1] — ``None`` disables the gate
     #: (historical behaviour). 0.6 is a reasonable starting point:
     #: ordinary OCR corrections align far above it, wholesale rewrites
-    #: far below. Calibration against a real corpus is the job of a calibration against a real corpus.
+    #: far below. The value is NOT calibrated: no corpus has been measured
+    #: against it, which is why the gate is off by default.
     min_alignment_score: float | None = Field(default=None, ge=0.0, le=1.0)
 
 
@@ -670,9 +671,8 @@ class ConfidencePolicy(FrozenPolicy):
       aggregation formula). Nothing is written into the XML.
     * **WRITE_WC**: reserved — stamping confidences into the output
       markup (ALTO ``WC`` with a declared ``postProcessingStep``, PAGE
-      multi-``TextEquiv``) is LOCKED until the calibration against a real corpus
-      harness proves the values against a real corpus. Requesting it
-      raises at construction.
+      multi-``TextEquiv``) is LOCKED until a calibration harness proves the
+      values against a real corpus. Requesting it raises at construction.
 
     Deliberately NOT part of the §8.2 composite ``config_fingerprint``
     yet: ``report_only`` affects the report, never the corrected XML —
@@ -687,8 +687,8 @@ class ConfidencePolicy(FrozenPolicy):
         if self.mode == "write_wc":
             raise ValueError(
                 "ConfidencePolicy(mode='write_wc') is locked until the "
-                "calibration harness (the vision/QE programme/3) proves the "
-                "confidence values against a real corpus — use "
+                "calibration harness proves the confidence values against a "
+                "real corpus — use "
                 "'report_only' and read LineOutcome.confidence instead."
             )
         return self
