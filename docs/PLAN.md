@@ -873,11 +873,11 @@ s'exécute pas dans cette vague.
 | `RM-05a` | Aucun test ne protège l'ordre des passes de `core/finalize.py` | tests | important | `tests/decision/` (nouveau) | — | **fait (2026-08-06)** |
 | `RM-01` | L'écriture de la décision terminale d'une ligne est dispersée sur 5 modules ; l'ordre des passes est porté par une docstring | **bugfix** | **critique** | `core/decide.py` (nouveau), `core/outcome.py`, `core/acceptance.py`, `core/reconcile.py`, `core/routing.py`, `core/finalize.py` | `RM-02`, `RM-05a` | **fait (2026-08-06)** |
 | `RM-04` | ~20 % du code du paquet n'est exécuté par aucun chemin par défaut et est gelé par ce plan | nettoyage | important | `__init__.py`, `pyproject.toml`, `CHANGELOG.md` | `RM-11` + ratification | **fait (2026-08-06), périmètre corrigé** |
-| `RM-07` | `core` connaît les formats : `core/losses.py` porte la table des attributs ALTO ; le contrat d'import plafonne à `== 3` au lieu de nommer une règle | réducteur | important | `core/losses.py`, `core/provenance.py`, `tests/test_import_contract.py` | — | à faire |
+| `RM-07` | `core` connaît les formats : `core/losses.py` porte la table des attributs ALTO ; le contrat d'import plafonne à `== 3` au lieu de nommer une règle | réducteur | important | `core/losses.py`, `core/provenance.py`, `tests/test_import_contract.py` | — | **fait (2026-08-06)** |
 | `RM-03` | Drilling de paramètres : 10 à 20 arguments sur le chemin chaud | réducteur | important | `core/workspace.py` (nouveau), `core/driver.py`, `core/outcome.py`, `core/reconcile.py`, `core/routing.py`, `core/pipeline.py`, `core/retry.py` | `RM-01`, `RM-02` | **fait (2026-08-06)** |
-| `RM-06` | ~480 tags de vocabulaire privé, dont certains pointent vers `docs/history/` | vérité | secondaire | tout `src/` | `RM-11` | à faire |
-| `RM-05b` | 124 fichiers de test organisés par vague de remédiation ; 277 imports de symboles privés | tests | important | `tests/` | `RM-05a` | à faire |
-| `RM-09` | `core/schemas.py` fourre-tout : 1 538 l., 44 importateurs, 4 familles de types | nettoyage | secondaire | `core/schemas.py` → `core/schemas/` | — | à faire |
+| `RM-06` | ~480 tags de vocabulaire privé, dont certains pointent vers `docs/history/` | vérité | secondaire | tout `src/` | `RM-11` | **fait (2026-08-10)**, 215 mesurés → 23 gelés |
+| `RM-05b` | 124 fichiers de test organisés par vague de remédiation ; 277 imports de symboles privés | tests | important | `tests/` | `RM-05a` | **en cours** — `tests/hyphenation/` clos (2026-08-10) |
+| `RM-09` | `core/schemas.py` fourre-tout : 1 538 l., 44 importateurs, 4 familles de types | nettoyage | secondaire | `core/schemas.py` → `core/schemas/` | — | **fait (2026-08-10)**, zéro importateur touché |
 | `RM-08` | Cinq projections voisines de l'unité de césure (`_page_local_units` / `_units_visible_on_page` quasi identiques) | réducteur | important | `core/reconcile.py`, `core/units.py` | **`S1`** | **hors vague → `S1`** |
 
 ### Ordre, et pourquoi
@@ -924,6 +924,24 @@ produit le plus gros diff de la vague. Fait en dernier, avec un
   et RM-2 pas fermé.
 - **Lot RM-6 — nettoyages progressifs** : `RM-06`, `RM-05b`, `RM-09`.
 
+### `RM-08` attend toujours `S1` — reconfirmé le 2026-08-10
+
+La question se repose à chaque session parce que `RM-08` est le seul item
+« réducteur / important » encore ouvert, et la réponse n'a pas bougé : ses
+cinq projections voisines (`_page_local_units`, `_units_visible_on_page` et
+leurs parentes) sont des **lectures du champ pointeur**, qui est encore le
+stockage de référence. Les unifier avant que `derive_hyphen_groups` fasse
+autorité produit une sixième formulation de « qui est mon partenaire ? »
+plutôt qu'une de moins — précisément l'échec que `S1` a déjà connu une fois,
+quand l'unification a atterri en *ajout* et a laissé cinq résolveurs
+parallèles derrière elle.
+
+Ce qui a changé, c'est le prix de l'attente, pas la décision : la première
+tranche de `RM-05b` met les 19 cas qui casseraient sous un seul répertoire
+(`tests/hyphenation/`), ce qui est le filet dont `S1` manquait. `RM-08`
+s'exécute **dans** `S1`, comme la vérification que la dérivation a bien
+remplacé les projections au lieu de s'y ajouter.
+
 ### Ce que la vague ne touche pas
 
 `core/pairing.py`, `core/units.py`, `core/hyphenation.py` et la résolution de
@@ -935,9 +953,11 @@ restent intacts.
 
 ### Suivi
 
-Dernière mise à jour : 2026-08-06 — session 5. Lots `RM-0` et `RM-1` clos ;
-`RM-2` en cours, filet et table clos, migration à 4 sites sur 7.
-Branche : `claude/technical-repository-audit-61yzfb`.
+Dernière mise à jour : 2026-08-10 — session 10. Lots `RM-0` à `RM-5` clos ;
+`RM-6` clos sauf `RM-05b`, qui est **partiel et le restera par construction**
+(regroupement fichier par fichier). Restent : `RM-05b` (suite) et `RM-08`,
+qui n'est pas de cette vague.
+Branche : `claude/rm-session-10-nettoyages-qb74pu`.
 
 - **Done** — `RM-11` (session 1) : règle « pas de 6ᵉ chemin » de `CLAUDE.md`
   reformulée en propriété (deux encodages, pas un compte historique) ;
@@ -1128,9 +1148,73 @@ Branche : `claude/technical-repository-audit-61yzfb`.
   coûtant deux questions au lecteur à chacun de ses 8 sites. Délibérément
   **non gelé**, à l'inverse de `PageWorkspace` un commit plus tôt, et le
   contraste est le propos : un workspace se lit, un budget se dépense.
+- **Done** — `RM-06` (session 10), et l'ordre du geste est le résultat. Le
+  **test d'abord** : `test_adr_references_resolve.py` devient
+  `test_references_resolve.py` et couvre les deux vocabulaires qu'un
+  commentaire peut citer sans mentir — `ADR-NNN` (la généalogie) et `§n`
+  (le contrat). Deux `§` ne résolvaient pas et **ressemblaient** à des
+  renvois au SPEC : `ARCHITECTURE.md §3.2` (histoire gelée) et « prior
+  audit §7.1 » (un audit que personne ne peut nommer). Le reste — `Fnn`,
+  `P3.n`, `Sn`/`Ln`/`Rn`, tranche nue, `Audit-…` — est interdit par un
+  **cliquet à base mesurée** : 215 tags dans 48 fichiers, chaque fichier
+  libre de décroître et jamais de croître, un fichier à zéro devant quitter
+  la carte. Sensibilité vérifiée puis annulée dans les deux sens. Le
+  nettoyage devient alors mécanique et vert fichier par fichier : **215 →
+  23**, les 23 restants étant *exactement* les trois fichiers que la vague
+  s'interdit d'ouvrir (`core/pairing.py`, `core/hyphenation.py`,
+  `formats/alto/rewriter.py`).
+- **Done** — et c'est la moitié du travail : **on trie, on ne rase pas.**
+  Sept commentaires portaient la revendication dans le tag et sont
+  réécrits, pas dépouillés — « the whole of R1 » devient « the whole of the
+  false half above » (la fausseté que le docstring mesure trois paragraphes
+  plus haut), « exactly the shape of R1 » devient « exactly the
+  double-count this table exists to prevent », « `F8` pins both pair
+  members » devient le composant qui le fait vraiment (le planner), et
+  « moving it would put `S1` territory inside `RM-01` » devient ce que ça
+  signifie pour qui lit la ligne. Deux `slice E` nus **gagnent** leur ancre
+  (`ADR-011 slice E`) au lieu de la perdre : un `ADR` documente ses
+  tranches, donc celui-là résout. La connaissance de domaine signalée
+  n'était dans aucun tag et est intacte : le cas BnF `TL000454`,
+  l'inatteignabilité d'`EXACT` en ALTO, la distinction
+  STRUCTURAL/SEMANTIC.
+- **Done** — les docstrings brouillées de `core/schemas.py` relevées en
+  session 3, **et une troisième que personne n'avait vue** : le `ValueError`
+  qu'un hôte lit en demandant `write_wc` disait « the calibration harness
+  (the vision/QE programme/3) », où le `/3` est la queue de « (ROADMAP V3
+  Phase 2/3) ». Cause identifiée : `e7b465c` a substitué « Phase 2's job »
+  → « the job of a calibration against a real corpus » à l'aveugle, et là
+  où la phrase contenait déjà le membre, elle s'est mangée elle-même. Deux
+  descendantes de la même substitution dans `core/confidence.py` sont
+  **laissées** : elles se lisent correctement.
+- **Done** — `RM-09` (session 10). `core/schemas.py` (1 538 l.) devient
+  `core/schemas/` en quatre familles strictement stratifiées —
+  `manifest` ← `policies`/`producer` ← `report`, sans cycle. Le shim
+  n'était pas une commodité : `__all__` est **identique à l'octet** (39
+  noms, diffé), et les onze noms publics-de-fait qui n'y figuraient pas
+  (`ImageAsset`, `ModelCapabilities`, `HyphenSplit`, les cinq `DEFAULT_*`,
+  `CORRECTION_REPORT_VERSION`) sont réexportés en forme `X as X`. Ce
+  détail est le seul piège de l'item : sous `--strict`,
+  `no_implicit_reexport` aurait cassé leurs consommateurs au typage tout
+  en passant à l'exécution. **Vérifié plutôt que supposé** : `git status`
+  ne montre que le module supprimé et le paquet ajouté — zéro importateur
+  touché, dans la lib comme dans le backend ; 1 376 tests lib, 472 backend,
+  `mypy --strict` sur 74 fichiers, et le snapshot OpenAPI inchangé.
+  `SPECS_LIB_V2` §3 nomme l'arbre, donc il nomme le paquet.
+- **Done** — `RM-05b`, **première tranche** (session 10) : `tests/hyphenation/`.
+  Dix-neuf items de test portant sur un seul objet — un mot coupé sur deux
+  lignes physiques — vivaient dans trois fichiers nommés d'après la vague
+  qui les avait trouvés. Ils sont regroupés par la question posée
+  (`test_pair_vetting` 3, `test_pair_reconciliation` 7,
+  `test_unit_atomicity` 7, `test_fusion_detection` 2). **Un déplacement et
+  rien d'autre, contrôlé et non affirmé** : `pytest --collect-only` donne
+  les *mêmes* 1 383 items avant et après, et le diff des deux listes est
+  exactement 19 lignes retirées sous les anciens noms et 19 ajoutées sous
+  les nouveaux (P5). La seule ligne éditée est dans un *helper*
+  (`_reconciled_chain` appelle `_hyphen_line`, parce que le fichier importe
+  aussi le `_line(i, text)` de la suite planner). Le `_line` qui existait
+  en double au caractère près devient `tests/hyphenation/_lines.py`.
 - **Blocked** — aucun.
-- **Remaining** — `RM-01`, `RM-04`, `RM-07`, `RM-03`, `RM-06`, `RM-05b`,
-  `RM-09`.
+- **Remaining** — `RM-05b` (suite) ; `RM-08`, hors vague.
 - **New bugs discovered** — un, trouvé en étendant le ratchet et corrigé dans
   le même geste (l'instrument était en cause, pas `src/`) : la clé était le
   nom nu de la fonction, donc un fichier déclarant deux fois le même nom
@@ -1199,6 +1283,18 @@ Branche : `claude/technical-repository-audit-61yzfb`.
   4/3), `test_decision_write_exclusivity.py` (cliquet des 22 écritures).
   Premier répertoire de tests groupé par **invariant** et non par vague —
   amorce de `RM-05b`.
+- **Tests added** — session 10, `tests/test_references_resolve.py` (8 cas,
+  dont les 3 hérités de `test_adr_references_resolve.py`) : `§n` résout
+  contre `SPECS_LIB_V2.md`, une garde contre le vert par vacuité (si le
+  motif de titre dérive, le test échoue au lieu de comparer à un ensemble
+  vide), et les trois cas du cliquet — aucun fichier propre ne se salit,
+  aucun fichier sale ne grossit, aucune entrée périmée ne subsiste.
+  `tests/hyphenation/` ajoute 4 fichiers et 0 cas : **exactement 19 items
+  déplacés**, ce qui est le propos.
+- **New bugs discovered** — session 10, aucun dans le comportement. Un
+  seul constat, corrigé : la troisième phrase brouillée par `e7b465c` est
+  un message d'erreur, pas un docstring — donc le seul des trois qu'un
+  hôte pouvait lire.
 - **Tests added** — session 9, `tests/test_page_workspace_is_not_a_bag.py`
   (4 cas) : champs exacts, gel, aucune méthode, et le gel exercé plutôt
   qu'introspecté.
