@@ -136,7 +136,7 @@ _OVERPARAMETERISED: dict[str, int] = {
     "core/driver.py::PageDriver._descend_granularity": 10,
     "core/driver.py::PageDriver._handle_chunk_failure": 9,
     "core/pipeline.py::CorrectionPipeline.__init__": 14,
-    "core/pipeline.py::CorrectionPipeline.for_provider": 19,
+    "core/pipeline.py::CorrectionPipeline.for_provider": 9,
     "core/report.py::_build_correction_report": 11,
     "formats/alto/rewriter.py::_emit_string": 11,
     "integrations/vision.py::VisionEditProducer.__init__": 11,

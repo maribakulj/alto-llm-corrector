@@ -206,20 +206,11 @@ class CorrectionPipeline:
         model: str,
         provider_name: str = "unknown",
         observer: PipelineObserver,
-        config: ChunkPlannerConfig | None = None,
-        retry_policy: RetryPolicy | None = None,
-        guard_config: GuardConfig | None = None,
-        pairing_policy: PairingPolicy | None = None,
-        format_adapter: FormatAdapter | None = None,
-        loss_policy: LossPolicy | None = None,
-        confidence_policy: ConfidencePolicy | None = None,
-        confidence_scorers: tuple[ConfidenceScorer, ...] | None = None,
-        qe_scorer: QEScorer | None = None,
-        routing_policy: RoutingPolicy | None = None,
         system_prompt: str | None = None,
         output_schema: dict[str, Any] | None = None,
         uncertainty_channel: bool = False,
         lexicon: set[str] | None = None,
+        **pipeline_kwargs: Any,
     ) -> CorrectionPipeline:
         """Build a pipeline around a raw ``StructuredCompletionClient`` (§5.1).
 
@@ -231,8 +222,30 @@ class CorrectionPipeline:
         + prompt contract into an ``LLMEditProducer`` so callers migrating
         from the legacy ``run(api_key=…, model=…, provider_name=…)`` keep a
         one-call setup. The import is function-local — this is one of the
-        two pinned lazy composition defaults the import-contract test
-        allows in core (the other is the ALTO format adapter).
+        two pinned lazy composition sites the import-contract test allows
+        in core (the other is the adapter resolution in
+        ``_render_outputs``).
+
+        The named parameters here are the ones this constructor OWNS —
+        the vendor call (``provider``, ``api_key``, ``model``,
+        ``provider_name``) and the prompt contract it hands the producer
+        (``system_prompt``, ``output_schema``, ``uncertainty_channel``,
+        ``lexicon``) — plus ``observer``, which is kept named for a reason
+        worth stating: it is REQUIRED by ``__init__``, so forwarding it
+        would move the error from this call site into the constructor,
+        turning a missing-argument message about ``for_provider`` into one
+        about a function the caller did not call. Optional configuration
+        has no such problem and goes through ``**pipeline_kwargs``
+        (`RM-03`).
+
+        It used to re-declare all thirteen and copy them across by hand,
+        which is not merely long: the copy is a SECOND declaration of the
+        constructor's signature, and nothing made the two agree. A knob
+        added to ``__init__`` and forgotten here was silently unreachable
+        through this door, and a default drifting apart between the two
+        would have been invisible in review. Forwarding removes the class
+        of bug; ``tests/test_public_api_snapshot.py`` pins both signatures
+        so the loss of explicitness stays visible where consumers read it.
         """
         from corrigenda.producers.llm_edit import LLMEditProducer
 
@@ -248,16 +261,7 @@ class CorrectionPipeline:
         return cls(
             producer=producer,
             observer=observer,
-            config=config,
-            retry_policy=retry_policy,
-            guard_config=guard_config,
-            pairing_policy=pairing_policy,
-            format_adapter=format_adapter,
-            loss_policy=loss_policy,
-            confidence_policy=confidence_policy,
-            confidence_scorers=confidence_scorers,
-            qe_scorer=qe_scorer,
-            routing_policy=routing_policy,
+            **pipeline_kwargs,
             # Vendor vocabulary is native HERE (the LLM convenience):
             # the two strings become the generic identity envelope. The
             # producer's configuration fingerprint (prompt + schema)
