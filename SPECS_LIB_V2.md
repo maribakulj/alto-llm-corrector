@@ -130,7 +130,8 @@ corrigenda/
 ├── errors.py                # hiérarchie CorrigendaError (§8.4)
 ├── facade.py                # load / correct / correct_sync — le chemin en 3 lignes (§2)
 ├── core/                    # pur : zéro I/O, zéro réseau, zéro lxml
-│   ├── schemas.py           # manifests, chunks, politiques gelées, rapport (§9)
+│   ├── schemas/             # manifest / policies / producer / report — tout réexporté
+│   │                        #   par `schemas/__init__.py` (§8.2, §9)
 │   ├── protocols.py         # EditProducer, PipelineObserver, FormatAdapter, RewriteResult
 │   ├── pipeline.py          # orchestration (retry, descente de granularité, traces)
 │   ├── planner.py           # chunk planner (PAGE→BLOCK→WINDOW→LINE, césure-conscient)
