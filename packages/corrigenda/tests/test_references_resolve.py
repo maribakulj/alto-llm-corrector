@@ -223,7 +223,6 @@ _STILL_TAGGED: dict[str, int] = {
     "core/result.py": 3,
     "core/retry.py": 2,
     "core/routing.py": 1,
-    "core/schemas.py": 33,
     "core/traces.py": 2,
     "core/validator.py": 6,
     "core/workspace.py": 1,

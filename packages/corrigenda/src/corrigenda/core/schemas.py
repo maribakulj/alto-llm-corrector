@@ -58,7 +58,7 @@ class HyphenRole(str, Enum):
 
 
 class PipelineEventType(str, Enum):
-    """Canonical event names emitted by the correction ENGINE (P3.6).
+    """Canonical event names emitted by the correction ENGINE.
 
     Only events the pipeline itself (or a host reporting the pipeline's
     metrics) can emit live here. Server-side job lifecycle
@@ -78,7 +78,7 @@ class PipelineEventType(str, Enum):
     CHUNK_STARTED = "chunk_started"
     CHUNK_COMPLETED = "chunk_completed"
     CHUNK_ERROR = "chunk_error"
-    # F1 — emitted when a chunk's retry budget is exhausted and its lines are
+    # Emitted when a chunk's retry budget is exhausted and its lines are
     # re-planned at the next-finer granularity (PAGE→BLOCK→WINDOW→LINE).
     CHUNK_DOWNGRADED = "chunk_downgraded"
     RETRY = "retry"
@@ -109,7 +109,8 @@ class Coords(BaseModel):
     on the PAGE side, so the source polygon is a read-only provenance field.
     """
 
-    # ADR-011 slice E, made structural (`S4`, partial). The engine works on
+    # ADR-011 slice E, made structural — on this model, not yet on every
+    # manifest type. The engine works on
     # a deep copy and never writes here — freezing says so in the type
     # instead of leaving it to hold by the discipline of one call site.
     #
@@ -117,8 +118,8 @@ class Coords(BaseModel):
     # IS the run's working state (246 assignment sites — corrected_text,
     # status, the hyphen pointers), and `PageManifest`/`BlockManifest` are
     # written once by the page-id disambiguation in `core.pairing`, which
-    # rewrites hyphen pointer fields in the same pass and so belongs to
-    # `S1`'s territory.
+    # rewrites hyphen pointer fields in the same pass — freezing them waits
+    # on the hyphen unit becoming the storage of record.
     model_config = ConfigDict(frozen=True)
 
     hpos: int
@@ -218,7 +219,8 @@ class PageManifest(BaseModel):
 class DocumentManifest(BaseModel):
     """A multi-page document: the top-level structure the pipeline consumes."""
 
-    # ADR-011 slice E, made structural (`S4`, partial). The engine works on
+    # ADR-011 slice E, made structural — on this model, not yet on every
+    # manifest type. The engine works on
     # a deep copy and never writes here — freezing says so in the type
     # instead of leaving it to hold by the discipline of one call site.
     #
@@ -226,8 +228,8 @@ class DocumentManifest(BaseModel):
     # IS the run's working state (246 assignment sites — corrected_text,
     # status, the hyphen pointers), and `PageManifest`/`BlockManifest` are
     # written once by the page-id disambiguation in `core.pairing`, which
-    # rewrites hyphen pointer fields in the same pass and so belongs to
-    # `S1`'s territory.
+    # rewrites hyphen pointer fields in the same pass — freezing them waits
+    # on the hyphen unit becoming the storage of record.
     model_config = ConfigDict(frozen=True)
 
     document_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
@@ -310,7 +312,7 @@ class ChunkPlannerConfig(FrozenPolicy):
 
 
 class GuardConfig(FrozenPolicy):
-    """All anti-migration / acceptance thresholds in one frozen object (F13).
+    """All anti-migration / acceptance thresholds in one frozen object.
 
     The pipeline runs three stages of text-migration guards, each living
     beside the control flow that acts on it (see ``core/guards.py`` for the
@@ -455,7 +457,7 @@ DEFAULT_GUARD_CONFIG = GuardConfig()
 
 
 class PairingPolicy(FrozenPolicy):
-    """Decides whether a PART1/BOTH line may pair with the following line (F7).
+    """Decides whether a PART1/BOTH line may pair with the following line.
 
     Hyphen pairing is sequential — the parser proposes the next line in
     reading order — and this policy vets the proposal. The default
@@ -595,7 +597,7 @@ DEFAULT_PAIRING_POLICY = PairingPolicy()
 
 class LossPolicy(FrozenPolicy):
     """What the run does when projecting a correction would LOSE format
-    granularity (ADR-012, P3.8; token_realign — the vision/QE programme).
+    granularity (ADR-012; token_realign — the vision/QE programme).
 
     The PAGE rewriter cannot keep ``Word`` geometry when a correction
     changes a line's word count (6.2 P4 slow path: the ``Word`` children
@@ -628,7 +630,7 @@ class LossPolicy(FrozenPolicy):
     they stay report-only in every mode.
 
     **``strict`` is a no-op on ALTO, and that is worth stating outright
-    rather than leaving to be inferred from the sentence above** (R7).
+    rather than leaving to be inferred from the sentence above**.
     ``word_count`` is populated by the PAGE parser alone: ALTO's per-token
     ``String`` geometry redistributes at any token count, so there is no
     word markup to lose and the gate has nothing to measure. A host that
@@ -699,7 +701,7 @@ DEFAULT_CONFIDENCE_POLICY = ConfidencePolicy()
 
 
 class RetryPolicy(FrozenPolicy):
-    """Per-chunk LLM retry strategy (F9), injectable and frozen.
+    """Per-chunk LLM retry strategy, injectable and frozen.
 
     Pre-F9 the temperature ramp (0.0 → 0.3 → 0.5) and the attempt cap were
     hard-coded in the pipeline, so *any* retry introduced non-determinism.
@@ -715,7 +717,7 @@ class RetryPolicy(FrozenPolicy):
         the first, malformed-output errors the second. Hyphen violations
         retry immediately (0 s).
       - ``per_chunk_budget`` — total attempts budget for a chunk across
-        all granularity downgrades (F1). Bounds the PAGE→BLOCK→WINDOW→LINE
+        all granularity downgrades. Bounds the PAGE→BLOCK→WINDOW→LINE
         descent so one malformed line can't burn unbounded calls.
 
     ``RetryPolicy.default()`` reproduces the historical behaviour to the
@@ -766,7 +768,7 @@ class ChunkRequest(BaseModel):
     block_id: str | None = None
     granularity: ChunkGranularity
     line_ids: list[str]
-    # F8 — target lines the pipeline actually corrects/accepts. Any line in
+    # Target lines the pipeline actually corrects/accepts. Any line in
     # ``line_ids`` but NOT in ``target_line_ids`` is *context only*: it is
     # still sent to the producer so a target near it keeps full surrounding
     # context, but its output is discarded here (it is a target of an
@@ -824,7 +826,7 @@ class ChunkPlan(BaseModel):
 
 # ``Provider``, ``JobStatus`` and ``JobManifest`` (with its ``images`` map)
 # are server-side concepts and live in the consumer package — see
-# ``app.schemas.job`` in the backend (spec F12). The core does not enumerate
+# ``app.schemas.job`` in the backend. The core does not enumerate
 # LLM vendors or track a job's lifecycle.
 
 
@@ -1077,7 +1079,7 @@ class ModelCapabilities(BaseModel):
 
 
 class Usage(BaseModel):
-    """Token consumption reported by a producer call (F14, §5.1).
+    """Token consumption reported by a producer call (§5.1).
 
     Returned alongside the JSON payload by ``complete_structured`` so the
     pipeline can aggregate cost across a run and surface it on the report
@@ -1125,7 +1127,7 @@ class LineTrace(BaseModel):
     progresses (exposed on ``CorrectionResult.traces``). The report's
     JSON artefact does not serialize it: the report builder projects
     each line's trace + terminal decision into a staged
-    :class:`LineOutcome` (P3.5 — report v2). The two surfaces version
+    :class:`LineOutcome` (report v2). The two surfaces version
     independently (see ``docs/versioning.md``).
     """
 
@@ -1138,14 +1140,14 @@ class LineTrace(BaseModel):
         None  # text retained after validation/reconciliation/fallback
     )
     output_alto_text: str | None = None  # text re-extracted from the output XML
-    #: P3.5 — the acceptance guard's once-computed metrics (see
+    #: The acceptance guard's once-computed metrics (see
     #: :class:`ProposalFeatures`); surfaces on the report's decision stage.
     proposal_features: ProposalFeatures | None = None
 
     # Diagnostic metadata
     hyphen_role: str | None = None
     rewriter_path: str | None = None  # untouched / subs_only / fast_path / slow_path
-    #: P3.8 — this line's share of the rewrite's granularity losses
+    #: This line's share of the rewrite's granularity losses
     #: (e.g. ``{"words_dropped": 4}``), ``None`` when its rewrite lost
     #: nothing; surfaces on the report's projection stage.
     projection_losses: dict[str, int] | None = None
@@ -1153,7 +1155,7 @@ class LineTrace(BaseModel):
     #: surfaces on the report's projection stage. ``None`` until the line's
     #: file has been rewritten (and forever, for a run that writes nothing).
     projection_fidelity: ProjectionFidelity | None = None
-    #: R5 — the rewriter's token alignment suspected a word reorder on this
+    #: The rewriter's token alignment suspected a word reorder on this
     #: line. Flagged, never acted on.
     word_order_suspected: bool | None = None
     validation_status: str | None = None  # corrected / fallback / failed
@@ -1161,7 +1163,7 @@ class LineTrace(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Report v2 (§9, P3.5) — one staged LineOutcome per line:
+# Report v2 (§9) — one staged LineOutcome per line:
 # source → proposal → decision → projection
 # ---------------------------------------------------------------------------
 
@@ -1185,7 +1187,7 @@ class DecisionReason(BaseModel):
 
 
 class ProposalFeatures(BaseModel):
-    """Metrics the acceptance guard computed ONCE while deciding (P3.5) —
+    """Metrics the acceptance guard computed ONCE while deciding —
     recorded so no consumer re-derives them. Each field is ``None`` when
     the guard's path never computed it (e.g. neighbour similarities on a
     line whose source-similarity check already rejected it, or a line
@@ -1224,7 +1226,7 @@ class ProjectionStage(BaseModel):
     #: library writes PAGE too, the name was wrong.
     extracted_text: str | None = None
     rewriter_path: str | None = None  # untouched / subs_only / fast_path / slow_path
-    #: P3.8 (ADR-012) — THIS line's granularity losses (e.g.
+    #: ADR-012 — THIS line's granularity losses (e.g.
     #: ``{"words_dropped": 4}``): the per-decision attribution of the
     #: run-level ``CorrectionReport.format_losses`` aggregate. Absent
     #: when this line's rewrite lost nothing. Additive and optional —
@@ -1240,7 +1242,7 @@ class ProjectionStage(BaseModel):
     #: words diverge, so no worse level can reach a report. Additive and
     #: optional — no ``report_version`` bump.
     fidelity: ProjectionFidelity | None = None
-    #: R5 — the token alignment suspected the correction REORDERED this
+    #: The token alignment suspected the correction REORDERED this
     #: line's words. Flagged, never acted on: lines never merge and words
     #: never move, so the text is written exactly as decided and the source
     #: identities stay where the alignment could vouch for them. Not a loss
@@ -1300,7 +1302,7 @@ class LineOutcome(BaseModel):
 
 
 #: Bumped on any breaking change to the CorrectionReport JSON shape (§9).
-#: 2.0 (P3.5): flat ``LineTrace`` entries became staged ``LineOutcome``
+#: 2.0: flat ``LineTrace`` entries became staged ``LineOutcome``
 #: objects (``source_text`` / ``proposal`` / ``decision`` /
 #: ``projection``); ``output_alto_text`` renamed to
 #: ``projection.extracted_text``; ``fallback_reason`` became the
@@ -1309,7 +1311,7 @@ CORRECTION_REPORT_VERSION = "2.0"
 
 
 class ProducerProvenance(BaseModel):
-    """The producer's identity as recorded on the report (P3.9, §11).
+    """The producer's identity as recorded on the report (§11).
 
     Mirrors :class:`corrigenda.core.protocols.ProducerMetadata` field for
     field (the dataclass cannot be the report type directly — protocols
@@ -1325,7 +1327,7 @@ class ProducerProvenance(BaseModel):
 
 
 class RunProvenance(BaseModel):
-    """Everything needed to say WHAT produced this report (P3.9, §11).
+    """Everything needed to say WHAT produced this report (§11).
 
     Extends the §11 story beyond the policy fingerprint: the exact
     library, the exact producer identity, the exact SOURCE bytes
@@ -1345,7 +1347,7 @@ class RunProvenance(BaseModel):
     #: The §8.2 composite policy fingerprint (chunk_planner / guard /
     #: loss / pairing / retry) — same value stamped into the XML.
     config_fingerprint: str
-    #: Who produced the edits (generic identity, P3.7-4).
+    #: Who produced the edits (generic identity).
     producer: ProducerProvenance
     #: the ESCALATE tier's producer identity, when a run was
     #: configured with an ``escalation_producer`` (a VLM). ``None`` when the
@@ -1402,7 +1404,7 @@ class SidecarEntry(BaseModel):
 class CorrectionReport(BaseModel):
     """Public, versioned correction report (§9).
 
-    Each line is a staged :class:`LineOutcome` (v2, P3.5) recording its
+    Each line is a staged :class:`LineOutcome` (v2) recording its
     full journey — source → proposal (producer in/out) → decision
     (terminal status, final text, structured reason) → projection
     (re-extracted text, rewriter path) — so a consumer can render a
@@ -1423,7 +1425,7 @@ class CorrectionReport(BaseModel):
     #: bump only on a *breaking* JSON change, and a new optional key is
     #: backward-compatible.
     #:
-    #: **``None`` does NOT mean the run lost nothing** (R8). This field
+    #: **``None`` does NOT mean the run lost nothing.** This field
     #: counts losses of MARKUP granularity: an element or attribute that
     #: left the tree. A character the format could not carry — a no-break
     #: space or a tab flattened into an ordinary one — is a loss of TEXT,
@@ -1436,7 +1438,8 @@ class CorrectionReport(BaseModel):
     #: Deliberately NOT mirrored here as a second counter. It would agree
     #: with ``projection_fidelity["normalized"]`` on every run by
     #: construction, and a counter derivable from another counter is what
-    #: R1 was: two accounting sites for one event, free to drift apart.
+    #: this accounting already suffered once: two sites for one event,
+    #: free to drift apart.
     format_losses: dict[str, int] | None = None
     #: Per-line projection fidelity, counted by level over the run — e.g.
     #: ``{"exact": 498, "token_equivalent": 22, "normalized": 2}``. Two
@@ -1457,7 +1460,7 @@ class CorrectionReport(BaseModel):
     #: nobody sewed. ``None`` when every break found its partner. Additive
     #: and optional — no ``report_version`` bump.
     unpaired_breaks: int | None = None
-    #: R6 — the forward hyphen links this run SEVERED to keep a chain inside
+    #: The forward hyphen links this run SEVERED to keep a chain inside
     #: one request (ADR-010 unit SPLIT). Recorded on the ``ChunkPlan`` since
     #: the split existed and read by nobody, which made the engine's one
     #: deliberately destructive operation the only one a host could not see.
@@ -1470,12 +1473,12 @@ class CorrectionReport(BaseModel):
     #: common case, since only chains over ``max_lines_per_request`` are.
     #: Additive and optional — no ``report_version`` bump.
     hyphen_splits: list[HyphenSplit] | None = None
-    #: P3.9 (§11) — the run's full provenance record. Optional and
+    #: §11 — the run's full provenance record. Optional and
     #: additive (no ``report_version`` bump): a v2.0 consumer that
     #: ignores unknown keys keeps working, one that reads it gains the
     #: source digests, producer identity and dependency versions.
     provenance: RunProvenance | None = None
-    #: F14/§11 — provider usage aggregated over the run (tokens +
+    #: §11 — provider usage aggregated over the run (tokens +
     #: response ids). Historically it lived only on the TRANSIENT
     #: ``CorrectionResult`` while the report was the persisted artefact,
     #: so cost never reached trace.json. ``None`` when no producer call
