@@ -91,3 +91,39 @@ def _classify_retry(
         error_tag=sanitised_msg[:120],
         is_hyphen_violation=False,
     )
+
+
+@dataclass
+class ChunkBudget:
+    """Attempts left for one original chunk and its whole descent (F9).
+
+    Was ``budget: list[int]`` — a one-element list used as a mutable cell,
+    because a descent has to spend from the SAME purse as the chunk that
+    spawned it and an ``int`` would have been copied at the call boundary.
+    The trick worked and cost a reader two questions at every site: why a
+    list, and what the element means. `RM-03` gives it a name.
+
+    Deliberately not frozen. It is the one genuinely mutable thing on the
+    chunk path, and pretending otherwise would mean returning a new budget
+    through six call frames to say what ``spend`` says here.
+    """
+
+    remaining: int
+
+    def spend(self, attempts: int) -> None:
+        """Charge attempts already made. Never raises: a descent that
+        overspends its last sub-chunk is charged and then refused by
+        :attr:`exhausted`, which is the historical behaviour."""
+        self.remaining -= attempts
+
+    @property
+    def exhausted(self) -> bool:
+        return self.remaining <= 0
+
+    def attempts_allowed(self, cap: int) -> int:
+        """How many attempts the next call may make: the policy's cap,
+        bounded by what is left, never negative."""
+        return min(cap, max(self.remaining, 0))
+
+
+__all__ = ["ChunkBudget"]

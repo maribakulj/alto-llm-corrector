@@ -32,6 +32,7 @@ from corrigenda.core.outcome import (
 )
 from corrigenda.core.planner import downgrade_granularity, plan_page
 from corrigenda.core.protocols import EditProducer, ProviderPermanentError
+from corrigenda.core.retry import ChunkBudget
 from corrigenda.core.quality import QEScorer, RoutingPolicy
 from corrigenda.core.reconcile import _build_hyphen_pairs, _subpage_for_lines
 from corrigenda.core.routing import _route_and_filter_chunks
@@ -259,7 +260,7 @@ class PageDriver:
         producer: EditProducer,
         page: PageManifest,
         workspace: PageWorkspace,
-        budget: list[int] | None = None,
+        budget: ChunkBudget | None = None,
         should_abort: Callable[[], bool] | None = None,
     ) -> int:
         """Process one chunk, and decide what its outcome means.
@@ -271,10 +272,12 @@ class PageDriver:
         grain already reached, or the shared budget spent — and the chunk
         falls back to OCR source.
 
-        ``budget`` is a 1-element list holding the remaining cumulative
-        attempts for this original chunk's whole descent (default 6, from
-        ``RetryPolicy.per_chunk_budget``); ``None`` at the top level starts
-        a fresh one.
+        ``budget`` is the :class:`~corrigenda.core.retry.ChunkBudget` this
+        original chunk shares with its whole descent (default 6, from
+        ``RetryPolicy.per_chunk_budget``); ``None`` at the top level opens
+        a fresh one. It is mutable on purpose — a sub-chunk spends from
+        the SAME purse, which is the property that stops a descent from
+        multiplying the run's cost by its depth.
         """
         line_by_id = workspace.line_by_id
         chunk_lines = [line_by_id[lid] for lid in chunk.line_ids if lid in line_by_id]
@@ -282,7 +285,7 @@ class PageDriver:
             return 0
 
         if budget is None:
-            budget = [self.retry_policy.per_chunk_budget]
+            budget = ChunkBudget(self.retry_policy.per_chunk_budget)
 
         hyphen_pairs = _build_hyphen_pairs(chunk_lines)
 
@@ -294,7 +297,7 @@ class PageDriver:
             )
         )
 
-        attempts_cap = min(self.retry_policy.max_attempts, max(budget[0], 0))
+        attempts_cap = budget.attempts_allowed(self.retry_policy.max_attempts)
         outcome = await _attempt_chunk(
             ctx=ctx,
             chunk=chunk,
@@ -308,7 +311,7 @@ class PageDriver:
             guard_config=self.guard_config,
             emit=self.emit,
         )
-        budget[0] -= outcome.attempts_used
+        budget.spend(outcome.attempts_used)
 
         if outcome.response is not None:
             return _finish_successful_chunk(
@@ -344,7 +347,7 @@ class PageDriver:
         page: PageManifest,
         chunk_lines: list[LineManifest],
         workspace: PageWorkspace,
-        budget: list[int],
+        budget: ChunkBudget,
         should_abort: Callable[[], bool] | None,
     ) -> int:
         """No attempt produced a proposal — descend, or fall back.
@@ -356,7 +359,7 @@ class PageDriver:
         identically, and LINE grain has nowhere left to go.
         """
         next_g = downgrade_granularity(chunk.granularity)
-        if outcome.can_downgrade and next_g is not None and budget[0] > 0:
+        if outcome.can_downgrade and next_g is not None and not budget.exhausted:
             return await self._descend_granularity(
                 ctx=ctx,
                 chunk=chunk,
@@ -389,7 +392,7 @@ class PageDriver:
         page: PageManifest,
         chunk_lines: list[LineManifest],
         workspace: PageWorkspace,
-        budget: list[int],
+        budget: ChunkBudget,
         should_abort: Callable[[], bool] | None,
         last_msg: str,
     ) -> int:
@@ -414,7 +417,7 @@ class PageDriver:
                 to_granularity=next_g.value,
                 line_count=len(chunk_lines),
                 target_count=len(descent_lines),
-                budget_remaining=budget[0],
+                budget_remaining=budget.remaining,
             )
         )
         sub_plan = plan_page(
@@ -434,7 +437,7 @@ class PageDriver:
                     f"run aborted during granularity descent of chunk "
                     f"{chunk.chunk_id!r} on page {page.page_id!r}"
                 )
-            if budget[0] <= 0:
+            if budget.exhausted:
                 # Budget spent mid-descent: OCR-fallback the rest.
                 sub_lines = [
                     workspace.line_by_id[lid]
