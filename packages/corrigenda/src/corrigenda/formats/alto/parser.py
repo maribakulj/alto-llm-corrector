@@ -64,7 +64,7 @@ def _parse_textline_hyphen_info(
     PART1 (trailing HYP element or last String has SUBS_TYPE="HypPart1").
     In that case, role is set to BOTH with forward fields for the PART1 side.
     """
-    # Spec F5/F3 — comments and processing instructions carry a callable
+    # Comments and processing instructions carry a callable
     # ``tag`` (``etree.Comment`` / ``etree.PI``), not a ``str``. A trailing
     # comment inside a TextLine made ``etree.QName(last_child.tag)`` below
     # raise and abort the whole file. Filter them out up front so every
@@ -299,7 +299,7 @@ def parse_alto_file(
     """
     Parse one ALTO XML file and return (list_of_PageManifest, root_element).
 
-    ``pairing_policy`` (F7) is forwarded to the hyphen-pair linker; the
+    ``pairing_policy`` is forwarded to the hyphen-pair linker; the
     default vets heuristic pairs geometrically; pass
     ``PairingPolicy(geometric_checks=False)`` for the historical
     purely-sequential pairing.
@@ -471,7 +471,7 @@ def build_document_manifest(
     Build a DocumentManifest from a list of (xml_path, source_name) tuples.
     Files are processed in order; page/line indices are continuous.
 
-    ``pairing_policy`` (F7) is applied to both intra-page and cross-page
+    ``pairing_policy`` is applied to both intra-page and cross-page
     hyphen linking; the default vets heuristic pairs geometrically.
     """
     source_files: list[str] = []

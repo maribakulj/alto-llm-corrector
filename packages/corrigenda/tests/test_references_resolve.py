@@ -186,28 +186,18 @@ def test_every_cited_spec_section_exists() -> None:
 #: file that reached zero must leave the map, and a file absent from the map
 #: must be clean. Sorting one file is then a self-contained green commit.
 #:
-#: Measured 2026-08-10 at 215 tags in 48 files. Three of them are files this
-#: wave is forbidden to touch (`docs/PLAN.md`, "Ce que la vague ne touche
-#: pas"): `core/pairing.py` and `core/hyphenation.py` are `S1` territory, and
-#: `formats/alto/rewriter.py` is measured by `RM-10` and never cut. They are
-#: swept by whoever opens them next; the other 45 are `RM-06`'s work.
+#: Measured 2026-08-10 at 215 tags in 48 files; `RM-06` cleared 45 of them.
+#: The three that remain are exactly the files this wave is forbidden to
+#: touch (`docs/PLAN.md`, "Ce que la vague ne touche pas"):
+#: `core/pairing.py` and `core/hyphenation.py` are `S1` territory, and
+#: `formats/alto/rewriter.py` is measured by `RM-10` and never cut. Their 23
+#: tags are swept by whoever opens those files next — the same triage, and
+#: the domain knowledge around them (the BnF `TL000454` case, the geometric
+#: vetting) stays.
 _STILL_TAGGED: dict[str, int] = {
-    "__init__.py": 3,
     "core/hyphenation.py": 2,
     "core/pairing.py": 5,
-    "errors.py": 7,
-    "facade.py": 1,
-    "formats/alto/_ns.py": 1,
-    "formats/alto/_text.py": 2,
-    "formats/alto/losses.py": 2,
-    "formats/alto/parser.py": 4,
     "formats/alto/rewriter.py": 16,
-    "formats/page/_custom.py": 1,
-    "formats/page/rewriter.py": 2,
-    "integrations/__init__.py": 1,
-    "integrations/vision.py": 1,
-    "producers/llm_edit.py": 3,
-    "producers/rules.py": 2,
 }
 
 
@@ -218,8 +208,9 @@ def test_no_new_file_carries_work_item_tags() -> None:
         if (tags := _work_item_tags(path.read_text(encoding="utf-8")))
         and _rel(path) not in _STILL_TAGGED
     }
+    named = {file: sorted(set(tags)) for file, tags in offenders.items()}
     assert not offenders, (
-        f"work-item tags in files that had none: { {k: sorted(set(v)) for k, v in offenders.items()} }. "
+        f"work-item tags in files that had none: {named}. "
         "These name a plan row, not an invariant. State what the code "
         "guarantees; cite an ADR or a § if the genealogy matters."
     )

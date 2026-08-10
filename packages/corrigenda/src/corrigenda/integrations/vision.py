@@ -413,7 +413,7 @@ class VisionEditProducer:
         )
         self._system_prompt = default_prompt if system_prompt is None else system_prompt
         self._output_schema = default_schema if output_schema is None else output_schema
-        #: Provenance (P3.7-4): the generic "vision" producer name, the
+        #: Provenance: the generic "vision" producer name, the
         #: model as implementation, and a configuration fingerprint that —
         #: unlike the text producer's — also folds in the crop geometry
         #: knobs (margin, polygon mask), because they change the pixels the

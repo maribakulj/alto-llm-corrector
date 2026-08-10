@@ -28,7 +28,7 @@ def _int_attr(el: etree._Element, name: str, default: int = 0) -> int:
     empty string for present-but-empty attrs — the default only fires for
     MISSING attrs.
 
-    Spec F5 — some ALTO producers emit float-valued coordinates
+    Some ALTO producers emit float-valued coordinates
     (``HPOS="123.0"``, ``WIDTH="12.5"``); floats truncate toward zero. A
     genuinely non-numeric value (``"abc"``) still raises ``ValueError`` (the
     ``strict`` policy) — only blank/float-shaped strings are tolerated. The

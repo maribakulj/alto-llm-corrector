@@ -41,7 +41,7 @@ _DEDUP_MARKS: tuple[str, ...] = tuple(c for c in HYPHEN_CHARS if c != "­")
 
 #: Source character -> what the logical text says instead. The ONE place
 #: the reconstruction is not verbatim, written as a table so it can be
-#: *asked about* rather than only performed (L8): the projection invariant
+#: *asked about* rather than only performed: the projection invariant
 #: needs to know that a line's decision spells a mark differently from the
 #: file, and it cannot know that by comparing two texts that both went
 #: through the same collapse. Widening this dict widens the declaration for
@@ -80,7 +80,7 @@ def reconstruct_textline(
     it — a soft hyphen in ``ocr_text`` is exactly what the collapse exists
     to prevent. It exists so the projection invariant can tell "the
     artefact says the decision" from "the artefact says the SOURCE's
-    spelling of what the decision normalised" (L8), which comparing two
+    spelling of what the decision normalised", which comparing two
     collapsed strings can never do: the collapse is applied identically on
     both sides and compares equal to itself.
 

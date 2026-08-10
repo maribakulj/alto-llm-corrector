@@ -6,7 +6,7 @@ protocol, not the protocol itself: the pipeline only ever talks to an
 + prompt/schema into one. It converts the historical
 ``{lines:[{line_id, corrected_text}]}`` structured response into a
 ``replace_line`` :class:`EditScript` — byte-equivalent to the direct path
-(proved in ``test_editing``) — plus the token ``Usage`` (F14).
+(proved in ``test_editing``) — plus the token ``Usage``.
 
 Structural validation and the guard matrix (E6) stay downstream in the
 pipeline; this adapter only shapes the provider call into the protocol.
@@ -94,7 +94,7 @@ class LLMEditProducer:
         )
         self._system_prompt = default_prompt if system_prompt is None else system_prompt
         self._output_schema = default_schema if output_schema is None else output_schema
-        #: Declared provenance (P3.7-4) — the adapter cannot know the
+        #: Declared provenance — the adapter cannot know the
         #: vendor's marketing name, so ``name`` stays the generic "llm";
         #: ``for_provider(provider_name=…)`` overrides it with the
         #: caller's label via explicit constructor metadata (carrying
@@ -122,7 +122,7 @@ class LLMEditProducer:
             user_payload=payload.model_dump(exclude_none=True),
             json_schema=self._output_schema,
             # The pipeline drives the retry ramp: the envelope carries
-            # this attempt's resolved temperature (P3.7).
+            # this attempt's resolved temperature.
             temperature=options.temperature,
         )
         ops = edit_ops_from_response(
