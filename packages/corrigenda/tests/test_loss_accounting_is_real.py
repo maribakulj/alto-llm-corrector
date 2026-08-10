@@ -29,12 +29,14 @@ import pytest
 from lxml import etree
 
 from corrigenda.core.losses import (
-    ALTO_STRING_ATTRIBUTES,
     COUNTS_INVALIDATION,
     INVALIDATION_COUNTER,
     INVALIDATION_UNIT,
     AttributeClass,
     AttributeFate,
+)
+from corrigenda.formats.alto.losses import (
+    ALTO_STRING_ATTRIBUTES,
     fate_of,
     is_countable_loss,
     is_invalidated,

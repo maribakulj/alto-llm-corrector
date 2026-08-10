@@ -12,10 +12,12 @@ from corrigenda.core._parse import parse_int_tolerant
 from corrigenda.core.alignment import align_tokens
 from corrigenda.core.identity import ensure_unique_identities
 from corrigenda.core.losses import (
-    ALIGNMENT_SCOPED,
     COUNTS_INVALIDATION,
-    INVALIDATED_ATTRIBUTES,
     INVALIDATION_COUNTER,
+)
+from corrigenda.formats.alto.losses import (
+    ALIGNMENT_SCOPED,
+    INVALIDATED_ATTRIBUTES,
     is_unconditional_loss,
 )
 from corrigenda.core.pairing import HYPHEN_CHARS, forward_break_is_explicit
@@ -402,7 +404,7 @@ def _apply_subs(
 def _semantic_attr_losses(orig_string_attribs: list[dict[str, str]]) -> dict[str, int]:
     """Count the attributes a slow-path rebuild really loses.
 
-    "Really" is defined by :mod:`corrigenda.core.losses`, the versioned
+    "Really" is defined by :mod:`corrigenda.formats.alto.losses`, the versioned
     matrix, and not by a second list kept here — a second list is how this
     counter came to claim 229 dropped SUBS_CONTENT on a file that kept
     every one of them (R1). The matrix says which attributes are
@@ -466,7 +468,7 @@ def _add_alignment_scoped_losses(
     These are the attributes whose loss is CONDITIONAL — ``STYLE`` and
     ``STYLEREFS`` ride along when their String is matched to a target token
     and go when it is not — so the unconditional per-String pass leaves them
-    alone (see :func:`corrigenda.core.losses.is_unconditional_loss`) and this
+    alone (see :func:`corrigenda.formats.alto.losses.is_unconditional_loss`) and this
     one owns them.
 
     Called from two places on purpose. The rebuild has a second exit: a

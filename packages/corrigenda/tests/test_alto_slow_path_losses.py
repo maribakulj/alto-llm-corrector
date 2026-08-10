@@ -324,7 +324,7 @@ def test_the_element_vocabulary_is_not_the_attribute_vocabulary() -> None:
     differential invariant reads it as one (source count minus output count).
     An element loss keyed ``hyp_dropped`` would be checked against a
     non-existent ``HYP`` attribute and read as a phantom."""
-    from corrigenda.core.losses import ALTO_STRING_ATTRIBUTES
+    from corrigenda.formats.alto.losses import ALTO_STRING_ATTRIBUTES
 
     assert not "hyp_elements_removed".endswith("_dropped")
     assert "HYP" not in ALTO_STRING_ATTRIBUTES
