@@ -1,8 +1,13 @@
 """Audit-D remediation (2026-07-12) — library correctness cluster.
 
 Each test pins one confirmed audit finding in the pure-core library
-(hyphenation, editing, validator, schemas, guards, rules, _ns, parsers).
-Every test is written to FAIL on the pre-fix code and pass after.
+(editing, guards, rules, _ns, parsers). Every test is written to FAIL on
+the pre-fix code and pass after.
+
+Shrinking on purpose: the seven hyphenation findings this file used to
+hold moved to ``tests/hyphenation/`` (`RM-05b`), where the invariant they
+protect is the subject rather than the date they were found. What is left
+is what has no invariant-shaped home yet.
 """
 
 from __future__ import annotations
@@ -16,41 +21,11 @@ from corrigenda.core.editing import (
     apply_edit_script,
 )
 from corrigenda.core.guards import check_adjacent_duplicates
-from corrigenda.core.hyphenation import reconcile_hyphen_pair
-from corrigenda.core.schemas import Coords, HyphenRole, LineManifest, PairingPolicy
-from corrigenda.core.validator import (
-    HyphenIntegrityError,
-    _validate_hyphen_integrity,
-)
 from corrigenda.errors import ParseError
 from corrigenda.formats.alto.parser import parse_alto_file
 from corrigenda.formats.page.parser import parse_page_file
 from corrigenda.formats.page._ns import polygon_to_bbox
 from corrigenda.producers.rules import RulesProducer, SubstitutionRule
-
-
-def _line(
-    line_id: str,
-    ocr: str,
-    *,
-    page_id: str = "p1",
-    block_id: str = "b1",
-    role: HyphenRole = HyphenRole.NONE,
-    subs: str | None = None,
-    explicit: bool = False,
-) -> LineManifest:
-    return LineManifest(
-        line_id=line_id,
-        page_id=page_id,
-        block_id=block_id,
-        line_order_global=0,
-        line_order_in_block=0,
-        coords=Coords(hpos=0, vpos=0, width=100, height=20),
-        ocr_text=ocr,
-        hyphen_role=role,
-        hyphen_subs_content=subs,
-        hyphen_source_explicit=explicit,
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -120,67 +95,9 @@ def test_lexicon_guard_matches_nfd_entry():
 # ---------------------------------------------------------------------------
 
 
-def test_same_block_only_forbids_cross_page_even_with_reused_block_id():
-    policy = PairingPolicy(same_block_only=True, geometric_checks=False)
-    part1 = _line(
-        "TL9", "mot-", page_id="pA", block_id="TextBlock1", role=HyphenRole.PART1
-    )
-    # Cross-page candidate reusing the SAME block id (both pages export
-    # "TextBlock1"). The documented guarantee: cross-page pairing forbidden.
-    candidate = _line(
-        "TL1", "suite", page_id="pB", block_id="TextBlock1", role=HyphenRole.PART2
-    )
-    assert policy.can_pair(part1, candidate) is False
-
-
-def test_same_block_only_still_allows_intra_block_same_page():
-    policy = PairingPolicy(same_block_only=True, geometric_checks=False)
-    part1 = _line("TL1", "mot-", page_id="pA", block_id="TB1", role=HyphenRole.PART1)
-    candidate = _line(
-        "TL2", "suite", page_id="pA", block_id="TB1", role=HyphenRole.PART2
-    )
-    assert policy.can_pair(part1, candidate) is True
-
-
 # ---------------------------------------------------------------------------
 # #18 — fusion check ignores context-only pairs (F8 window mode)
 # ---------------------------------------------------------------------------
-
-
-def test_fusion_check_skips_context_only_pair():
-    # A full hyphen pair sits entirely in the chunk's CONTEXT region (neither
-    # member is a target). Even if the LLM fuses PART1 (its last word ==
-    # subs_content), the target chunk must NOT be failed.
-    hyphen_pairs = {"ctxP1": "ctxP2", "ctxP2": "ctxP1"}
-    text_by_id = {
-        "ctxP1": "necessaires",  # fused: contains the full logical word
-        "ctxP2": "du roi",
-        "tgt": "corrected target",
-    }
-    ocr_texts = {"ctxP1": "neces-", "ctxP2": "saires", "tgt": "target"}
-    hyphen_subs = {"ctxP1": "necessaires"}
-    chunk_ids = {"tgt"}  # only the target line is in scope
-
-    # Must NOT raise — the context-only fusion is not this chunk's concern.
-    _validate_hyphen_integrity(
-        text_by_id,
-        hyphen_pairs,
-        chunk_ids,
-        ocr_texts,
-        hyphen_subs,
-    )
-
-
-def test_fusion_check_still_fires_for_a_target_pair():
-    hyphen_pairs = {"P1": "P2", "P2": "P1"}
-    text_by_id = {"P1": "necessaires", "P2": "du roi"}
-    ocr_texts = {"P1": "neces-", "P2": "saires"}
-    hyphen_subs = {"P1": "necessaires"}
-    chunk_ids = {"P1", "P2"}
-    with pytest.raises(HyphenIntegrityError):
-        _validate_hyphen_integrity(
-            text_by_id, hyphen_pairs, chunk_ids, ocr_texts, hyphen_subs
-        )
 
 
 # ---------------------------------------------------------------------------
@@ -188,43 +105,9 @@ def test_fusion_check_still_fires_for_a_target_pair():
 # ---------------------------------------------------------------------------
 
 
-def test_explicit_subs_join_accepts_non_ascii_break_char():
-    # Fraktur double-oblique hyphen U+2E17 ("⸗"). The corrected pair keeps it
-    # and the subs join must still match "Aufmerksamkeit".
-    part1 = _line(
-        "p1", "Aufmerksam⸗", role=HyphenRole.PART1, subs="Aufmerksamkeit", explicit=True
-    )
-    part2 = _line("p2", "keit", role=HyphenRole.PART2)
-    f1, f2, subs = reconcile_hyphen_pair(part1, part2, "Aufmerksam⸗", "keit")
-    # Not a fallback: the corrected texts and subs survive.
-    assert f1 == "Aufmerksam⸗"
-    assert f2 == "keit"
-    assert subs == "Aufmerksamkeit"
-
-
 # ---------------------------------------------------------------------------
 # #6 — explicit-mode PART2 that absorbed trailing words falls back
 # ---------------------------------------------------------------------------
-
-
-def test_explicit_part2_absorption_falls_back():
-    part1 = _line(
-        "p1", "neces-", role=HyphenRole.PART1, subs="necessaires", explicit=True
-    )
-    part2 = _line("p2", "saires", role=HyphenRole.PART2)
-    # PART2 absorbed "du roi" from the next line — boundary join still
-    # matches subs, but the physical line grew.
-    f1, f2, subs = reconcile_hyphen_pair(part1, part2, "neces-", "saires du roi")
-    assert (f1, f2, subs) == (part1.ocr_text, part2.ocr_text, None)
-
-
-def test_explicit_part2_no_absorption_accepted():
-    part1 = _line(
-        "p1", "neces-", role=HyphenRole.PART1, subs="necessaires", explicit=True
-    )
-    part2 = _line("p2", "saires", role=HyphenRole.PART2)
-    f1, f2, subs = reconcile_hyphen_pair(part1, part2, "neces-", "saires")
-    assert (f1, f2, subs) == ("neces-", "saires", "necessaires")
 
 
 # ---------------------------------------------------------------------------

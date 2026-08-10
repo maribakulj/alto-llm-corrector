@@ -3,41 +3,21 @@
 Each test pins one confirmed finding of docs/audit/AUDIT-2026-07-13.md
 (fix plan: docs/audit/PLAN-CORRECTIONS.md, Vague 1, F1-F12). Every test
 was written to FAIL on the pre-fix code and pass after.
+
+Shrinking on purpose: the pair-reconciliation and chain-revert cases
+moved to ``tests/hyphenation/`` (`RM-05b`). The line builder they shared
+moved with them and is imported back here, which is the direction this
+file is going.
 """
 
 from __future__ import annotations
 
 import pytest
 
-from corrigenda.core.acceptance import _apply_unit_reverts
 from corrigenda.core.protocols import ProducerMetadata
-from corrigenda.core.hyphenation import reconcile_hyphen_pair
-from corrigenda.core.identity import line_ref
-from corrigenda.core.schemas import Coords, HyphenRole, LineManifest, LineStatus
+from corrigenda.core.schemas import HyphenRole, LineManifest, LineStatus
 
-
-def _line(
-    line_id: str,
-    ocr: str,
-    *,
-    page_id: str = "p1",
-    block_id: str = "b1",
-    role: HyphenRole = HyphenRole.NONE,
-    subs: str | None = None,
-    explicit: bool = False,
-) -> LineManifest:
-    return LineManifest(
-        line_id=line_id,
-        page_id=page_id,
-        block_id=block_id,
-        line_order_global=0,
-        line_order_in_block=0,
-        coords=Coords(hpos=0, vpos=0, width=100, height=20),
-        ocr_text=ocr,
-        hyphen_role=role,
-        hyphen_subs_content=subs,
-        hyphen_source_explicit=explicit,
-    )
+from tests.hyphenation._lines import _line
 
 
 # ---------------------------------------------------------------------------
@@ -46,117 +26,10 @@ def _line(
 # ---------------------------------------------------------------------------
 
 
-def test_f1_heuristic_part2_absorption_falls_back():
-    """Heuristic pair: PART2 'saires' → 'saires du roi' absorbed the next
-    physical line's words. The boundary word is unchanged so the
-    boundary-word guard passes, and the floor-3 expansion allowance in
-    _part2_text_migrated is too permissive for a short PART2 — pre-fix
-    the merged line survived, violating lines-never-merge."""
-    part1 = _line("p1", "néces-", role=HyphenRole.PART1, explicit=False)
-    part2 = _line(
-        "p2",
-        "saires",
-        role=HyphenRole.PART2,
-        explicit=False,
-    )
-    f1, f2, subs = reconcile_hyphen_pair(part1, part2, "néces-", "saires du roi")
-    assert (f1, f2, subs) == (part1.ocr_text, part2.ocr_text, None)
-
-
-def test_f1_heuristic_part2_same_word_count_still_accepted():
-    """The growth guard must not reject legitimate same-word-count
-    corrections in heuristic mode."""
-    part1 = _line("p1", "boule-", role=HyphenRole.PART1, explicit=False)
-    part2 = _line("p2", "vard du rol", role=HyphenRole.PART2, explicit=False)
-    f1, f2, subs = reconcile_hyphen_pair(part1, part2, "boule-", "vard du roi")
-    assert (f1, f2, subs) == ("boule-", "vard du roi", None)
-
-
-def test_f1_explicit_no_subs_part2_absorption_falls_back():
-    """Twin branch (F1): explicit pair WITHOUT usable SUBS_CONTENT takes
-    the boundary-word path, which pre-fix had the same absorption gap as
-    the heuristic branch."""
-    part1 = _line("p1", "néces-", role=HyphenRole.PART1, subs=None, explicit=True)
-    part2 = _line("p2", "saires", role=HyphenRole.PART2)
-    f1, f2, subs = reconcile_hyphen_pair(part1, part2, "néces-", "saires du roi")
-    assert (f1, f2, subs) == (part1.ocr_text, part2.ocr_text, None)
-
-
 # ---------------------------------------------------------------------------
 # F2 — duplicate-revert partner extension must walk whole hyphen chains
 # (worklist/fixpoint), not just one hop from the originally flagged lines
 # ---------------------------------------------------------------------------
-
-
-def _reconciled_chain(*ocr_texts: str) -> list[LineManifest]:
-    """Build a coherently-reconciled hyphen chain a-b-…-z (PART1, BOTH…,
-    PART2), every member CORRECTED."""
-    lines = []
-    for i, ocr in enumerate(ocr_texts):
-        if i == 0:
-            role = HyphenRole.PART1
-        elif i == len(ocr_texts) - 1:
-            role = HyphenRole.PART2
-        else:
-            role = HyphenRole.BOTH
-        lm = _line(f"c{i}", ocr, role=role)
-        lm.corrected_text = ocr.replace("0", "o")  # a plausible correction
-        lm.status = LineStatus.CORRECTED
-        lines.append(lm)
-    for i, lm in enumerate(lines):
-        if i > 0:
-            lm.hyphen_pair_line_id = lines[i - 1].line_id
-        if 0 < i < len(lines) - 1:
-            lm.hyphen_forward_pair_id = lines[i + 1].line_id
-        elif i == 0:
-            # PART1 carries its (forward) link in the plain pair fields.
-            lm.hyphen_pair_line_id = lines[i + 1].line_id
-    return lines
-
-
-def _make_pipeline():
-    from corrigenda.core.pipeline import CorrectionPipeline
-    from tests._pipeline_harness import DictProvider, RecordingObserver
-
-    return CorrectionPipeline.for_provider(
-        DictProvider({}),
-        api_key="k",
-        model="m",
-        observer=RecordingObserver(),
-    )
-
-
-@pytest.mark.parametrize("flagged_index", [0, 2])
-def test_f2_three_line_chain_reverts_atomically(flagged_index: int):
-    """Flagging either endpoint of an a-b-c chain must revert ALL THREE
-    members: pre-fix the extension was one-hop (b reverted, the far
-    endpoint stayed corrected → mixed OCR+corrected pair inside the
-    chain)."""
-    chain = _reconciled_chain("m0t un-", "deux-", "tr0is fin")
-    all_lines = {line_ref(lm): lm for lm in chain}
-    pipeline = _make_pipeline()
-    _apply_unit_reverts(
-        reverts={line_ref(chain[flagged_index]): "adjacent_duplicate_detected"},
-        all_lines=all_lines,
-        traces=None,
-    )
-    for lm in chain:
-        assert lm.corrected_text == lm.ocr_text, lm.line_id
-        assert lm.status is LineStatus.FALLBACK, lm.line_id
-
-
-def test_f2_four_line_chain_reverts_atomically():
-    """Multi-hop: flag on the head of a-b-c-d must reach d (three hops)."""
-    chain = _reconciled_chain("a0-", "b0-", "c0-", "d fin")
-    all_lines = {line_ref(lm): lm for lm in chain}
-    pipeline = _make_pipeline()
-    _apply_unit_reverts(
-        reverts={line_ref(chain[0]): "adjacent_duplicate_detected"},
-        all_lines=all_lines,
-        traces=None,
-    )
-    for lm in chain:
-        assert lm.corrected_text == lm.ocr_text, lm.line_id
 
 
 # ---------------------------------------------------------------------------
@@ -764,22 +637,6 @@ def test_f12_canonical_transkribus_spacing_unchanged():
         "readingOrder {index:0;} textStyle {offset:12;length:5;}"
     )
     assert (new, removed) == ("readingOrder {index:0;}", 1)
-
-
-def test_f1_both_line_forward_subs_preserved_on_acceptance():
-    """Heuristic-branch subs semantics preserved: a BOTH line's forward
-    reconcile passes subs_content explicitly; acceptance must keep it."""
-    part1 = _line("m1", "frag-", role=HyphenRole.BOTH, explicit=False)
-    part2 = _line("m2", "ment suivant", role=HyphenRole.PART2)
-    f1, f2, subs = reconcile_hyphen_pair(
-        part1,
-        part2,
-        "frag-",
-        "ment suivant",
-        subs_content="fragment",
-        source_explicit=False,
-    )
-    assert (f1, f2, subs) == ("frag-", "ment suivant", "fragment")
 
 
 # ---------------------------------------------------------------------------
