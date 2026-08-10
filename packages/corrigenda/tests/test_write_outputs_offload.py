@@ -42,7 +42,7 @@ class _SlowRewriteAdapter:
 
 
 def test_review_w3_rewrite_does_not_block_the_event_loop(tmp_path):
-    from corrigenda.core.provenance import _adapter_for_format
+    from corrigenda.formats.loader import adapter_for_format
 
     path = _write_doc(tmp_path)
     doc = build_document_manifest([(path, "doc.xml")])
@@ -52,7 +52,7 @@ def test_review_w3_rewrite_does_not_block_the_event_loop(tmp_path):
         api_key="k",
         model="m",
         observer=RecordingObserver(),
-        format_adapter=_SlowRewriteAdapter(_adapter_for_format("alto")),
+        format_adapter=_SlowRewriteAdapter(adapter_for_format("alto")),
     )
 
     gaps: list[float] = []
