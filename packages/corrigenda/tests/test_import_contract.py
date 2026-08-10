@@ -4,13 +4,23 @@ Rules enforced:
   1. ``corrigenda.core`` (and ``errors``) never import lxml, formats or
      producers — statically NOR at import time (subprocess-verified: no
      ``lxml`` in ``sys.modules`` after importing every core module).
-  2. Exactly TWO pinned lazy functions, both composition boundaries in
-     ``core/pipeline.py``, both with function-local imports only:
-     ``_adapter_for_format`` (resolves the adapter the MANIFEST declares
-     — one import per supported format, no implicit default) and
-     ``for_provider`` (lazy ``LLMEditProducer`` wrap — the §5.1
-     resorption moved the prompt/schema seam into the producer, so the
-     old ``_default_llm_contract`` exception is gone).
+  2. Exactly TWO composition sites, NAMED — ``_render_outputs``
+     (``core/rendering.py``, resolves the manifest's adapter) and
+     ``for_provider`` (``core/pipeline.py``, wraps a client into an
+     ``LLMEditProducer``) — each with function-local imports only.
+
+     This used to be ``assert len(violations) == 3``, and `RM-07` replaced
+     the count with the rule. A count is a ceiling: it says how much
+     trespass is tolerated without saying by whom, so a new violation
+     anywhere in ``core`` was legal as long as an old one vanished in the
+     same commit. The pin is on function NAMES, not files — ``S2`` had
+     already shown why, by moving a site between modules and breaking a
+     test about import purity for a reason unrelated to import purity.
+
+     `RM-07` also took one entry OFF the list: the adapter resolver moved
+     to ``formats/loader.py``, next to the parser dispatch that answers
+     the same question, so ``core`` no longer enumerates ALTO and PAGE
+     anywhere.
   3. ``formats`` never imports producers; ``producers`` never imports
      formats or lxml.
 """
@@ -47,35 +57,142 @@ def _violations(path: Path, forbidden: tuple[str, ...]) -> list[str]:
     ]
 
 
-def test_core_has_no_forbidden_imports_except_pinned_lazy_default():
-    core_files = sorted((SRC / "core").glob("*.py")) + [SRC / "errors.py"]
-    assert core_files
-    all_violations: list[str] = []
-    for f in core_files:
-        all_violations.extend(_violations(f, FORBIDDEN_IN_CORE))
-    # The only allowed sites: two pinned lazy FUNCTIONS
-    # (``_adapter_for_format`` imports one adapter per supported format).
-    assert len(all_violations) == 3, f"unexpected core imports: {all_violations}"
+#: The ONLY functions in ``core`` allowed to reach a format or producer
+#: module, and each may do so only with a function-local import.
+#:
+#: A NAMED rule, not a count. It used to be ``assert len(violations) == 3``,
+#: which is a ceiling: it said how much trespass was tolerated without
+#: saying by whom, so a new violation anywhere in ``core`` was legal as long
+#: as an old one disappeared in the same commit. `RM-07` replaced it with
+#: this list and, in the same move, took one of the two entries off it —
+#: the adapter resolver went to ``formats/loader.py``, beside the parser
+#: dispatch that answers the same question.
+#:
+#: ``_render_outputs`` is what remains: the engine has to reach SOME format
+#: to write a file, and this is the seam where it does. It no longer knows
+#: WHICH formats exist — it asks ``formats.loader.adapter_for_format`` and
+#: that module owns the enumeration.
+_LAZY_COMPOSITION_SITES = {
+    "_render_outputs": "core/rendering.py — resolves the manifest's adapter",
+    "for_provider": "core/pipeline.py — wraps a client into an LLMEditProducer",
+}
 
-    # The pin is on the function NAMES, not on the file they happen to live
-    # in. It used to name pipeline.py, which meant splitting that file (S2)
-    # broke a test about import purity for a reason that has nothing to do
-    # with import purity — `_adapter_for_format` moved to `provenance.py`
-    # and took two of the three imports with it, unchanged.
-    lazy_funcs: list[str] = []
-    for f in core_files:
-        tree = ast.parse(f.read_text(encoding="utf-8"))
-        lazy_funcs.extend(
-            node.name
-            for node in ast.walk(tree)
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
-            and any(
-                n
-                for n, _ in _imports(node)
-                if n.startswith(("corrigenda.formats", "corrigenda.producers"))
-            )
+
+def _core_files() -> list[Path]:
+    return sorted((SRC / "core").glob("*.py")) + [SRC / "errors.py"]
+
+
+def _functions_reaching_out(path: Path) -> set[str]:
+    """Functions in ``path`` with a function-local formats/producers import."""
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    return {
+        node.name
+        for node in ast.walk(tree)
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and any(
+            name
+            for name, _ in _imports(node)
+            if name.startswith(("corrigenda.formats", "corrigenda.producers"))
         )
-    assert sorted(lazy_funcs) == ["_adapter_for_format", "for_provider"], lazy_funcs
+    }
+
+
+def test_only_the_named_sites_reach_a_format_or_producer():
+    """The rule: these functions, and nothing else in ``core``."""
+    reaching = set()
+    for f in _core_files():
+        reaching |= _functions_reaching_out(f)
+    unexpected = reaching - set(_LAZY_COMPOSITION_SITES)
+    assert not unexpected, (
+        f"{sorted(unexpected)} import a format or producer module from core. "
+        "Only the named composition sites may, and adding one is a design "
+        f"decision, not a diff: {_LAZY_COMPOSITION_SITES}"
+    )
+    missing = set(_LAZY_COMPOSITION_SITES) - reaching
+    assert not missing, (
+        f"{sorted(missing)} no longer reach out — drop them from "
+        "_LAZY_COMPOSITION_SITES so the list keeps naming what is real."
+    )
+
+
+def test_no_core_module_reaches_out_at_import_time():
+    """Every allowed import is function-local. A module-level one would
+    make the whole of ``core`` depend on lxml, which is the property
+    :func:`test_importing_core_never_loads_lxml` checks at runtime — this
+    is the same fact, stated statically and with a file name attached."""
+    module_level: list[str] = []
+    for f in _core_files():
+        tree = ast.parse(f.read_text(encoding="utf-8"))
+        # Top-level import STATEMENTS only. Deliberately not `_imports`,
+        # which walks into function bodies — that is where every allowed
+        # site lives, so using it here would flag exactly the imports this
+        # rule permits.
+        for node in tree.body:
+            if not isinstance(node, (ast.Import, ast.ImportFrom)):
+                continue
+            for name, lineno in _imports(node):
+                if any(
+                    name == forbidden or name.startswith(forbidden + ".")
+                    for forbidden in FORBIDDEN_IN_CORE
+                ):
+                    module_level.append(f"{f.name}:{lineno} imports {name}")
+    assert not module_level, (
+        f"module-level forbidden imports in core: {module_level}. The "
+        "composition sites are lazy so that importing a core module never "
+        "loads lxml."
+    )
+
+
+#: ``core`` modules that import the package root. This is a real cycle —
+#: ``corrigenda/__init__`` imports ``core.pipeline`` imports ``core.rendering``
+#: imports ``corrigenda`` — broken only by the imports being function-local.
+#:
+#: `RM-07` looked at closing it and decided NOT to, on the merits rather
+#: than on effort. The cycle carries one symbol, ``__version__``, a module
+#: level string; a lazy import of it cannot deadlock and cannot partially
+#: initialise anything the caller then uses. Closing it means moving
+#: ``__version__`` to its own module, which means editing
+#: ``[tool.hatch.version] path`` (the wheel's version source) and the CI
+#: job that greps ``__init__.py`` for it — the release toolchain, for zero
+#: behavioural gain. And it is not what `RM-07` is about: the item is
+#: "core does not know the FORMATS", and a version string is not a format.
+#:
+#: What the decision buys by being written here instead of in a document is
+#: that it stays BOUNDED. A third site cannot appear quietly.
+_SELF_IMPORT_SITES = {
+    "core/provenance.py": "_build_run_provenance — stamps the lib version",
+    "core/rendering.py": "_rewrite_and_verify — stamps the processingStep",
+}
+
+
+def test_the_package_self_import_stays_where_it_was_measured():
+    """A known cycle, held at two sites (`RM-07`).
+
+    Not a violation of the §3 rule — ``corrigenda`` is not ``formats`` or
+    ``producers`` — which is exactly why nothing was watching it. Decided
+    open, so it is pinned open: the point is that "we know about it" and
+    "it cannot grow" are different properties, and only the second one
+    survives a busy month.
+    """
+    found: dict[str, set[str]] = {}
+    for f in _core_files():
+        tree = ast.parse(f.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom) and node.module == "corrigenda":
+                rel = f.relative_to(SRC).as_posix()
+                found.setdefault(rel, set()).update(a.name for a in node.names)
+    assert set(found) == set(_SELF_IMPORT_SITES), (
+        f"the package self-import moved: {sorted(found)} vs the pinned "
+        f"{sorted(_SELF_IMPORT_SITES)}. Adding one deepens a cycle that is "
+        "currently harmless only because it carries a single constant; "
+        "removing one means the entry should go."
+    )
+    carried = {name for names in found.values() for name in names}
+    assert carried == {"__version__"}, (
+        f"the self-import now carries {sorted(carried)}. It was decided "
+        "harmless because it is one module-level string — a second symbol "
+        "is a different decision, not the same one."
+    )
 
 
 def test_importing_core_never_loads_lxml():

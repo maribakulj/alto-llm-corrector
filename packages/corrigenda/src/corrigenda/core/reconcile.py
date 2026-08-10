@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from corrigenda.core import events as ev
+from corrigenda.core import decide, events as ev
 from corrigenda.core.context import RunContext
 from corrigenda.core.hyphenation import (
     classify_reconcile_outcome,
@@ -34,6 +34,7 @@ from corrigenda.core.schemas import (
 )
 from corrigenda.core.traces import _set_trace
 from corrigenda.core.units import derive_hyphen_groups
+from corrigenda.core.workspace import PageWorkspace
 
 
 def _subpage_for_lines(page: PageManifest, lines: list[LineManifest]) -> PageManifest:
@@ -203,6 +204,7 @@ def _reconcile_one_pair(
     *,
     is_forward: bool,
     config: GuardConfig = DEFAULT_GUARD_CONFIG,
+    traces: dict[LineRef, LineTrace] | None = None,
 ) -> str:
     """Apply reconcile_hyphen_pair and write results back onto the manifests.
 
@@ -217,8 +219,7 @@ def _reconcile_one_pair(
     # pair stays at source text; "fallback" is the classified outcome.
     if lm.status is LineStatus.FALLBACK or part2.status is LineStatus.FALLBACK:
         for member in (lm, part2):
-            member.corrected_text = member.ocr_text
-            member.status = LineStatus.FALLBACK
+            decide.fall_back(member, reason="hyphen_pair_fallback", traces=traces)
         return "fallback"
 
     corrected_p2 = text_by_id.get(part2.line_id, part2.ocr_text)
@@ -269,11 +270,21 @@ def _reconcile_one_pair(
     # it too. ``classify_reconcile_outcome`` only says "fallback" when
     # something was actually proposed and thrown away, so an identity
     # correction still lands as CORRECTED, which is what it is.
-    status = LineStatus.FALLBACK if outcome == "fallback" else LineStatus.CORRECTED
-    lm.corrected_text = final_p1
-    lm.status = status
-    part2.corrected_text = final_p2
-    part2.status = status
+    # ``classify_reconcile_outcome`` returns "fallback" ONLY when
+    # ``final_p1 == lm.ocr_text and final_p2 == part2.ocr_text`` — the
+    # classification is defined by that equality — so ``fall_back``,
+    # which writes ``ocr_text``, writes exactly ``final_p1``/``final_p2``
+    # here. That is a guarantee from the classifier's own definition, not
+    # an empirical one, and ``test_reconcile_translation.py`` pins it.
+    if outcome == "fallback":
+        decide.fall_back(lm, reason="hyphen_pair_fallback", traces=traces)
+        decide.fall_back(part2, reason="hyphen_pair_fallback", traces=traces)
+    else:
+        decide.accept(lm, final_p1, traces=traces)
+        decide.accept(part2, final_p2, traces=traces)
+    # NOT a decision field, and deliberately left here: the SUBS_CONTENT
+    # a pair resolved is hyphen state, and moving it would put `S1`
+    # territory inside `RM-01`.
     part2.hyphen_subs_content = subs
 
     if is_forward:
@@ -302,9 +313,7 @@ def _reconcile_chunk_hyphens(
     chunk_id: str,
     chunk_lines: list[LineManifest],
     text_by_id: dict[str, str],
-    line_by_id: dict[str, LineManifest],
-    cross_page_partners: dict[LineRef, LineManifest] | None,
-    traces: dict[LineRef, LineTrace] | None = None,
+    workspace: PageWorkspace,
 ) -> int:
     """Unit-driven hyphen reconciliation (ADR-010).
 
@@ -336,8 +345,8 @@ def _reconcile_chunk_hyphens(
     joins, pool = _claim_joins(
         chunk_id=chunk_id,
         chunk_lines=chunk_lines,
-        line_by_id=line_by_id,
-        cross_page_partners=cross_page_partners,
+        line_by_id=workspace.line_by_id,
+        cross_page_partners=workspace.cross_page_partners,
         emit=emit,
     )
     return _walk_units_reconciling(
@@ -346,7 +355,7 @@ def _reconcile_chunk_hyphens(
         guard_config=guard_config,
         ctx=ctx,
         text_by_id=text_by_id,
-        traces=traces,
+        traces=workspace.traces,
     )
 
 
@@ -488,6 +497,7 @@ def _walk_units_reconciling(
                 text_by_id,
                 is_forward=is_forward,
                 config=guard_config,
+                traces=traces,
             )
             _record_reconcile_outcome(ctx, outcome)
             _refresh_pair_traces(tail, head, outcome=outcome, traces=traces)

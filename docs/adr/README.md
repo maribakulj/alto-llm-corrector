@@ -22,3 +22,4 @@ Format: `NNN-short-slug.md`, statuses `accepted | superseded by NNN`.
 | [010](010-atomic-hyphen-groups.md) | Hyphen groups: one derivation of "these lines travel together" |
 | [011](011-immutable-source-decisionset.md) | Immutable source, `DecisionSet`, side-effect-free engine — supersedes ADR-005 |
 | [012](012-loss-policy-and-per-line-attribution.md) | Loss policy: a format loss is a decision, and it is attributed per line |
+| [013](013-fallback-reason-precedence.md) | When two passes revert the same line, the first reason is the true one |

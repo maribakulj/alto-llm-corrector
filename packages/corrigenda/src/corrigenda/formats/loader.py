@@ -20,12 +20,13 @@ from pathlib import Path
 
 from lxml import etree
 
+from corrigenda.core.protocols import FormatAdapter
 from corrigenda.core.schemas import (
     DEFAULT_PAIRING_POLICY,
     DocumentManifest,
     PairingPolicy,
 )
-from corrigenda.errors import ParseError
+from corrigenda.errors import ConfigurationError, ParseError
 from corrigenda.formats._xml import (
     classified_parse_errors,
     detect_namespace,
@@ -88,4 +89,42 @@ def build_document_manifest(
     return build(files, pairing_policy=pairing_policy)
 
 
-__all__ = ["build_document_manifest", "sniff_format"]
+def adapter_for_format(source_format: str | None) -> FormatAdapter:
+    """Resolve the adapter the MANIFEST declares — no implicit default (§3).
+
+    The format travels with the document: the parsers stamp
+    ``DocumentManifest.source_format`` and the engine derives the matching
+    adapter from it. A manifest without a stamped format (hand-built) has
+    no derivable adapter, and silently assuming one — the historical ALTO
+    default — is exactly how a PAGE document ended up rewritten by the
+    ALTO rewriter.
+
+    Lives here since `RM-07`, next to :func:`build_document_manifest`,
+    because the two answer the same question: which module speaks this
+    format. It sat in ``core/provenance.py`` before, where it was the one
+    place the pure core enumerated ALTO and PAGE by name — lazily, so no
+    import rule was broken, but the knowledge was there and a third format
+    would have had to be added to a core module to be usable.
+
+    The imports stay function-local: this module is reached from ``core``
+    lazily too (``core/rendering.py``, the single remaining lazy site),
+    and eager adapter imports would pull both rewriters for a run that
+    writes one format.
+    """
+    if source_format == "alto":
+        from corrigenda.formats.alto.adapter import AltoFormatAdapter
+
+        return AltoFormatAdapter()
+    if source_format == "page":
+        from corrigenda.formats.page.adapter import PageFormatAdapter
+
+        return PageFormatAdapter()
+    raise ConfigurationError(
+        f"the manifest declares no derivable format "
+        f"(source_format={source_format!r}); load the document through a "
+        "corrigenda format parser, or inject format_adapter explicitly "
+        "on the pipeline"
+    )
+
+
+__all__ = ["adapter_for_format", "build_document_manifest", "sniff_format"]

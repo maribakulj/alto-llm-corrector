@@ -2,7 +2,9 @@
 
 The list below is no longer an inventory of what accreted. It is what `S3b`
 cut the surface down to (2026-08-01): **68 symbols, computed rather than
-chosen**, and the computation is reproducible — start from what
+chosen**, and `RM-04` took it to **66** (2026-08-06) by demoting the two
+knobs no default run uses. The computation is reproducible — start from
+what
 ``load``/``correct``/``correct_sync`` return and from what
 :class:`EditProducer` and :class:`PipelineObserver` name in their
 signatures, then follow the type annotations transitively.
@@ -22,6 +24,23 @@ year. Blessing it under SemVer at 1.0 would promise a stability nothing
 supports. It stays at its module path, which `docs/versioning.md` documents
 as a supported door.
 
+`RM-04`'s two removals are ``ConfidencePolicy`` and ``RoutingPolicy``.
+Both are constructor knobs whose defaults do nothing — ``mode="drop"``
+computes no confidence, and a ``RoutingPolicy`` with both bounds ``None``
+sends every line to the producer — and both belong to the research
+programme the plan's freeze suspends. A top-level export reads as "ready";
+these are not. They stay importable from ``core.schemas`` and
+``core.quality``, the demotion door ``docs/versioning.md`` documents, so
+the four calibration scripts are unaffected
+(``tests/test_research_boundary.py`` pins their exact import paths).
+
+What did NOT go, and the distinction is `I4`: ``ImageAsset``,
+``ImageRef``, ``ImageTransform`` and ``PageImage`` stay on the surface.
+They are not vision code — they are what the pure core CARRIES for a
+producer that asks for pixels, and never opens. A custom ``EditProducer``
+declaring ``wants_image`` is handed one, so they are inside the producer
+seam's closure and leaving them out would break rule (3) below.
+
 The former surface was 95, and the four numbers worth keeping straight are
 in `docs/PLAN.md`: the plan's own estimate was 54, which turned out not to
 be reproducible — it counted the advanced door's entry points without their
@@ -34,7 +53,7 @@ Four pins:
      feature freeze, extending the public API is suspended outright.
   2. The surface does not GROW. Stated separately from (1) because it is
      the property that survives the cut, and it should fail with that
-     sentence rather than a diff of 68 strings.
+     sentence rather than a diff of 66 strings.
   3. Every listed symbol actually resolves — eager or lazy (PEP 562) — and
      every lazy-map key is part of ``__all__``.
   4. The signatures of the top entry points (``run``, ``run_sync``,
@@ -66,7 +85,6 @@ CURRENT_TOP_LEVEL_SURFACE = sorted(
         "BlockManifest",
         "ChunkGranularity",
         "ChunkPlannerConfig",
-        "ConfidencePolicy",
         "Coords",
         "CorrectionAborted",
         "CorrectionError",
@@ -121,7 +139,6 @@ CURRENT_TOP_LEVEL_SURFACE = sorted(
         "ReplaceLine",
         "ReplaceSpan",
         "RetryPolicy",
-        "RoutingPolicy",
         "RunProvenance",
         "SidecarEntry",
         "Usage",

@@ -42,14 +42,42 @@ not because a migration is owed.
 | Recoverability is an allowlist | providers raising raw transport exceptions |
 | Parsers stamp identity | hand-built manifests |
 | Fallback accounting counts LINES, not chunks | `CorrectionResult` counters |
+| The two research knobs left the top-level surface | `from corrigenda import ConfidencePolicy, RoutingPolicy` |
 
-The **top-level import surface** will break once more before the first tag:
-`corrigenda.__all__` is provisional and drops from 95 symbols to the computed
-54 (`S3b`). See `docs/versioning.md`.
+The **top-level import surface** is provisional until `1.0.0`. It went from
+95 accreted symbols to the computed 68 (`S3b`), then to 66 (`RM-04`). See
+`docs/versioning.md`.
 
 ## [Unreleased]
 
 ### Changed — BREAKING
+
+- **`ConfidencePolicy` and `RoutingPolicy` leave the top-level surface: 68 →
+  66 (`RM-04`).** Both are constructor knobs of `CorrectionPipeline` whose
+  defaults do nothing. `ConfidencePolicy()` is `mode="drop"` — no confidence
+  is computed, and the third mode, `write_wc`, still *raises* at
+  construction. `RoutingPolicy()` has both bounds at `None` — every line goes
+  to the producer, so a default run is byte-identical with and without it.
+  They belong to the vision/QE research programme that `docs/PLAN.md`
+  suspends under its feature freeze, and a top-level export reads as an
+  invitation: it says "this is ready", when what is true is "this is written,
+  frozen, and executed by no default run".
+
+  **Migration is one import line.** Both stay exactly where they are —
+  `from corrigenda.core.schemas import ConfidencePolicy`,
+  `from corrigenda.core.quality import RoutingPolicy` — which is the demotion
+  door `docs/versioning.md` documents for symbols that leave `__all__`
+  without leaving the library. Nothing is deleted, no behaviour changes, and
+  the pipeline still accepts both arguments. `tests/test_research_boundary.py`
+  pins those import paths because the four calibration scripts behind the
+  `M*` measurement programme use them.
+
+  What deliberately did NOT go, because the distinction is `I4`: `ImageAsset`,
+  `ImageRef`, `ImageTransform` and `PageImage` stay on the surface. They are
+  not vision code — they are what the pixel-blind core CARRIES for a producer
+  that asked for pixels, and never opens. A custom `EditProducer` declaring
+  `wants_image` is handed one, so they sit inside the producer seam's closure
+  and removing them would break the promise `S3b` computed the surface from.
 
 - **The top-level surface is 95 → 68 symbols, and it is now computed
   (`S3b`).** `corrigenda.__all__` had reached 95 by accretion: each name was

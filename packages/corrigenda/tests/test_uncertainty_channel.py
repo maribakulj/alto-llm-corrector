@@ -15,7 +15,8 @@ from typing import Any
 
 import pytest
 
-from corrigenda import ConfidencePolicy, CorrectionPipeline, Usage
+from corrigenda import CorrectionPipeline, Usage
+from corrigenda.core.schemas import ConfidencePolicy
 from corrigenda.core.confidence import score_producer_claims
 from corrigenda.formats.alto.parser import build_document_manifest
 from corrigenda.integrations.llm import (

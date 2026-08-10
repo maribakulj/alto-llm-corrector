@@ -19,7 +19,6 @@ producer-bound symbols are exposed LAZILY (PEP 562) so that importing
 
 from typing import TYPE_CHECKING, Any
 
-from corrigenda.core.quality import RoutingPolicy
 from corrigenda.core.decisions import (
     DecisionSet,
     LineDecision,
@@ -52,7 +51,6 @@ from corrigenda.core.schemas import (
     BlockManifest,
     ChunkGranularity,
     ChunkPlannerConfig,
-    ConfidencePolicy,
     Coords,
     CorrectionReport,
     CorrectionRequest,
@@ -213,14 +211,20 @@ __all__ = [
     "PipelineObserver",
     # ---------------------------------------------------------------
     # Injectable policies (§8.2). Frozen fields, fingerprinted.
+    #
+    # The five that shape EVERY run. `RM-04` demoted the two that shape
+    # none by default — `ConfidencePolicy` (mode="drop") and
+    # `RoutingPolicy` (both bounds None) belong to the research
+    # programme the plan's freeze suspends, and a top-level export
+    # advertises as ready something no default run executes. Both stay
+    # importable from their own module (`core.schemas`, `core.quality`),
+    # which is the demotion door `docs/versioning.md` documents.
     # ---------------------------------------------------------------
     "ChunkPlannerConfig",
     "RetryPolicy",
     "GuardConfig",
     "PairingPolicy",
     "LossPolicy",
-    "ConfidencePolicy",
-    "RoutingPolicy",
     # ---------------------------------------------------------------
     # Errors (§8.4)
     # ---------------------------------------------------------------

@@ -20,7 +20,6 @@ from corrigenda.core import events as ev
 from corrigenda.core.decisions import DecisionSet
 from corrigenda.core.identity import LineRef, line_ref
 from corrigenda.core.projection import _verify_projection
-from corrigenda.core.provenance import _adapter_for_format
 from corrigenda.core.fidelity import ProjectionFidelity
 from corrigenda.core.protocols import (
     FormatAdapter,
@@ -75,7 +74,13 @@ async def _render_outputs(
         if not pages_for_file:
             continue
         if adapter is None:
-            adapter = _adapter_for_format(document_manifest.source_format)
+            # `RM-07` — the ONE place core reaches a format module, and
+            # it no longer knows which formats exist: the resolver lives
+            # beside the parser dispatch in `formats/loader.py`. Kept
+            # lazy so importing any core module never loads lxml.
+            from corrigenda.formats.loader import adapter_for_format
+
+            adapter = adapter_for_format(document_manifest.source_format)
 
         result, fidelity_by_lid = await _rewrite_and_verify(
             adapter,
