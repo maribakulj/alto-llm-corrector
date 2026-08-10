@@ -143,6 +143,58 @@ def test_no_core_module_reaches_out_at_import_time():
     )
 
 
+#: ``core`` modules that import the package root. This is a real cycle —
+#: ``corrigenda/__init__`` imports ``core.pipeline`` imports ``core.rendering``
+#: imports ``corrigenda`` — broken only by the imports being function-local.
+#:
+#: `RM-07` looked at closing it and decided NOT to, on the merits rather
+#: than on effort. The cycle carries one symbol, ``__version__``, a module
+#: level string; a lazy import of it cannot deadlock and cannot partially
+#: initialise anything the caller then uses. Closing it means moving
+#: ``__version__`` to its own module, which means editing
+#: ``[tool.hatch.version] path`` (the wheel's version source) and the CI
+#: job that greps ``__init__.py`` for it — the release toolchain, for zero
+#: behavioural gain. And it is not what `RM-07` is about: the item is
+#: "core does not know the FORMATS", and a version string is not a format.
+#:
+#: What the decision buys by being written here instead of in a document is
+#: that it stays BOUNDED. A third site cannot appear quietly.
+_SELF_IMPORT_SITES = {
+    "core/provenance.py": "_build_run_provenance — stamps the lib version",
+    "core/rendering.py": "_rewrite_and_verify — stamps the processingStep",
+}
+
+
+def test_the_package_self_import_stays_where_it_was_measured():
+    """A known cycle, held at two sites (`RM-07`).
+
+    Not a violation of the §3 rule — ``corrigenda`` is not ``formats`` or
+    ``producers`` — which is exactly why nothing was watching it. Decided
+    open, so it is pinned open: the point is that "we know about it" and
+    "it cannot grow" are different properties, and only the second one
+    survives a busy month.
+    """
+    found: dict[str, set[str]] = {}
+    for f in _core_files():
+        tree = ast.parse(f.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom) and node.module == "corrigenda":
+                rel = f.relative_to(SRC).as_posix()
+                found.setdefault(rel, set()).update(a.name for a in node.names)
+    assert set(found) == set(_SELF_IMPORT_SITES), (
+        f"the package self-import moved: {sorted(found)} vs the pinned "
+        f"{sorted(_SELF_IMPORT_SITES)}. Adding one deepens a cycle that is "
+        "currently harmless only because it carries a single constant; "
+        "removing one means the entry should go."
+    )
+    carried = {name for names in found.values() for name in names}
+    assert carried == {"__version__"}, (
+        f"the self-import now carries {sorted(carried)}. It was decided "
+        "harmless because it is one module-level string — a second symbol "
+        "is a different decision, not the same one."
+    )
+
+
 def test_importing_core_never_loads_lxml():
     """Runtime guarantee, not just static: a consumer that only wants the
     pure algorithms (guards, planner, schemas, reconciliation, pipeline)
