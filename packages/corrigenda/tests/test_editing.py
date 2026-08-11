@@ -345,3 +345,24 @@ def test_replace_line_reexpression_is_byte_identical(filename: str):
         return hashlib.sha256(xml_bytes).hexdigest()
 
     assert _bytes(direct) == _bytes(result.text_by_id)
+
+
+# ---------------------------------------------------------------------------
+# E2 — co-located operations (moved here from a wave-named file, `RM-05b`)
+# ---------------------------------------------------------------------------
+
+
+def test_e2_rejects_colocated_insertion_and_replacement():
+    # insert@[2,2]='X' listed BEFORE replace@[2,7]='Y' on '0123456789'.
+    # Old code accepted both and produced '01Y6789' (char 6 survived).
+    script = EditScript(
+        ops=[
+            ReplaceSpan(line_id="l1", anchor=RangeAnchor(start=2, end=2), text="X"),
+            ReplaceSpan(line_id="l1", anchor=RangeAnchor(start=2, end=7), text="Y"),
+        ]
+    )
+    res = apply_edit_script(script, {"l1": "0123456789"})
+    # The co-located pair must not corrupt the line: the replacement is
+    # rejected as an overlap, so '6' can never survive a supposed [2,7) wipe.
+    assert "6" not in res.text_by_id.get("l1", "0123456789")[:6] or res.rejected
+    assert any(r.reason == "e2_overlap" for r in res.rejected)

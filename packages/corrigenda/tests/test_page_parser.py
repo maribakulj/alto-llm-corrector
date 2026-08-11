@@ -200,3 +200,41 @@ def test_parse_is_robust_to_degenerate_input(tmp_path: Path, bad: str):
     except Exception:
         return  # clean rejection acceptable
     assert isinstance(pages, list)
+
+
+# ---------------------------------------------------------------------------
+# polygon_to_bbox — a coordinate pair is parsed atomically or skipped
+# (moved here from two wave-named files, `RM-05b`)
+# ---------------------------------------------------------------------------
+
+
+def test_polygon_bbox_skips_half_malformed_pair_atomically():
+    # Last pair has a good x (500) but a bad y (abc). The old code appended
+    # x before y raised, inflating width to 490 from a coordinate the
+    # docstring promises to skip.
+    hpos, vpos, w, h = polygon_to_bbox("10,10 20,20 500,abc")
+    assert (hpos, vpos, w, h) == (10, 10, 10, 10)
+
+
+def test_polygon_bbox_wellformed_unchanged():
+    assert polygon_to_bbox("617,1046 3450,1046 3450,5797 617,5797") == (
+        617,
+        1046,
+        2833,
+        4751,
+    )
+
+
+@pytest.mark.parametrize(
+    "points, expected",
+    [
+        ("10,10 20,20 30,inf", (10, 10, 10, 10)),  # inf y → pair skipped atomically
+        ("10,10 20,20 1e999,30", (10, 10, 10, 10)),  # overflow x → pair skipped
+        ("inf,inf 1e999,-1e400", (0, 0, 0, 0)),  # nothing parseable → zero box
+        ("10,10 ,5 20,20", (10, 10, 10, 10)),  # empty x still skipped
+    ],
+)
+def test_f9_polygon_bbox_skips_non_finite_pairs(points: str, expected: tuple):
+    from corrigenda.formats.page._ns import polygon_to_bbox
+
+    assert polygon_to_bbox(points) == expected

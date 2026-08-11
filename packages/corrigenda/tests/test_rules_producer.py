@@ -159,3 +159,82 @@ def test_alto_corpus_rules_are_byte_reproducible():
     a = prod.build_edit_script(canonical).model_dump_json()
     b = prod.build_edit_script(canonical).model_dump_json()
     assert a == b
+
+
+# ---------------------------------------------------------------------------
+# The lexicon guard: normalisation, and composition WITHIN a token
+# (moved here from two wave-named files, `RM-05b`)
+# ---------------------------------------------------------------------------
+
+
+def test_lexicon_guard_matches_nfd_entry():
+    import unicodedata
+
+    # Lexicon supplied in DECOMPOSED (NFD) form; the token the rule produces
+    # is composed (NFC, as the parser emits). The guard must still fire.
+    nfd_word = unicodedata.normalize("NFD", "modérné")
+    assert nfd_word != "modérné"  # sanity: genuinely decomposed
+    prod = RulesProducer(
+        [SubstitutionRule("rn", "rné", lexicon_guarded=True)],
+        lexicon={nfd_word},
+    )
+    # OCR "modérn" → the guarded rule turns "rn" into "rné" giving the known
+    # word "modérné"; the guard (NFC-folded) accepts it.
+    script = prod.build_edit_script({"l1": "modérn"})
+    assert script.ops, "guarded substitution should fire against an NFD lexicon"
+
+
+def _rules_producer(lexicon: set[str]):
+    from corrigenda.producers.rules import RulesProducer, SubstitutionRule
+
+    return RulesProducer(
+        [
+            SubstitutionRule("rn", "m", lexicon_guarded=True),
+            SubstitutionRule("ae", "a", lexicon_guarded=True),
+        ],
+        lexicon=lexicon,
+    )
+
+
+def test_f11_composed_token_out_of_lexicon_rejects_the_batch():
+    """'cornae' with rn→m at [2,4) and ae→a at [4,6): each single-edit
+    result ('comae', 'corna') is in the lexicon so both guards pass in
+    isolation, but the composition 'coma' is NOT — pre-fix both were
+    emitted, violating the guard's contract."""
+    producer = _rules_producer({"comae", "corna"})
+    script = producer.build_edit_script({"l1": "cornae"})
+    assert script.ops == [], script.ops
+
+
+def test_f11_composed_token_in_lexicon_still_accepted():
+    producer = _rules_producer({"comae", "corna", "coma"})
+    script = producer.build_edit_script({"l1": "cornae"})
+    assert len(script.ops) == 2
+
+
+def test_f11_edits_in_distinct_tokens_unaffected():
+    """Composition only matters WITHIN a token: one guarded edit per
+    word keeps the historical single-edit validation."""
+    producer = _rules_producer({"bome", "cura"})
+    script = producer.build_edit_script({"l1": "borne curae"})
+    assert len(script.ops) == 2
+    assert {op.text for op in script.ops} == {"m", "a"}
+
+
+def test_f11_single_guarded_edit_behaviour_unchanged():
+    from corrigenda.producers.rules import RulesProducer, SubstitutionRule
+
+    producer = RulesProducer(
+        [SubstitutionRule("rn", "m", lexicon_guarded=True)],
+        lexicon={"moderne"},
+    )
+    script = producer.build_edit_script({"l1": "modeme moderne"})
+    assert script.ops == []  # 'modeme' has no 'rn'; nothing to do
+    script = RulesProducer(
+        [SubstitutionRule("m", "rn", lexicon_guarded=True)],
+        lexicon={"moderne"},
+    ).build_edit_script({"l1": "modeme"})
+    # modeme → moderne via the SECOND 'm' only ([4,5)); the first 'm'
+    # ([0,1)) fails its guard. Exactly one op survives.
+    assert len(script.ops) == 1
+    assert script.ops[0].anchor.start == 4

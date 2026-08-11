@@ -4,10 +4,19 @@ Each test pins one confirmed finding of docs/audit/AUDIT-2026-07-13.md
 (fix plan: docs/audit/PLAN-CORRECTIONS.md, Vague 1, F1-F12). Every test
 was written to FAIL on the pre-fix code and pass after.
 
-Shrinking on purpose: the pair-reconciliation and chain-revert cases
-moved to ``tests/hyphenation/`` (`RM-05b`). The line builder they shared
-moved with them and is imported back here, which is the direction this
-file is going.
+Shrinking on purpose, and this is now the LAST file named after a wave:
+its two siblings (``test_audit_d_lib_fixes.py``, ``test_review_fixes.py``)
+were dissolved into the invariants they were about (`RM-05b`), and this
+file has given up its hyphenation, adjacent-duplicate, polygon and lexicon
+cases the same way. The line builder it shared moved with them and is
+imported back here.
+
+What remains is what still has no better home, and each has one waiting:
+the ALTO ``SUBS`` predicate (F5) and the HYP width fallback belong beside
+the rewriter, whose tests this wave does not open; the geometry tiling
+(F6), the int parsing (F7-F8), the line-separator gates (F10) and the PAGE
+custom-group preservation (F12) each want a topical file that does not
+exist yet. Splitting them is the next slice, not this one.
 """
 
 from __future__ import annotations
@@ -38,132 +47,6 @@ from tests.hyphenation._lines import _line
 # (a,b in chunk0 — reverted intra-chunk — then c in chunk1) was masked
 # because the pass read the post-revert (OCR) text of the boundary line
 # ---------------------------------------------------------------------------
-
-
-def test_f3_three_run_duplicate_across_chunk_boundary_reverts_third(tmp_path):
-
-    from corrigenda.core.pipeline import CorrectionPipeline
-    from corrigenda.core.schemas import ChunkPlannerConfig, GuardConfig
-    from corrigenda.formats.alto.parser import build_document_manifest
-    from tests._pipeline_harness import apply_decisions, DictProvider, RecordingObserver
-    from tests.test_planner_budget_and_cross_chunk_guard import _write_doc
-
-    path = _write_doc(tmp_path)
-    doc = build_document_manifest([(path, "doc.xml")])
-
-    dup = "le meme texte hallucine identique pour trois lignes"
-    pipeline = CorrectionPipeline.for_provider(
-        # Window 4, overlap 0 → chunk0 targets {L0..L3}, chunk1 {L4..L7}.
-        # L2+L3 are reverted by chunk0's intra-chunk pass BEFORE the
-        # boundary pass compares (L3, L4).
-        DictProvider({"L2": dup, "L3": dup, "L4": dup}),
-        api_key="k",
-        model="m",
-        observer=RecordingObserver(),
-        config=ChunkPlannerConfig(
-            max_input_chars_per_request=200,
-            max_lines_per_request=50,
-            line_window_size=4,
-            line_window_overlap=0,
-        ),
-        guard_config=GuardConfig(min_source_similarity=0.0, neighbour_margin=1.0),
-    )
-    apply_decisions(
-        doc,
-        pipeline.run_sync(document_manifest=doc, source_files={"doc.xml": path}),
-    )
-
-    lines = {lm.line_id: lm for p in doc.pages for lm in p.lines}
-    for lid in ("L2", "L3", "L4"):
-        assert lines[lid].corrected_text == lines[lid].ocr_text, lid
-        assert lines[lid].status is LineStatus.FALLBACK, lid
-
-
-_ALTO_TWO_PAGES = """\
-<?xml version="1.0" encoding="UTF-8"?>
-<alto xmlns="http://www.loc.gov/standards/alto/ns-v3#">
-  <Layout>
-    <Page ID="P1" WIDTH="1000" HEIGHT="1000">
-      <PrintSpace HPOS="0" VPOS="0" WIDTH="1000" HEIGHT="1000">
-        <TextBlock ID="B1" HPOS="0" VPOS="0" WIDTH="1000" HEIGHT="900">
-          {page1}
-        </TextBlock>
-      </PrintSpace>
-    </Page>
-    <Page ID="P2" WIDTH="1000" HEIGHT="1000">
-      <PrintSpace HPOS="0" VPOS="0" WIDTH="1000" HEIGHT="1000">
-        <TextBlock ID="B2" HPOS="0" VPOS="0" WIDTH="1000" HEIGHT="900">
-          {page2}
-        </TextBlock>
-      </PrintSpace>
-    </Page>
-  </Layout>
-</alto>"""
-
-
-def _seam_doc(tmp_path) -> object:
-    import textwrap
-
-    p1_texts = [
-        "Il faisait ce jour la un temps splendide",
-        "et la lumiere dorait les vieux murs",
-        "la riviere descendait vers le moulin",
-    ]
-    p2_texts = [
-        "les enfants couraient dans la prairie",
-        "un orage montait derriere la colline",
-    ]
-
-    def _body(texts: list[str], start: int) -> str:
-        return "".join(
-            f'<TextLine ID="L{start + i}" HPOS="10" VPOS="{30 * i + 10}"'
-            f' WIDTH="900" HEIGHT="20">'
-            f'<String CONTENT="{t}" HPOS="10" VPOS="{30 * i + 10}"'
-            f' WIDTH="900" HEIGHT="20"/>'
-            "</TextLine>"
-            for i, t in enumerate(texts)
-        )
-
-    p = tmp_path / "seam.xml"
-    p.write_text(
-        textwrap.dedent(_ALTO_TWO_PAGES).format(
-            page1=_body(p1_texts, 0), page2=_body(p2_texts, 3)
-        ),
-        encoding="utf-8",
-    )
-    return p
-
-
-def test_f3_twin_three_run_duplicate_across_page_seam_reverts_third(tmp_path):
-    """Twin branch of F3: the document-level PAGE-SEAM pass reads live
-    corrected_text too. A 3-run whose first two members (last two lines
-    of page 1) were already reverted intra-page masked the seam pair
-    (L2, L3) the same way."""
-    from corrigenda.core.pipeline import CorrectionPipeline
-    from corrigenda.core.schemas import GuardConfig
-    from corrigenda.formats.alto.parser import build_document_manifest
-    from tests._pipeline_harness import apply_decisions, DictProvider, RecordingObserver
-
-    path = _seam_doc(tmp_path)
-    doc = build_document_manifest([(path, "seam.xml")])
-
-    dup = "le meme texte hallucine identique pour trois lignes"
-    pipeline = CorrectionPipeline.for_provider(
-        DictProvider({"L1": dup, "L2": dup, "L3": dup}),
-        api_key="k",
-        model="m",
-        observer=RecordingObserver(),
-        guard_config=GuardConfig(min_source_similarity=0.0, neighbour_margin=1.0),
-    )
-    apply_decisions(
-        doc,
-        pipeline.run_sync(document_manifest=doc, source_files={"seam.xml": path}),
-    )
-
-    lines = {lm.line_id: lm for p in doc.pages for lm in p.lines}
-    for lid in ("L1", "L2", "L3"):
-        assert lines[lid].corrected_text == lines[lid].ocr_text, lid
-        assert lines[lid].status is LineStatus.FALLBACK, lid
 
 
 # ---------------------------------------------------------------------------
@@ -466,21 +349,6 @@ def test_f8_alto_int_attr_inf_coordinate_surfaces_as_value_error():
     assert _int_attr(el, "HPOS", 3) == 3
 
 
-@pytest.mark.parametrize(
-    "points, expected",
-    [
-        ("10,10 20,20 30,inf", (10, 10, 10, 10)),  # inf y → pair skipped atomically
-        ("10,10 20,20 1e999,30", (10, 10, 10, 10)),  # overflow x → pair skipped
-        ("inf,inf 1e999,-1e400", (0, 0, 0, 0)),  # nothing parseable → zero box
-        ("10,10 ,5 20,20", (10, 10, 10, 10)),  # empty x still skipped
-    ],
-)
-def test_f9_polygon_bbox_skips_non_finite_pairs(points: str, expected: tuple):
-    from corrigenda.formats.page._ns import polygon_to_bbox
-
-    assert polygon_to_bbox(points) == expected
-
-
 # ---------------------------------------------------------------------------
 # F10 — the newline check must cover every str.splitlines boundary:
 # U+2028/U+2029 (and \x0b \x0c \x85 …) survived into single-line ALTO
@@ -530,62 +398,6 @@ def test_f10_plain_text_still_accepted():
 # own edit against the ORIGINAL token in isolation, so the composition
 # could produce a word NOT in the lexicon
 # ---------------------------------------------------------------------------
-
-
-def _rules_producer(lexicon: set[str]):
-    from corrigenda.producers.rules import RulesProducer, SubstitutionRule
-
-    return RulesProducer(
-        [
-            SubstitutionRule("rn", "m", lexicon_guarded=True),
-            SubstitutionRule("ae", "a", lexicon_guarded=True),
-        ],
-        lexicon=lexicon,
-    )
-
-
-def test_f11_composed_token_out_of_lexicon_rejects_the_batch():
-    """'cornae' with rn→m at [2,4) and ae→a at [4,6): each single-edit
-    result ('comae', 'corna') is in the lexicon so both guards pass in
-    isolation, but the composition 'coma' is NOT — pre-fix both were
-    emitted, violating the guard's contract."""
-    producer = _rules_producer({"comae", "corna"})
-    script = producer.build_edit_script({"l1": "cornae"})
-    assert script.ops == [], script.ops
-
-
-def test_f11_composed_token_in_lexicon_still_accepted():
-    producer = _rules_producer({"comae", "corna", "coma"})
-    script = producer.build_edit_script({"l1": "cornae"})
-    assert len(script.ops) == 2
-
-
-def test_f11_edits_in_distinct_tokens_unaffected():
-    """Composition only matters WITHIN a token: one guarded edit per
-    word keeps the historical single-edit validation."""
-    producer = _rules_producer({"bome", "cura"})
-    script = producer.build_edit_script({"l1": "borne curae"})
-    assert len(script.ops) == 2
-    assert {op.text for op in script.ops} == {"m", "a"}
-
-
-def test_f11_single_guarded_edit_behaviour_unchanged():
-    from corrigenda.producers.rules import RulesProducer, SubstitutionRule
-
-    producer = RulesProducer(
-        [SubstitutionRule("rn", "m", lexicon_guarded=True)],
-        lexicon={"moderne"},
-    )
-    script = producer.build_edit_script({"l1": "modeme moderne"})
-    assert script.ops == []  # 'modeme' has no 'rn'; nothing to do
-    script = RulesProducer(
-        [SubstitutionRule("m", "rn", lexicon_guarded=True)],
-        lexicon={"moderne"},
-    ).build_edit_script({"l1": "modeme"})
-    # modeme → moderne via the SECOND 'm' only ([4,5)); the first 'm'
-    # ([0,1)) fails its guard. Exactly one op survives.
-    assert len(script.ops) == 1
-    assert script.ops[0].anchor.start == 4
 
 
 # ---------------------------------------------------------------------------
@@ -695,90 +507,6 @@ def test_review_w1_hyp_width_overflow_end_to_end(tmp_path):
         )
         or b"deux" in out_bytes
     )
-
-
-def test_review_w1_duplicate_across_downgrade_subchunk_seam_reverts(
-    tmp_path, monkeypatch
-):
-    """Wave-1 review follow-up — the cross-chunk boundary pass built its
-    owner map from the PLANNED chunks and was gated on
-    ``len(plan.chunks) > 1``. A single planned chunk that granularity-
-    descends into per-line sub-chunks therefore had NO boundary pass at
-    all: an identical hallucination on two adjacent lines finalized by
-    two different sub-chunks survived the duplicate guard entirely."""
-    from unittest.mock import AsyncMock
-
-    from corrigenda.core.pipeline import CorrectionPipeline
-    from corrigenda.core.schemas import ChunkPlannerConfig, GuardConfig, RetryPolicy
-    from corrigenda.formats.alto.parser import build_document_manifest
-    from tests._pipeline_harness import RecordingObserver, apply_decisions
-    from tests.test_planner_budget_and_cross_chunk_guard import _write_doc
-
-    monkeypatch.setattr(
-        "corrigenda.core.pipeline.asyncio.sleep", AsyncMock(return_value=None)
-    )
-
-    path = _write_doc(tmp_path)
-    doc = build_document_manifest([(path, "doc.xml")])
-    dup = "le meme texte hallucine identique pour deux lignes"
-
-    class _DescendToLineProvider:
-        """Refuses every multi-line request (forcing the full
-        PAGE→BLOCK→WINDOW→LINE descent), then hallucinates the same
-        sentence for the adjacent L3 and L4 — each finalized by its own
-        single-line sub-chunk."""
-
-        async def list_models(self, api_key: str) -> list:  # pragma: no cover
-            return []
-
-        async def complete_structured(
-            self,
-            *,
-            api_key,
-            model,
-            system_prompt,
-            user_payload,
-            json_schema,
-            temperature=0.0,
-        ):
-            lines = user_payload.get("lines", [])
-            if len(lines) > 1:
-                raise ValueError("mock: multi-line request refused")
-            (ln,) = lines
-            corrected = {"L3": dup, "L4": dup}.get(
-                ln["line_id"], ln.get("ocr_text", "")
-            )
-            return {
-                "lines": [{"line_id": ln["line_id"], "corrected_text": corrected}]
-            }, None
-
-    pipeline = CorrectionPipeline.for_provider(
-        _DescendToLineProvider(),
-        api_key="k",
-        model="m",
-        observer=RecordingObserver(),
-        # Defaults plan the 8-line doc as ONE chunk — the pre-fix gate
-        # `len(plan.chunks) > 1` then skipped the boundary pass outright.
-        config=ChunkPlannerConfig(),
-        guard_config=GuardConfig(min_source_similarity=0.0, neighbour_margin=1.0),
-        retry_policy=RetryPolicy(
-            max_attempts=1, temperatures=(0.0,), per_chunk_budget=30
-        ),
-    )
-    apply_decisions(
-        doc,
-        pipeline.run_sync(document_manifest=doc, source_files={"doc.xml": path}),
-    )
-
-    lines = {lm.line_id: lm for p in doc.pages for lm in p.lines}
-    # Identity corrections on the other lines survive untouched…
-    assert lines["L0"].corrected_text == lines["L0"].ocr_text
-    # …and the adjacent duplicate pair is reverted to OCR source.
-    for lid in ("L3", "L4"):
-        assert lines[lid].corrected_text == lines[lid].ocr_text, (
-            f"{lid} kept the duplicated hallucination: {lines[lid].corrected_text!r}"
-        )
-        assert lines[lid].status is LineStatus.FALLBACK, lid
 
 
 @pytest.mark.asyncio
