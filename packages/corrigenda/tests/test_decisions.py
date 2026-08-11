@@ -21,7 +21,7 @@ from corrigenda.core.schemas import LineStatus
 from corrigenda.formats.alto.parser import build_document_manifest
 from corrigenda.producers.rules import RulesProducer, SubstitutionRule
 
-from tests.test_unit_fallback_atomicity import _XPAGE_ALTO, _Null
+from tests.hyphenation.test_unit_fallback_atomicity import _XPAGE_ALTO, _Null
 
 
 def _doc(tmp_path):
@@ -70,7 +70,7 @@ async def test_decision_set_mirrors_a_real_run(tmp_path) -> None:
 async def test_fallback_reason_travels_onto_the_decision(tmp_path) -> None:
     """A fallen line's decision carries the trace's reason; the counts
     aggregate by prefix exactly as the result reports them."""
-    from tests.test_unit_fallback_atomicity import _FailsPages
+    from tests.hyphenation.test_unit_fallback_atomicity import _FailsPages
 
     doc, src = _doc(tmp_path)
     from corrigenda.core.schemas import RetryPolicy
