@@ -1230,6 +1230,35 @@ Branche : `claude/rm-session-10-nettoyages-qb74pu`.
   d'entre eux étant gardés par `skipif(not PATH.exists())` : ils auraient
   simplement cessé de s'exécuter. `tests/_pipeline_harness.EXAMPLES`
   existait déjà et reste à la racine de `tests/`.
+- **Done** — `RM-05b`, **troisième tranche** (session 10) : `tests/identity/`,
+  pour la règle sur laquelle toute la bibliothèque est indexée — l'identité
+  d'une ligne est `(page_id, line_id)`. `test_duplicate_ids.py` (`ADR-007`)
+  et `test_line_ref.py` (`ADR-009`) y entrent en `git mv` ; cinq cas les
+  rejoignent depuis deux fichiers-vague. Le cas difficile est **l'acceptation**
+  et non les refus : un id de bloc répété sur chaque page d'un export OCR
+  page-par-page est *légitime*, l'identité étant page-qualifiée. La frontière
+  est écrite : l'ordre de lecture et la traversée récursive
+  (`test_structure_traversal`) portent sur les éléments que le parseur
+  *visite*, pas sur ce qui les nomme — ils partagent des fixtures avec ce
+  répertoire, pas un invariant. Pas de garde de complétude ici, et pour une
+  raison mesurée : `line_ref` est la façon dont *tout* indexe une ligne, donc
+  « importe `core.identity` » nommerait la moitié de la suite au lieu de la
+  borner.
+- **Done** — **et le déplacement a révélé une classe entière que la tranche
+  précédente avait mal bornée.** `test_line_ref.py` déplacé résolvait
+  `examples/sample.xml` un répertoire trop haut et a échoué. Échouer était la
+  moitié chanceuse : un grep a trouvé **35 modules de plus** faisant la même
+  arithmétique, et la plupart des tests adossés au corpus sont derrière
+  `skipif(not PATH.exists())` — déplacés, ils résolvent vers rien, *skippent*,
+  et annoncent un succès. Une suite qui cesse silencieusement de s'exécuter
+  ressemble exactement à une suite qui passe. `tests/_paths.py` calcule
+  `REPO`/`PKG`/`SRC`/`TESTS`/`EXAMPLES` une fois, depuis le seul module qui ne
+  bougera jamais ; 59 modules les importent.
+  `test_paths_are_not_counted_in_parents.py` interdit le retour du motif — et
+  a échoué deux fois à son propre premier run : son docstring citait la
+  chaîne interdite mot pour mot, et sa première prise a été **la garde
+  précédente**, `test_the_net_is_bounded.py`, qui calculait `TESTS` de la
+  façon interdite.
 - **Done** — le regroupement est **tenu par un test**, parce que rassembler
   ne tient pas tout seul : `test_the_net_is_bounded.py` exige que tout
   module de test important `corrigenda.core.pairing`, `.units` ou
