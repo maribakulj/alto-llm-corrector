@@ -63,11 +63,12 @@ should work through by default.
 from __future__ import annotations
 
 import ast
-from pathlib import Path
 
 import pytest
 
-SRC = Path(__file__).parent.parent / "src" / "corrigenda"
+from tests._paths import SRC
+
+SRC = SRC
 PIPELINE = SRC / "core" / "pipeline.py"
 
 #: The target the plan sets for the orchestrator, in lines.

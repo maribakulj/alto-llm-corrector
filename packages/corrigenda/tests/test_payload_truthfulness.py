@@ -36,6 +36,8 @@ from corrigenda.core.hyphenation import enrich_chunk_lines
 from corrigenda.core.pairing import backward_partner_ref, forward_partner_ref
 from corrigenda.core.schemas import Coords, HyphenRole, LineManifest
 
+from tests._paths import EXAMPLES
+
 
 def _line(
     line_id: str,
@@ -246,11 +248,10 @@ def test_a_both_line_offers_the_forward_slots_authority() -> None:
 @pytest.mark.parametrize("name", ["sample.xml", "X0000002.xml"])
 def test_the_invariant_holds_on_the_real_fixtures(name: str) -> None:
     """Hand-built manifests can miss a shape the parser really produces."""
-    from pathlib import Path
 
     from corrigenda.formats.alto.parser import parse_alto_file
 
-    path = Path(__file__).parent.parent.parent.parent / "examples" / name
+    path = EXAMPLES / name
     pages, _ = parse_alto_file(path, path.name)
     for page in pages:
         by_id = {lm.line_id: lm for lm in page.lines}
@@ -273,12 +274,11 @@ def test_the_report_counts_a_break_with_no_partner() -> None:
     its pair-drift guards never run. A host reading "0 fallback" had no way
     to learn any of that happened.
     """
-    from pathlib import Path
 
     from corrigenda.core.pairing import unpaired_break_refs
     from corrigenda.formats.alto.parser import build_document_manifest
 
-    path = Path(__file__).parent.parent.parent.parent / "examples" / "X0000002.xml"
+    path = EXAMPLES / "X0000002.xml"
     doc = build_document_manifest([(path, path.name)])
 
     orphans = unpaired_break_refs(doc.pages)
@@ -294,11 +294,10 @@ def test_the_report_counts_a_break_with_no_partner() -> None:
 
 def test_a_fully_paired_document_reports_nothing() -> None:
     """The counter must stay quiet when there is nothing to admit."""
-    from pathlib import Path
 
     from corrigenda.core.pairing import unpaired_break_refs
     from corrigenda.formats.alto.parser import build_document_manifest
 
-    path = Path(__file__).parent.parent.parent.parent / "examples" / "sample.xml"
+    path = EXAMPLES / "sample.xml"
     doc = build_document_manifest([(path, path.name)])
     assert unpaired_break_refs(doc.pages) == []

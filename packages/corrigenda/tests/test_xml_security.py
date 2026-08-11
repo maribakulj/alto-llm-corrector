@@ -39,6 +39,8 @@ from pathlib import Path
 from corrigenda.formats.alto.parser import parse_alto_file
 from corrigenda.formats.alto.rewriter import extract_output_texts
 
+from tests._paths import PKG, SRC
+
 
 def _xxe_payload_text_node(secret_path: Path) -> bytes:
     """ALTO-like document with the external entity referenced from a
@@ -198,7 +200,7 @@ def test_no_alto_lxml_call_site_uses_default_parser():
 
     # §10 — the safe-parser contract covers EVERY format backend, present
     # and future (PAGE XML lands in the same tree).
-    src_root = Path(__file__).resolve().parents[1] / "src" / "corrigenda" / "formats"
+    src_root = SRC / "formats"
     offenders: list[tuple[str, int, str]] = []
     for py in src_root.rglob("*.py"):
         text = py.read_text(encoding="utf-8")
@@ -247,13 +249,7 @@ def test_make_safe_parser_enables_all_four_safety_flags():
     """
     import ast
 
-    xml_path = (
-        Path(__file__).resolve().parents[1]
-        / "src"
-        / "corrigenda"
-        / "formats"
-        / "_xml.py"
-    )
+    xml_path = PKG / "src" / "corrigenda" / "formats" / "_xml.py"
     tree = ast.parse(xml_path.read_text(encoding="utf-8"), filename=str(xml_path))
     flags: dict[str, ast.expr] = {}
     for node in ast.walk(tree):

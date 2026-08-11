@@ -19,7 +19,9 @@ from corrigenda.formats.page._ns import (
 )
 from corrigenda.formats.page.parser import build_document_manifest, parse_page_file
 
-_EXAMPLES = Path(__file__).parent.parent.parent.parent / "examples" / "page"
+from tests._paths import EXAMPLES
+
+_EXAMPLES = EXAMPLES / "page"
 _LAFAYETTE_CORR = (
     _EXAMPLES / "LaFayette1678_Cleves_btv1b8610820b_corrected_0011_page_corrected.xml"
 )

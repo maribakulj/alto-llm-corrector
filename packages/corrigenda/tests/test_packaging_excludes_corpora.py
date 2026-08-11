@@ -40,7 +40,9 @@ from pathlib import Path
 
 import pytest
 
-_PACKAGE_ROOT = Path(__file__).parent.parent
+from tests._paths import PKG
+
+_PACKAGE_ROOT = PKG
 _REPO_ROOT = _PACKAGE_ROOT.parent.parent
 
 #: Everything the sdist is allowed to carry. Widening this list is a

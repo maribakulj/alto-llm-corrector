@@ -22,7 +22,6 @@ A ``DictProvider`` returns a caller-controlled correction per line
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any
 
 from corrigenda.core.identity import LineRef
@@ -30,7 +29,9 @@ from corrigenda.core.pipeline import CorrectionPipeline, CorrectionResult
 from corrigenda.core.schemas import DocumentManifest, LineManifest
 from corrigenda.formats.alto.parser import build_document_manifest
 
-EXAMPLES = Path(__file__).resolve().parent.parent.parent.parent / "examples"
+from tests._paths import EXAMPLES
+
+EXAMPLES = EXAMPLES
 
 
 class DictProvider:

@@ -9,7 +9,6 @@ historical direct path.
 from __future__ import annotations
 
 import hashlib
-from pathlib import Path
 
 import pytest
 
@@ -27,7 +26,9 @@ from corrigenda.core.schemas import GuardConfig, HyphenRole, LineManifest, Coord
 from corrigenda.formats.alto.parser import build_document_manifest
 from corrigenda.formats.alto.rewriter import rewrite_alto_file
 
-_EXAMPLES = Path(__file__).parent.parent.parent.parent / "examples"
+from tests._paths import EXAMPLES
+
+_EXAMPLES = EXAMPLES
 
 
 def _line(line_id: str, role: HyphenRole = HyphenRole.NONE) -> LineManifest:

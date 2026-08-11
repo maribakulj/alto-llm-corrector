@@ -13,7 +13,9 @@ import subprocess
 import sys
 from pathlib import Path
 
-_PKG = Path(__file__).resolve().parents[1]
+from tests._paths import PKG
+
+_PKG = PKG
 _QUICKSTART = _PKG / "examples" / "quickstart.py"
 
 

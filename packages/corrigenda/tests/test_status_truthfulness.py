@@ -41,7 +41,9 @@ from tests._alto_gen import rich_alto_documents
 from tests._pipeline_harness import DictProvider
 from tests.test_properties_hypothesis import _write_tmp
 
-_EXAMPLES = Path(__file__).parent.parent.parent.parent / "examples"
+from tests._paths import EXAMPLES
+
+_EXAMPLES = EXAMPLES
 
 
 class _Null:

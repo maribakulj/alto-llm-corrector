@@ -20,7 +20,6 @@ Everything else fails the run.
 
 from __future__ import annotations
 
-from pathlib import Path
 
 import pytest
 
@@ -32,7 +31,9 @@ from corrigenda.core.protocols import ProviderTransientError
 from corrigenda.core.schemas import LineStatus, RetryPolicy
 from corrigenda.formats.alto.parser import build_document_manifest
 
-_SAMPLE = Path(__file__).parent.parent.parent.parent / "examples" / "sample.xml"
+from tests._paths import EXAMPLES
+
+_SAMPLE = EXAMPLES / "sample.xml"
 
 
 class _Null:

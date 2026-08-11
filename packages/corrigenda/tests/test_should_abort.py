@@ -8,7 +8,6 @@ Pins:
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
 
 import pytest
@@ -16,7 +15,9 @@ import pytest
 from corrigenda import CorrectionAborted, CorrectionError, CorrectionPipeline
 from corrigenda.formats.alto.parser import build_document_manifest
 
-_SAMPLE = Path(__file__).parent.parent.parent.parent / "examples" / "sample.xml"
+from tests._paths import EXAMPLES
+
+_SAMPLE = EXAMPLES / "sample.xml"
 
 
 class _EchoProvider:

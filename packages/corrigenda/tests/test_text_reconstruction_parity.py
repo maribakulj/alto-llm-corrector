@@ -24,7 +24,9 @@ from corrigenda.formats.alto._text import reconstruct_textline
 from corrigenda.formats.alto.parser import _build_ocr_text
 from lxml import etree
 
-_EXAMPLES = Path(__file__).parent.parent.parent.parent / "examples"
+from tests._paths import EXAMPLES
+
+_EXAMPLES = EXAMPLES
 _SAMPLE_FILES = [_EXAMPLES / "sample.xml", _EXAMPLES / "X0000002.xml"]
 
 

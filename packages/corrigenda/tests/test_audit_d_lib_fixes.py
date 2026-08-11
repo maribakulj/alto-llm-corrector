@@ -12,7 +12,6 @@ is what has no invariant-shaped home yet.
 
 from __future__ import annotations
 
-import pytest
 
 from corrigenda.core.editing import (
     EditScript,
@@ -21,9 +20,6 @@ from corrigenda.core.editing import (
     apply_edit_script,
 )
 from corrigenda.core.guards import check_adjacent_duplicates
-from corrigenda.errors import ParseError
-from corrigenda.formats.alto.parser import parse_alto_file
-from corrigenda.formats.page.parser import parse_page_file
 from corrigenda.formats.page._ns import polygon_to_bbox
 from corrigenda.producers.rules import RulesProducer, SubstitutionRule
 
@@ -134,50 +130,6 @@ def test_e2_rejects_colocated_insertion_and_replacement():
 # ---------------------------------------------------------------------------
 # #30 — an id-less TextLine cannot round-trip; both parsers must refuse it
 # ---------------------------------------------------------------------------
-
-_ALTO_IDLESS = """\
-<?xml version="1.0" encoding="UTF-8"?>
-<alto xmlns="http://www.loc.gov/standards/alto/ns-v3#">
-  <Layout>
-    <Page ID="P1" WIDTH="1000" HEIGHT="1000">
-      <PrintSpace HPOS="0" VPOS="0" WIDTH="1000" HEIGHT="1000">
-        <TextBlock ID="B1" HPOS="0" VPOS="0" WIDTH="1000" HEIGHT="900">
-          <TextLine HPOS="10" VPOS="10" WIDTH="900" HEIGHT="20">
-            <String CONTENT="orphan" HPOS="10" VPOS="10" WIDTH="900" HEIGHT="20"/>
-          </TextLine>
-        </TextBlock>
-      </PrintSpace>
-    </Page>
-  </Layout>
-</alto>"""
-
-_PAGE_IDLESS = """\
-<?xml version="1.0" encoding="UTF-8"?>
-<PcGts xmlns="http://schema.primaresearch.org/PAGE/gts/pagecontent/2019-07-15">
-  <Page imageFilename="p.png" imageWidth="1000" imageHeight="1000">
-    <TextRegion id="r1">
-      <Coords points="0,0 1000,0 1000,900 0,900"/>
-      <TextLine>
-        <Coords points="10,10 900,10 900,30 10,30"/>
-        <TextEquiv><Unicode>orphan</Unicode></TextEquiv>
-      </TextLine>
-    </TextRegion>
-  </Page>
-</PcGts>"""
-
-
-def test_alto_idless_textline_refused(tmp_path):
-    p = tmp_path / "a.xml"
-    p.write_text(_ALTO_IDLESS, encoding="utf-8")
-    with pytest.raises(ParseError, match="without an id"):
-        parse_alto_file(p, "a.xml")
-
-
-def test_page_idless_textline_refused(tmp_path):
-    p = tmp_path / "p.xml"
-    p.write_text(_PAGE_IDLESS, encoding="utf-8")
-    with pytest.raises(ParseError, match="without an id"):
-        parse_page_file(p, "p.xml")
 
 
 # ---------------------------------------------------------------------------

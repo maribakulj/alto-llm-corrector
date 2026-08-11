@@ -36,6 +36,8 @@ from corrigenda.integrations.vision import (  # noqa: E402
     crop_region,
 )
 
+from tests._paths import EXAMPLES
+
 
 def _png(path: Path, size: tuple[int, int], color: tuple[int, int, int]) -> Path:
     Image.new("RGB", size, color).save(path, format="PNG")
@@ -314,7 +316,7 @@ def test_vision_producer_drives_the_full_pipeline(tmp_path: Path) -> None:
     from corrigenda import CorrectionPipeline
     from corrigenda.formats.alto.parser import build_document_manifest
 
-    sample = Path(__file__).parent.parent.parent.parent / "examples" / "sample.xml"
+    sample = EXAMPLES / "sample.xml"
     doc = build_document_manifest([(sample, sample.name)])
     assets = {}
     for page in doc.pages:
@@ -360,7 +362,7 @@ def test_digestless_asset_records_no_image_digest(tmp_path: Path) -> None:
     from corrigenda import CorrectionPipeline
     from corrigenda.formats.alto.parser import build_document_manifest
 
-    sample = Path(__file__).parent.parent.parent.parent / "examples" / "sample.xml"
+    sample = EXAMPLES / "sample.xml"
     doc = build_document_manifest([(sample, sample.name)])
 
     class _Null:

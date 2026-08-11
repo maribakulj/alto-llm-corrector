@@ -25,7 +25,6 @@ Deliberate exclusions, so the comparison stays fair:
 
 from __future__ import annotations
 
-from pathlib import Path
 
 import pytest
 
@@ -35,7 +34,9 @@ from corrigenda.core.protocols import ProducerMetadata
 from corrigenda.core.schemas import ChunkPlannerConfig, ModelCapabilities
 from corrigenda.formats.alto.parser import build_document_manifest
 
-_SAMPLE = Path(__file__).parent.parent.parent.parent / "examples" / "sample.xml"
+from tests._paths import EXAMPLES
+
+_SAMPLE = EXAMPLES / "sample.xml"
 
 
 class _Null:

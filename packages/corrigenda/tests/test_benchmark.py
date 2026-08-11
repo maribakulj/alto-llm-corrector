@@ -15,7 +15,9 @@ import subprocess
 import sys
 from pathlib import Path
 
-_REPO = Path(__file__).resolve().parents[3]
+from tests._paths import REPO, TESTS
+
+_REPO = REPO
 _BENCHMARK = _REPO / "scripts" / "benchmark.py"
 
 
@@ -109,7 +111,7 @@ def test_cassette_replay_matches_oracle(tmp_path: Path):
     mapping and replaying it must reproduce the oracle's metrics."""
     import corrigenda
 
-    ref = Path(__file__).parent / "corpus_gt" / "synthetic-fr-early-print.ref.alto.xml"
+    ref = TESTS / "corpus_gt" / "synthetic-fr-early-print.ref.alto.xml"
     document = corrigenda.load(ref)
     cassette = {
         lm.line_id: lm.ocr_text for page in document.manifest.pages for lm in page.lines

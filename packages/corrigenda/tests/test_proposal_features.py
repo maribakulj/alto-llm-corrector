@@ -10,7 +10,6 @@ anything — and no second SequenceMatcher pass exists anywhere.
 
 from __future__ import annotations
 
-from pathlib import Path
 
 import pytest
 
@@ -20,7 +19,9 @@ from corrigenda.formats.alto.parser import build_document_manifest
 
 from tests._pipeline_harness import DictProvider
 
-_SAMPLE = Path(__file__).parent.parent.parent.parent / "examples" / "sample.xml"
+from tests._paths import EXAMPLES
+
+_SAMPLE = EXAMPLES / "sample.xml"
 
 
 class _Null:

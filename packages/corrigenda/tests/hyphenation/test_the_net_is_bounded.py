@@ -24,8 +24,11 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-TESTS = Path(__file__).parent.parent
-HERE = Path(__file__).parent.name
+from tests._paths import TESTS
+
+#: This directory, named rather than derived — a guard that asks where it
+#: is would move with the files it is supposed to keep in place.
+HERE = "hyphenation"
 
 #: The three modules `S1` will rewrite. A test that imports one of them is
 #: a test that can break when it does.

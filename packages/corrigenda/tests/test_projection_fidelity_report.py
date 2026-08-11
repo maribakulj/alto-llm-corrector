@@ -17,7 +17,6 @@ of the two happened instead of saying nothing.
 
 from __future__ import annotations
 
-from pathlib import Path
 
 import pytest
 
@@ -27,7 +26,9 @@ from corrigenda.core.fidelity import ProjectionFidelity
 from corrigenda.core.protocols import ProducerMetadata
 from corrigenda.formats.alto.parser import build_document_manifest
 
-_SAMPLE = Path(__file__).parent.parent.parent.parent / "examples" / "sample.xml"
+from tests._paths import EXAMPLES
+
+_SAMPLE = EXAMPLES / "sample.xml"
 
 NBSP = " "
 NNBSP = " "  # French typography before % ; ! ? :
@@ -172,7 +173,7 @@ async def test_the_level_survives_the_json_round_trip() -> None:
 # ---------------------------------------------------------------------------
 
 
-_BNF = Path(__file__).parent.parent.parent.parent / "examples" / "X0000002.xml"
+_BNF = EXAMPLES / "X0000002.xml"
 
 
 class _Echo:

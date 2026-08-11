@@ -47,7 +47,9 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-REPO = Path(__file__).parent.parent.parent.parent
+from tests._paths import REPO
+
+REPO = REPO
 SRC = REPO / "packages" / "corrigenda" / "src" / "corrigenda"
 ADR_DIR = REPO / "docs" / "adr"
 SPEC = REPO / "SPECS_LIB_V2.md"

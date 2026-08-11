@@ -43,7 +43,9 @@ from tests.test_properties_hypothesis import (
     alto_documents,
 )
 
-_SAMPLE = Path(__file__).parent.parent.parent.parent / "examples" / "sample.xml"
+from tests._paths import EXAMPLES
+
+_SAMPLE = EXAMPLES / "sample.xml"
 
 # Three partitions of the same document: whole-page plans, overlapping
 # 2-line windows, and 3-line windows. Budgets are in characters, so the
@@ -227,6 +229,7 @@ async def test_two_runs_on_the_same_document_are_identical() -> None:
 from corrigenda.core.schemas import HyphenRole  # noqa: E402
 
 from tests._alto_gen import rich_alto_documents  # noqa: E402
+
 
 _EXPECTED_ROLE = {
     "plain": HyphenRole.NONE,

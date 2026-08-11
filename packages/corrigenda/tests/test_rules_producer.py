@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-from pathlib import Path
 
 from corrigenda.core.protocols import ProducerOptions
 from corrigenda.core.editing import RangeAnchor, ReplaceSpan, apply_edit_script
@@ -14,7 +13,9 @@ from corrigenda.producers.rules import (
     default_french_ocr_rules,
 )
 
-_EXAMPLES = Path(__file__).parent.parent.parent.parent / "examples"
+from tests._paths import EXAMPLES
+
+_EXAMPLES = EXAMPLES
 
 
 # ---------------------------------------------------------------------------

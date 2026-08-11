@@ -11,14 +11,15 @@ leaks no state.
 from __future__ import annotations
 
 import asyncio
-from pathlib import Path
 from typing import Any
 
 from corrigenda import CorrectionPipeline
 
-SAMPLE_XML = Path(__file__).parent / "data" / "sample.xml"
+from tests._paths import REPO, TESTS
+
+SAMPLE_XML = TESTS / "data" / "sample.xml"
 if not SAMPLE_XML.exists():  # repo-level example as fallback
-    SAMPLE_XML = Path(__file__).parents[3] / "examples" / "sample.xml"
+    SAMPLE_XML = REPO / "examples" / "sample.xml"
 
 
 class _NullObserver:

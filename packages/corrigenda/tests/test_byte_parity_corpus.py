@@ -74,14 +74,15 @@ these hashes are independent of the library version string.
 from __future__ import annotations
 
 import hashlib
-from pathlib import Path
 
 import pytest
 
 from corrigenda.formats.alto.parser import build_document_manifest
 from corrigenda.formats.alto.rewriter import rewrite_alto_file
 
-_EXAMPLES = Path(__file__).parent.parent.parent.parent / "examples"
+from tests._paths import EXAMPLES
+
+_EXAMPLES = EXAMPLES
 
 _GOLDEN = {
     ("sample.xml", "identity"): (

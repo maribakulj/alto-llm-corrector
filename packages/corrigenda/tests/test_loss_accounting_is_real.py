@@ -46,7 +46,9 @@ from corrigenda.formats.alto._ns import _detect_namespace
 from corrigenda.formats.alto.parser import parse_alto_file
 from corrigenda.formats.alto.rewriter import rewrite_alto_file
 
-_EXAMPLES = Path(__file__).parent.parent.parent.parent / "examples"
+from tests._paths import EXAMPLES
+
+_EXAMPLES = EXAMPLES
 
 #: ``<attr>_dropped`` -> the ALTO attribute it claims to have dropped.
 _ATTR_OF_KEY = re.compile(r"^(?P<attr>[a-z_]+)_dropped$")
