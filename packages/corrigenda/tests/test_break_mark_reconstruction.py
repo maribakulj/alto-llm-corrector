@@ -27,12 +27,13 @@ not "fix" it.
 
 from __future__ import annotations
 
-from pathlib import Path
 
 import pytest
 from lxml import etree
 
 from corrigenda.formats.alto._text import _DEDUP_MARKS, reconstruct_textline
+
+from tests._pipeline_harness import EXAMPLES
 
 _NS = "http://www.loc.gov/standards/alto/ns-v3#"
 
@@ -129,7 +130,7 @@ class TestAMixedRoleLineKeepsItsForwardMark:
         from corrigenda.core.schemas import HyphenRole
         from corrigenda.formats.alto.parser import parse_alto_file
 
-        path = Path(__file__).parent.parent.parent.parent / "examples" / "X0000002.xml"
+        path = EXAMPLES / "X0000002.xml"
         pages, _ = parse_alto_file(path, path.name)
         line = next(
             lm
@@ -148,7 +149,7 @@ class TestAMixedRoleLineKeepsItsForwardMark:
         from corrigenda.formats.alto.parser import parse_alto_file
         from corrigenda.formats.alto.rewriter import rewrite_alto_file
 
-        path = Path(__file__).parent.parent.parent.parent / "examples" / "X0000002.xml"
+        path = EXAMPLES / "X0000002.xml"
         pages, _ = parse_alto_file(path, path.name)
         target = "PAG_00000002_TL000454"
         for page in pages:

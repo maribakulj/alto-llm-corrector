@@ -9,12 +9,12 @@ Pins:
 
 from __future__ import annotations
 
-from pathlib import Path
 
 from corrigenda.formats.alto.parser import build_document_manifest, parse_alto_file
 from corrigenda.core.schemas import HyphenRole, PairingPolicy
 
-_EXAMPLES = Path(__file__).parent.parent.parent.parent / "examples"
+from tests._pipeline_harness import EXAMPLES as _EXAMPLES
+
 _SAMPLE = _EXAMPLES / "sample.xml"
 
 

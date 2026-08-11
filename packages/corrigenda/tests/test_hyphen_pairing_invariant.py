@@ -22,18 +22,15 @@ long as the guarantee holds.
 
 from __future__ import annotations
 
-from pathlib import Path
 
 import pytest
 
 from corrigenda.core.schemas import HyphenRole
 from corrigenda.formats.alto.parser import parse_alto_file
 
-from tests._pipeline_harness import run_pipeline
+from tests._pipeline_harness import EXAMPLES, run_pipeline
 
-X0000002_PATH = (
-    Path(__file__).resolve().parent.parent.parent.parent / "examples" / "X0000002.xml"
-)
+X0000002_PATH = EXAMPLES / "X0000002.xml"
 
 pytestmark = pytest.mark.skipif(
     not X0000002_PATH.exists(), reason="X0000002.xml not found"

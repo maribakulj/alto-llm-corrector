@@ -19,6 +19,8 @@ from lxml import etree
 
 from corrigenda.core.schemas import HyphenRole
 
+from tests._pipeline_harness import EXAMPLES
+
 NS = "http://www.loc.gov/standards/alto/ns-v3#"
 
 
@@ -177,9 +179,7 @@ class TestContentPlusHypDash:
 # Test 4: sample.xml regression — no double dash after fix
 # ===========================================================================
 
-SAMPLE_PATH = (
-    Path(__file__).resolve().parent.parent.parent.parent / "examples" / "sample.xml"
-)
+SAMPLE_PATH = EXAMPLES / "sample.xml"
 
 
 @pytest.mark.skipif(not SAMPLE_PATH.exists(), reason="sample.xml not found")

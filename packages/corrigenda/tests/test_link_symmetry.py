@@ -33,7 +33,7 @@ from corrigenda.core.schemas import HyphenRole, LineManifest, PageManifest
 from tests._alto_gen import rich_alto_documents
 from tests.test_properties_hypothesis import _write_tmp
 
-_EXAMPLES = Path(__file__).parent.parent.parent.parent / "examples"
+from tests._pipeline_harness import EXAMPLES as _EXAMPLES
 
 
 def assert_links_are_symmetric(pages: list[PageManifest]) -> None:
