@@ -876,7 +876,7 @@ s'exécute pas dans cette vague.
 | `RM-07` | `core` connaît les formats : `core/losses.py` porte la table des attributs ALTO ; le contrat d'import plafonne à `== 3` au lieu de nommer une règle | réducteur | important | `core/losses.py`, `core/provenance.py`, `tests/test_import_contract.py` | — | **fait (2026-08-06)** |
 | `RM-03` | Drilling de paramètres : 10 à 20 arguments sur le chemin chaud | réducteur | important | `core/workspace.py` (nouveau), `core/driver.py`, `core/outcome.py`, `core/reconcile.py`, `core/routing.py`, `core/pipeline.py`, `core/retry.py` | `RM-01`, `RM-02` | **fait (2026-08-06)** |
 | `RM-06` | ~480 tags de vocabulaire privé, dont certains pointent vers `docs/history/` | vérité | secondaire | tout `src/` | `RM-11` | **fait (2026-08-10)**, 215 mesurés → 23 gelés |
-| `RM-05b` | 124 fichiers de test organisés par vague de remédiation ; 277 imports de symboles privés | tests | important | `tests/` | `RM-05a` | **en cours** — `tests/hyphenation/` clos et **borné par un test** (2026-08-10) |
+| `RM-05b` | 124 fichiers de test organisés par vague de remédiation ; 277 imports de symboles privés | tests | important | `tests/` | `RM-05a` | **en cours** — 3 répertoires par invariant, 2 fichiers-vague sur 3 dissous, 1 reste (2026-08-11) |
 | `RM-09` | `core/schemas.py` fourre-tout : 1 538 l., 44 importateurs, 4 familles de types | nettoyage | secondaire | `core/schemas.py` → `core/schemas/` | — | **fait (2026-08-10)**, zéro importateur touché |
 | `RM-08` | Cinq projections voisines de l'unité de césure (`_page_local_units` / `_units_visible_on_page` quasi identiques) | réducteur | important | `core/reconcile.py`, `core/units.py` | **`S1`** | **hors vague → `S1`** |
 
@@ -1259,6 +1259,26 @@ Branche : `claude/rm-session-10-nettoyages-qb74pu`.
   chaîne interdite mot pour mot, et sa première prise a été **la garde
   précédente**, `test_the_net_is_bounded.py`, qui calculait `TESTS` de la
   façon interdite.
+- **Done** — `RM-05b`, **quatrième tranche** (session 10) : deux fichiers-vague
+  **dissous, pas renommés**. Renommer un sac de constats sans rapport ne fait
+  que lui donner un meilleur nom ; chaque cas restant de
+  `test_audit_d_lib_fixes.py` et `test_review_fixes.py` a rejoint l'invariant
+  dont il parle, et six cas de `test_text_integrity_cluster.py` ont suivi ceux
+  qui partageaient une destination — pour qu'aucun invariant ne finisse coupé
+  en deux. Un fichier neuf, `test_adjacent_duplicates.py` : une seule garde
+  (`check_adjacent_duplicates`), quatre endroits où elle peut être mise en
+  défaut (dans un chunk, à une frontière de chunk, à une couture de page, à
+  une descente de granularité), jusqu'ici répartis sur trois fichiers. Mêmes
+  1 389 noms de test collectés avant et après (P5).
+- **Done** — et un refus délibéré, noté parce qu'il aurait été tentant : les
+  quatre cas de traversée déplacés construisent leurs documents avec des
+  constructeurs *plus permissifs* (un corps de `Page` sans `PrintSpace`, un
+  `TextBlock` dont l'id peut être vide ou absent) que les homonymes de
+  `test_structure_traversal`. Ils sont importés sous alias
+  (`_alto_page_doc`, `_tb_optional_id`) **et non fusionnés** : les deux
+  émettent un XML différent, et les unifier changerait en silence ce que les
+  tests plus anciens affirment. C'est une mesure à faire exprès, pas un effet
+  de bord de déplacement.
 - **Done** — le regroupement est **tenu par un test**, parce que rassembler
   ne tient pas tout seul : `test_the_net_is_bounded.py` exige que tout
   module de test important `corrigenda.core.pairing`, `.units` ou
