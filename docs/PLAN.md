@@ -876,7 +876,7 @@ s'exécute pas dans cette vague.
 | `RM-07` | `core` connaît les formats : `core/losses.py` porte la table des attributs ALTO ; le contrat d'import plafonne à `== 3` au lieu de nommer une règle | réducteur | important | `core/losses.py`, `core/provenance.py`, `tests/test_import_contract.py` | — | **fait (2026-08-06)** |
 | `RM-03` | Drilling de paramètres : 10 à 20 arguments sur le chemin chaud | réducteur | important | `core/workspace.py` (nouveau), `core/driver.py`, `core/outcome.py`, `core/reconcile.py`, `core/routing.py`, `core/pipeline.py`, `core/retry.py` | `RM-01`, `RM-02` | **fait (2026-08-06)** |
 | `RM-06` | ~480 tags de vocabulaire privé, dont certains pointent vers `docs/history/` | vérité | secondaire | tout `src/` | `RM-11` | **fait (2026-08-10)**, 215 mesurés → 23 gelés |
-| `RM-05b` | 124 fichiers de test organisés par vague de remédiation ; 277 imports de symboles privés | tests | important | `tests/` | `RM-05a` | **en cours** — `tests/hyphenation/` clos (2026-08-10) |
+| `RM-05b` | 124 fichiers de test organisés par vague de remédiation ; 277 imports de symboles privés | tests | important | `tests/` | `RM-05a` | **en cours** — `tests/hyphenation/` clos et **borné par un test** (2026-08-10) |
 | `RM-09` | `core/schemas.py` fourre-tout : 1 538 l., 44 importateurs, 4 familles de types | nettoyage | secondaire | `core/schemas.py` → `core/schemas/` | — | **fait (2026-08-10)**, zéro importateur touché |
 | `RM-08` | Cinq projections voisines de l'unité de césure (`_page_local_units` / `_units_visible_on_page` quasi identiques) | réducteur | important | `core/reconcile.py`, `core/units.py` | **`S1`** | **hors vague → `S1`** |
 
@@ -938,9 +938,11 @@ parallèles derrière elle.
 
 Ce qui a changé, c'est le prix de l'attente, pas la décision : la première
 tranche de `RM-05b` met les 19 cas qui casseraient sous un seul répertoire
-(`tests/hyphenation/`), ce qui est le filet dont `S1` manquait. `RM-08`
-s'exécute **dans** `S1`, comme la vérification que la dérivation a bien
-remplacé les projections au lieu de s'y ajouter.
+(`tests/hyphenation/`), ce qui est le filet dont `S1` manquait — et
+`test_the_net_is_bounded.py` fait de « ce répertoire EST le filet » un
+invariant tenu plutôt qu'une intention. `RM-08` s'exécute **dans** `S1`,
+comme la vérification que la dérivation a bien remplacé les projections au
+lieu de s'y ajouter.
 
 ### Ce que la vague ne touche pas
 
@@ -1213,6 +1215,33 @@ Branche : `claude/rm-session-10-nettoyages-qb74pu`.
   (`_reconciled_chain` appelle `_hyphen_line`, parce que le fichier importe
   aussi le `_line(i, text)` de la suite planner). Le `_line` qui existait
   en double au caractère près devient `tests/hyphenation/_lines.py`.
+- **Done** — `RM-05b`, **deuxième tranche** (session 10) : le filet de `S1`
+  devient *un* répertoire. Les 19 fichiers dont le sujet entier est l'unité
+  de césure (4 828 l., ~200 cas, de `test_pairing_core` à `test_units`)
+  rejoignent `tests/hyphenation/` en `git mv` pur — git les enregistre tous
+  les 19 comme renommages à zéro ligne modifiée, et le seul fichier édité
+  est `test_decisions.py`, dont l'import suit le module qu'il lit. Preuve
+  que c'est un déplacement : la liste triée des IDs collectés, privée de son
+  préfixe de répertoire, est identique à l'octet — 1 383 items.
+- **Done** — **le prérequis mesuré du déplacement, et il n'était pas
+  cosmétique** : sept sites dans six fichiers atteignaient `examples/` en
+  comptant quatre `.parent` depuis `__file__`. Descendus d'un répertoire,
+  les sept résolvaient vers un chemin inexistant — **silencieusement**, six
+  d'entre eux étant gardés par `skipif(not PATH.exists())` : ils auraient
+  simplement cessé de s'exécuter. `tests/_pipeline_harness.EXAMPLES`
+  existait déjà et reste à la racine de `tests/`.
+- **Done** — le regroupement est **tenu par un test**, parce que rassembler
+  ne tient pas tout seul : `test_the_net_is_bounded.py` exige que tout
+  module de test important `corrigenda.core.pairing`, `.units` ou
+  `.hyphenation` vive dans ce répertoire, à cinq exceptions **nommées avec
+  leur raison**. Deux gardes sur la garde : une entrée d'allowlist qui
+  n'atteint plus le code doit *partir*, et le scan doit continuer à voir au
+  moins dix modules à l'intérieur — sans quoi un motif dérivé passerait au
+  vert en ne prouvant rien. La première a sauté **dès le premier run,
+  contre son propre auteur** : `test_parser.py` avait été listé sur la foi
+  d'un grep alors qu'il ne cite `core.pairing.HYPHEN_CHARS` que dans un
+  docstring. Nommer un module en prose n'est pas une façon de casser quand
+  il change ; le motif porte donc sur le chemin d'import.
 - **Blocked** — aucun.
 - **Remaining** — `RM-05b` (suite) ; `RM-08`, hors vague.
 - **New bugs discovered** — un, trouvé en étendant le ratchet et corrigé dans
@@ -1290,7 +1319,9 @@ Branche : `claude/rm-session-10-nettoyages-qb74pu`.
   vide), et les trois cas du cliquet — aucun fichier propre ne se salit,
   aucun fichier sale ne grossit, aucune entrée périmée ne subsiste.
   `tests/hyphenation/` ajoute 4 fichiers et 0 cas : **exactement 19 items
-  déplacés**, ce qui est le propos.
+  déplacés**, ce qui est le propos. La deuxième tranche en déplace 19 de
+  plus — des fichiers entiers, en `git mv` — et ajoute le seul test neuf du
+  répertoire, `test_the_net_is_bounded.py` (3 cas).
 - **New bugs discovered** — session 10, aucun dans le comportement. Un
   seul constat, corrigé : la troisième phrase brouillée par `e7b465c` est
   un message d'erreur, pas un docstring — donc le seul des trois qu'un
