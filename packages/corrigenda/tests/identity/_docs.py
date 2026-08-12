@@ -2,8 +2,8 @@
 
 Builders that put a chosen id — or no id, or a repeated one — exactly
 where a parser has to notice it: a margin block, a nested region, a second
-page. Moved out of ``test_review_fixes.py`` and ``test_audit_d_lib_fixes.py``
-unchanged.
+page. These are the builders two now-dissolved wave-named files carried;
+they were moved here unchanged.
 
 ``_alto_doc`` here wraps a PAGE body and NOT a ``PrintSpace``, which is
 what lets a caller place a block in a margin; ``test_structure_traversal``

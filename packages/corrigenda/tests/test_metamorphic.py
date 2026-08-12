@@ -276,7 +276,8 @@ def test_parser_recognises_every_generated_structure(
 # on purpose. A 3-line chain under the 2-line cap stresses the window
 # pinning's hardest case, and the invariance must STILL hold: the
 # planner's over-cap cut (unlink, pinned at planner level in
-# test_review_fixes.py) only runs on failure-driven descent to LINE
+# tests/hyphenation/test_unit_atomicity.py) only runs on failure-driven
+# descent to LINE
 # granularity, and the deterministic rules producer never fails a chunk
 # now that validation is identity-safe — a hard chunk failure under this
 # producer is always a validator false positive, which is exactly the

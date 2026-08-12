@@ -1,9 +1,9 @@
 """The line builder every hyphenation test needs.
 
 One ``LineManifest`` with plausible geometry and the hyphen fields
-exposed as keywords. This is the copy that used to sit — character for
-character, twice — at the top of ``test_audit_d_lib_fixes.py`` and
-``test_text_integrity_cluster.py``.
+exposed as keywords. This is the copy that sat — character for character,
+twice — at the top of two of the three wave-named files, all three of
+which are now dissolved into the invariants they were about.
 """
 
 from __future__ import annotations

@@ -15,11 +15,17 @@ These tests pin the corrected contract:
 
 from __future__ import annotations
 
+import pytest
+
+from corrigenda.core.schemas import HyphenRole, LineStatus
 from corrigenda.formats.alto.rewriter import (
     _compute_geometry,
     _is_space_token,
     _tokenize,
 )
+
+from tests._docs import _ALTO_ONE_LINE
+from tests.hyphenation._lines import _line
 
 
 def _widths(text: str, hpos: int, width: int) -> list[int]:
@@ -150,3 +156,135 @@ def test_geometry_weighs_a_no_break_space_as_part_of_its_word():
     geo = _compute_geometry(0, 100, tokens)
     assert [t for t, _h, _w in geo] == ["ab cd"]
     assert sum(w for _t, _h, w in geo) == 100
+
+
+# ---------------------------------------------------------------------------
+# The slow-path rebuild's own geometry: a trailing HYP must not land on top
+# of a trailing SP, and an unusable HYP WIDTH falls back to the estimate
+# rather than crashing (moved here from a wave-named file, `RM-05b`)
+# ---------------------------------------------------------------------------
+
+
+_ALTO_NS = "http://www.loc.gov/standards/alto/ns-v3#"
+
+
+def _part1_line_element():
+    from lxml import etree
+
+    tl = etree.Element(f"{{{_ALTO_NS}}}TextLine")
+    tl.set("ID", "T1")
+    tl.set("HPOS", "100")
+    tl.set("VPOS", "0")
+    tl.set("WIDTH", "1000")
+    tl.set("HEIGHT", "50")
+    s = etree.SubElement(tl, f"{{{_ALTO_NS}}}String")
+    for k, v in (
+        ("ID", "S1"),
+        ("CONTENT", "unseulmot-"),
+        ("HPOS", "100"),
+        ("VPOS", "0"),
+        ("WIDTH", "960"),
+        ("HEIGHT", "50"),
+    ):
+        s.set(k, v)
+    h = etree.SubElement(tl, f"{{{_ALTO_NS}}}HYP")
+    h.set("CONTENT", "-")
+    h.set("WIDTH", "40")
+    return tl
+
+
+def _rebuild_children(tl):
+    """(localname, hpos, width) for every child, in document order."""
+    out = []
+    for c in tl:
+        local = c.tag.rsplit("}", 1)[-1]
+        out.append((local, int(c.get("HPOS")), int(c.get("WIDTH"))))
+    return out
+
+
+def _assert_children_tile_line(tl, line_hpos: int, line_width: int) -> None:
+    children = _rebuild_children(tl)
+    cursor = line_hpos
+    for local, hpos, width in children:
+        assert hpos == cursor, f"{local} at {hpos}, expected {cursor}: {children}"
+        cursor += width
+    assert cursor == line_hpos + line_width, children
+
+
+@pytest.mark.parametrize("corrected", ["deux mots- ", "deux mots-  ", " deux mots- "])
+def test_f6_trailing_whitespace_geometry_tiles_cleanly(corrected):
+    """corrected_text with leading/trailing whitespace on an explicit
+    PART1 slow-path rebuild must still yield non-overlapping children
+    summing exactly to the line WIDTH — pre-fix the HYP was placed at
+    last_word end, on top of the trailing SP's range."""
+    from corrigenda.formats.alto.rewriter import _rebuild_line
+
+    tl = _part1_line_element()
+    lm = _line("T1", "unseulmot-", role=HyphenRole.PART1, explicit=True)
+    _rebuild_line(tl, corrected, lm, _ALTO_NS)
+    _assert_children_tile_line(tl, 100, 1000)
+    # The HYP is the LAST child, at the very end of the line.
+    local, hpos, width = _rebuild_children(tl)[-1]
+    assert local == "HYP"
+    assert hpos + width == 1100
+
+
+def test_f6_no_whitespace_geometry_unchanged():
+    """Non-regression: the trim must not alter a clean rebuild."""
+    from corrigenda.formats.alto.rewriter import _rebuild_line
+
+    tl_clean = _part1_line_element()
+    lm = _line("T1", "unseulmot-", role=HyphenRole.PART1, explicit=True)
+    _rebuild_line(tl_clean, "deux mots-", lm, _ALTO_NS)
+    clean = _rebuild_children(tl_clean)
+
+    tl_spaced = _part1_line_element()
+    _rebuild_line(tl_spaced, "deux mots- ", lm, _ALTO_NS)
+    assert _rebuild_children(tl_spaced) == clean
+    _assert_children_tile_line(tl_clean, 100, 1000)
+
+
+@pytest.mark.parametrize("bad_width", ["1e999", "inf", "-inf", "nan", "abc"])
+def test_review_w1_hyp_width_overflow_falls_back_to_estimate(bad_width):
+    from corrigenda.formats.alto.rewriter import _rebuild_line
+
+    tl = _part1_line_element()
+    tl[-1].set("WIDTH", bad_width)  # the HYP child
+    lm = _line("T1", "unseulmot-", role=HyphenRole.PART1, explicit=True)
+    # Pre-fix: OverflowError for the inf-shaped values. Post-fix: the
+    # unusable width follows the tolerant policy — 4% estimate — and the
+    # rebuilt children still tile the line exactly.
+    _rebuild_line(tl, "deux mots-", lm, _ALTO_NS)
+    _assert_children_tile_line(tl, 100, 1000)
+    local, _hpos, _width = _rebuild_children(tl)[-1]
+    assert local == "HYP"
+
+
+def test_review_w1_hyp_width_overflow_end_to_end(tmp_path):
+    """A malformed upload (HYP WIDTH="1e999" on an explicit PART1) with a
+    word-count-changing correction must not abort the whole rewrite."""
+    from corrigenda.formats.alto.parser import parse_alto_file
+    from corrigenda.formats.alto.rewriter import rewrite_alto_file
+
+    xml = _ALTO_ONE_LINE.format(text="placeholder").replace(
+        '<String CONTENT="placeholder" HPOS="10" VPOS="10" WIDTH="900" HEIGHT="20"/>',
+        '<String CONTENT="unseulmot-" HPOS="10" VPOS="10" WIDTH="860" HEIGHT="20"'
+        ' SUBS_TYPE="HypPart1" SUBS_CONTENT="unseulmotsuite"/>'
+        '<HYP CONTENT="-" WIDTH="1e999"/>',
+    )
+    path = tmp_path / "overflow-hyp.xml"
+    path.write_text(xml, encoding="utf-8")
+    pages, _root = parse_alto_file(path, "overflow-hyp.xml")
+    (lm,) = [line for p in pages for line in p.lines]
+    lm.corrected_text = "deux mots-"  # forces the slow-path rebuild
+    lm.status = LineStatus.CORRECTED
+
+    out_bytes, _metrics, paths = rewrite_alto_file(path, pages, "test", "model")
+    assert lm.line_id in paths
+    assert (
+        b"deux mots"
+        in out_bytes.replace(b'CONTENT="deux"', b"deux").replace(
+            b'CONTENT="mots-"', b"mots"
+        )
+        or b"deux" in out_bytes
+    )
