@@ -109,6 +109,30 @@ fermer un écart déjà surveillé ». À rouvrir seulement si `S2` l'exige. Le
 rappel est ici parce que `CLAUDE.md` décrit l'écart sans dire qu'il est
 délibérément laissé ouvert, ce qui se lit comme du travail en attente.
 
+**5. La porte avancée EST publique, et `S3b` devient « la fermer ».** Tranché
+sur la mesure du 2026-08-11 : le seul intégrateur réel du dépôt — le backend —
+n'emprunte pas la façade mais la porte basse, et il n'avait pas le choix
+puisque la façade ne couvre pas son usage. Déclarer la porte privée
+reviendrait à casser le seul consommateur connu pour tenir une formulation de
+`V5` qui ne parlait que de la façade. Donc :
+
+- **ajouter les 9** types que les signatures de la porte exigent
+  (`FormatAdapter`, `RewriteResult`, `RewriteMetrics`, `ConfidenceScorer`,
+  `ConfidencePolicy`, `QEScorer`, `RoutingPolicy`, `TokenAlignment`,
+  `AlignedPair`) ;
+- **rétrograder les 4** hors de toute clôture (`EDIT_PROTOCOL_VERSION`,
+  `EditOp`, `ImageRef`, `PageImage`), dans le **même commit** que la mise à
+  jour des appelants ;
+- **reformuler `V5`** : « la surface publique est la clôture de ce que la
+  bibliothèque **retourne et accepte** » — deux portes, deux clôtures, et un
+  test par clôture. La rédaction actuelle ne décrivait que la moitié empruntée
+  par personne.
+
+Net : 66 → 71, et la direction annoncée du plan (« couper ») s'inverse pour
+une raison mesurée. Ce n'est pas un renoncement à `V5` : c'est la première
+fois que les deux moitiés sont calculées, et une surface *close* est ce que le
+critère demandait — pas une surface *petite*.
+
 **Ce qui n'est pas délégué et ne le sera pas ici** : le budget des runs
 (`M2`/`M3`), les licences de corpus (`M5`/`M6`), la conception de
 `review_required` (`G*`), et le tag de publication. Ils passent par le CLI —

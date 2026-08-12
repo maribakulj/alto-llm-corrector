@@ -70,9 +70,13 @@ intégralement exportée, et la porte avancée exige 9 types qu'on ne peut pas
 importer depuis le sommet. La question devient « la porte est-elle
 publique ? », et aucune clôture n'y répond.
 
-**Cet item est donc en attente d'un arbitrage**, avec une recommandation
-écrite dans le plan (la porte est publique, il faut la fermer). La mesure et
-sa garde sont faites : `tests/test_public_surface_is_the_closure.py`.
+**L'arbitrage est tranché** (décision déléguée n°5, 2026-08-11) : **la porte
+est publique, `S3b` devient « la fermer »** — ajouter les 9, rétrograder les
+4, reformuler `V5` en « ce que la bibliothèque retourne *et accepte* ». La
+mesure et sa garde sont faites
+(`tests/test_public_surface_is_the_closure.py`) ; **reste l'exécution**, qui
+est un geste à part entière : la coupe et la mise à jour des appelants sont le
+même commit, et `_LAZY` doit suivre `__all__` (un test l'exige).
 
 **Fini quand** : l'arbitrage est tranché ; `corrigenda.__all__` vaut la cible
 qui en découle ; les rétrogradés sont importables depuis leur module, prouvé
@@ -167,5 +171,8 @@ Une ligne par réveil : date, item, résultat, ou la raison de l'arrêt.
 - 2026-08-11 — `S3b` : mesure faite, **cible renversée**, garde posée
   (`test_public_surface_is_the_closure.py`, 4 cas). **Arrêt** : l'item demande
   un arbitrage absent des « Décisions déléguées » — la porte avancée est-elle
-  publique ? Recommandation écrite dans le plan. Prochain item de la file :
-  `RM-08`.
+  publique ?
+- 2026-08-11 — arbitrage **tranché** (décision n°5) : la porte est publique.
+  `S3b` reste en tête de file, son contenu est maintenant exécutable sans
+  décision : ajouter 9, rétrograder 4, reformuler `V5`, mettre `_LAZY`,
+  `docs/versioning.md` et le `CHANGELOG` en accord.
