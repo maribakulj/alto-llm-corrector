@@ -850,6 +850,67 @@ symboles sous SemVer. Il ne bloque en revanche pas `0.10.0`, que
 
 ---
 
+## État de la porte `0.10.0` — relevé du 2026-08-11
+
+L'information existait, éparpillée sur six sections. Rassemblée ici, elle dit
+quelque chose que personne n'avait formulé : **les cinq critères exigibles pour
+`0.10.0` sont tenus, et ce qui reste est de la mécanique de publication.**
+
+| critère | exigé pour | état, et par quoi il est établi |
+|---|---|---|
+| `V1` — aucune altération non déclarée | `0.10.0` | **tenu.** `L0`-`L10` fermés. Restent deux résidus de `L5` que ce plan qualifie lui-même de « pas un correctif » : ils demandent de la géométrie et un corpus qui les contienne (`M7`), pas une édition de prédicat |
+| `V2` — ni fantôme ni angle mort | `0.10.0` | **tenu.** `R0`-`R8` fermés (2026-07-28), deux d'entre eux par mesure plutôt que par code |
+| `V3` — une seule définition de l'unité | `0.10.0` | **tenu** (déjà acté dans le tableau des critères) |
+| `V8` — aucun renvoi vers l'histoire gelée | `0.10.0` | **tenu.** `D*` clos (2026-07-28) ; `RM-06` a fermé le versant `src/` (215 tags → 23, tous dans des fichiers que la vague s'interdit d'ouvrir) |
+| `V9` — licences des corpus | `0.10.0` | **tenu.** `Gate 0` clos ; aucun corpus dans la wheel ni la sdist, épinglé par un test qui lit les artefacts **construits** |
+
+Ce qui reste, et ce n'est pas de la correction :
+
+1. **`P1` fin** — l'upload TestPyPI. Toute la chaîne a été rejouée en local le
+   2026-08-01 ; l'upload exige l'OIDC de GitHub Actions, donc un tag, donc
+   `P2`. C'est la seule dépendance circulaire du lot et elle se casse en
+   taguant.
+2. **`P2`** — `0.9.0` → `0.10.0` dans `__version__` (le `pyproject` le lit),
+   entrée `CHANGELOG.md`, tag `corrigenda-v0.10.0`, SBOM, publier l'artefact
+   **testé**.
+3. **Un garde-fou déjà tenu, à ne pas perdre** : « aucune revendication de
+   qualité ne sort du dépôt sans `M2` + `M3` ». Vérifié le 2026-08-11 — les
+   deux `README` ne portent **aucun chiffre**. Publier `0.10.0` sans
+   revendication chiffrée est donc cohérent, et le rester est une contrainte
+   sur la note de version.
+
+### La décision qui n'est pas technique
+
+Le gel dit : « aucune fonctionnalité nouvelle tant que `L*` et `R*` ne sont pas
+fermés ». **Cette condition est atteinte.** Le lever ou non est un arbitrage,
+pas un constat, et il commande une séquence :
+
+- Tant que le gel tient, **`S3b` ne peut pas se faire** — c'est une réduction
+  de la surface publique, donc autorisée en tant que refactorisation
+  réductrice, mais elle a été explicitement différée après `S2`.
+- Or `S3b` est une **rupture**. Elle doit donc passer pendant la série `0.x`,
+  que `docs/versioning.md` autorise à casser. La faire après `1.0` la
+  gèlerait sous SemVer — c'est la raison n°1 pour laquelle ce plan refuse de
+  publier `1.0` en premier.
+
+Deux ordres sont donc défendables, et le choix appartient au mainteneur :
+publier `0.10.0` avec la surface actuelle (68 symboles) puis couper en
+`0.11.0` ; ou couper d'abord et publier une seule fois. Le premier livre plus
+tôt et dépense une rupture de plus ; le second retarde la première publication
+d'un item structurel entier.
+
+### Et `1.0.0` reste loin, pour des raisons de fond
+
+`V4` (`G1`-`G3`, l'état `review_required` — une vraie fonctionnalité, et le
+plan démontre qu'aucun réglage de seuil ne ferme la famille des gardes
+sémantiquement aveugles), `V5` (`S3b`), `V6` (`M1`-`M3`, `M7` — le chemin
+inter-pages n'est mesuré par **aucun** run aujourd'hui), `V7` (`M5` —
+`tests/external_corpus/pinned/` est vide et le tier téléchargé est
+`continue-on-error`, donc **aucune page externe ne bloque un merge**), `V10`
+(`P3`). Aucun de ces cinq n'est de la dette : ce sont des travaux.
+
+---
+
 ## RM — Remédiation structurelle (audit du 2026-08-06)
 
 Origine : un audit statique externe du dépôt, lu à `26d6f53`. Il **ne rouvre
@@ -876,7 +937,7 @@ s'exécute pas dans cette vague.
 | `RM-07` | `core` connaît les formats : `core/losses.py` porte la table des attributs ALTO ; le contrat d'import plafonne à `== 3` au lieu de nommer une règle | réducteur | important | `core/losses.py`, `core/provenance.py`, `tests/test_import_contract.py` | — | **fait (2026-08-06)** |
 | `RM-03` | Drilling de paramètres : 10 à 20 arguments sur le chemin chaud | réducteur | important | `core/workspace.py` (nouveau), `core/driver.py`, `core/outcome.py`, `core/reconcile.py`, `core/routing.py`, `core/pipeline.py`, `core/retry.py` | `RM-01`, `RM-02` | **fait (2026-08-06)** |
 | `RM-06` | ~480 tags de vocabulaire privé, dont certains pointent vers `docs/history/` | vérité | secondaire | tout `src/` | `RM-11` | **fait (2026-08-10)**, 215 mesurés → 23 gelés |
-| `RM-05b` | 124 fichiers de test organisés par vague de remédiation ; 277 imports de symboles privés | tests | important | `tests/` | `RM-05a` | **en cours** — volet « vagues » **clos** (0 fichier-vague restant, 3 répertoires par invariant, 2026-08-11) ; restent les 277 imports privés |
+| `RM-05b` | 124 fichiers de test organisés par vague de remédiation ; ~~277 imports de symboles privés~~ **64, mesurés** | tests | important | `tests/` | `RM-05a` | **fait (2026-08-11)** — 0 fichier-vague, 3 répertoires par invariant, 38 symboles internes nommés avec leur catégorie |
 | `RM-09` | `core/schemas.py` fourre-tout : 1 538 l., 44 importateurs, 4 familles de types | nettoyage | secondaire | `core/schemas.py` → `core/schemas/` | — | **fait (2026-08-10)**, zéro importateur touché |
 | `RM-08` | Cinq projections voisines de l'unité de césure (`_page_local_units` / `_units_visible_on_page` quasi identiques) | réducteur | important | `core/reconcile.py`, `core/units.py` | **`S1`** | **hors vague → `S1`** |
 
@@ -1259,6 +1320,32 @@ Branche : `claude/rm-session-10-nettoyages-qb74pu`.
   chaîne interdite mot pour mot, et sa première prise a été **la garde
   précédente**, `test_the_net_is_bounded.py`, qui calculait `TESTS` de la
   façon interdite.
+- **Done** — `RM-05b` **clos** (session 10), et son second constat était
+  **faux**. « 277 imports de symboles privés » : mesuré, c'est **64 imports,
+  38 symboles, 32 fichiers** (en élargissant aux imports privés entre modules
+  de test et aux accès d'attribut : 175 — 277 n'est reconstituable par aucune
+  définition essayée). Surtout, le compte n'était pas le sujet. Classés, les
+  38 forment quatre familles et **aucune n'est du gaspillage à réduire** :
+  **`surface` (2)** — `__version__` et `_LAZY` sont les *instruments* du test
+  de surface publique, pas des internes ; **`alias` (3 symboles, 12 imports)**
+  — `_detect_namespace` **est** `formats._xml.detect_namespace`, un nom
+  **public** porté sous alias privé et listé dans le `__all__` des deux
+  paquets de format, soit près d'un cinquième des imports « privés » comptés
+  par l'audit ; **`value` (~23)** — fonctions de leurs arguments, où passer
+  par la façade affirmerait *moins* et non autrement ; **`run-state` (~10)**
+  — les passes qui écrivent l'état du run, porteuses **par construction**, et
+  le plan le dit déjà : la suite publique vérifie l'état *final*, pas la
+  dépendance à l'ordre des passes (`RM-05a`).
+- **Done** — le livrable est donc un **cliquet nommé, pas une réduction** :
+  `tests/test_internal_seams_are_named.py`, où un 39ᵉ import privé est une
+  décision que quelqu'un prend exprès. Et la classification est **vérifiée,
+  pas déclarée** : une entrée `run-state` doit porter `traces`, `workspace`
+  ou `order` dans sa signature réelle lue dans `src/`, une `value` n'en porte
+  aucune, une `alias` doit résoudre vers un nom public. Ce dernier contrôle a
+  échoué au premier run et avait raison : `formats/alto/parser.py` réimporte
+  le nom *déjà* privé, donc la chaîne de réexport a deux maillons et
+  n'interroger que le dernier faisait passer le second pour un interne.
+
 - **Done** — `RM-05b`, **cinquième tranche** (session 10) :
   `test_text_integrity_cluster.py` dissous à son tour. **Il ne reste dans la
   suite aucun fichier nommé d'après le moment où un défaut a été trouvé
