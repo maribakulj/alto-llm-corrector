@@ -876,7 +876,7 @@ s'exécute pas dans cette vague.
 | `RM-07` | `core` connaît les formats : `core/losses.py` porte la table des attributs ALTO ; le contrat d'import plafonne à `== 3` au lieu de nommer une règle | réducteur | important | `core/losses.py`, `core/provenance.py`, `tests/test_import_contract.py` | — | **fait (2026-08-06)** |
 | `RM-03` | Drilling de paramètres : 10 à 20 arguments sur le chemin chaud | réducteur | important | `core/workspace.py` (nouveau), `core/driver.py`, `core/outcome.py`, `core/reconcile.py`, `core/routing.py`, `core/pipeline.py`, `core/retry.py` | `RM-01`, `RM-02` | **fait (2026-08-06)** |
 | `RM-06` | ~480 tags de vocabulaire privé, dont certains pointent vers `docs/history/` | vérité | secondaire | tout `src/` | `RM-11` | **fait (2026-08-10)**, 215 mesurés → 23 gelés |
-| `RM-05b` | 124 fichiers de test organisés par vague de remédiation ; 277 imports de symboles privés | tests | important | `tests/` | `RM-05a` | **en cours** — 3 répertoires par invariant, 2 fichiers-vague sur 3 dissous, 1 reste (2026-08-11) |
+| `RM-05b` | 124 fichiers de test organisés par vague de remédiation ; 277 imports de symboles privés | tests | important | `tests/` | `RM-05a` | **en cours** — volet « vagues » **clos** (0 fichier-vague restant, 3 répertoires par invariant, 2026-08-11) ; restent les 277 imports privés |
 | `RM-09` | `core/schemas.py` fourre-tout : 1 538 l., 44 importateurs, 4 familles de types | nettoyage | secondaire | `core/schemas.py` → `core/schemas/` | — | **fait (2026-08-10)**, zéro importateur touché |
 | `RM-08` | Cinq projections voisines de l'unité de césure (`_page_local_units` / `_units_visible_on_page` quasi identiques) | réducteur | important | `core/reconcile.py`, `core/units.py` | **`S1`** | **hors vague → `S1`** |
 
@@ -1259,6 +1259,27 @@ Branche : `claude/rm-session-10-nettoyages-qb74pu`.
   chaîne interdite mot pour mot, et sa première prise a été **la garde
   précédente**, `test_the_net_is_bounded.py`, qui calculait `TESTS` de la
   façon interdite.
+- **Done** — `RM-05b`, **cinquième tranche** (session 10) :
+  `test_text_integrity_cluster.py` dissous à son tour. **Il ne reste dans la
+  suite aucun fichier nommé d'après le moment où un défaut a été trouvé
+  plutôt que d'après ce qu'il garantit** — le constat qui ouvrait `RM-05b`
+  est clos sur son versant « fichiers-vague ». Ses 21 cas ont rejoint sept
+  destinations, dont quatre fichiers neufs nommés par l'invariant :
+  `identity/test_ops_are_attributable.py` (une édition reste attachée à la
+  ligne pour laquelle elle a été calculée — `line_id` seul se répète entre
+  fichiers), `hyphenation/test_subs_marker_convergence.py` (ce que le
+  rewriter *demande* d'un marqueur et ce qu'il *écrit* concordent : le défaut
+  n'était pas un fichier faux mais une **route** fausse, une ligne
+  octet-correcte reclassée « à réécrire » à chaque run),
+  `test_line_separators_are_refused.py` (une ligne corrigée est UNE ligne,
+  aux deux portes — `str.splitlines` coupe sur huit caractères, une porte qui
+  en refuse deux en laisse passer six) et `test_page_custom_groups.py`.
+  Mêmes 1 389 noms collectés (P5).
+- **Done** — et le corollaire, appliqué : **supprimer un fichier est la façon
+  la plus rapide de créer une référence morte.** Quatre commentaires
+  pointaient vers les fichiers supprimés ; ils sont réparés dans le même
+  commit. C'est exactement le défaut que `RM-06` vient de retirer de `src/`,
+  et il se recrée à chaque déplacement si personne ne regarde.
 - **Done** — `RM-05b`, **quatrième tranche** (session 10) : deux fichiers-vague
   **dissous, pas renommés**. Renommer un sac de constats sans rapport ne fait
   que lui donner un meilleur nom ; chaque cas restant de
