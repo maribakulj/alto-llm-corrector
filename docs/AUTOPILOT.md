@@ -4,7 +4,43 @@ Ce fichier est **l'état**, pas un compte rendu. Une session réveillée par la
 Routine n'a pas mon contexte : elle a ce fichier, `docs/PLAN.md`, et le dépôt.
 Si les trois se contredisent, `docs/PLAN.md` gagne et ce fichier est corrigé.
 
-Dernière mise à jour : 2026-08-11.
+Dernière mise à jour : 2026-08-12.
+
+---
+
+## Le contrat de boucle — piloté par les événements
+
+**La PR ouverte est l'unité de travail, et « verte » est la condition de
+sortie de chaque tour.** La boucle ne tourne plus à l'horloge : elle reprend
+sur **événement** de la PR — résultat de CI, commentaire de revue, push,
+conflit de merge — et rend la main quand la PR est verte et qu'il n'y a rien
+en attente.
+
+PR courante : **[#71](https://github.com/maribakulj/corrigenda/pull/71)**,
+`claude/rm-session-10-nettoyages-qb74pu` → `main`. La session y est abonnée.
+
+Ordre de priorité à chaque réveil, sans exception :
+
+1. **CI rouge, ou commentaire de revue en attente → c'est ça le travail.**
+   Rien d'autre ne commence tant que la PR n'est pas revenue au vert. Une
+   régression trouvée par la CI passe avant n'importe quel item de la file :
+   elle est déjà payée, il ne reste qu'à la lire.
+2. **PR verte et file non vide** → l'item non clos le plus haut, un geste, un
+   commit, un push.
+3. **Sinon** → arrêt, avec la raison au journal.
+
+**Deux réserves qui ont valeur de règle.** Les webhooks ne livrent pas tout —
+succès de CI, nouveaux pushes et passages en conflit arrivent en retard ou pas
+du tout. Donc : *vérifier l'état réel de la PR plutôt que le supposer*, et un
+**filet horaire toutes les 6 h** existe pour le cas où aucun événement
+n'arrive. Ce filet n'est pas le moteur ; s'il fait le travail, c'est qu'un
+événement s'est perdu.
+
+**Et le vert local ne vaut pas le vert de la CI.** La CI exécute la suite sur
+**3.11, 3.12 et 3.13**, plus le backend, le frontend, la dérive des types
+OpenAPI, la construction Docker et le paquet. Un geste vert ici peut être
+rouge là-bas — c'est précisément à ça que sert la PR, et c'est pour ça que
+« verte » et non « la suite passe chez moi » est la condition de sortie.
 
 ---
 
@@ -34,7 +70,8 @@ Dernière mise à jour : 2026-08-11.
 
 La boucle s'arrête — et écrit pourquoi ici — dès que l'une est vraie :
 
-- la suite est rouge et la cause n'est pas le geste en cours ;
+- la CI est rouge pour une cause qu'on ne sait pas lire après une tentative ;
+- la suite locale est rouge et la cause n'est pas le geste en cours ;
 - l'item suivant exige clés, réseau, budget, licence ou revue humaine ;
 - l'item suivant demande un arbitrage absent de « Décisions déléguées » ;
 - deux réveils consécutifs sans progrès mesurable ;
@@ -176,3 +213,7 @@ Une ligne par réveil : date, item, résultat, ou la raison de l'arrêt.
   `S3b` reste en tête de file, son contenu est maintenant exécutable sans
   décision : ajouter 9, rétrograder 4, reformuler `V5`, mettre `_LAZY`,
   `docs/versioning.md` et le `CHANGELOG` en accord.
+- 2026-08-12 — **PR #71 ouverte**, 23 commits, **CI verte 17/17** (dont la
+  suite sur 3.11/3.12/3.13, le backend, la dérive OpenAPI et le paquet). La
+  boucle est recâblée sur les événements de la PR ; le cron passe de horaire à
+  filet toutes les 6 h. Prochain geste : exécuter `S3b`.
