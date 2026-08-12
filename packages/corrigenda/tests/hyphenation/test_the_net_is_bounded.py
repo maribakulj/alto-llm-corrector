@@ -49,6 +49,10 @@ _ELSEWHERE: dict[str, str] = {
         "names the modules as strings in a subprocess import probe — it "
         "never imports them"
     ),
+    "test_internal_seams_are_named.py": (
+        "names them as strings in the map of which internals the suite may "
+        "reach — it classifies them, it does not call them"
+    ),
     "test_payload_truthfulness.py": (
         "reads the partner refs to check what the PAYLOAD tells a producer "
         "— the subject is the request, not the pair"
