@@ -65,7 +65,63 @@ distance restante entre `0.10.0` et `1.0.0`.
 
 ---
 
+## Décisions déléguées — 2026-08-11
+
+Le mainteneur a délégué quatre arbitrages qui bloquaient la suite. Ils sont
+tranchés ici, avec leur raison, et **chacun est réversible en modifiant ce
+paragraphe** — c'est le seul endroit qui les porte.
+
+Le fait qui les commande toutes : **rien ne sera publié avant une v1 aboutie.**
+Cela retire l'urgence de taguer et rend gratuites les ruptures de la série
+`0.x`, qui n'atteindront jamais un consommateur.
+
+**1. Le gel est levé sur son critère, et remplacé par une contrainte plus
+étroite.** Sa condition d'origine — « tant que `L*` et `R*` ne sont pas
+fermés » — **est atteinte** : `R0`-`R8` clos le 2026-07-28, `L0`-`L10` clos
+sauf deux résidus de `L5` que ce plan qualifie lui-même de non-correctifs. Le
+lever tel quel rouvrirait pourtant la porte que la suite doit garder fermée,
+alors la nouvelle règle est plus précise que l'ancienne :
+
+> **Aucune extension de la surface publique tant que `S3b` n'a pas coupé.**
+
+Les deux corollaires permanents sont conservés : aucun 6ᵉ chemin de résolution
+de partenaire, et aucune revendication chiffrée sans `M2` + `M3`.
+
+**2. Pas de publication intermédiaire ; `S3b` passe avant tout tag.** La
+question « publier `0.10.0` puis couper, ou couper puis publier » est éteinte
+par la décision de ne publier qu'une v1. Couper d'abord ne coûte donc plus une
+rupture — elle ne sera vue par personne — et publier d'abord ferait dépenser
+un numéro pour rien.
+
+**3. `RM-08` est découplé de `S1`.** Il attendait `S1` au motif qu'unifier les
+projections avant que l'unité soit autoritaire produirait une 6ᵉ formulation
+au lieu d'en retirer cinq. Le motif tient **si** la fusion touche au stockage.
+Elle est donc autorisée sous condition explicite : **les champs pointeurs
+restent la vérité, on retire des lectures redondantes, on n'en ajoute
+aucune.** Si la fusion exige de rendre l'unité autoritaire, elle s'arrête —
+c'est `S1`, et le point 4 le parke.
+
+**4. `S1` reste parké, et ce n'est pas une nouvelle décision.** Ce plan l'a
+déjà tranché le 2026-07-27 : `V3` est reformulé et **atteint**, l'écart
+restant est surveillé par trois tests, et le refactor est « le plus gros
+risque de régression du dépôt, sur la partie la plus chargée du moteur, pour
+fermer un écart déjà surveillé ». À rouvrir seulement si `S2` l'exige. Le
+rappel est ici parce que `CLAUDE.md` décrit l'écart sans dire qu'il est
+délibérément laissé ouvert, ce qui se lit comme du travail en attente.
+
+**Ce qui n'est pas délégué et ne le sera pas ici** : le budget des runs
+(`M2`/`M3`), les licences de corpus (`M5`/`M6`), la conception de
+`review_required` (`G*`), et le tag de publication. Ils passent par le CLI —
+voir `docs/AUTOPILOT.md`.
+
+---
+
 ## Règle de gel — applicable immédiatement
+
+> **Levée le 2026-08-11** — condition atteinte, remplacée par une contrainte
+> plus étroite : *aucune extension de la surface publique tant que `S3b` n'a
+> pas coupé*. Voir « Décisions déléguées » ci-dessus. Le paragraphe d'origine
+> est conservé tel quel parce qu'il dit ce que la règle protégeait.
 
 **Aucune fonctionnalité nouvelle tant que `L*` et `R*` ne sont pas fermés.**
 
