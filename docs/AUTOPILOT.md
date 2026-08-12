@@ -63,11 +63,21 @@ appelants sont le même commit**, sinon le dépôt se casse lui-même. Coût
 mesuré : 32 lignes d'import, dont 6 en production, toutes pour
 `sanitize_error`.
 
-**Fini quand** : `corrigenda.__all__` vaut exactement les 54 ;
-`tests/test_public_api_snapshot.py` épingle la nouvelle liste et sa docstring
-ne prétend plus qu'elle est provisoire ; les 45 rétrogradés sont importables
-depuis leur module, prouvé par un test ; la lib, le backend et les scripts
-sont verts ; `docs/versioning.md` et le `CHANGELOG` disent la rupture.
+**Mesuré le 2026-08-11, et la cible est renversée** — voir `docs/PLAN.md`
+§ « Mesure du 2026-08-11 ». La surface est **4 trop grande et 9 trop
+petite**, pas 41 trop grande : la clôture des retours (34 types) est
+intégralement exportée, et la porte avancée exige 9 types qu'on ne peut pas
+importer depuis le sommet. La question devient « la porte est-elle
+publique ? », et aucune clôture n'y répond.
+
+**Cet item est donc en attente d'un arbitrage**, avec une recommandation
+écrite dans le plan (la porte est publique, il faut la fermer). La mesure et
+sa garde sont faites : `tests/test_public_surface_is_the_closure.py`.
+
+**Fini quand** : l'arbitrage est tranché ; `corrigenda.__all__` vaut la cible
+qui en découle ; les rétrogradés sont importables depuis leur module, prouvé
+par un test ; la lib, le backend et les scripts sont verts ;
+`docs/versioning.md` et le `CHANGELOG` disent la rupture.
 
 ### 2. `RM-08` — fusionner les projections voisines de l'unité
 
@@ -153,4 +163,9 @@ aucun chiffre, et le rester est une contrainte sur toute note de version.
 
 Une ligne par réveil : date, item, résultat, ou la raison de l'arrêt.
 
-- 2026-08-11 — file écrite, Routine armée. Rien d'exécuté encore.
+- 2026-08-11 — file écrite, Routine armée.
+- 2026-08-11 — `S3b` : mesure faite, **cible renversée**, garde posée
+  (`test_public_surface_is_the_closure.py`, 4 cas). **Arrêt** : l'item demande
+  un arbitrage absent des « Décisions déléguées » — la porte avancée est-elle
+  publique ? Recommandation écrite dans le plan. Prochain item de la file :
+  `RM-08`.

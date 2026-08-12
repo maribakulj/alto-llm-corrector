@@ -840,6 +840,61 @@ leur module** (vérifié : les 45 ont un module d'accueil réel).
 changer leurs imports — mécanique, pas une refonte — mais c'est un changement à
 faire **dans le même commit** que la coupe, sinon le dépôt se casse lui-même.
 
+### Mesure du 2026-08-11 — **la cible de `S3b` est renversée**
+
+La répartition ci-dessus (95 → 54, « couper 41 ») a été confrontée à la
+surface réelle en recalculant les clôtures. Elle ne tient plus, et pas d'un
+peu : **la surface n'est pas 41 symboles trop grande, elle est 4 trop grande
+et 9 trop petite.**
+
+`corrigenda.__all__` vaut **66** aujourd'hui — `RM-04` avait déjà fait
+l'essentiel de la coupe. Et :
+
+| clôture | taille | état |
+|---|---|---|
+| ce que la façade **retourne** | 34 types | **tous exportés.** La moitié vérifiable de `V5` est donc **atteinte**, et désormais gardée par un test qui échoue au moment où un champ de retour porte un type non exportable |
+| ce que la porte avancée **accepte** | 58 types | **9 ne sont pas exportés** |
+
+- **4 exportés hors de toute clôture**, donc rétrogradables sur le critère de
+  `S3` lui-même : `EDIT_PROTOCOL_VERSION`, `EditOp`, `ImageRef`, `PageImage`.
+- **9 types que les signatures de la porte exigent et qu'on ne peut pas
+  importer depuis le sommet** : `FormatAdapter`, `RewriteResult`,
+  `RewriteMetrics`, `ConfidenceScorer`, `ConfidencePolicy`, `QEScorer`,
+  `RoutingPolicy`, `TokenAlignment`, `AlignedPair`. Qui implémente un
+  `EditProducer` ou passe `format_adapter=` doit aller les chercher par
+  chemin de module.
+
+**Et ça explique une observation que `S3` avait faite sans la relier** : le
+backend, seul intégrateur réel, n'emprunte pas la façade mais la porte basse.
+Il n'avait pas le choix — la porte qu'il utilise n'a jamais été complètement
+exportée. « Le namespace de sommet est une vitrine que le dépôt n'emprunte
+pas » a une seconde moitié : *la porte qu'il emprunte n'est pas une vitrine
+du tout.*
+
+#### Ce que `S3b` devient, et la question qu'il faut trancher
+
+La question n'est plus « couper quoi » mais **« la porte avancée est-elle
+publique ? »**, et aucune clôture ne peut y répondre :
+
+- **si oui**, il faut la *fermer* — ajouter les 9 — et la surface monte avant
+  de descendre. Le seul consommateur connu l'emprunte, donc la démoter le
+  casserait ;
+- **si non**, alors `CorrectionPipeline` non plus n'est pas publique, et la
+  surface tombe à la clôture de la façade plus les erreurs, soit ~45.
+
+**Recommandation, sur la mesure** : la porte est publique et doit être fermée.
+Le coût de l'autre branche est de casser le seul intégrateur réel pour tenir
+une formulation de `V5` qui ne parlait que de la façade.
+
+**Non exécuté délibérément.** Le geste inverse la direction annoncée du plan
+et déplace la surface publique ; il doit être vu avant d'atterrir, pas glissé
+dans une tranche autonome. Ce qui est fait, c'est la mesure et sa garde :
+`tests/test_public_surface_is_the_closure.py` fige les deux écarts, pour que
+la prochaine session hérite d'un fait au lieu de le redériver — deux fois,
+comme celle-ci : les premiers essais suivaient les méthodes privées dans le
+moteur et perdaient les paramètres du constructeur, ce qui faisait passer la
+clôture de la porte pour le paquet entier.
+
 ### Décision (2026-07-28) — la coupe est différée, la vérité ne l'est pas
 
 `S3` se scinde en deux, parce que ses deux moitiés n'ont ni le même coût ni le
