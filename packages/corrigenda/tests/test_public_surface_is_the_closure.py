@@ -1,48 +1,49 @@
-"""What `corrigenda.__all__` should hold, computed rather than chosen.
+"""What `corrigenda.__all__` holds, recomputed on every run.
 
-`V5` says the public surface is *the closure of what the façade returns*, and
-`S3` established that closure by calculation for a reason worth repeating:
-choosing a surface by hand is how the package reached 95 symbols.
+`S3b` cut the surface to a computed closure on 2026-08-01 and
+``test_public_api_snapshot`` pins the resulting list. This module is its
+complement: the snapshot says *which names*, this one says *why those* — it
+redoes the calculation instead of trusting the list, so a change to a
+signature or a returned field is caught by the rule rather than by a diff of
+sixty-six strings.
 
-This module recomputes both closures on every run and pins the gaps.
+The library makes **two** promises, and each is a closure that must be
+complete:
 
-**Closure of the façade returns — 34 types, all exported.** That half of `V5`
-is met, and this test is what keeps it met: a new field on ``CorrectionResult``
-whose type is not exported fails here, at the moment it is added, instead of
-being discovered by a consumer who cannot name the value they are holding.
+  * what the façade RETURNS — 34 types, all exported. A caller typing the
+    value it was handed can name every part of it.
+  * what the PRODUCER SEAM accepts — 17 types, all exported. The README's
+    first sentence promises corrections "by LLM, rules engine, or any custom
+    EditProducer", so an implementer typing the protocol it fills can name
+    every part of that too.
 
-**Closure of the advanced door — 58 types, nine of them NOT exported.** This is
-the measurement that supersedes `S3b`'s target, and it points the opposite way
-to the plan's arithmetic (95 → 54, "cut 41"):
+There is a **third** seam, and it is deliberately left open:
+``CorrectionPipeline``'s optional injections — ``format_adapter``,
+``qe_scorer``, ``routing_policy``, ``confidence_policy``,
+``confidence_scorers``. Closing it would drag in nine more names, listed
+below. They stay at their module paths, which ``docs/versioning.md``
+documents as a supported door, for two reasons already written in
+``test_public_api_snapshot``: ``RewriteResult``/``RewriteMetrics``/
+``AlignedPair``/``TokenAlignment``/``FormatAdapter`` are the rewriter's
+internal accounting vocabulary that `R5`/`R8`/`L8` have been moving all
+year, and blessing it under SemVer would promise a stability nothing
+supports; ``ConfidencePolicy``/``RoutingPolicy``/``QEScorer``/
+``ConfidenceScorer`` are research knobs whose defaults do nothing, and a
+top-level export reads as "ready".
 
-  * exactly **four** exported symbols sit outside EVERY closure and are
-    demotable on the plan's own criterion;
-  * **nine** types the advanced door's own signatures require cannot be
-    imported from the top at all. Someone implementing ``EditProducer``, or
-    passing ``format_adapter=``, has to reach into a module path for
-    ``FormatAdapter``, ``RewriteResult``, ``ConfidenceScorer``, ``QEScorer``,
-    ``RoutingPolicy`` or ``ConfidencePolicy``.
+**Why this file exists at all is a correction.** On 2026-08-11 the closure
+was recomputed with ``CorrectionPipeline`` as a seed, which pulls the third
+seam in, and the nine names below looked like *holes* — leading to a written
+conclusion that the surface was "four too big and nine too small" and that
+`S3b`'s target should be inverted. That was wrong, and the error is
+instructive: seeding a public-surface calculation with a constructor's
+OPTIONAL knobs measures what the library can be configured with, not what it
+promises. The two promises are the seeds; the third seam is a decision.
 
-That second half explains an observation `S3` already recorded without
-connecting it: the backend — the only real integrator — does not use
-``load``/``correct``/``correct_sync``, it goes through the low-level door. It
-had no choice. **The top-level namespace is a shop window the repository
-itself does not use**, and part of the reason is that the door it does use was
-never fully exported.
-
-So the surface is not 41 symbols too big. It is four too big and nine too
-small, and the open question is not "cut what" but **"is the advanced door
-public?"** — which no closure can answer, because a door that is public has to
-be closed over, and a door that is not means demoting ``CorrectionPipeline``
-itself. That decision is written up in `docs/PLAN.md`; this file only holds it
-still while it is made.
-
-Nothing here asserts the surface *should* change. It asserts that both gaps
-are exactly the ones measured on 2026-08-11, so the next session inherits a
-fact instead of re-deriving one — twice, as this one did: the first two
-attempts followed private methods into the engine and dropped the
-constructor's parameters, which made the door's closure look like the whole
-package.
+So the nine are pinned here as the **cost of a decision**, not as a defect.
+If someone later decides the third seam is public, this set goes to empty in
+the same commit that exports them — and the snapshot, the CHANGELOG and
+``docs/versioning.md`` move with it.
 """
 
 from __future__ import annotations
@@ -54,36 +55,39 @@ import typing
 import corrigenda
 from corrigenda import facade
 
-#: Exported, and outside both closures. The façade entry points, the error
-#: hierarchy and ``sanitize_error`` are here by design — they are not types a
-#: return value drags in, they are the API itself.
-_DELIBERATE = {
-    "load",
-    "correct",
-    "correct_sync",
-    "__version__",
-    "sanitize_error",
-    "CorrigendaError",
-    "CorrectionError",
-    "ParseError",
-    "DuplicateIdError",
-    "ProposalValidationError",
-    "ValidationError",
-    "CorrectionAborted",
+#: Exported without being reachable from either promise — on purpose, with
+#: the reason. This is the list that has to stay short: a surface reaches 95
+#: one defensible addition at a time, and the defence is the point.
+_DELIBERATE: dict[str, str] = {
+    "load": "the façade itself",
+    "correct": "the façade itself",
+    "correct_sync": "the façade itself",
+    "__version__": "a dunder",
+    "sanitize_error": "the one helper the backend imports from the top (3 sites)",
+    "CorrigendaError": "the error hierarchy is the API, not a returned type",
+    "CorrectionError": "deprecation alias, removed at 1.0",
+    "ParseError": "the error hierarchy",
+    "DuplicateIdError": "the error hierarchy",
+    "ProposalValidationError": "the error hierarchy",
+    "ValidationError": "deprecation alias, removed at 1.0",
+    "CorrectionAborted": "the error hierarchy",
+    "CorrectionPipeline": "the advanced door itself — what the backend uses",
+    "RetryPolicy": "§15: injection is the ONLY way a consumer adapts the lib",
+    "GuardConfig": "§15 injection point",
+    "ChunkPlannerConfig": "§15 injection point",
+    "PairingPolicy": "§15 injection point",
+    "LossPolicy": "§15 injection point",
+    "ProducerMetadata": "what a producer declares about itself (§11 provenance)",
+    "ImageRef": "`I4` — the pure core CARRIES it for a producer that asks for "
+    "pixels, and never opens it",
+    "PageImage": "`I4`, same reason",
+    "EditOp": "the edit protocol's own vocabulary, exported with EditScript",
+    "EDIT_PROTOCOL_VERSION": "the version a consumer dispatches on (`D5`)",
 }
 
-#: Exported, outside both closures, and NOT deliberate — demotable on `S3`'s
-#: own criterion. Measured 2026-08-11.
-_OUTSIDE_EVERY_CLOSURE = {
-    "EDIT_PROTOCOL_VERSION",
-    "EditOp",
-    "ImageRef",
-    "PageImage",
-}
-
-#: Required by the advanced door's own signatures, and not exported. The
-#: number this list should reach is a decision, not a measurement.
-_DOOR_GAPS = {
+#: What closing the THIRD seam would cost. Not holes — the price of a
+#: decision taken on 2026-08-01 and re-affirmed on 2026-08-12.
+_THIRD_SEAM = {
     "AlignedPair",
     "ConfidencePolicy",
     "ConfidenceScorer",
@@ -163,15 +167,24 @@ def _return_closure() -> set[str]:
     return _closure(seeds)
 
 
-def _door_closure() -> set[str]:
+def _producer_seam_closure() -> set[str]:
+    """The second promise. ``CorrectionPipeline`` is deliberately NOT a seed.
+
+    It accepts the third seam's optional injections, so seeding with it
+    measures what the library can be configured with rather than what it
+    promises — the exact error this file was born correcting.
+    """
     return _closure(
         {
-            corrigenda.CorrectionPipeline,
             corrigenda.EditProducer,
             corrigenda.PipelineObserver,
             corrigenda.CorrectionRequest,
         }
     )
+
+
+def _third_seam_closure() -> set[str]:
+    return _closure({corrigenda.CorrectionPipeline}) - _producer_seam_closure()
 
 
 def test_the_facade_closure_is_fully_exported() -> None:
@@ -199,35 +212,47 @@ def test_the_return_closure_has_not_quietly_shrunk() -> None:
     )
 
 
-def test_the_door_gaps_are_the_measured_ones() -> None:
-    """The advanced door is not closed, and by exactly this much.
+def test_the_producer_seam_is_fully_exported() -> None:
+    """The second promise, held to the same standard as the first."""
+    missing = sorted(_producer_seam_closure() - set(corrigenda.__all__))
+    assert not missing, (
+        f"type(s) an EditProducer implementer must name but cannot import "
+        f"from the top: {missing}. The README promises this seam; a promise "
+        "with a name you cannot say is not one."
+    )
 
-    Growing this set means a new door signature names a type a caller cannot
-    import. Shrinking it means someone exported one — which is a surface
-    decision, so it should arrive with the plan updated.
+
+def test_the_third_seam_costs_exactly_what_was_decided() -> None:
+    """The price of leaving ``CorrectionPipeline``'s knobs at module paths.
+
+    Growing this set means a new optional injection named a new type — worth
+    knowing, since each one raises the price of ever closing the seam.
+    Shrinking it means someone exported one, which is a surface decision and
+    should arrive with the snapshot, the CHANGELOG and versioning.md.
     """
-    gaps = _door_closure() - set(corrigenda.__all__)
-    assert gaps == _DOOR_GAPS, (
-        f"the advanced door's unexported types changed.\n"
-        f"  added:   {sorted(gaps - _DOOR_GAPS)}\n"
-        f"  removed: {sorted(_DOOR_GAPS - gaps)}\n"
-        "If the door is public these belong in __all__; if it is not, "
-        "CorrectionPipeline does not either. `docs/PLAN.md` holds that "
-        "question — answer it there, then update this set."
+    cost = _third_seam_closure() - set(corrigenda.__all__)
+    assert cost == _THIRD_SEAM, (
+        f"the third seam's cost changed.\n"
+        f"  added:   {sorted(cost - _THIRD_SEAM)}\n"
+        f"  removed: {sorted(_THIRD_SEAM - cost)}\n"
+        "These stay at their module paths on purpose "
+        "(see test_public_api_snapshot). Changing that is a decision, not a "
+        "refactor."
     )
 
 
-def test_nothing_is_exported_outside_every_closure_but_the_named() -> None:
-    """Four symbols, named, demotable on `S3`'s own criterion."""
-    outside = set(corrigenda.__all__) - _return_closure() - _door_closure()
-    unexpected = sorted(outside - _DELIBERATE - _OUTSIDE_EVERY_CLOSURE)
+def test_nothing_is_exported_outside_both_promises_but_the_named() -> None:
+    """A symbol in neither promise is how a surface reaches 95."""
+    outside = set(corrigenda.__all__) - _return_closure() - _producer_seam_closure()
+    unexpected = sorted(outside - set(_DELIBERATE))
     assert not unexpected, (
-        f"symbol(s) exported without being reachable from anything the "
-        f"library returns or accepts: {unexpected}. That is how a surface "
-        "grows to 95 — one deliberate addition at a time."
+        f"symbol(s) exported without being reachable from either promise and "
+        f"without a stated reason: {unexpected}. That is how a surface grows "
+        "to 95 — one defensible addition at a time, undefended."
     )
-    vanished = sorted(_OUTSIDE_EVERY_CLOSURE - outside)
-    assert not vanished, (
-        f"these were measured outside every closure and no longer are: "
-        f"{vanished}. Good news, but the list has to follow."
+    stale = sorted(set(_DELIBERATE) - outside - {"load", "correct", "correct_sync"})
+    assert not stale, (
+        f"these are listed as deliberate exceptions but are now reachable "
+        f"from a promise (or gone): {stale}. Drop them — an exception nobody "
+        "removes stops being one."
     )

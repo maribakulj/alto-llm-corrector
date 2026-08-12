@@ -65,6 +65,10 @@ rouge là-bas — c'est précisément à ça que sert la PR, et c'est pour ça q
    collectés par `pytest --collect-only`.
 5. **Ce que la vague RM s'interdit reste interdit** : `core/pairing.py`,
    `core/hyphenation.py`, `formats/alto/rewriter.py` ne sont pas découpés.
+6. **Avant d'attaquer un item, vérifier dans le CODE qu'il est encore
+   ouvert.** Un item peut être clos dans le code et resté ouvert dans le plan
+   — `S3b` l'était, et la file en a hérité. Le plan décrit l'intention ; les
+   tests décrivent l'état.
 
 ### Conditions d'arrêt
 
@@ -84,41 +88,24 @@ La boucle s'arrête — et écrit pourquoi ici — dès que l'une est vraie :
 Dans l'ordre. Un item se ferme quand son « fini quand » est vérifiable par
 quelqu'un qui n'a pas suivi le travail.
 
-### 1. `S3b` — couper la surface publique à sa clôture
+### ~~1. `S3b`~~ — **déjà fait, retiré de la file le 2026-08-12**
 
-**État : à faire. C'est le plus gros item restant qui soit entièrement
-autonome, et il est entièrement spécifié.**
+`S3b` a été exécuté le **2026-08-01** et affiné par `RM-04` le 2026-08-06. Les
+66 symboles actuels sont la clôture calculée, pas une accumulation, et
+`tests/test_public_api_snapshot.py` porte le raisonnement complet.
 
-`docs/PLAN.md` §`S3` a calculé la cible : **54 symboles** (50 gardés + les 4
-trous : `Coords`, `ProjectionFidelity`, `ReconcileMetrics`,
-`CORRECTION_REPORT_VERSION`). La surface est à **68** aujourd'hui — `RM-04`
-l'a déjà dégonflée depuis 95. Les 45 rétrogradés ont tous un module d'accueil
-réel, vérifié par le plan.
+Cet item figurait ici parce que `docs/PLAN.md` le décrivait encore comme
+différé. **C'est le premier vrai piège de cette file** : un item peut être
+clos dans le code et ouvert dans le plan, et la file hérite du plan. Corollaire
+ajouté aux règles permanentes : *avant d'attaquer un item, vérifier dans le
+code qu'il est encore ouvert.*
 
-Contrainte que le plan pose explicitement : **la coupe et la mise à jour des
-appelants sont le même commit**, sinon le dépôt se casse lui-même. Coût
-mesuré : 32 lignes d'import, dont 6 en production, toutes pour
-`sanitize_error`.
-
-**Mesuré le 2026-08-11, et la cible est renversée** — voir `docs/PLAN.md`
-§ « Mesure du 2026-08-11 ». La surface est **4 trop grande et 9 trop
-petite**, pas 41 trop grande : la clôture des retours (34 types) est
-intégralement exportée, et la porte avancée exige 9 types qu'on ne peut pas
-importer depuis le sommet. La question devient « la porte est-elle
-publique ? », et aucune clôture n'y répond.
-
-**L'arbitrage est tranché** (décision déléguée n°5, 2026-08-11) : **la porte
-est publique, `S3b` devient « la fermer »** — ajouter les 9, rétrograder les
-4, reformuler `V5` en « ce que la bibliothèque retourne *et accepte* ». La
-mesure et sa garde sont faites
-(`tests/test_public_surface_is_the_closure.py`) ; **reste l'exécution**, qui
-est un geste à part entière : la coupe et la mise à jour des appelants sont le
-même commit, et `_LAZY` doit suivre `__all__` (un test l'exige).
-
-**Fini quand** : l'arbitrage est tranché ; `corrigenda.__all__` vaut la cible
-qui en découle ; les rétrogradés sont importables depuis leur module, prouvé
-par un test ; la lib, le backend et les scripts sont verts ;
-`docs/versioning.md` et le `CHANGELOG` disent la rupture.
+Ce que la tentative laisse : `tests/test_public_surface_is_the_closure.py`,
+qui **recalcule** les deux clôtures de promesse à chaque run (34 types
+retournés, 17 types du seam producteur, tous exportés) et épingle le prix du
+troisième seam — les 9 noms que fermer `format_adapter`/`qe_scorer`/
+`routing_policy`/`confidence_policy` coûterait, comme prix d'une décision et
+non comme défaut.
 
 ### 2. `RM-08` — fusionner les projections voisines de l'unité
 
@@ -216,4 +203,11 @@ Une ligne par réveil : date, item, résultat, ou la raison de l'arrêt.
 - 2026-08-12 — **PR #71 ouverte**, 23 commits, **CI verte 17/17** (dont la
   suite sur 3.11/3.12/3.13, le backend, la dérive OpenAPI et le paquet). La
   boucle est recâblée sur les événements de la PR ; le cron passe de horaire à
-  filet toutes les 6 h. Prochain geste : exécuter `S3b`.
+  filet toutes les 6 h.
+- 2026-08-12 (filet) — PR verte, 0 fil de revue, `mergeable_state: clean`.
+  `S3b` attaqué, **puis annulé en cours de geste** : la lecture de
+  `test_public_api_snapshot.py` a montré qu'il était **déjà fait** depuis le
+  2026-08-01 et que les « 9 trous » sont un troisième seam laissé ouvert par
+  écrit. Surface restaurée à 66, décision n°5 annulée, mesure du plan
+  rétractée, règle n°6 ajoutée. Reste acquis : la garde qui recalcule les deux
+  clôtures. **Prochain item : `RM-08`.**

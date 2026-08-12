@@ -109,29 +109,22 @@ fermer un écart déjà surveillé ». À rouvrir seulement si `S2` l'exige. Le
 rappel est ici parce que `CLAUDE.md` décrit l'écart sans dire qu'il est
 délibérément laissé ouvert, ce qui se lit comme du travail en attente.
 
-**5. La porte avancée EST publique, et `S3b` devient « la fermer ».** Tranché
-sur la mesure du 2026-08-11 : le seul intégrateur réel du dépôt — le backend —
-n'emprunte pas la façade mais la porte basse, et il n'avait pas le choix
-puisque la façade ne couvre pas son usage. Déclarer la porte privée
-reviendrait à casser le seul consommateur connu pour tenir une formulation de
-`V5` qui ne parlait que de la façade. Donc :
+**5. ~~La porte avancée est publique~~ — ANNULÉE le 2026-08-12, sans avoir
+été exécutée.** Elle reposait sur une mesure fausse (voir §`S3` « Mesure du
+2026-08-11 — rétractée ») : les neuf « trous » sont un troisième seam laissé
+ouvert **par écrit**, et `S3b` était déjà fait depuis le 2026-08-01.
 
-- **ajouter les 9** types que les signatures de la porte exigent
-  (`FormatAdapter`, `RewriteResult`, `RewriteMetrics`, `ConfidenceScorer`,
-  `ConfidencePolicy`, `QEScorer`, `RoutingPolicy`, `TokenAlignment`,
-  `AlignedPair`) ;
-- **rétrograder les 4** hors de toute clôture (`EDIT_PROTOCOL_VERSION`,
-  `EditOp`, `ImageRef`, `PageImage`), dans le **même commit** que la mise à
-  jour des appelants ;
-- **reformuler `V5`** : « la surface publique est la clôture de ce que la
-  bibliothèque **retourne et accepte** » — deux portes, deux clôtures, et un
-  test par clôture. La rédaction actuelle ne décrivait que la moitié empruntée
-  par personne.
+Ce que l'épisode laisse, et qui est plus utile que la décision annulée :
 
-Net : 66 → 71, et la direction annoncée du plan (« couper ») s'inverse pour
-une raison mesurée. Ce n'est pas un renoncement à `V5` : c'est la première
-fois que les deux moitiés sont calculées, et une surface *close* est ce que le
-critère demandait — pas une surface *petite*.
+- une garde qui **recalcule** les deux clôtures au lieu de faire confiance à
+  la liste épinglée ;
+- la règle de méthode : *on amorce une clôture de surface publique avec les
+  promesses de la bibliothèque, jamais avec les boutons optionnels d'un
+  constructeur* ;
+- et un rappel sur la délégation elle-même. Une décision déléguée reste une
+  décision : celle-ci a été prise vite, sur une mesure d'une heure, contre
+  deux décisions documentées que je n'avais pas lues. La délégation autorise
+  à trancher ; elle n'autorise pas à trancher sans avoir lu.
 
 **Ce qui n'est pas délégué et ne le sera pas ici** : le budget des runs
 (`M2`/`M3`), les licences de corpus (`M5`/`M6`), la conception de
@@ -864,7 +857,7 @@ leur module** (vérifié : les 45 ont un module d'accueil réel).
 changer leurs imports — mécanique, pas une refonte — mais c'est un changement à
 faire **dans le même commit** que la coupe, sinon le dépôt se casse lui-même.
 
-### Mesure du 2026-08-11 — **la cible de `S3b` est renversée**
+### Mesure du 2026-08-11 — **rétractée le 2026-08-12**
 
 La répartition ci-dessus (95 → 54, « couper 41 ») a été confrontée à la
 surface réelle en recalculant les clôtures. Elle ne tient plus, et pas d'un
@@ -910,14 +903,43 @@ publique ? »**, et aucune clôture ne peut y répondre :
 Le coût de l'autre branche est de casser le seul intégrateur réel pour tenir
 une formulation de `V5` qui ne parlait que de la façade.
 
-**Non exécuté délibérément.** Le geste inverse la direction annoncée du plan
-et déplace la surface publique ; il doit être vu avant d'atterrir, pas glissé
-dans une tranche autonome. Ce qui est fait, c'est la mesure et sa garde :
-`tests/test_public_surface_is_the_closure.py` fige les deux écarts, pour que
-la prochaine session hérite d'un fait au lieu de le redériver — deux fois,
-comme celle-ci : les premiers essais suivaient les méthodes privées dans le
-moteur et perdaient les paramètres du constructeur, ce qui faisait passer la
-clôture de la porte pour le paquet entier.
+**RÉTRACTÉ le 2026-08-12, avant exécution.** Le constat ci-dessus est faux,
+et l'erreur mérite d'être gardée parce qu'elle est reproductible.
+
+`S3b` **est déjà fait** — exécuté le 2026-08-01, et `RM-04` l'a affiné le
+2026-08-06. Les 66 symboles actuels ne sont pas une accumulation : c'est la
+clôture calculée, et `tests/test_public_api_snapshot.py` porte le raisonnement
+complet, que la mesure d'hier n'avait pas lu.
+
+Surtout, **les « 9 trous » ne sont pas des trous** : ils sont exactement ce que
+`CorrectionPipeline` ajoute par ses **injections optionnelles** —
+`format_adapter`, `qe_scorer`, `routing_policy`, `confidence_policy`,
+`confidence_scorers`. C'est un **troisième seam**, laissé ouvert par écrit et
+pour deux raisons :
+
+- `RewriteResult`, `RewriteMetrics`, `AlignedPair`, `TokenAlignment`,
+  `FormatAdapter` sont le vocabulaire de comptabilité interne du rewriter, que
+  `R5`/`R8`/`L8` ont déplacé toute l'année. Le bénir sous SemVer promettrait
+  une stabilité que rien ne soutient ;
+- `ConfidencePolicy`, `RoutingPolicy`, `QEScorer`, `ConfidenceScorer` sont des
+  boutons de recherche dont les défauts ne font rien. Un export au sommet se
+  lit « prêt » ; ils ne le sont pas.
+
+**L'erreur de méthode, qui est la leçon** : j'ai amorcé le calcul de clôture
+avec `CorrectionPipeline`. Amorcer une surface publique avec les boutons
+**optionnels** d'un constructeur mesure ce avec quoi la bibliothèque peut être
+*configurée*, pas ce qu'elle *promet*. Les semences sont les deux promesses —
+ce que la façade retourne, et ce que le seam producteur accepte. Recalculé
+ainsi : **34 types et 17 types, tous exportés**. Les deux moitiés de `V5` sont
+tenues.
+
+Ce qui reste de la mesure, et qui vaut : `tests/test_public_surface_is_the_closure.py`
+recalcule les deux clôtures à chaque run, exporte la garde que la liste
+épinglée ne donnait pas (un champ de retour au type non exportable échoue au
+moment où on l'ajoute), et **épingle le prix du troisième seam** — neuf noms,
+comme coût d'une décision et non comme défaut.
+
+**La décision n°5 est donc annulée** : voir « Décisions déléguées ».
 
 ### Décision (2026-07-28) — la coupe est différée, la vérité ne l'est pas
 
