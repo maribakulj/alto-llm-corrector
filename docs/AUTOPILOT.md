@@ -16,8 +16,15 @@ sur **événement** de la PR — résultat de CI, commentaire de revue, push,
 conflit de merge — et rend la main quand la PR est verte et qu'il n'y a rien
 en attente.
 
-PR courante : **[#71](https://github.com/maribakulj/corrigenda/pull/71)**,
-`claude/rm-session-10-nettoyages-qb74pu` → `main`. La session y est abonnée.
+**PR courante : aucune.** [#71](https://github.com/maribakulj/corrigenda/pull/71)
+a été mergée le 2026-08-13 ; la branche `claude/rm-session-10-nettoyages-qb74pu`
+est close et la souscription aux événements avec elle.
+
+**Donc la boucle n'a plus de moteur événementiel tant qu'aucune PR n'est
+ouverte** — c'est le filet toutes les 6 h qui reprend la main, et c'est normal,
+pas une panne. Le premier geste d'une nouvelle tranche est d'ouvrir une PR
+depuis une branche neuve partant de `main`, puis de s'y abonner : sans ça,
+« verte » n'a rien à qualifier.
 
 Ordre de priorité à chaque réveil, sans exception :
 
@@ -232,3 +239,9 @@ Une ligne par réveil : date, item, résultat, ou la raison de l'arrêt.
   somme des pertes par ligne reproduit l'agrégat — une promesse **écrite dans
   le contrat et vérifiée nulle part**, la famille `R1`. Aucun défaut trouvé.
   Prochain réveil : suite de `T1`/`T3` (4 propriétés avant la borne).
+- 2026-08-13 — **PR #71 mergée** dans `main` (27 commits). Avant merge, deux
+  décisions déléguées ont été trouvées **vidées de leur contenu** par la
+  découverte que `S3b` était déjà fait : « pas d'extension de surface tant que
+  `S3b` n'a pas coupé » ne contraignait plus rien, et « `S3b` avant tout tag »
+  était satisfait avant d'être écrit. Reformulées, pas laissées. **Prochain
+  geste : nouvelle branche depuis `main`, nouvelle PR, s'y abonner.**

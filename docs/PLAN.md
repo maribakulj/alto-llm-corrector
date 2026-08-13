@@ -80,18 +80,31 @@ Cela retire l'urgence de taguer et rend gratuites les ruptures de la série
 fermés » — **est atteinte** : `R0`-`R8` clos le 2026-07-28, `L0`-`L10` clos
 sauf deux résidus de `L5` que ce plan qualifie lui-même de non-correctifs. Le
 lever tel quel rouvrirait pourtant la porte que la suite doit garder fermée,
-alors la nouvelle règle est plus précise que l'ancienne :
+alors une règle plus précise le remplace.
 
-> **Aucune extension de la surface publique tant que `S3b` n'a pas coupé.**
+**Reformulée le 2026-08-13.** La première rédaction disait « aucune extension
+de la surface publique **tant que `S3b` n'a pas coupé** » — et `S3b` avait
+coupé le 2026-08-01, donc la contrainte censée remplacer le gel ne
+contraignait rien. Corrigée en ce qu'elle voulait dire :
+
+> **La surface publique EST à sa clôture calculée. L'étendre est une décision
+> explicite, jamais un effet de bord** : elle passe par
+> `test_public_api_snapshot` (qui refuse qu'elle grandisse),
+> `test_public_surface_is_the_closure` (qui recalcule les deux promesses), le
+> `CHANGELOG` et `docs/versioning.md` — dans le même commit.
 
 Les deux corollaires permanents sont conservés : aucun 6ᵉ chemin de résolution
 de partenaire, et aucune revendication chiffrée sans `M2` + `M3`.
 
-**2. Pas de publication intermédiaire ; `S3b` passe avant tout tag.** La
-question « publier `0.10.0` puis couper, ou couper puis publier » est éteinte
-par la décision de ne publier qu'une v1. Couper d'abord ne coûte donc plus une
-rupture — elle ne sera vue par personne — et publier d'abord ferait dépenser
-un numéro pour rien.
+**2. Pas de publication intermédiaire.** La question « publier `0.10.0` puis
+couper, ou couper puis publier » est éteinte deux fois : par la décision de ne
+publier qu'une v1 finie, et par le fait que **la coupe est déjà faite**
+(2026-08-01). La seconde moitié de cette décision — « `S3b` passe avant tout
+tag » — était donc satisfaite avant d'être écrite ; elle est retirée plutôt
+que gardée comme une condition qui se lit encore comme un travail à venir.
+
+Ce qui reste, et qui est la seule règle active : **aucun tag avant une v1
+aboutie.**
 
 **3. `RM-08` est découplé de `S1`.** Il attendait `S1` au motif qu'unifier les
 projections avant que l'unité soit autoritaire produirait une 6ᵉ formulation
