@@ -134,6 +134,16 @@ le cas de la page vide ; `T3` a trouvé `L10` et la promesse de jointure fausse.
 ne teste rien). S'arrêter après six propriétés ajoutées sans qu'aucune ne
 trouve de défaut — à ce stade l'écart est ailleurs et il faut le mesurer.
 
+**Compteur : 2 propriétés ajoutées, 0 défaut trouvé** (2026-08-13). Quatre
+avant l'arrêt prévu par la borne.
+
+Ce que la mutation délibérée a déjà payé : la première version de la
+propriété « l'ordre des fichiers » comparait les octets livrés, passait au
+vert, et **ne détectait pas** la famille de défaut pour laquelle elle était
+écrite — `F4` corrompait le script d'édition en laissant le XML correct. La
+règle n'est pas une formalité : elle a transformé une propriété décorative en
+propriété réelle.
+
 ### 4. `S4` — geler ce qui peut l'être
 
 **État : partiel, et le reste est en grande partie hors d'atteinte.**
@@ -215,3 +225,10 @@ Une ligne par réveil : date, item, résultat, ou la raison de l'arrêt.
   items de suite se sont révélés déjà clos ; c'est un motif, pas une
   coïncidence : le plan décrit l'intention, le code décrit l'état.**
   Prochain item : `T1`/`T3`.
+- 2026-08-13 (filet) — PR verte 17/17, 0 fil de revue. `T1`/`T3` : **2
+  propriétés ajoutées**, chacune vérifiée par mutation délibérée. (1) l'ordre
+  des fichiers d'entrée ne change rien de ce que le run rend — la première
+  version ne détectait pas `F4` et a été élargie au script d'édition ; (2) la
+  somme des pertes par ligne reproduit l'agrégat — une promesse **écrite dans
+  le contrat et vérifiée nulle part**, la famille `R1`. Aucun défaut trouvé.
+  Prochain réveil : suite de `T1`/`T3` (4 propriétés avant la borne).
