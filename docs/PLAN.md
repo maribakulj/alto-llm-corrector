@@ -1096,7 +1096,7 @@ s'exécute pas dans cette vague.
 | `RM-06` | ~480 tags de vocabulaire privé, dont certains pointent vers `docs/history/` | vérité | secondaire | tout `src/` | `RM-11` | **fait (2026-08-10)**, 215 mesurés → 23 gelés |
 | `RM-05b` | 124 fichiers de test organisés par vague de remédiation ; ~~277 imports de symboles privés~~ **64, mesurés** | tests | important | `tests/` | `RM-05a` | **fait (2026-08-11)** — 0 fichier-vague, 3 répertoires par invariant, 38 symboles internes nommés avec leur catégorie |
 | `RM-09` | `core/schemas.py` fourre-tout : 1 538 l., 44 importateurs, 4 familles de types | nettoyage | secondaire | `core/schemas.py` → `core/schemas/` | — | **fait (2026-08-10)**, zéro importateur touché |
-| `RM-08` | Cinq projections voisines de l'unité de césure (`_page_local_units` / `_units_visible_on_page` quasi identiques) | réducteur | important | `core/reconcile.py`, `core/units.py` | **`S1`** | **hors vague → `S1`** |
+| `RM-08` | ~~Cinq projections voisines de l'unité de césure~~ — **constat périmé** : les deux ne sont plus des résolveurs parallèles mais deux filtres d'**une** dérivation, et ils divergent pour une raison écrite | réducteur | important | `core/reconcile.py` | ~~`S1`~~ | **clos par la mesure (2026-08-12)** |
 
 ### Ordre, et pourquoi
 
@@ -1142,25 +1142,44 @@ produit le plus gros diff de la vague. Fait en dernier, avec un
   et RM-2 pas fermé.
 - **Lot RM-6 — nettoyages progressifs** : `RM-06`, `RM-05b`, `RM-09`.
 
-### `RM-08` attend toujours `S1` — reconfirmé le 2026-08-10
+### `RM-08` — **clos par la mesure, le 2026-08-12** (et non par une fusion)
 
-La question se repose à chaque session parce que `RM-08` est le seul item
-« réducteur / important » encore ouvert, et la réponse n'a pas bougé : ses
-cinq projections voisines (`_page_local_units`, `_units_visible_on_page` et
-leurs parentes) sont des **lectures du champ pointeur**, qui est encore le
-stockage de référence. Les unifier avant que `derive_hyphen_groups` fasse
-autorité produit une sixième formulation de « qui est mon partenaire ? »
-plutôt qu'une de moins — précisément l'échec que `S1` a déjà connu une fois,
-quand l'unification a atterri en *ajout* et a laissé cinq résolveurs
-parallèles derrière elle.
+Le constat d'origine — « cinq projections voisines, `_page_local_units` /
+`_units_visible_on_page` quasi identiques » — décrivait un état **antérieur**.
+Vérifié dans le code avant d'y toucher, comme la règle n°6 de
+`docs/AUTOPILOT.md` l'exige désormais :
 
-Ce qui a changé, c'est le prix de l'attente, pas la décision : la première
-tranche de `RM-05b` met les 19 cas qui casseraient sous un seul répertoire
-(`tests/hyphenation/`), ce qui est le filet dont `S1` manquait — et
-`test_the_net_is_bounded.py` fait de « ce répertoire EST le filet » un
-invariant tenu plutôt qu'une intention. `RM-08` s'exécute **dans** `S1`,
-comme la vérification que la dérivation a bien remplacé les projections au
-lieu de s'y ajouter.
+- les deux lisent **zéro champ pointeur** ;
+- les deux passent par **la** dérivation partagée (`derive_hyphen_groups`,
+  `ADR-010`).
+
+Elles ne sont donc plus des résolveurs parallèles — c'est précisément ce que
+`S1` a retiré. Ce qui reste est **une dérivation vue par deux filtres**, et la
+différence n'est pas cosmétique :
+
+- le **routeur** peut décliner. Escalader la moitié d'une unité la couperait
+  entre deux producteurs, donc une unité incomplète est laissée au producteur
+  primaire et ses membres restent ensemble *en ne faisant rien*.
+  `_page_local_units` ne retourne donc rien pour une unité qui n'est pas
+  entière ;
+- le **batcher image-cap** ne le peut pas. Il découpe *un* chunk en plusieurs
+  appels : « ne rien faire » n'existe pas, chaque ligne atterrit dans un
+  batch. Sans réponse, il traitait chaque membre comme un singleton et pouvait
+  mettre une paire dans deux appels — la seule chose que l'atomicité de paire
+  interdit. `_units_visible_on_page` retourne donc les membres *présents*.
+
+**Fusionner obligerait à choisir un comportement et changerait l'autre en
+silence.** Ce n'est pas une opinion : `tests/hyphenation/test_the_unit_projections_are_not_duplicates.py`
+exhibe un document où les deux divergent (une chaîne A-B ici, C sur la page
+suivante : le routeur voit `{}`, le batcher voit `{A, B}`), et la sensibilité
+a été vérifiée en simulant la fusion demandée — le test échoue.
+
+Le test est aussi la façon honnête pour l'item de **rouvrir** : si un
+changement futur les rend d'accord partout, elles sont redondantes et le test
+le dit en échouant.
+
+`S1` n'est donc plus un prérequis de `RM-08`, et `RM-08` ne sort pas de la
+vague : il en sort par le haut, sans code modifié.
 
 ### Ce que la vague ne touche pas
 

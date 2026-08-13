@@ -147,10 +147,17 @@ _SEAMS: dict[str, tuple[str, str]] = {
         "returns how far a unit reaches from a position — an integer, and the "
         "window walk's whole correctness",
     ),
+    "corrigenda.core.reconcile._units_visible_on_page": (
+        "value",
+        "the batcher's projection of the same derivation; `RM-08` proposed "
+        "merging it with _page_local_units, and the test that closed the "
+        "item needs both to show they disagree",
+    ),
     "corrigenda.core.reconcile._page_local_units": (
         "value",
-        "returns the units wholly visible on a page; `RM-08` will merge it "
-        "with its neighbours, and this is the test that will notice",
+        "the router's projection: the units WHOLLY on this page. `RM-08` "
+        "asked for a merge with its neighbour; measured, they disagree on a "
+        "chain that leaves the page, and the item closed on that",
     ),
     "corrigenda.core.retry._RetryDecision": ("value", "the returned decision type"),
     "corrigenda.core.retry._classify_retry": (

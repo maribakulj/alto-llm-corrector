@@ -107,22 +107,18 @@ troisième seam — les 9 noms que fermer `format_adapter`/`qe_scorer`/
 `routing_policy`/`confidence_policy` coûterait, comme prix d'une décision et
 non comme défaut.
 
-### 2. `RM-08` — fusionner les projections voisines de l'unité
+### ~~2. `RM-08`~~ — **clos par la mesure le 2026-08-12, sans fusion**
 
-**État : à faire, et son blocage a été levé (voir « Décisions déléguées »).**
+Le constat était périmé, et la règle n°6 l'a attrapé : vérifié dans le code,
+les deux projections lisent zéro pointeur et partagent la dérivation. Ce ne
+sont plus des résolveurs parallèles mais **deux filtres d'une dérivation**,
+qui divergent sur une chaîne quittant la page — le routeur voit `{}`, le
+batcher voit les deux membres présents, et fusionner changerait l'un des deux
+comportements en silence.
 
-Cinq projections voisines, dont `_page_local_units` et
-`_units_visible_on_page` quasi identiques. Le plan les bloquait derrière `S1`
-au motif qu'unifier avant que l'unité soit autoritaire produirait une 6ᵉ
-formulation. La fusion est autorisée **à la condition qu'elle ne touche pas au
-stockage de référence** : les champs pointeurs restent la vérité, on retire
-des lectures redondantes, on n'en ajoute aucune.
-
-**Fini quand** : le nombre de projections a baissé, aucune nouvelle n'existe,
-`tests/hyphenation/` est vert sans modification de cas, et
-`tests/test_internal_seams_are_named.py` reflète les symboles qui ont disparu.
-**Si la fusion exige de rendre l'unité autoritaire, s'arrêter** : c'est `S1`,
-et `S1` est parké.
+`tests/hyphenation/test_the_unit_projections_are_not_duplicates.py` l'exhibe
+plutôt que de l'affirmer, et rouvrira l'item tout seul si un changement futur
+les rend d'accord partout. Détail et raison dans `docs/PLAN.md`.
 
 ### 3. `T1` / `T3` — étendre métamorphiques et différentiels
 
@@ -211,3 +207,11 @@ Une ligne par réveil : date, item, résultat, ou la raison de l'arrêt.
   écrit. Surface restaurée à 66, décision n°5 annulée, mesure du plan
   rétractée, règle n°6 ajoutée. Reste acquis : la garde qui recalcule les deux
   clôtures. **Prochain item : `RM-08`.**
+- 2026-08-12 (filet) — PR verte 17/17, 0 fil de revue. `RM-08` **clos par la
+  mesure, sans toucher au code** : constat périmé, les deux projections
+  partagent la dérivation et divergent pour une raison écrite. Test de
+  divergence ajouté (3 cas, sensibilité vérifiée en simulant la fusion). Le
+  cliquet des internes a attrapé le test lui-même — symbole nommé. **Deux
+  items de suite se sont révélés déjà clos ; c'est un motif, pas une
+  coïncidence : le plan décrit l'intention, le code décrit l'état.**
+  Prochain item : `T1`/`T3`.
