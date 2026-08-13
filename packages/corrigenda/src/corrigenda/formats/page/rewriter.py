@@ -77,7 +77,7 @@ class PageRewriterMetrics:
     words_dropped: int = 0
     #: Lines that lost their OCR confidence — @conf removed because the
     #: correction made it false. Counted per LINE and named for the shared
-    #: key both formats emit (R4); it was ``conf_dropped`` and counted per
+    #: key both formats emit; it was ``conf_dropped`` and counted per
     #: @conf, which made PAGE the only counter in the report speaking a
     #: unit no line could be held to, and left ALTO silent about the same
     #: event. See :mod:`corrigenda.core.losses`.
@@ -120,7 +120,7 @@ class PageRewriterMetrics:
 def _promote_confidence_to_line(
     metrics: PageRewriterMetrics, occurrences_before: int
 ) -> None:
-    """R4 — one ``@conf`` removed or forty, the line lost its confidence once.
+    """One ``@conf`` removed or forty, the line lost its confidence once.
 
     Called by the rewrite loop, the only scope that knows where a line ends,
     and before :func:`_record_line_losses` so the per-line attribution sees

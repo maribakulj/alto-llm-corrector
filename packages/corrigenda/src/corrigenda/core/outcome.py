@@ -20,7 +20,7 @@ where nothing suggested it was a sibling of the fallback path.
 
 Two invariants they share, and neither is optional:
 
-  - **F8 — only TARGET lines.** Context lines were sent to the producer for
+  - **Only TARGET lines.** Context lines were sent to the producer for
     context and belong to an adjacent chunk; forcing them here would steal
     a decision from the window where their context is maximal.
   - **ADR-010 — a fallback covers the whole hyphen unit.** Intra-page
@@ -29,7 +29,7 @@ Two invariants they share, and neither is optional:
     not run yet) is pulled to OCR too, rather than leaving a joined word
     rewritten on one line and verbatim on the other.
 
-Free functions (S2). The engine supplies its guard config and its observer
+Free functions. The engine supplies its guard config and its observer
 callback; nothing here reads a pipeline.
 """
 
@@ -73,7 +73,7 @@ def _finish_successful_chunk(
 ) -> int:
     """Reconcile / accept / finalize a chunk whose producer call succeeded.
 
-    Returns the hyphen pairs reconciled. F8 — only the chunk's *target*
+    Returns the hyphen pairs reconciled. Only the chunk's *target*
     lines are corrected here; a context line's output is discarded on this
     pass.
     """

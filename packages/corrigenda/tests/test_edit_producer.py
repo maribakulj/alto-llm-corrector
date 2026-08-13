@@ -28,7 +28,9 @@ from corrigenda.errors import ConfigurationError
 from corrigenda.producers.llm_edit import LLMEditProducer
 from corrigenda.producers.rules import RulesProducer, default_french_ocr_rules
 
-_SRC = Path(__file__).parent.parent / "src" / "corrigenda"
+from tests._paths import SRC
+
+_SRC = SRC
 
 
 def _line(line_id: str, page_id: str = "pg") -> LineManifest:

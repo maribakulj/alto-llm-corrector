@@ -24,6 +24,8 @@ from lxml import etree
 
 from corrigenda.core.schemas import HyphenRole
 
+from tests._pipeline_harness import EXAMPLES
+
 NS = "http://www.loc.gov/standards/alto/ns-v3#"
 
 
@@ -353,9 +355,7 @@ class TestChainedRewriting:
 # Test 6: Real corpus chained zone from X0000002.xml
 # ===========================================================================
 
-X0000002_PATH = (
-    Path(__file__).resolve().parent.parent.parent.parent / "examples" / "X0000002.xml"
-)
+X0000002_PATH = EXAMPLES / "X0000002.xml"
 
 
 @pytest.mark.skipif(not X0000002_PATH.exists(), reason="X0000002.xml not found")

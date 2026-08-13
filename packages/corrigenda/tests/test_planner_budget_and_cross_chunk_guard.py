@@ -376,3 +376,21 @@ def test_multiline_hyphen_chain_targeted_in_single_window():
     assert owner["l1"] == owner["l2"] == owner["l3"], (
         f"chain split across chunks: {[owner.get(x) for x in ('l1', 'l2', 'l3')]}"
     )
+
+
+# ---------------------------------------------------------------------------
+# The window walk's own progress guard (moved here from a wave-named
+# file, `RM-05b`, which was already importing this module's helpers)
+# ---------------------------------------------------------------------------
+
+
+def test_window_walk_survives_validation_bypass():
+    """model_copy(update=…) bypasses the P2-5 validator; without the
+    progress clamp this spun forever (reproduced before the fix)."""
+    cfg = ChunkPlannerConfig().model_copy(
+        update={"line_window_size": 8, "line_window_overlap": 8}
+    )
+    lines = [_line(i, "abc") for i in range(20)]
+    plan = plan_page(_page(lines), "d1", cfg, force_granularity=ChunkGranularity.WINDOW)
+    covered = {lid for c in plan.chunks for lid in c.targets()}
+    assert covered == {lm.line_id for lm in lines}

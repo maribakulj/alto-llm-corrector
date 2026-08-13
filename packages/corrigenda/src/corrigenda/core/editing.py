@@ -47,14 +47,14 @@ from corrigenda.core.schemas import (
 )
 from corrigenda.errors import ProposalValidationError
 
-#: Version of THIS edit protocol (P3.10). Bumped only on a breaking
+#: Version of THIS edit protocol. Bumped only on a breaking
 #: change to the op/anchor semantics; ``apply_edit_script`` refuses a
 #: script stamped with a version it does not speak.
 EDIT_PROTOCOL_VERSION = "1"
 
 
 def line_digest(text: str) -> str:
-    """Stable 16-hex digest of one line's canonical text (P3.10).
+    """Stable 16-hex digest of one line's canonical text.
 
     The unit of the script's per-line preconditions: same shape as the
     §11 policy fingerprints. Consumers building scripts by hand compute
@@ -137,7 +137,7 @@ EditOp = Annotated[Union[ReplaceLine, ReplaceSpan], Field(discriminator="op")]
 
 class LinePrecondition(BaseModel):
     """What one targeted line's SOURCE text must be for the script to
-    apply to it (P3.10).
+    apply to it.
 
     ``digest`` is :func:`line_digest` of the canonical source text at
     script-build time. ``page_id`` qualifies the line like the ops'
@@ -153,18 +153,18 @@ class LinePrecondition(BaseModel):
 
 class EditScript(BaseModel):
     ops: list[EditOp] = Field(default_factory=list)
-    #: P3.10 — the protocol this script speaks. Scripts built by this
+    #: The protocol this script speaks. Scripts built by this
     #: library stamp the current version; ``apply_edit_script`` raises
     #: on a version it does not know. ``None`` (hand-written / legacy
     #: JSON) is accepted as the current version.
     protocol_version: str | None = None
-    #: P3.10 — source file name → ``sha256:<hex>`` of the INPUT bytes
+    #: Source file name → ``sha256:<hex>`` of the INPUT bytes
     #: the script was derived from (same shape as
     #: ``RunProvenance.source_digests``). Recorded for consumers
     #: replaying against files; not verifiable by ``apply_edit_script``
     #: itself, which sees only canonical text.
     source_digests: dict[str, str] = Field(default_factory=dict)
-    #: P3.10 — per targeted line, the digest of the source text the
+    #: Per targeted line, the digest of the source text the
     #: ops were computed against. ``apply_edit_script`` REJECTS the
     #: line's ops when the document at hand carries the same line_id
     #: with different content — an op must never land on a lookalike.
@@ -454,7 +454,7 @@ def apply_edit_script(
     even when files reuse line_ids. Ops without a stamp are always in
     scope (hand-written scripts keep their historical behaviour).
 
-    Preconditions (P3.10): a script stamped with an unknown
+    Preconditions: a script stamped with an unknown
     ``protocol_version`` raises :class:`~corrigenda.errors.ProposalValidationError`
     — an incompatible script must fail loudly, not half-apply. A line
     whose recorded source :func:`line_digest` differs from the document
@@ -502,7 +502,7 @@ def apply_edit_script(
 
         canonical = canonical_by_id[line_id]
 
-        # P3.10 — the document at hand must carry the SAME source text
+        # The document at hand must carry the SAME source text
         # the ops were computed against; same id + different content is
         # a lookalike, never a target.
         expected = digest_by_line.get(line_id)

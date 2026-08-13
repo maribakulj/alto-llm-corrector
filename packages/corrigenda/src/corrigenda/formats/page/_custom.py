@@ -12,7 +12,7 @@ Groups come in two kinds:
   - **offset-anchored** (``textStyle``, semantic tags with
     ``offset``/``length``) — they point at character ranges in the OLD line
     text. Once the text changes those offsets are stale, so the whole group
-    is dropped (the "never keep invalidated data" doctrine, cf. ALTO F2)
+    is dropped (the "never keep invalidated data" doctrine, as in ALTO)
     and counted. A future span-only edit path (v2.x) can instead remap the
     offsets through the EditScript; that is out of scope here.
 """

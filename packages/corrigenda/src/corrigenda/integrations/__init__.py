@@ -1,4 +1,4 @@
-"""Vendor-specific integration surfaces (P3.7).
+"""Vendor-specific integration surfaces.
 
 The pure core speaks the generic edit protocol; anything that exists
 only because the producer is an LLM — the system prompt, the structured

@@ -138,7 +138,7 @@ def __dir__() -> list[str]:
 
 __all__ = [
     # ---------------------------------------------------------------
-    # The façade (§2, P3.12) — lazy, because `load` reaches a format.
+    # The façade (§2) — lazy, because `load` reaches a format.
     # ---------------------------------------------------------------
     "load",
     "correct",
@@ -167,7 +167,7 @@ __all__ = [
     "LineTrace",
     "Usage",
     "ReconcileMetrics",
-    # Report v2 (§9, P3.5) — the staged per-line outcome
+    # Report v2 (§9) — the staged per-line outcome
     "LineOutcome",
     "ProposalStage",
     "ProposalFeatures",
@@ -177,7 +177,7 @@ __all__ = [
     "ProjectionFidelity",
     "LineConfidence",
     "SidecarEntry",
-    # Provenance (§11, P3.9)
+    # Provenance (§11)
     "ProducerProvenance",
     "RunProvenance",
     # The edit script the run applied (§4)

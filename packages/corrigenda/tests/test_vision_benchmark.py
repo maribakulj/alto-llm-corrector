@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import importlib.util
 import sys
-from pathlib import Path
 
 import pytest
 
@@ -20,7 +19,9 @@ from corrigenda.core.protocols import ProducerMetadata
 from corrigenda.core.quality import RoutingPolicy
 from corrigenda.formats.alto.parser import build_document_manifest
 
-_REPO_ROOT = Path(__file__).resolve().parents[3]
+from tests._paths import REPO
+
+_REPO_ROOT = REPO
 _SCRIPT = _REPO_ROOT / "scripts" / "vision_benchmark.py"
 _SAMPLE = _REPO_ROOT / "examples" / "sample.xml"
 

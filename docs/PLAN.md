@@ -65,7 +65,93 @@ distance restante entre `0.10.0` et `1.0.0`.
 
 ---
 
+## Décisions déléguées — 2026-08-11
+
+Le mainteneur a délégué quatre arbitrages qui bloquaient la suite. Ils sont
+tranchés ici, avec leur raison, et **chacun est réversible en modifiant ce
+paragraphe** — c'est le seul endroit qui les porte.
+
+Le fait qui les commande toutes : **rien ne sera publié avant une v1 aboutie.**
+Cela retire l'urgence de taguer et rend gratuites les ruptures de la série
+`0.x`, qui n'atteindront jamais un consommateur.
+
+**1. Le gel est levé sur son critère, et remplacé par une contrainte plus
+étroite.** Sa condition d'origine — « tant que `L*` et `R*` ne sont pas
+fermés » — **est atteinte** : `R0`-`R8` clos le 2026-07-28, `L0`-`L10` clos
+sauf deux résidus de `L5` que ce plan qualifie lui-même de non-correctifs. Le
+lever tel quel rouvrirait pourtant la porte que la suite doit garder fermée,
+alors une règle plus précise le remplace.
+
+**Reformulée le 2026-08-13.** La première rédaction disait « aucune extension
+de la surface publique **tant que `S3b` n'a pas coupé** » — et `S3b` avait
+coupé le 2026-08-01, donc la contrainte censée remplacer le gel ne
+contraignait rien. Corrigée en ce qu'elle voulait dire :
+
+> **La surface publique EST à sa clôture calculée. L'étendre est une décision
+> explicite, jamais un effet de bord** : elle passe par
+> `test_public_api_snapshot` (qui refuse qu'elle grandisse),
+> `test_public_surface_is_the_closure` (qui recalcule les deux promesses), le
+> `CHANGELOG` et `docs/versioning.md` — dans le même commit.
+
+Les deux corollaires permanents sont conservés : aucun 6ᵉ chemin de résolution
+de partenaire, et aucune revendication chiffrée sans `M2` + `M3`.
+
+**2. Pas de publication intermédiaire.** La question « publier `0.10.0` puis
+couper, ou couper puis publier » est éteinte deux fois : par la décision de ne
+publier qu'une v1 finie, et par le fait que **la coupe est déjà faite**
+(2026-08-01). La seconde moitié de cette décision — « `S3b` passe avant tout
+tag » — était donc satisfaite avant d'être écrite ; elle est retirée plutôt
+que gardée comme une condition qui se lit encore comme un travail à venir.
+
+Ce qui reste, et qui est la seule règle active : **aucun tag avant une v1
+aboutie.**
+
+**3. `RM-08` est découplé de `S1`.** Il attendait `S1` au motif qu'unifier les
+projections avant que l'unité soit autoritaire produirait une 6ᵉ formulation
+au lieu d'en retirer cinq. Le motif tient **si** la fusion touche au stockage.
+Elle est donc autorisée sous condition explicite : **les champs pointeurs
+restent la vérité, on retire des lectures redondantes, on n'en ajoute
+aucune.** Si la fusion exige de rendre l'unité autoritaire, elle s'arrête —
+c'est `S1`, et le point 4 le parke.
+
+**4. `S1` reste parké, et ce n'est pas une nouvelle décision.** Ce plan l'a
+déjà tranché le 2026-07-27 : `V3` est reformulé et **atteint**, l'écart
+restant est surveillé par trois tests, et le refactor est « le plus gros
+risque de régression du dépôt, sur la partie la plus chargée du moteur, pour
+fermer un écart déjà surveillé ». À rouvrir seulement si `S2` l'exige. Le
+rappel est ici parce que `CLAUDE.md` décrit l'écart sans dire qu'il est
+délibérément laissé ouvert, ce qui se lit comme du travail en attente.
+
+**5. ~~La porte avancée est publique~~ — ANNULÉE le 2026-08-12, sans avoir
+été exécutée.** Elle reposait sur une mesure fausse (voir §`S3` « Mesure du
+2026-08-11 — rétractée ») : les neuf « trous » sont un troisième seam laissé
+ouvert **par écrit**, et `S3b` était déjà fait depuis le 2026-08-01.
+
+Ce que l'épisode laisse, et qui est plus utile que la décision annulée :
+
+- une garde qui **recalcule** les deux clôtures au lieu de faire confiance à
+  la liste épinglée ;
+- la règle de méthode : *on amorce une clôture de surface publique avec les
+  promesses de la bibliothèque, jamais avec les boutons optionnels d'un
+  constructeur* ;
+- et un rappel sur la délégation elle-même. Une décision déléguée reste une
+  décision : celle-ci a été prise vite, sur une mesure d'une heure, contre
+  deux décisions documentées que je n'avais pas lues. La délégation autorise
+  à trancher ; elle n'autorise pas à trancher sans avoir lu.
+
+**Ce qui n'est pas délégué et ne le sera pas ici** : le budget des runs
+(`M2`/`M3`), les licences de corpus (`M5`/`M6`), la conception de
+`review_required` (`G*`), et le tag de publication. Ils passent par le CLI —
+voir `docs/AUTOPILOT.md`.
+
+---
+
 ## Règle de gel — applicable immédiatement
+
+> **Levée le 2026-08-11** — condition atteinte, remplacée par une contrainte
+> plus étroite : *aucune extension de la surface publique tant que `S3b` n'a
+> pas coupé*. Voir « Décisions déléguées » ci-dessus. Le paragraphe d'origine
+> est conservé tel quel parce qu'il dit ce que la règle protégeait.
 
 **Aucune fonctionnalité nouvelle tant que `L*` et `R*` ne sont pas fermés.**
 
@@ -784,6 +870,90 @@ leur module** (vérifié : les 45 ont un module d'accueil réel).
 changer leurs imports — mécanique, pas une refonte — mais c'est un changement à
 faire **dans le même commit** que la coupe, sinon le dépôt se casse lui-même.
 
+### Mesure du 2026-08-11 — **rétractée le 2026-08-12**
+
+La répartition ci-dessus (95 → 54, « couper 41 ») a été confrontée à la
+surface réelle en recalculant les clôtures. Elle ne tient plus, et pas d'un
+peu : **la surface n'est pas 41 symboles trop grande, elle est 4 trop grande
+et 9 trop petite.**
+
+`corrigenda.__all__` vaut **66** aujourd'hui — `RM-04` avait déjà fait
+l'essentiel de la coupe. Et :
+
+| clôture | taille | état |
+|---|---|---|
+| ce que la façade **retourne** | 34 types | **tous exportés.** La moitié vérifiable de `V5` est donc **atteinte**, et désormais gardée par un test qui échoue au moment où un champ de retour porte un type non exportable |
+| ce que la porte avancée **accepte** | 58 types | **9 ne sont pas exportés** |
+
+- **4 exportés hors de toute clôture**, donc rétrogradables sur le critère de
+  `S3` lui-même : `EDIT_PROTOCOL_VERSION`, `EditOp`, `ImageRef`, `PageImage`.
+- **9 types que les signatures de la porte exigent et qu'on ne peut pas
+  importer depuis le sommet** : `FormatAdapter`, `RewriteResult`,
+  `RewriteMetrics`, `ConfidenceScorer`, `ConfidencePolicy`, `QEScorer`,
+  `RoutingPolicy`, `TokenAlignment`, `AlignedPair`. Qui implémente un
+  `EditProducer` ou passe `format_adapter=` doit aller les chercher par
+  chemin de module.
+
+**Et ça explique une observation que `S3` avait faite sans la relier** : le
+backend, seul intégrateur réel, n'emprunte pas la façade mais la porte basse.
+Il n'avait pas le choix — la porte qu'il utilise n'a jamais été complètement
+exportée. « Le namespace de sommet est une vitrine que le dépôt n'emprunte
+pas » a une seconde moitié : *la porte qu'il emprunte n'est pas une vitrine
+du tout.*
+
+#### Ce que `S3b` devient, et la question qu'il faut trancher
+
+La question n'est plus « couper quoi » mais **« la porte avancée est-elle
+publique ? »**, et aucune clôture ne peut y répondre :
+
+- **si oui**, il faut la *fermer* — ajouter les 9 — et la surface monte avant
+  de descendre. Le seul consommateur connu l'emprunte, donc la démoter le
+  casserait ;
+- **si non**, alors `CorrectionPipeline` non plus n'est pas publique, et la
+  surface tombe à la clôture de la façade plus les erreurs, soit ~45.
+
+**Recommandation, sur la mesure** : la porte est publique et doit être fermée.
+Le coût de l'autre branche est de casser le seul intégrateur réel pour tenir
+une formulation de `V5` qui ne parlait que de la façade.
+
+**RÉTRACTÉ le 2026-08-12, avant exécution.** Le constat ci-dessus est faux,
+et l'erreur mérite d'être gardée parce qu'elle est reproductible.
+
+`S3b` **est déjà fait** — exécuté le 2026-08-01, et `RM-04` l'a affiné le
+2026-08-06. Les 66 symboles actuels ne sont pas une accumulation : c'est la
+clôture calculée, et `tests/test_public_api_snapshot.py` porte le raisonnement
+complet, que la mesure d'hier n'avait pas lu.
+
+Surtout, **les « 9 trous » ne sont pas des trous** : ils sont exactement ce que
+`CorrectionPipeline` ajoute par ses **injections optionnelles** —
+`format_adapter`, `qe_scorer`, `routing_policy`, `confidence_policy`,
+`confidence_scorers`. C'est un **troisième seam**, laissé ouvert par écrit et
+pour deux raisons :
+
+- `RewriteResult`, `RewriteMetrics`, `AlignedPair`, `TokenAlignment`,
+  `FormatAdapter` sont le vocabulaire de comptabilité interne du rewriter, que
+  `R5`/`R8`/`L8` ont déplacé toute l'année. Le bénir sous SemVer promettrait
+  une stabilité que rien ne soutient ;
+- `ConfidencePolicy`, `RoutingPolicy`, `QEScorer`, `ConfidenceScorer` sont des
+  boutons de recherche dont les défauts ne font rien. Un export au sommet se
+  lit « prêt » ; ils ne le sont pas.
+
+**L'erreur de méthode, qui est la leçon** : j'ai amorcé le calcul de clôture
+avec `CorrectionPipeline`. Amorcer une surface publique avec les boutons
+**optionnels** d'un constructeur mesure ce avec quoi la bibliothèque peut être
+*configurée*, pas ce qu'elle *promet*. Les semences sont les deux promesses —
+ce que la façade retourne, et ce que le seam producteur accepte. Recalculé
+ainsi : **34 types et 17 types, tous exportés**. Les deux moitiés de `V5` sont
+tenues.
+
+Ce qui reste de la mesure, et qui vaut : `tests/test_public_surface_is_the_closure.py`
+recalcule les deux clôtures à chaque run, exporte la garde que la liste
+épinglée ne donnait pas (un champ de retour au type non exportable échoue au
+moment où on l'ajoute), et **épingle le prix du troisième seam** — neuf noms,
+comme coût d'une décision et non comme défaut.
+
+**La décision n°5 est donc annulée** : voir « Décisions déléguées ».
+
 ### Décision (2026-07-28) — la coupe est différée, la vérité ne l'est pas
 
 `S3` se scinde en deux, parce que ses deux moitiés n'ont ni le même coût ni le
@@ -850,6 +1020,67 @@ symboles sous SemVer. Il ne bloque en revanche pas `0.10.0`, que
 
 ---
 
+## État de la porte `0.10.0` — relevé du 2026-08-11
+
+L'information existait, éparpillée sur six sections. Rassemblée ici, elle dit
+quelque chose que personne n'avait formulé : **les cinq critères exigibles pour
+`0.10.0` sont tenus, et ce qui reste est de la mécanique de publication.**
+
+| critère | exigé pour | état, et par quoi il est établi |
+|---|---|---|
+| `V1` — aucune altération non déclarée | `0.10.0` | **tenu.** `L0`-`L10` fermés. Restent deux résidus de `L5` que ce plan qualifie lui-même de « pas un correctif » : ils demandent de la géométrie et un corpus qui les contienne (`M7`), pas une édition de prédicat |
+| `V2` — ni fantôme ni angle mort | `0.10.0` | **tenu.** `R0`-`R8` fermés (2026-07-28), deux d'entre eux par mesure plutôt que par code |
+| `V3` — une seule définition de l'unité | `0.10.0` | **tenu** (déjà acté dans le tableau des critères) |
+| `V8` — aucun renvoi vers l'histoire gelée | `0.10.0` | **tenu.** `D*` clos (2026-07-28) ; `RM-06` a fermé le versant `src/` (215 tags → 23, tous dans des fichiers que la vague s'interdit d'ouvrir) |
+| `V9` — licences des corpus | `0.10.0` | **tenu.** `Gate 0` clos ; aucun corpus dans la wheel ni la sdist, épinglé par un test qui lit les artefacts **construits** |
+
+Ce qui reste, et ce n'est pas de la correction :
+
+1. **`P1` fin** — l'upload TestPyPI. Toute la chaîne a été rejouée en local le
+   2026-08-01 ; l'upload exige l'OIDC de GitHub Actions, donc un tag, donc
+   `P2`. C'est la seule dépendance circulaire du lot et elle se casse en
+   taguant.
+2. **`P2`** — `0.9.0` → `0.10.0` dans `__version__` (le `pyproject` le lit),
+   entrée `CHANGELOG.md`, tag `corrigenda-v0.10.0`, SBOM, publier l'artefact
+   **testé**.
+3. **Un garde-fou déjà tenu, à ne pas perdre** : « aucune revendication de
+   qualité ne sort du dépôt sans `M2` + `M3` ». Vérifié le 2026-08-11 — les
+   deux `README` ne portent **aucun chiffre**. Publier `0.10.0` sans
+   revendication chiffrée est donc cohérent, et le rester est une contrainte
+   sur la note de version.
+
+### La décision qui n'est pas technique
+
+Le gel dit : « aucune fonctionnalité nouvelle tant que `L*` et `R*` ne sont pas
+fermés ». **Cette condition est atteinte.** Le lever ou non est un arbitrage,
+pas un constat, et il commande une séquence :
+
+- Tant que le gel tient, **`S3b` ne peut pas se faire** — c'est une réduction
+  de la surface publique, donc autorisée en tant que refactorisation
+  réductrice, mais elle a été explicitement différée après `S2`.
+- Or `S3b` est une **rupture**. Elle doit donc passer pendant la série `0.x`,
+  que `docs/versioning.md` autorise à casser. La faire après `1.0` la
+  gèlerait sous SemVer — c'est la raison n°1 pour laquelle ce plan refuse de
+  publier `1.0` en premier.
+
+Deux ordres sont donc défendables, et le choix appartient au mainteneur :
+publier `0.10.0` avec la surface actuelle (68 symboles) puis couper en
+`0.11.0` ; ou couper d'abord et publier une seule fois. Le premier livre plus
+tôt et dépense une rupture de plus ; le second retarde la première publication
+d'un item structurel entier.
+
+### Et `1.0.0` reste loin, pour des raisons de fond
+
+`V4` (`G1`-`G3`, l'état `review_required` — une vraie fonctionnalité, et le
+plan démontre qu'aucun réglage de seuil ne ferme la famille des gardes
+sémantiquement aveugles), `V5` (`S3b`), `V6` (`M1`-`M3`, `M7` — le chemin
+inter-pages n'est mesuré par **aucun** run aujourd'hui), `V7` (`M5` —
+`tests/external_corpus/pinned/` est vide et le tier téléchargé est
+`continue-on-error`, donc **aucune page externe ne bloque un merge**), `V10`
+(`P3`). Aucun de ces cinq n'est de la dette : ce sont des travaux.
+
+---
+
 ## RM — Remédiation structurelle (audit du 2026-08-06)
 
 Origine : un audit statique externe du dépôt, lu à `26d6f53`. Il **ne rouvre
@@ -873,12 +1104,12 @@ s'exécute pas dans cette vague.
 | `RM-05a` | Aucun test ne protège l'ordre des passes de `core/finalize.py` | tests | important | `tests/decision/` (nouveau) | — | **fait (2026-08-06)** |
 | `RM-01` | L'écriture de la décision terminale d'une ligne est dispersée sur 5 modules ; l'ordre des passes est porté par une docstring | **bugfix** | **critique** | `core/decide.py` (nouveau), `core/outcome.py`, `core/acceptance.py`, `core/reconcile.py`, `core/routing.py`, `core/finalize.py` | `RM-02`, `RM-05a` | **fait (2026-08-06)** |
 | `RM-04` | ~20 % du code du paquet n'est exécuté par aucun chemin par défaut et est gelé par ce plan | nettoyage | important | `__init__.py`, `pyproject.toml`, `CHANGELOG.md` | `RM-11` + ratification | **fait (2026-08-06), périmètre corrigé** |
-| `RM-07` | `core` connaît les formats : `core/losses.py` porte la table des attributs ALTO ; le contrat d'import plafonne à `== 3` au lieu de nommer une règle | réducteur | important | `core/losses.py`, `core/provenance.py`, `tests/test_import_contract.py` | — | à faire |
+| `RM-07` | `core` connaît les formats : `core/losses.py` porte la table des attributs ALTO ; le contrat d'import plafonne à `== 3` au lieu de nommer une règle | réducteur | important | `core/losses.py`, `core/provenance.py`, `tests/test_import_contract.py` | — | **fait (2026-08-06)** |
 | `RM-03` | Drilling de paramètres : 10 à 20 arguments sur le chemin chaud | réducteur | important | `core/workspace.py` (nouveau), `core/driver.py`, `core/outcome.py`, `core/reconcile.py`, `core/routing.py`, `core/pipeline.py`, `core/retry.py` | `RM-01`, `RM-02` | **fait (2026-08-06)** |
-| `RM-06` | ~480 tags de vocabulaire privé, dont certains pointent vers `docs/history/` | vérité | secondaire | tout `src/` | `RM-11` | à faire |
-| `RM-05b` | 124 fichiers de test organisés par vague de remédiation ; 277 imports de symboles privés | tests | important | `tests/` | `RM-05a` | à faire |
-| `RM-09` | `core/schemas.py` fourre-tout : 1 538 l., 44 importateurs, 4 familles de types | nettoyage | secondaire | `core/schemas.py` → `core/schemas/` | — | à faire |
-| `RM-08` | Cinq projections voisines de l'unité de césure (`_page_local_units` / `_units_visible_on_page` quasi identiques) | réducteur | important | `core/reconcile.py`, `core/units.py` | **`S1`** | **hors vague → `S1`** |
+| `RM-06` | ~480 tags de vocabulaire privé, dont certains pointent vers `docs/history/` | vérité | secondaire | tout `src/` | `RM-11` | **fait (2026-08-10)**, 215 mesurés → 23 gelés |
+| `RM-05b` | 124 fichiers de test organisés par vague de remédiation ; ~~277 imports de symboles privés~~ **64, mesurés** | tests | important | `tests/` | `RM-05a` | **fait (2026-08-11)** — 0 fichier-vague, 3 répertoires par invariant, 38 symboles internes nommés avec leur catégorie |
+| `RM-09` | `core/schemas.py` fourre-tout : 1 538 l., 44 importateurs, 4 familles de types | nettoyage | secondaire | `core/schemas.py` → `core/schemas/` | — | **fait (2026-08-10)**, zéro importateur touché |
+| `RM-08` | ~~Cinq projections voisines de l'unité de césure~~ — **constat périmé** : les deux ne sont plus des résolveurs parallèles mais deux filtres d'**une** dérivation, et ils divergent pour une raison écrite | réducteur | important | `core/reconcile.py` | ~~`S1`~~ | **clos par la mesure (2026-08-12)** |
 
 ### Ordre, et pourquoi
 
@@ -924,6 +1155,45 @@ produit le plus gros diff de la vague. Fait en dernier, avec un
   et RM-2 pas fermé.
 - **Lot RM-6 — nettoyages progressifs** : `RM-06`, `RM-05b`, `RM-09`.
 
+### `RM-08` — **clos par la mesure, le 2026-08-12** (et non par une fusion)
+
+Le constat d'origine — « cinq projections voisines, `_page_local_units` /
+`_units_visible_on_page` quasi identiques » — décrivait un état **antérieur**.
+Vérifié dans le code avant d'y toucher, comme la règle n°6 de
+`docs/AUTOPILOT.md` l'exige désormais :
+
+- les deux lisent **zéro champ pointeur** ;
+- les deux passent par **la** dérivation partagée (`derive_hyphen_groups`,
+  `ADR-010`).
+
+Elles ne sont donc plus des résolveurs parallèles — c'est précisément ce que
+`S1` a retiré. Ce qui reste est **une dérivation vue par deux filtres**, et la
+différence n'est pas cosmétique :
+
+- le **routeur** peut décliner. Escalader la moitié d'une unité la couperait
+  entre deux producteurs, donc une unité incomplète est laissée au producteur
+  primaire et ses membres restent ensemble *en ne faisant rien*.
+  `_page_local_units` ne retourne donc rien pour une unité qui n'est pas
+  entière ;
+- le **batcher image-cap** ne le peut pas. Il découpe *un* chunk en plusieurs
+  appels : « ne rien faire » n'existe pas, chaque ligne atterrit dans un
+  batch. Sans réponse, il traitait chaque membre comme un singleton et pouvait
+  mettre une paire dans deux appels — la seule chose que l'atomicité de paire
+  interdit. `_units_visible_on_page` retourne donc les membres *présents*.
+
+**Fusionner obligerait à choisir un comportement et changerait l'autre en
+silence.** Ce n'est pas une opinion : `tests/hyphenation/test_the_unit_projections_are_not_duplicates.py`
+exhibe un document où les deux divergent (une chaîne A-B ici, C sur la page
+suivante : le routeur voit `{}`, le batcher voit `{A, B}`), et la sensibilité
+a été vérifiée en simulant la fusion demandée — le test échoue.
+
+Le test est aussi la façon honnête pour l'item de **rouvrir** : si un
+changement futur les rend d'accord partout, elles sont redondantes et le test
+le dit en échouant.
+
+`S1` n'est donc plus un prérequis de `RM-08`, et `RM-08` ne sort pas de la
+vague : il en sort par le haut, sans code modifié.
+
 ### Ce que la vague ne touche pas
 
 `core/pairing.py`, `core/units.py`, `core/hyphenation.py` et la résolution de
@@ -935,9 +1205,11 @@ restent intacts.
 
 ### Suivi
 
-Dernière mise à jour : 2026-08-06 — session 5. Lots `RM-0` et `RM-1` clos ;
-`RM-2` en cours, filet et table clos, migration à 4 sites sur 7.
-Branche : `claude/technical-repository-audit-61yzfb`.
+Dernière mise à jour : 2026-08-10 — session 10. Lots `RM-0` à `RM-5` clos ;
+`RM-6` clos sauf `RM-05b`, qui est **partiel et le restera par construction**
+(regroupement fichier par fichier). Restent : `RM-05b` (suite) et `RM-08`,
+qui n'est pas de cette vague.
+Branche : `claude/rm-session-10-nettoyages-qb74pu`.
 
 - **Done** — `RM-11` (session 1) : règle « pas de 6ᵉ chemin » de `CLAUDE.md`
   reformulée en propriété (deux encodages, pas un compte historique) ;
@@ -1128,9 +1400,196 @@ Branche : `claude/technical-repository-audit-61yzfb`.
   coûtant deux questions au lecteur à chacun de ses 8 sites. Délibérément
   **non gelé**, à l'inverse de `PageWorkspace` un commit plus tôt, et le
   contraste est le propos : un workspace se lit, un budget se dépense.
+- **Done** — `RM-06` (session 10), et l'ordre du geste est le résultat. Le
+  **test d'abord** : `test_adr_references_resolve.py` devient
+  `test_references_resolve.py` et couvre les deux vocabulaires qu'un
+  commentaire peut citer sans mentir — `ADR-NNN` (la généalogie) et `§n`
+  (le contrat). Deux `§` ne résolvaient pas et **ressemblaient** à des
+  renvois au SPEC : `ARCHITECTURE.md §3.2` (histoire gelée) et « prior
+  audit §7.1 » (un audit que personne ne peut nommer). Le reste — `Fnn`,
+  `P3.n`, `Sn`/`Ln`/`Rn`, tranche nue, `Audit-…` — est interdit par un
+  **cliquet à base mesurée** : 215 tags dans 48 fichiers, chaque fichier
+  libre de décroître et jamais de croître, un fichier à zéro devant quitter
+  la carte. Sensibilité vérifiée puis annulée dans les deux sens. Le
+  nettoyage devient alors mécanique et vert fichier par fichier : **215 →
+  23**, les 23 restants étant *exactement* les trois fichiers que la vague
+  s'interdit d'ouvrir (`core/pairing.py`, `core/hyphenation.py`,
+  `formats/alto/rewriter.py`).
+- **Done** — et c'est la moitié du travail : **on trie, on ne rase pas.**
+  Sept commentaires portaient la revendication dans le tag et sont
+  réécrits, pas dépouillés — « the whole of R1 » devient « the whole of the
+  false half above » (la fausseté que le docstring mesure trois paragraphes
+  plus haut), « exactly the shape of R1 » devient « exactly the
+  double-count this table exists to prevent », « `F8` pins both pair
+  members » devient le composant qui le fait vraiment (le planner), et
+  « moving it would put `S1` territory inside `RM-01` » devient ce que ça
+  signifie pour qui lit la ligne. Deux `slice E` nus **gagnent** leur ancre
+  (`ADR-011 slice E`) au lieu de la perdre : un `ADR` documente ses
+  tranches, donc celui-là résout. La connaissance de domaine signalée
+  n'était dans aucun tag et est intacte : le cas BnF `TL000454`,
+  l'inatteignabilité d'`EXACT` en ALTO, la distinction
+  STRUCTURAL/SEMANTIC.
+- **Done** — les docstrings brouillées de `core/schemas.py` relevées en
+  session 3, **et une troisième que personne n'avait vue** : le `ValueError`
+  qu'un hôte lit en demandant `write_wc` disait « the calibration harness
+  (the vision/QE programme/3) », où le `/3` est la queue de « (ROADMAP V3
+  Phase 2/3) ». Cause identifiée : `e7b465c` a substitué « Phase 2's job »
+  → « the job of a calibration against a real corpus » à l'aveugle, et là
+  où la phrase contenait déjà le membre, elle s'est mangée elle-même. Deux
+  descendantes de la même substitution dans `core/confidence.py` sont
+  **laissées** : elles se lisent correctement.
+- **Done** — `RM-09` (session 10). `core/schemas.py` (1 538 l.) devient
+  `core/schemas/` en quatre familles strictement stratifiées —
+  `manifest` ← `policies`/`producer` ← `report`, sans cycle. Le shim
+  n'était pas une commodité : `__all__` est **identique à l'octet** (39
+  noms, diffé), et les onze noms publics-de-fait qui n'y figuraient pas
+  (`ImageAsset`, `ModelCapabilities`, `HyphenSplit`, les cinq `DEFAULT_*`,
+  `CORRECTION_REPORT_VERSION`) sont réexportés en forme `X as X`. Ce
+  détail est le seul piège de l'item : sous `--strict`,
+  `no_implicit_reexport` aurait cassé leurs consommateurs au typage tout
+  en passant à l'exécution. **Vérifié plutôt que supposé** : `git status`
+  ne montre que le module supprimé et le paquet ajouté — zéro importateur
+  touché, dans la lib comme dans le backend ; 1 376 tests lib, 472 backend,
+  `mypy --strict` sur 74 fichiers, et le snapshot OpenAPI inchangé.
+  `SPECS_LIB_V2` §3 nomme l'arbre, donc il nomme le paquet.
+- **Done** — `RM-05b`, **première tranche** (session 10) : `tests/hyphenation/`.
+  Dix-neuf items de test portant sur un seul objet — un mot coupé sur deux
+  lignes physiques — vivaient dans trois fichiers nommés d'après la vague
+  qui les avait trouvés. Ils sont regroupés par la question posée
+  (`test_pair_vetting` 3, `test_pair_reconciliation` 7,
+  `test_unit_atomicity` 7, `test_fusion_detection` 2). **Un déplacement et
+  rien d'autre, contrôlé et non affirmé** : `pytest --collect-only` donne
+  les *mêmes* 1 383 items avant et après, et le diff des deux listes est
+  exactement 19 lignes retirées sous les anciens noms et 19 ajoutées sous
+  les nouveaux (P5). La seule ligne éditée est dans un *helper*
+  (`_reconciled_chain` appelle `_hyphen_line`, parce que le fichier importe
+  aussi le `_line(i, text)` de la suite planner). Le `_line` qui existait
+  en double au caractère près devient `tests/hyphenation/_lines.py`.
+- **Done** — `RM-05b`, **deuxième tranche** (session 10) : le filet de `S1`
+  devient *un* répertoire. Les 19 fichiers dont le sujet entier est l'unité
+  de césure (4 828 l., ~200 cas, de `test_pairing_core` à `test_units`)
+  rejoignent `tests/hyphenation/` en `git mv` pur — git les enregistre tous
+  les 19 comme renommages à zéro ligne modifiée, et le seul fichier édité
+  est `test_decisions.py`, dont l'import suit le module qu'il lit. Preuve
+  que c'est un déplacement : la liste triée des IDs collectés, privée de son
+  préfixe de répertoire, est identique à l'octet — 1 383 items.
+- **Done** — **le prérequis mesuré du déplacement, et il n'était pas
+  cosmétique** : sept sites dans six fichiers atteignaient `examples/` en
+  comptant quatre `.parent` depuis `__file__`. Descendus d'un répertoire,
+  les sept résolvaient vers un chemin inexistant — **silencieusement**, six
+  d'entre eux étant gardés par `skipif(not PATH.exists())` : ils auraient
+  simplement cessé de s'exécuter. `tests/_pipeline_harness.EXAMPLES`
+  existait déjà et reste à la racine de `tests/`.
+- **Done** — `RM-05b`, **troisième tranche** (session 10) : `tests/identity/`,
+  pour la règle sur laquelle toute la bibliothèque est indexée — l'identité
+  d'une ligne est `(page_id, line_id)`. `test_duplicate_ids.py` (`ADR-007`)
+  et `test_line_ref.py` (`ADR-009`) y entrent en `git mv` ; cinq cas les
+  rejoignent depuis deux fichiers-vague. Le cas difficile est **l'acceptation**
+  et non les refus : un id de bloc répété sur chaque page d'un export OCR
+  page-par-page est *légitime*, l'identité étant page-qualifiée. La frontière
+  est écrite : l'ordre de lecture et la traversée récursive
+  (`test_structure_traversal`) portent sur les éléments que le parseur
+  *visite*, pas sur ce qui les nomme — ils partagent des fixtures avec ce
+  répertoire, pas un invariant. Pas de garde de complétude ici, et pour une
+  raison mesurée : `line_ref` est la façon dont *tout* indexe une ligne, donc
+  « importe `core.identity` » nommerait la moitié de la suite au lieu de la
+  borner.
+- **Done** — **et le déplacement a révélé une classe entière que la tranche
+  précédente avait mal bornée.** `test_line_ref.py` déplacé résolvait
+  `examples/sample.xml` un répertoire trop haut et a échoué. Échouer était la
+  moitié chanceuse : un grep a trouvé **35 modules de plus** faisant la même
+  arithmétique, et la plupart des tests adossés au corpus sont derrière
+  `skipif(not PATH.exists())` — déplacés, ils résolvent vers rien, *skippent*,
+  et annoncent un succès. Une suite qui cesse silencieusement de s'exécuter
+  ressemble exactement à une suite qui passe. `tests/_paths.py` calcule
+  `REPO`/`PKG`/`SRC`/`TESTS`/`EXAMPLES` une fois, depuis le seul module qui ne
+  bougera jamais ; 59 modules les importent.
+  `test_paths_are_not_counted_in_parents.py` interdit le retour du motif — et
+  a échoué deux fois à son propre premier run : son docstring citait la
+  chaîne interdite mot pour mot, et sa première prise a été **la garde
+  précédente**, `test_the_net_is_bounded.py`, qui calculait `TESTS` de la
+  façon interdite.
+- **Done** — `RM-05b` **clos** (session 10), et son second constat était
+  **faux**. « 277 imports de symboles privés » : mesuré, c'est **64 imports,
+  38 symboles, 32 fichiers** (en élargissant aux imports privés entre modules
+  de test et aux accès d'attribut : 175 — 277 n'est reconstituable par aucune
+  définition essayée). Surtout, le compte n'était pas le sujet. Classés, les
+  38 forment quatre familles et **aucune n'est du gaspillage à réduire** :
+  **`surface` (2)** — `__version__` et `_LAZY` sont les *instruments* du test
+  de surface publique, pas des internes ; **`alias` (3 symboles, 12 imports)**
+  — `_detect_namespace` **est** `formats._xml.detect_namespace`, un nom
+  **public** porté sous alias privé et listé dans le `__all__` des deux
+  paquets de format, soit près d'un cinquième des imports « privés » comptés
+  par l'audit ; **`value` (~23)** — fonctions de leurs arguments, où passer
+  par la façade affirmerait *moins* et non autrement ; **`run-state` (~10)**
+  — les passes qui écrivent l'état du run, porteuses **par construction**, et
+  le plan le dit déjà : la suite publique vérifie l'état *final*, pas la
+  dépendance à l'ordre des passes (`RM-05a`).
+- **Done** — le livrable est donc un **cliquet nommé, pas une réduction** :
+  `tests/test_internal_seams_are_named.py`, où un 39ᵉ import privé est une
+  décision que quelqu'un prend exprès. Et la classification est **vérifiée,
+  pas déclarée** : une entrée `run-state` doit porter `traces`, `workspace`
+  ou `order` dans sa signature réelle lue dans `src/`, une `value` n'en porte
+  aucune, une `alias` doit résoudre vers un nom public. Ce dernier contrôle a
+  échoué au premier run et avait raison : `formats/alto/parser.py` réimporte
+  le nom *déjà* privé, donc la chaîne de réexport a deux maillons et
+  n'interroger que le dernier faisait passer le second pour un interne.
+
+- **Done** — `RM-05b`, **cinquième tranche** (session 10) :
+  `test_text_integrity_cluster.py` dissous à son tour. **Il ne reste dans la
+  suite aucun fichier nommé d'après le moment où un défaut a été trouvé
+  plutôt que d'après ce qu'il garantit** — le constat qui ouvrait `RM-05b`
+  est clos sur son versant « fichiers-vague ». Ses 21 cas ont rejoint sept
+  destinations, dont quatre fichiers neufs nommés par l'invariant :
+  `identity/test_ops_are_attributable.py` (une édition reste attachée à la
+  ligne pour laquelle elle a été calculée — `line_id` seul se répète entre
+  fichiers), `hyphenation/test_subs_marker_convergence.py` (ce que le
+  rewriter *demande* d'un marqueur et ce qu'il *écrit* concordent : le défaut
+  n'était pas un fichier faux mais une **route** fausse, une ligne
+  octet-correcte reclassée « à réécrire » à chaque run),
+  `test_line_separators_are_refused.py` (une ligne corrigée est UNE ligne,
+  aux deux portes — `str.splitlines` coupe sur huit caractères, une porte qui
+  en refuse deux en laisse passer six) et `test_page_custom_groups.py`.
+  Mêmes 1 389 noms collectés (P5).
+- **Done** — et le corollaire, appliqué : **supprimer un fichier est la façon
+  la plus rapide de créer une référence morte.** Quatre commentaires
+  pointaient vers les fichiers supprimés ; ils sont réparés dans le même
+  commit. C'est exactement le défaut que `RM-06` vient de retirer de `src/`,
+  et il se recrée à chaque déplacement si personne ne regarde.
+- **Done** — `RM-05b`, **quatrième tranche** (session 10) : deux fichiers-vague
+  **dissous, pas renommés**. Renommer un sac de constats sans rapport ne fait
+  que lui donner un meilleur nom ; chaque cas restant de
+  `test_audit_d_lib_fixes.py` et `test_review_fixes.py` a rejoint l'invariant
+  dont il parle, et six cas de `test_text_integrity_cluster.py` ont suivi ceux
+  qui partageaient une destination — pour qu'aucun invariant ne finisse coupé
+  en deux. Un fichier neuf, `test_adjacent_duplicates.py` : une seule garde
+  (`check_adjacent_duplicates`), quatre endroits où elle peut être mise en
+  défaut (dans un chunk, à une frontière de chunk, à une couture de page, à
+  une descente de granularité), jusqu'ici répartis sur trois fichiers. Mêmes
+  1 389 noms de test collectés avant et après (P5).
+- **Done** — et un refus délibéré, noté parce qu'il aurait été tentant : les
+  quatre cas de traversée déplacés construisent leurs documents avec des
+  constructeurs *plus permissifs* (un corps de `Page` sans `PrintSpace`, un
+  `TextBlock` dont l'id peut être vide ou absent) que les homonymes de
+  `test_structure_traversal`. Ils sont importés sous alias
+  (`_alto_page_doc`, `_tb_optional_id`) **et non fusionnés** : les deux
+  émettent un XML différent, et les unifier changerait en silence ce que les
+  tests plus anciens affirment. C'est une mesure à faire exprès, pas un effet
+  de bord de déplacement.
+- **Done** — le regroupement est **tenu par un test**, parce que rassembler
+  ne tient pas tout seul : `test_the_net_is_bounded.py` exige que tout
+  module de test important `corrigenda.core.pairing`, `.units` ou
+  `.hyphenation` vive dans ce répertoire, à cinq exceptions **nommées avec
+  leur raison**. Deux gardes sur la garde : une entrée d'allowlist qui
+  n'atteint plus le code doit *partir*, et le scan doit continuer à voir au
+  moins dix modules à l'intérieur — sans quoi un motif dérivé passerait au
+  vert en ne prouvant rien. La première a sauté **dès le premier run,
+  contre son propre auteur** : `test_parser.py` avait été listé sur la foi
+  d'un grep alors qu'il ne cite `core.pairing.HYPHEN_CHARS` que dans un
+  docstring. Nommer un module en prose n'est pas une façon de casser quand
+  il change ; le motif porte donc sur le chemin d'import.
 - **Blocked** — aucun.
-- **Remaining** — `RM-01`, `RM-04`, `RM-07`, `RM-03`, `RM-06`, `RM-05b`,
-  `RM-09`.
+- **Remaining** — `RM-05b` (suite) ; `RM-08`, hors vague.
 - **New bugs discovered** — un, trouvé en étendant le ratchet et corrigé dans
   le même geste (l'instrument était en cause, pas `src/`) : la clé était le
   nom nu de la fonction, donc un fichier déclarant deux fois le même nom
@@ -1199,6 +1658,20 @@ Branche : `claude/technical-repository-audit-61yzfb`.
   4/3), `test_decision_write_exclusivity.py` (cliquet des 22 écritures).
   Premier répertoire de tests groupé par **invariant** et non par vague —
   amorce de `RM-05b`.
+- **Tests added** — session 10, `tests/test_references_resolve.py` (8 cas,
+  dont les 3 hérités de `test_adr_references_resolve.py`) : `§n` résout
+  contre `SPECS_LIB_V2.md`, une garde contre le vert par vacuité (si le
+  motif de titre dérive, le test échoue au lieu de comparer à un ensemble
+  vide), et les trois cas du cliquet — aucun fichier propre ne se salit,
+  aucun fichier sale ne grossit, aucune entrée périmée ne subsiste.
+  `tests/hyphenation/` ajoute 4 fichiers et 0 cas : **exactement 19 items
+  déplacés**, ce qui est le propos. La deuxième tranche en déplace 19 de
+  plus — des fichiers entiers, en `git mv` — et ajoute le seul test neuf du
+  répertoire, `test_the_net_is_bounded.py` (3 cas).
+- **New bugs discovered** — session 10, aucun dans le comportement. Un
+  seul constat, corrigé : la troisième phrase brouillée par `e7b465c` est
+  un message d'erreur, pas un docstring — donc le seul des trois qu'un
+  hôte pouvait lire.
 - **Tests added** — session 9, `tests/test_page_workspace_is_not_a_bag.py`
   (4 cas) : champs exacts, gel, aucune méthode, et le gel exercé plutôt
   qu'introspecté.

@@ -59,7 +59,9 @@ from corrigenda.formats.loader import build_document_manifest
 
 from tests.decision._state import document, line
 
-SRC = Path(__file__).parent.parent.parent / "src" / "corrigenda"
+from tests._paths import SRC
+
+SRC = SRC
 REPO = SRC.parent.parent.parent.parent
 EXAMPLES = REPO / "examples"
 CORPUS_GT = SRC.parent.parent / "tests" / "corpus_gt"

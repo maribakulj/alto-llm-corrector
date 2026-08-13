@@ -8,7 +8,7 @@ traversals of every page of every file, interleaved with the event it emits
 about them — which is why the traversals kept being read as part of the run
 and not as what they are: an index, derived from the manifest alone.
 
-One pass now, and one value to carry (S2). Line identity is
+One pass now, and one value to carry. Line identity is
 ``(page_id, line_id)`` throughout (ADR-001/ADR-007): a bare ``line_id``
 legitimately repeats across source files, so every key here is a
 :class:`LineRef`.

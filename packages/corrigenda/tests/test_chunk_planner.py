@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 
 import pytest
 from corrigenda.core.planner import downgrade_granularity, plan_page
@@ -17,7 +16,9 @@ from corrigenda.core.schemas import (
     PageManifest,
 )
 
-X0000002_PATH = Path(__file__).parent.parent.parent.parent / "examples" / "X0000002.xml"
+from tests._paths import EXAMPLES
+
+X0000002_PATH = EXAMPLES / "X0000002.xml"
 
 
 # ---------------------------------------------------------------------------

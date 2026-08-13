@@ -26,14 +26,15 @@ text fails immediately instead of at the next byte-parity run.
 from __future__ import annotations
 
 import ast
-from pathlib import Path
 
 import pytest
 
 from corrigenda.core.guards import check_line
 from corrigenda.core.schemas import GuardConfig
 
-SRC = Path(__file__).parent.parent.parent / "src" / "corrigenda"
+from tests._paths import SRC
+
+SRC = SRC
 
 
 def _check_line_returns() -> list[dict[str, str]]:

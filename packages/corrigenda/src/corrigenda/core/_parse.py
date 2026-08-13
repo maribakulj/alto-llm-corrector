@@ -3,7 +3,7 @@
 Heritage XML producers emit coordinates and indices as floats
 (``HPOS="123.0"``), as blanks (``WIDTH=""``), or occasionally as garbage.
 Every format parser needs the same policy: a blank/missing value becomes a
-default, a float truncates toward zero (spec F5), and a genuinely
+default, a float truncates toward zero, and a genuinely
 non-numeric value either raises or defaults depending on the call site.
 
 Centralising it here keeps the four former copies from drifting — one
@@ -20,7 +20,7 @@ from __future__ import annotations
 def parse_int_tolerant(
     raw: str | None, default: int = 0, *, strict: bool = False
 ) -> int:
-    """Parse ``raw`` to ``int``, truncating floats toward zero (spec F5).
+    """Parse ``raw`` to ``int``, truncating floats toward zero.
 
     ``None`` or ``""`` returns ``default``. A float-shaped string truncates
     toward zero (``"12.9" → 12``, ``"-1.9" → -1``). A genuinely non-numeric

@@ -1,4 +1,4 @@
-"""Assembling what a run REPORTS, separately from how it ran (S2).
+"""Assembling what a run REPORTS, separately from how it ran.
 
 The plan's target for splitting the orchestrator names this seam explicitly:
 report assembly must not be entangled with execution control. Two pieces
@@ -64,7 +64,7 @@ def _build_final_edit_script(
       (a reconciled hyphen member) → a ``replace_line`` carrying the
       final text, since the original span no longer describes it.
 
-    P3.10 — the script is stamped with its protocol version, the
+    The script is stamped with its protocol version, the
     run's source-file digests, and one :class:`LinePrecondition`
     per op-carrying line (the digest of the SOURCE text the ops
     were computed against), so replaying it on a different document
@@ -179,14 +179,14 @@ def _build_correction_report(
     report = CorrectionReport(
         run_id=run_id,
         total_lines=len(decisions.decisions),
-        # P3.5 / ADR-011 slice C — the report builder reads the
+        # ADR-011 slice C — the report builder reads the
         # DecisionSet (terminal stage) + the working traces
         # (proposal/projection stages), staged per line (§9 v2).
         lines=build_line_outcomes(decisions, traces),
         # ADR-011 — the rewrite's granularity-loss counters surface on
         # the report. None when no MARKUP was dropped (or nothing was
         # written) — never read as "the run lost nothing": a flattened
-        # character is counted on the fidelity scale below (R8).
+        # character is counted on the fidelity scale below.
         format_losses=format_losses or None,
         # How faithfully each rewritten line carries its decision,
         # counted by level. A non-zero "normalized" is the run telling
@@ -198,14 +198,14 @@ def _build_correction_report(
         # and not the same thing as a fallback — the line WAS corrected,
         # just alone and without its pair-drift guards.
         unpaired_breaks=len(unpaired_break_refs(document_manifest.pages)) or None,
-        # R6 — the units this run CUT to fit the request cap. Distinct
+        # The units this run CUT to fit the request cap. Distinct
         # from unpaired_breaks: there the link was never there, here the
         # engine severed one on purpose, and the split resets the tail's
         # role to NONE so it cannot show up in that count either.
         hyphen_splits=ctx.hyphen_splits or None,
-        # P3.9 (§11) — the run's full provenance record.
+        # §11 — the run's full provenance record.
         provenance=provenance,
-        # F14/§11 — the aggregated usage is part of the persisted
+        # §11 — the aggregated usage is part of the persisted
         # artefact, not just the transient result. None when nothing
         # was reported: a zero Usage would be indistinguishable from
         # "the provider reported zero tokens".

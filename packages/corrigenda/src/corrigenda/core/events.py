@@ -1,4 +1,4 @@
-"""Typed engine events (P3.6, second slice).
+"""Typed engine events.
 
 Each dataclass here is THE definition of one
 :class:`~corrigenda.core.schemas.PipelineEventType`'s payload — the
@@ -88,7 +88,7 @@ class ChunkCompleted(EngineEvent):
     line_count: int
     target_count: int
     hyphen_pairs_reconciled: int
-    # F14 — token usage for this chunk's producer call (0 when the
+    # Token usage for this chunk's producer call (0 when the
     # provider did not report it).
     input_tokens: int
     output_tokens: int
@@ -105,7 +105,7 @@ class ChunkError(EngineEvent):
 
 @dataclass(frozen=True)
 class ChunkDowngraded(EngineEvent):
-    """F1 — the chunk's retry budget is exhausted; its target lines are
+    """The chunk's retry budget is exhausted; its target lines are
     re-planned at the next-finer granularity."""
 
     type: ClassVar[PipelineEventType] = PipelineEventType.CHUNK_DOWNGRADED

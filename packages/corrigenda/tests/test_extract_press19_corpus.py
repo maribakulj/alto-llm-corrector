@@ -12,7 +12,9 @@ import importlib.util
 import sys
 from pathlib import Path
 
-_REPO_ROOT = Path(__file__).resolve().parents[3]
+from tests._paths import REPO
+
+_REPO_ROOT = REPO
 _SCRIPT = _REPO_ROOT / "scripts" / "extract_press19_corpus.py"
 
 _spec = importlib.util.spec_from_file_location("extract_press19_corpus", _SCRIPT)

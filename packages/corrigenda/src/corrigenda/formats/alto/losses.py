@@ -76,8 +76,9 @@ ALTO_STRING_ATTRIBUTES: dict[str, tuple[AttributeClass, AttributeFate]] = {
 #: They are DROPPED in the table — that is their fate WHEN lost — but the
 #: unconditional per-String counter must skip them, or every rebuilt line
 #: reports a loss for an attribute that is still there. Two counting sites
-#: for one attribute is exactly the shape of R1, so the split is named here
-#: rather than left implicit in whichever list each site happens to carry.
+#: for one attribute is exactly the double-count this table exists to
+#: prevent, so the split is named here rather than left implicit in
+#: whichever list each site happens to carry.
 ALIGNMENT_SCOPED: frozenset[str] = frozenset({"STYLE", "STYLEREFS"})
 
 
@@ -109,7 +110,7 @@ def is_unconditional_loss(attribute: str) -> bool:
     """Does the per-String counter own this attribute's loss?
 
     False in two cases, both because another site already owns it, and two
-    sites counting one attribute is precisely the shape of R1:
+    sites counting one attribute is precisely the double-count to avoid:
 
     * :data:`ALIGNMENT_SCOPED` — the alignment-aware pass owns those, and
       counting them here too would report a loss on every rebuilt String

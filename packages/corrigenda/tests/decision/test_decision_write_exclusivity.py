@@ -31,11 +31,12 @@ a file rather than also amending this rule.
 from __future__ import annotations
 
 import ast
-from pathlib import Path
 
 import pytest
 
-SRC = Path(__file__).parent.parent.parent / "src" / "corrigenda"
+from tests._paths import SRC
+
+SRC = SRC
 
 #: The two manifest fields that carry a line's decision. ``fallback_reason``
 #: lives on the trace and is characterised separately, in

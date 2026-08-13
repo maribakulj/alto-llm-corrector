@@ -8,7 +8,7 @@ the format the manifest was parsed as, a duplicate identity, an image key
 matching no page — every one of them would otherwise fail late, confusingly,
 with correction work already spent.
 
-Lifted out of ``_run_impl`` (S2): the 311-line orchestrator opened with 60
+Lifted out of ``_run_impl``: the 311-line orchestrator opened with 60
 lines that decide nothing about how the run proceeds, only whether it may
 start at all.
 """

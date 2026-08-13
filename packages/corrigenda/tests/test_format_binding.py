@@ -17,7 +17,6 @@ the engine derives the right adapter from it:
 
 from __future__ import annotations
 
-from pathlib import Path
 
 import pytest
 from lxml import etree
@@ -30,7 +29,9 @@ from corrigenda.formats.alto.parser import build_document_manifest as build_alto
 from corrigenda.formats.page.parser import build_document_manifest as build_page
 from corrigenda.producers.rules import RulesProducer, SubstitutionRule
 
-_SAMPLE_ALTO = Path(__file__).parent.parent.parent.parent / "examples" / "sample.xml"
+from tests._paths import EXAMPLES
+
+_SAMPLE_ALTO = EXAMPLES / "sample.xml"
 
 _PAGE_XML = """<?xml version="1.0" encoding="UTF-8"?>
 <PcGts xmlns="http://schema.primaresearch.org/PAGE/gts/pagecontent/2019-07-15">

@@ -98,7 +98,7 @@ class RulesProducer:
         # a bare .lower() left a decomposed (NFD) lexicon entry unable to
         # match its composed token — a silently missed guarded correction.
         self._lexicon = {ncfold(w) for w in lexicon} if lexicon else set()
-        #: Declared provenance (P3.7-4) — a rules engine has no "model":
+        #: Declared provenance — a rules engine has no "model":
         #: ``implementation`` stays None and the identity carries the
         #: producer-side configuration digest instead, so the §11 stamp
         #: records WHICH rules table (and lexicon) produced the edits.
@@ -231,7 +231,7 @@ class RulesProducer:
     ) -> tuple[EditScript, Usage | None]:
         """§5.1 entry point — deterministic, so ``policy`` is unused and
         ``Usage`` is ``None`` (no tokens spent). Rules run over every line
-        in the payload; the pipeline discards ops for context lines (F8)."""
+        in the payload; the pipeline discards ops for context lines."""
         canonical = {ln.line_id: ln.ocr_text for ln in payload.lines}
         return self.build_edit_script(canonical), None
 

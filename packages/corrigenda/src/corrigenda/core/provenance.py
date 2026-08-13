@@ -3,7 +3,7 @@
 Helpers the orchestrator used to carry: which format adapter serves a
 document, which dependency versions were installed, the digest of every
 source file, and the assembled provenance record itself. None of them
-touches run state (S2) — the record is a function of the run's inputs and
+touches run state — the record is a function of the run's inputs and
 the identities it was configured with, which is exactly why it does not
 need the engine to build it.
 """
@@ -43,7 +43,7 @@ def _dependency_versions() -> dict[str, str]:
 
 
 def _digest_sources(source_files: dict[str, Path]) -> dict[str, str]:
-    """``sha256:<hex>`` of every input file's bytes, as GIVEN (P3.9/P3.10).
+    """``sha256:<hex>`` of every input file's bytes, as GIVEN.
 
     Computed once per run and shared by the provenance record and the
     final edit script's preconditions — the two must agree by
@@ -64,7 +64,7 @@ def _build_run_provenance(
     source_digests: dict[str, str],
     image_assets: dict[str, PageImage],
 ) -> RunProvenance:
-    """The run's §11 provenance record (P3.9).
+    """The run's §11 provenance record.
 
     Library + producer identity, policy fingerprint, per-file digests of
     the INPUT bytes (computed once per run by :func:`_digest_sources` and

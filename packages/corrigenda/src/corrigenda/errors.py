@@ -15,14 +15,14 @@ raises so consumers can ``except CorrigendaError`` once::
     ├── ProjectionError            — output artefact ≠ decisions
     └── CorrectionAborted
 
-Naming (P3.11): the root is ``CorrigendaError`` — named for the LIBRARY,
+Naming: the root is ``CorrigendaError`` — named for the LIBRARY,
 like ``requests.RequestException`` — and the producer-response error is
-``ProposalValidationError`` (it validates producer *proposals*, P3.7
-vocabulary; the bare ``ValidationError`` collided with pydantic's in
+``ProposalValidationError`` (it validates producer *proposals*, in the
+producer vocabulary; the bare ``ValidationError`` collided with pydantic's in
 every consumer's imports). ``CorrectionError`` and ``ValidationError``
 remain as deprecation ALIASES of the same classes for the 0.9.x series —
 ``except`` clauses, ``isinstance`` and subclasses behave identically
-through either name — and disappear at the P3.11 top-level reduction.
+through either name — and disappear at the 1.0 top-level reduction.
 
 The value-shaped errors additionally inherit ``ValueError`` so the bare
 ``ValueError`` raises that predate this hierarchy keep working under
@@ -141,7 +141,7 @@ class ProjectionError(CorrigendaError):
 
 
 class CorrectionAborted(CorrigendaError):
-    """Raised when ``should_abort()`` requested cancellation (F10).
+    """Raised when ``should_abort()`` requested cancellation.
 
     The pipeline probes the caller-supplied ``should_abort`` callback
     between chunks and between pages. When it returns ``True`` the run
@@ -154,10 +154,10 @@ class CorrectionAborted(CorrigendaError):
     code: ClassVar[str] = "cancelled"
 
 
-# --- 0.9.x deprecation aliases (P3.11) --------------------------------------
+# --- 0.9.x deprecation aliases ----------------------------------------------
 # Plain assignments: same class objects under both names, so `except`,
 # `isinstance` and subclassing behave identically whichever name a
-# consumer uses. Removed at the P3.11 top-level reduction (1.0).
+# consumer uses. Removed at the 1.0 top-level reduction.
 CorrectionError = CorrigendaError
 ValidationError = ProposalValidationError
 
@@ -171,7 +171,7 @@ __all__ = [
     "ConfigurationError",
     "ProjectionError",
     "CorrectionAborted",
-    # 0.9.x deprecation aliases (P3.11) — removed at the top-level reduction.
+    # 0.9.x deprecation aliases — removed at the 1.0 top-level reduction.
     "CorrectionError",
     "ValidationError",
 ]

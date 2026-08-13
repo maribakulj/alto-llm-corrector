@@ -27,7 +27,7 @@ stage lives rather than a claim to own them all:
   +----------+----------------------+------------------+-------------------+
 
 The thresholds intentionally differ and tune TOGETHER (all read from
-``GuardConfig``, F13): tightening one stage without the others can leak
+``GuardConfig``): tightening one stage without the others can leak
 migrations through the gap.
 
   - Stage A carries the *most aggressive remedy* — a hyphen drift is
@@ -82,7 +82,7 @@ class AcceptanceResult:
     accepted: bool
     text: str  # retained text (correction or OCR fallback)
     reason: str | None = None  # None when accepted; short tag when rejected
-    #: P3.5 — the metrics this check computed while deciding, recorded
+    #: The metrics this check computed while deciding, recorded
     #: once so no consumer re-derives them (report v2's decision stage).
     features: ProposalFeatures | None = None
 
@@ -141,7 +141,7 @@ def check_line(
             features=ProposalFeatures(source_similarity=1.0, length_ratio=1.0),
         )
 
-    # P3.5 — every ratio this check computes is recorded ONCE on the
+    # Every ratio this check computes is recorded ONCE on the
     # result (fields the taken path never computed stay None).
     src_len = max(len(source_ocr), 1)
     features = ProposalFeatures(length_ratio=round(len(corrected) / src_len, 4))

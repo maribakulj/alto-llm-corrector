@@ -3,7 +3,7 @@
 Everything here answers a question ABOUT A UNIT — which lines travel
 together, where a partner's manifest is, what one pair's reconciliation
 decided — and none of it needs a pipeline, a producer or an observer. They
-were 224 lines in the middle of a 3200-line orchestrator (S2), which is
+were 224 lines in the middle of a 3200-line orchestrator, which is
 where "who is my partner?" grew five parallel answers in the first place.
 
 Every one of them reads the shared derivation (`units.derive_hyphen_groups`)
@@ -38,7 +38,7 @@ from corrigenda.core.workspace import PageWorkspace
 
 
 def _subpage_for_lines(page: PageManifest, lines: list[LineManifest]) -> PageManifest:
-    """Build a synthetic single-page manifest holding just ``lines`` (F1).
+    """Build a synthetic single-page manifest holding just ``lines``.
 
     Used to re-plan a failed chunk's lines at a finer granularity via the
     normal chunk planner: the planner needs a ``PageManifest`` with the
@@ -151,7 +151,7 @@ def _units_visible_on_page(
     complete or not.
 
     The image-cap batcher's question, and NOT
-    :func:`_page_local_units`'s (L7). That one answers "is this the whole
+    :func:`_page_local_units`'s. That one answers "is this the whole
     unit?" and returns nothing when the answer is no, which is right for the
     ROUTER: escalating half a unit to a second producer would split it, so an
     incomplete unit is left to the primary and its members stay together by
@@ -240,7 +240,7 @@ def _reconcile_one_pair(
         # is what a CROSS-PAGE tail carries: its page ran earlier, so its
         # decision is on the manifest and not in this chunk's response,
         # and reading the response would silently substitute raw OCR for
-        # the correction it already earned (L3).
+        # the correction it already earned.
         corrected_p1 = lm.corrected_text or text_by_id.get(lm.line_id, lm.ocr_text)
         final_p1, final_p2, subs = reconcile_hyphen_pair(
             lm,
@@ -265,7 +265,7 @@ def _reconcile_one_pair(
     # reverted BOTH sides to their OCR text because the pair was
     # incoherent. Two lines then kept their source text while reporting
     # as corrected, so the revert reached no fallback counter and no
-    # reason: the same silent shape as the cross-page freeze (L3), and
+    # reason: the same silent shape as the cross-page freeze, and
     # not limited to cross-page pairs — any rejected intra-page pair had
     # it too. ``classify_reconcile_outcome`` only says "fallback" when
     # something was actually proposed and thrown away, so an identity
@@ -283,8 +283,8 @@ def _reconcile_one_pair(
         decide.accept(lm, final_p1, traces=traces)
         decide.accept(part2, final_p2, traces=traces)
     # NOT a decision field, and deliberately left here: the SUBS_CONTENT
-    # a pair resolved is hyphen state, and moving it would put `S1`
-    # territory inside `RM-01`.
+    # a pair resolved is hyphen state, which the single decision writer
+    # deliberately does not own (`RM-01`).
     part2.hyphen_subs_content = subs
 
     if is_forward:
@@ -328,7 +328,7 @@ def _reconcile_chunk_hyphens(
     so the derived groups are the unit AS THIS CHUNK SEES IT — a
     member two hops away contributes nothing and is simply absent.
 
-    **A join that leaves the page is owned by its HEAD instead** (L3).
+    **A join that leaves the page is owned by its HEAD instead.**
     Tail-ownership is unreachable there: the tail always sits on the
     earlier page and is decided before the head exists, so the tail's
     pass read the head's text out of a response that never mentioned
@@ -379,7 +379,7 @@ def _claim_joins(
     the page; incoming ones (another line continues onto this one) only
     when they do. Every join is therefore owned exactly once, by
     whichever side can see both members — tail-ownership on a page,
-    head-ownership across one (L3).
+    head-ownership across one.
 
     Emits ``hyphen_partner_missing`` for each partner it cannot resolve,
     so an observer sees the diagnostic instead of a silent skip.

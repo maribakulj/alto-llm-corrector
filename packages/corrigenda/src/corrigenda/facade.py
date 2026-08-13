@@ -1,4 +1,4 @@
-"""The three-line happy path (P3.12, §2): load → correct → write.
+"""The three-line happy path (§2): load → correct → write.
 
 ::
 

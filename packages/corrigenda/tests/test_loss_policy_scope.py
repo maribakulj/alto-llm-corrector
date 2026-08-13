@@ -29,8 +29,10 @@ from corrigenda.formats.page.parser import (
     build_document_manifest as build_page_manifest,
 )
 
+from tests._paths import EXAMPLES
+
 _NS = "http://www.loc.gov/standards/alto/ns-v3#"
-_PAGE_EXAMPLES = Path(__file__).parent.parent.parent.parent / "examples" / "page"
+_PAGE_EXAMPLES = EXAMPLES / "page"
 _NEWSEYE = _PAGE_EXAMPLES / "newseye-fr" / "0250199004.xml"
 
 _ALTO = f"""<?xml version="1.0"?>

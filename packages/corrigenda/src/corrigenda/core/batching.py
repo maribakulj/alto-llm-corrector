@@ -4,7 +4,7 @@ A vision producer crops EVERY line of the chunk it receives, so a chunk's
 line count IS its image count, and providers cap that per call. This is where
 the app acts on the capability the descriptor already declared.
 
-Free functions rather than pipeline methods (S2): the only thing they ever
+Free functions rather than pipeline methods: the only thing they ever
 needed from the engine was the producer they were handed. Splitting is a
 property of a chunk and a cap, not of a run.
 """

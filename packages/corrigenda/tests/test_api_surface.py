@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-from pathlib import Path
 from typing import Any
 
 import pytest
@@ -20,7 +19,9 @@ from corrigenda.core.schemas import (
     RetryPolicy,
 )
 
-_SAMPLE = Path(__file__).parent.parent.parent.parent / "examples" / "sample.xml"
+from tests._paths import EXAMPLES
+
+_SAMPLE = EXAMPLES / "sample.xml"
 
 
 class _IdentityProvider:

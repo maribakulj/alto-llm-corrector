@@ -43,7 +43,9 @@ from tests.test_properties_hypothesis import (
     alto_documents,
 )
 
-_SAMPLE = Path(__file__).parent.parent.parent.parent / "examples" / "sample.xml"
+from tests._paths import EXAMPLES
+
+_SAMPLE = EXAMPLES / "sample.xml"
 
 # Three partitions of the same document: whole-page plans, overlapping
 # 2-line windows, and 3-line windows. Budgets are in characters, so the
@@ -228,6 +230,7 @@ from corrigenda.core.schemas import HyphenRole  # noqa: E402
 
 from tests._alto_gen import rich_alto_documents  # noqa: E402
 
+
 _EXPECTED_ROLE = {
     "plain": HyphenRole.NONE,
     "part1": HyphenRole.PART1,
@@ -273,7 +276,8 @@ def test_parser_recognises_every_generated_structure(
 # on purpose. A 3-line chain under the 2-line cap stresses the window
 # pinning's hardest case, and the invariance must STILL hold: the
 # planner's over-cap cut (unlink, pinned at planner level in
-# test_review_fixes.py) only runs on failure-driven descent to LINE
+# tests/hyphenation/test_unit_atomicity.py) only runs on failure-driven
+# descent to LINE
 # granularity, and the deterministic rules producer never fails a chunk
 # now that validation is identity-safe — a hard chunk failure under this
 # producer is always a validator false positive, which is exactly the

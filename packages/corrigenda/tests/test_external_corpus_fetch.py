@@ -15,7 +15,9 @@ from pathlib import Path
 
 import pytest
 
-_FETCH_PATH = Path(__file__).parent / "external_corpus" / "fetch.py"
+from tests._paths import TESTS
+
+_FETCH_PATH = TESTS / "external_corpus" / "fetch.py"
 
 
 @pytest.fixture()

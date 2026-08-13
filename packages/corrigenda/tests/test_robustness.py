@@ -459,3 +459,44 @@ def test_validate_llm_response_accepts_normal_text():
     }
     result = validate_llm_response(raw=raw, expected_line_ids=["L1"])
     assert result.lines[0].corrected_text == "  hello  "
+
+
+# ---------------------------------------------------------------------------
+# Infinity- and overflow-shaped numeric strings follow the SAME policy as
+# any other unparseable value: tolerant → default, strict → ValueError.
+# `int(float("1e999"))` raised OverflowError, which neither promise covers
+# (moved here from a wave-named file, `RM-05b`)
+# ---------------------------------------------------------------------------
+
+
+_INF_SHAPED = ["inf", "-inf", "Infinity", "1e999", "-1e400", "nan"]
+
+
+@pytest.mark.parametrize("raw", _INF_SHAPED)
+def test_f7_parse_int_tolerant_defaults_on_non_finite(raw: str):
+    from corrigenda.core._parse import parse_int_tolerant
+
+    assert parse_int_tolerant(raw, 7) == 7
+
+
+@pytest.mark.parametrize("raw", _INF_SHAPED)
+def test_f7_parse_int_strict_raises_the_promised_class(raw: str):
+    from corrigenda.core._parse import parse_int_tolerant
+
+    with pytest.raises(ValueError):
+        parse_int_tolerant(raw, 0, strict=True)
+
+
+def test_f8_alto_int_attr_inf_coordinate_surfaces_as_value_error():
+    """ALTO geometry policy: a non-representable coordinate must surface
+    as the promised ValueError (real error worth surfacing) — pre-fix an
+    OverflowError escaped instead."""
+    from lxml import etree
+
+    from corrigenda.formats.alto._ns import _int_attr
+
+    el = etree.Element("TextLine", WIDTH="1e400")
+    with pytest.raises(ValueError):
+        _int_attr(el, "WIDTH")
+    # Missing attribute still defaults.
+    assert _int_attr(el, "HPOS", 3) == 3

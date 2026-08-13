@@ -3,7 +3,7 @@
 The narrowest loop in the engine, and the one that was hardest to read: a
 single 221-line method held what to ask, how to ask it again, what came
 back, and what to record — four different jobs, only one of which is
-control flow. They are four functions now (S2), and the loop reads as the
+control flow. They are four functions now, and the loop reads as the
 retry policy it implements:
 
   - :func:`_build_correction_request` — what the producer is asked, and
@@ -17,14 +17,14 @@ retry policy it implements:
     retry costs;
   - :func:`_attempt_chunk` — the loop itself, and nothing else.
 
-Free functions (S2). What the engine used to supply from ``self`` is an
+Free functions. What the engine used to supply from ``self`` is an
 argument: the retry policy that shapes the ramp, the guard config the
 validator and the span protocol read, and the observer callback. An
 attempt is a call over a chunk and a policy, not a property of a run.
 
 **This function never applies the OCR fallback.** That decision — and the
 warning event that goes with it — belongs to the caller, which may descend
-a granularity instead (F1).
+a granularity instead.
 """
 
 from __future__ import annotations
@@ -278,7 +278,7 @@ def _validate_and_capture(
         {lm.line_id: lm.ocr_text for lm in chunk_lines},
         declared_subs if declared_subs else None,
         guard_config=guard_config,
-        # F8 — the 1:1 count is enforced on targets; a missing context
+        # The 1:1 count is enforced on targets; a missing context
         # line's output is not an error (it belongs to an adjacent chunk).
         target_line_ids=chunk.target_line_ids,
     )
@@ -311,7 +311,7 @@ async def _produce(
         producer=producer,
         traces=traces,
     )
-    # P3.7 — the producer gets a per-call envelope, not the engine's whole
+    # The producer gets a per-call envelope, not the engine's whole
     # RetryPolicy: the ramp (and the hyphen 0.0 pin) is decided by the
     # caller; the probe lets long I/O be abandoned mid-flight. Count every
     # invocation (this attempt hits the producer whether or not it
@@ -391,7 +391,7 @@ class _AttemptOutcome:
     #: Attempts consumed, charged by the caller to the per-chunk budget.
     attempts_used: int
     #: On failure: the terminal error was retryable, so the same work is
-    #: worth another try at a finer granularity (F1). A hard error (e.g. a
+    #: worth another try at a finer granularity. A hard error (e.g. a
     #: 4xx) is ``False`` — smaller chunks would hit the same wall.
     can_downgrade: bool
     #: The sanitised terminal error message, empty on success.
@@ -418,7 +418,7 @@ async def _attempt_chunk(
 ) -> _AttemptOutcome:
     """Call the edit producer with retries; return the outcome.
 
-    Retry strategy (F9): up to ``max_attempts``, bounded by the caller to
+    Retry strategy: up to ``max_attempts``, bounded by the caller to
     the remaining budget, with the temperature ramp and backoffs the
     injected :class:`RetryPolicy` defines — except after a
     ``HyphenIntegrityError``, which pins every later attempt to 0.0 (the
@@ -431,7 +431,7 @@ async def _attempt_chunk(
 
     for attempt in range(1, max_attempts + 1):
         attempts_used = attempt
-        # F9 — temperature comes from the injected RetryPolicy. A hyphen
+        # Temperature comes from the injected RetryPolicy. A hyphen
         # violation still pins the next attempt to 0.0 (the producer
         # mishandled the pair; a colder attempt sticks closer to source).
         temperature = 0.0 if hyphen_violation else retry_policy.temperature_for(attempt)
@@ -449,7 +449,7 @@ async def _attempt_chunk(
             raw = _script_to_raw(
                 script, chunk_lines, producer=producer, guard_config=guard_config
             )
-            # F14 — charged before validation: a response the validator goes
+            # Charged before validation: a response the validator goes
             # on to refuse still cost its tokens, and both the run's total
             # and this chunk's must say so.
             if usage is not None:
@@ -488,7 +488,7 @@ async def _attempt_chunk(
                 continue
             # Attempts exhausted (or non-retryable error class). Do NOT
             # fall back here — the caller decides between a granularity
-            # downgrade (F1) and the OCR fallback. ``can_downgrade`` is
+            # downgrade and the OCR fallback. ``can_downgrade`` is
             # True only when the terminal error was retryable.
             return _AttemptOutcome(
                 None, attempts_used, decision.is_retryable, last_msg, None

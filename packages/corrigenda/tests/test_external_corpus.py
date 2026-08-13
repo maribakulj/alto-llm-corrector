@@ -38,13 +38,15 @@ from corrigenda.formats.alto.parser import build_document_manifest
 from tests._pipeline_harness import DictProvider, RecordingObserver
 from corrigenda.core.pipeline import CorrectionPipeline
 
+from tests._paths import TESTS
+
 _CACHE = Path(
     os.environ.get(
         "CORRIGENDA_EXTERNAL_CORPUS_DIR",
-        Path(__file__).parent / "external_corpus" / ".cache",
+        TESTS / "external_corpus" / ".cache",
     )
 )
-_PINNED_DIR = Path(__file__).parent / "external_corpus" / "pinned"
+_PINNED_DIR = TESTS / "external_corpus" / "pinned"
 _FETCHED = sorted(_CACHE.glob("*.alto.xml")) if _CACHE.is_dir() else []
 _PINNED = sorted(_PINNED_DIR.glob("*.alto.xml")) if _PINNED_DIR.is_dir() else []
 

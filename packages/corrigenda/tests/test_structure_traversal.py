@@ -297,3 +297,94 @@ def test_page_multicolumn_hyphen_pairs_follow_reading_order(tmp_path: Path):
     pages, _ = parse_page_file(_write(tmp_path, xml), "t.xml")
     lines = {lm.line_id: lm for lm in pages[0].lines}
     assert lines["c1l1"].hyphen_pair_line_id == "c2l1"
+
+
+# ---------------------------------------------------------------------------
+# Declared order under adverse input (moved here from two wave-named
+# files, `RM-05b`). These four build their documents with the LOOSER
+# builders — a Page body with no PrintSpace, and a TextBlock whose id may
+# be empty or absent — which this module's same-named helpers cannot
+# express. They are imported under distinct names rather than merged: the
+# two builders emit different XML, and unifying them would quietly change
+# what the tests above assert.
+# ---------------------------------------------------------------------------
+
+from tests.identity._docs import _alto_doc as _alto_page_doc  # noqa: E402
+from tests.identity._docs import _tb as _tb_optional_id  # noqa: E402
+
+
+def test_idless_region_under_reading_order_keeps_document_order():
+    from lxml import etree
+
+    from corrigenda.formats.page._ns import _detect_namespace
+    from corrigenda.formats.page.parser import _regions_in_reading_order
+
+    # Regions [A(id), B(NO id), C(id)] with ReadingOrder [C, A]. The
+    # declaration says nothing about B; sorting would yank B to the end.
+    # Conservative fix: bail to document order [A, B, C].
+    xml = """\
+<PcGts xmlns="http://schema.primaresearch.org/PAGE/gts/pagecontent/2019-07-15">
+  <Page imageFilename="p.png" imageWidth="1000" imageHeight="1000">
+    <ReadingOrder>
+      <OrderedGroup id="g">
+        <RegionRefIndexed index="0" regionRef="C"/>
+        <RegionRefIndexed index="1" regionRef="A"/>
+      </OrderedGroup>
+    </ReadingOrder>
+    <TextRegion id="A"><Coords points="0,0 10,0 10,10 0,10"/></TextRegion>
+    <TextRegion><Coords points="0,20 10,20 10,30 0,30"/></TextRegion>
+    <TextRegion id="C"><Coords points="0,40 10,40 10,50 0,50"/></TextRegion>
+  </Page>
+</PcGts>"""
+    root = etree.fromstring(xml.encode())
+    ns = _detect_namespace(root)
+    page_el = root.find(f"{{{ns}}}Page")
+    ordered = _regions_in_reading_order(page_el, ns)
+    assert [r.get("id") for r in ordered] == ["A", None, "C"]
+
+
+def test_alto_empty_string_block_id_does_not_crash(tmp_path: Path):
+    """ID=\"\" used to KeyError the IDNEXT chain walk."""
+    body = (
+        "<PrintSpace>"
+        + _tb_optional_id("B1", "un", idnext="B2", vpos=10)
+        + _tb_optional_id("", "sans id", vpos=50)
+        + _tb_optional_id("B2", "deux", vpos=90)
+        + "</PrintSpace>"
+    )
+    pages, _ = parse_alto_file(_write(tmp_path, _alto_page_doc(body)), "t.xml")
+    texts = [lm.ocr_text for lm in pages[0].lines]
+    assert sorted(texts) == sorted(["un", "sans id", "deux"])
+
+
+def test_alto_idnext_to_next_page_ends_chain_without_voiding_order(tmp_path: Path):
+    """A cross-page IDNEXT (valid METS/ALTO continuation) must be treated
+    as end-of-chain — the rest of the page's declared order is KEPT
+    (before the fix the whole declaration fell back to document order)."""
+    body = (
+        "<PrintSpace>"
+        + _tb_optional_id("B1", "premier", idnext="B3", vpos=10)
+        + _tb_optional_id("B2", "troisieme", idnext="NEXT_PAGE_BLOCK", vpos=50)
+        + _tb_optional_id("B3", "deuxieme", idnext="B2", vpos=90)
+        + "</PrintSpace>"
+    )
+    pages, _ = parse_alto_file(_write(tmp_path, _alto_page_doc(body)), "t.xml")
+    assert [lm.ocr_text for lm in pages[0].lines] == [
+        "premier",
+        "deuxieme",
+        "troisieme",
+    ]
+
+
+def test_alto_margin_blocks_stay_out_of_scope_without_printspace(tmp_path: Path):
+    """No PrintSpace: the whole Page is the container, but margin-nested
+    blocks (running heads, page numbers) must remain excluded — the
+    historical direct-children lookup excluded them implicitly."""
+    body = (
+        "<TopMargin>"
+        + _tb_optional_id("M1", "titre courant", vpos=5)
+        + "</TopMargin>"
+        + _tb_optional_id("B1", "corps du texte", vpos=100)
+    )
+    pages, _ = parse_alto_file(_write(tmp_path, _alto_page_doc(body)), "t.xml")
+    assert [lm.ocr_text for lm in pages[0].lines] == ["corps du texte"]

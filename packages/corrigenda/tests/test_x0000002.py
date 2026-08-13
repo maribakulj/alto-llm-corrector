@@ -12,7 +12,6 @@ Tests:
 
 from __future__ import annotations
 
-from pathlib import Path
 
 import pytest
 from corrigenda.formats.alto.parser import parse_alto_file
@@ -22,9 +21,9 @@ from corrigenda.core.schemas import HyphenRole, LineStatus
 
 from tests._pipeline_harness import run_pipeline
 
-X0000002_PATH = (
-    Path(__file__).resolve().parent.parent.parent.parent / "examples" / "X0000002.xml"
-)
+from tests._paths import EXAMPLES
+
+X0000002_PATH = EXAMPLES / "X0000002.xml"
 
 pytestmark = pytest.mark.skipif(
     not X0000002_PATH.exists(), reason="X0000002.xml not found"

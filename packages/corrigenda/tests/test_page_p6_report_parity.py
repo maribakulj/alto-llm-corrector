@@ -1,4 +1,10 @@
-"""PAGE Slice-D coverage: P6 custom offsets, ⸗ hyphen, report losses, 6.3 parity."""
+"""PAGE Slice-D coverage: P6 custom offsets, ⸗ hyphen, report losses, 6.3 parity.
+
+The unit tests of ``strip_offset_groups`` live in
+``test_page_custom_groups.py`` (`RM-05b`); what stays here is the
+end-to-end half — what a real rewrite does to a document's ``custom``
+attributes.
+"""
 
 from __future__ import annotations
 
@@ -10,11 +16,12 @@ from corrigenda.core.protocols import ProducerMetadata
 from corrigenda import CorrectionPipeline
 from corrigenda.core.editing import EditScript, ReplaceLine
 from corrigenda.core.schemas import CorrectionReport, HyphenRole
-from corrigenda.formats.page._custom import strip_offset_groups
 from corrigenda.formats.page.parser import build_document_manifest
 from corrigenda.formats.page.rewriter import extract_output_texts, rewrite_page_file
 
-_EXAMPLES = Path(__file__).parent.parent.parent.parent / "examples" / "page"
+from tests._paths import EXAMPLES
+
+_EXAMPLES = EXAMPLES / "page"
 _LAF_CORR = (
     _EXAMPLES / "LaFayette1678_Cleves_btv1b8610820b_corrected_0011_page_corrected.xml"
 )
@@ -30,17 +37,6 @@ def _write(tmp_path: Path, xml: str, name: str = "f.xml") -> Path:
 # ---------------------------------------------------------------------------
 # P6 — custom microformat
 # ---------------------------------------------------------------------------
-
-
-def test_strip_offset_groups_unit():
-    assert strip_offset_groups("readingOrder {index:0;}") == (
-        "readingOrder {index:0;}",
-        0,
-    )
-    assert strip_offset_groups(
-        "readingOrder {index:2;} textStyle {offset:5; length:3;}"
-    ) == ("readingOrder {index:2;}", 1)
-    assert strip_offset_groups("textStyle {offset:0; length:4;}") == ("", 1)
 
 
 _CUSTOM_FIXTURE = """<?xml version="1.0" encoding="UTF-8"?>

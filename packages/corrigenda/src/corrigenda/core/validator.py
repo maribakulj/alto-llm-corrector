@@ -23,8 +23,8 @@ class HyphenIntegrityError(ProposalValidationError):
     ``except ValueError`` catches keep working. Carrying the type
     explicitly lets the pipeline's retry classifier use ``isinstance(exc,
     HyphenIntegrityError)`` instead of substring-matching
-    ``"hyphen_integrity_violation"`` in the exception message — a fragile
-    coupling that prior audit §7.1 flagged. The retry SSE event still
+    ``"hyphen_integrity_violation"`` in the exception message — a coupling
+    to prose that no test protects. The retry SSE event still
     emits the literal ``"hyphen_integrity_violation"`` tag for the
     frontend consumer.
     """
@@ -63,7 +63,7 @@ def validate_llm_response(
         corrected text equals the full word, the LLM illegally merged
         the pair.
     target_line_ids:
-        F8 — the chunk's *target* lines. When provided, the 1:1 count is
+        The chunk's *target* lines. When provided, the 1:1 count is
         enforced on targets only: every target must be present exactly
         once; entries for *context* lines (in ``expected_line_ids`` but
         not targets) are accepted when present and their absence is NOT
@@ -71,8 +71,8 @@ def validate_llm_response(
         Per-entry structural checks (dict shape, known id, no duplicate,
         non-empty single-line text) stay strict for every entry: garbage
         anywhere still signals a degraded response. Hyphen-integrity
-        checks run over the target set (F8 pins both pair members into
-        the same target set). ``None`` = every line is a target
+        checks run over the target set (the planner pins both pair members
+        into the same target set). ``None`` = every line is a target
         (historical behaviour, byte-compatible).
 
     Raises
@@ -102,7 +102,7 @@ def validate_llm_response(
         raise ProposalValidationError("'lines' must be a list")
 
     expected_set = set(expected_line_ids)
-    # F8 — the ids whose output is REQUIRED. When target_line_ids is None
+    # The ids whose output is REQUIRED. When target_line_ids is None
     # every expected line is a target (historical exact-count behaviour).
     check_set = expected_set if target_line_ids is None else set(target_line_ids)
 
@@ -167,8 +167,8 @@ def validate_llm_response(
             f"Missing line_ids in response: {sorted(missing)}"
         )
 
-    # --- Hyphen integrity (over the required set — F8 keeps hyphen pairs
-    # within one target set, so both members are guaranteed present) ---
+    # --- Hyphen integrity (over the required set — the planner keeps hyphen
+    # pairs within one target set, so both members are guaranteed present) ---
     if hyphen_pairs:
         text_by_id = {o.line_id: o.corrected_text for o in outputs}
         _validate_hyphen_integrity(
@@ -235,7 +235,7 @@ def _validate_hyphen_integrity(
     # 4. Fusion check: PART1 contains the full logical word
     for part1_id, subs_content in hyphen_subs.items():
         # Restrict to the target/required id set, exactly like the drift
-        # checks above (loop 1-3). In F8 window mode a chunk carries context
+        # checks above (loop 1-3). In window mode a chunk carries context
         # lines owned by an ADJACENT chunk; a context-only PART1 the LLM
         # happens to fuse must not fail THIS chunk (its output is discarded),
         # or valid TARGET corrections get thrown away on retry/fallback.
@@ -245,7 +245,7 @@ def _validate_hyphen_integrity(
             continue
         part1_text = text_by_id[part1_id]
         # Bare text: whitespace and the trailing break MARK, whichever of the
-        # repertoire spells it (L5 — this was `rstrip("-")`, so a ⸗ or ¬ stayed
+        # repertoire spells it (this was `rstrip("-")`, so a ⸗ or ¬ stayed
         # glued to the last word and the fusion comparison never matched).
         part1_words = strip_trailing_break_marks(part1_text.rstrip()).split()
         if not part1_words:

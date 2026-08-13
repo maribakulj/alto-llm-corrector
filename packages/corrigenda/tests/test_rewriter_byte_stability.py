@@ -17,14 +17,15 @@ a stable line, the corresponding assertion fires.
 
 from __future__ import annotations
 
-from pathlib import Path
 
 from corrigenda.formats.alto._ns import _detect_namespace
 from corrigenda.formats.alto.parser import build_document_manifest
 from corrigenda.formats.alto.rewriter import rewrite_alto_file
 from lxml import etree
 
-_EXAMPLES = Path(__file__).parent.parent.parent.parent / "examples"
+from tests._paths import EXAMPLES
+
+_EXAMPLES = EXAMPLES
 _SAMPLE_FILES = [_EXAMPLES / "sample.xml", _EXAMPLES / "X0000002.xml"]
 
 

@@ -32,7 +32,9 @@ import subprocess
 import sys
 from pathlib import Path
 
-SRC = Path(__file__).parent.parent / "src" / "corrigenda"
+from tests._paths import SRC
+
+SRC = SRC
 
 FORBIDDEN_IN_CORE = ("lxml", "corrigenda.formats", "corrigenda.producers")
 

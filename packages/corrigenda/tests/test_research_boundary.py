@@ -33,11 +33,12 @@ from __future__ import annotations
 
 import subprocess
 import sys
-from pathlib import Path
 
 import pytest
 
-SRC = Path(__file__).parent.parent / "src" / "corrigenda"
+from tests._paths import SRC
+
+SRC = SRC
 EXAMPLES = SRC.parent.parent.parent.parent / "examples"
 
 #: Modules gated behind an optional dependency. Nothing on the base install

@@ -28,7 +28,6 @@ reads the source and fails if any pass is called without it.
 
 from __future__ import annotations
 
-from pathlib import Path
 
 import pytest
 
@@ -42,7 +41,9 @@ from corrigenda.core.schemas import GuardConfig, LossPolicy
 
 from tests.decision._state import document, line, snapshot
 
-SRC = Path(__file__).parent.parent.parent / "src" / "corrigenda"
+from tests._paths import SRC
+
+SRC = SRC
 
 #: A gate that is OFF by default (`RM-04` territory) but on a supported
 #: setting. It is the cheapest way to make the loss pass do something on
