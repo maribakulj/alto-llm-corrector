@@ -16,9 +16,8 @@ sur **événement** de la PR — résultat de CI, commentaire de revue, push,
 conflit de merge — et rend la main quand la PR est verte et qu'il n'y a rien
 en attente.
 
-**PR courante :** [#72](https://github.com/maribakulj/corrigenda/pull/72),
-ouverte le 2026-08-13 depuis `main` après le merge de
-[#71](https://github.com/maribakulj/corrigenda/pull/71), et abonnée.
+**PR courante :** ouverte le 2026-08-14 depuis `main` après le merge de
+[#72](https://github.com/maribakulj/corrigenda/pull/72), et abonnée.
 
 Quand une PR est mergée, la souscription meurt avec elle et **la boucle n'a
 plus de moteur événementiel tant qu'aucune autre n'est ouverte** — c'est le
@@ -171,6 +170,20 @@ sa mutation, et la mutation se lance **sur toute la suite**, pas seulement
 sur le module. Une propriété que d'autres tests attrapent déjà n'est pas
 fausse — elle ne compte simplement pas contre la borne.
 
+**Corollaire appris le 2026-08-14** : élargir une propriété à un second
+format n'est pas une propriété nouvelle, et la mesure ne se transpose pas
+non plus. Les deux réécriveurs sont deux implémentations ; le trou a été
+remesuré côté PAGE (1407 tests au vert sous la même mutation) au lieu d'être
+déduit du côté ALTO. Le compteur ne bouge pas pour un élargissement.
+
+**Et une garde sur les gardes** : un caractère invisible ne s'écrit pas en
+clair dans un fixage. L'espace insécable de
+`test_the_report_and_the_file_say_the_same_thing.py` s'est aplati en espace
+ordinaire pendant une réécriture du module ; comme `" " in text` est vrai de
+toute ligne, la garde de non-vacuité est restée verte et la moitié
+« insécable » de la propriété ne testait plus rien. Il s'écrit en échappée
+désormais.
+
 ### 4. `S4` — geler ce qui peut l'être
 
 **État : partiel, et le reste est en grande partie hors d'atteinte.**
@@ -259,6 +272,18 @@ Une ligne par réveil : date, item, résultat, ou la raison de l'arrêt.
   somme des pertes par ligne reproduit l'agrégat — une promesse **écrite dans
   le contrat et vérifiée nulle part**, la famille `R1`. Aucun défaut trouvé.
   Prochain réveil : suite de `T1`/`T3` (4 propriétés avant la borne).
+- 2026-08-14 — **PR #72 mergée** dans `main` (5 commits). Le réveil suivant
+  a trouvé la PR verte puis mergée en cours de geste : branche repartie de
+  `main`, nouvelle PR. Item `T1`/`T3` avancé **sans que le compteur bouge**
+  — la propriété « le rapport décrit l'artefact » a été élargie au
+  réécriveur PAGE, ce qui est un élargissement et pas une 6ᵉ propriété. Le
+  trou est le même des deux côtés (1407 tests au vert sous la mutation, sur
+  chaque réécriveur), remesuré plutôt que déduit. Deux pièges au passage,
+  tous deux écrits dans le module : le producteur du fixage ne déclarait pas
+  `requires_full_coverage = False` (tout retombait en fallback, le module ne
+  testait que le repli), et **l'espace insécable s'était aplati en espace
+  ordinaire**, rendant sa propre garde de non-vacuité verte et vide.
+  Compteur toujours **5/6**, question de la borne toujours ouverte.
 - 2026-08-13 (filet) — PR #72 verte 17/17, `mergeable_state: clean`, 0 fil
   de revue. `T1`/`T3` : **1 propriété ajoutée** — ce que le rapport dit du
   fichier, relu dans le fichier. Le réécriveur documente son raccourci (les
