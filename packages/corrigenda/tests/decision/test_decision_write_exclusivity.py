@@ -34,6 +34,7 @@ import ast
 
 import pytest
 
+from tests._ast_writes import written_attributes
 from tests._paths import SRC
 
 SRC = SRC
@@ -64,23 +65,22 @@ def _write_sites() -> dict[str, int]:
     ratchets read the same way. Functions nested inside another function
     are attributed to the enclosing definition — a closure that reverts a
     line is still that function writing a decision.
+
+    What counts as a write is ``tests/_ast_writes.py``'s business, and
+    deliberately not this file's: the predicate lived here inline, saw
+    only ``line.status = x``, and missed the tuple and augmented forms —
+    so the boundary below forbade one spelling of the violation and
+    waved the others through.
     """
     sites: dict[str, int] = {}
 
     def writes(node: ast.AST) -> int:
-        count = 0
-        for sub in ast.walk(node):
-            targets: list[ast.expr] = []
-            if isinstance(sub, ast.Assign):
-                targets = list(sub.targets)
-            elif isinstance(sub, ast.AnnAssign):
-                targets = [sub.target]
-            count += sum(
-                1
-                for t in targets
-                if isinstance(t, ast.Attribute) and t.attr in _DECISION_FIELDS
-            )
-        return count
+        return sum(
+            1
+            for sub in ast.walk(node)
+            for name in written_attributes(sub)
+            if name in _DECISION_FIELDS
+        )
 
     def visit(body: list[ast.stmt], rel: str, prefix: str) -> None:
         for node in body:

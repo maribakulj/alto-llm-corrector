@@ -59,6 +59,7 @@ from corrigenda.formats.loader import build_document_manifest
 
 from tests.decision._state import document, line
 
+from tests._ast_writes import written_attributes
 from tests._paths import SRC
 
 SRC = SRC
@@ -461,39 +462,109 @@ def test_a_reason_implies_the_line_is_back_at_source(
 # ---------------------------------------------------------------------------
 
 
-def _reason_writes() -> tuple[int, int]:
-    """``(guarded, unguarded)`` writes of ``fallback_reason`` in ``core``.
+#: The ``**fields`` → ``setattr`` funnels in ``core``. There the field is
+#: a string, so no shape test reaches it (``tests/_ast_writes.py`` says
+#: so in its own docstring); they are counted by NAME instead, and this
+#: list is closed by hand — a third funnel has to be added here.
+_TRACE_FUNNELS = frozenset({"_set_trace", "put"})
 
-    Guarded = the assignment sits under an ``if`` that tests the field
-    (``if not trace.fallback_reason``). Unguarded = it is handed to
-    ``_set_trace`` as a keyword, which always assigns.
+_REASON = "fallback_reason"
+
+
+def _reason_writes() -> tuple[int, int]:
+    """``(deferring, assigning)`` writes of ``fallback_reason`` in ``core``.
+
+    Deferring = the write sits under an ``if`` that tests the field
+    (``if not trace.fallback_reason``), so an earlier reason survives.
+    Assigning = it always lands: handed to a trace funnel as a keyword,
+    or written outright with nothing consulting the field first.
+
+    Every write falls in one bucket or the other, and that is the whole
+    point. The first version of this census counted only those two named
+    shapes, which left the most natural way to break `ADR-013` —
+    ``trace.fallback_reason = r``, bare, guarded by nothing — counted in
+    NEITHER. A third writer clobbering every reason it met would have
+    left the pin at ``(2, 0)`` and this test green.
     """
-    guarded = unguarded = 0
+    deferring = assigning = 0
     for path in sorted((SRC / "core").glob("*.py")):
-        tree = ast.parse(path.read_text(encoding="utf-8"))
-        for node in ast.walk(tree):
-            if isinstance(node, ast.If):
-                assigns = [
-                    sub
-                    for sub in ast.walk(node)
-                    if isinstance(sub, ast.Assign)
-                    and any(
-                        isinstance(t, ast.Attribute) and t.attr == "fallback_reason"
-                        for t in sub.targets
-                    )
-                ]
-                if assigns and "fallback_reason" in ast.unparse(node.test):
-                    guarded += len(assigns)
-            elif isinstance(node, ast.Call):
-                func = node.func
-                name = (
-                    func.id if isinstance(func, ast.Name) else getattr(func, "attr", "")
-                )
-                if name == "_set_trace":
-                    unguarded += sum(
-                        1 for kw in node.keywords if kw.arg == "fallback_reason"
-                    )
-    return guarded, unguarded
+        d, a = _classify(ast.parse(path.read_text(encoding="utf-8")))
+        deferring += d
+        assigning += a
+    return deferring, assigning
+
+
+def _classify(tree: ast.AST) -> tuple[int, int]:
+    """``_reason_writes`` for one parsed module — split out so the buckets
+    can be tested against fabricated source rather than only against a
+    package that currently happens to be clean."""
+    # Writes reached from an ``if`` that consults the field. Keyed by
+    # identity: the same statement is walked again in the sweep below.
+    deferred: set[int] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.If) and _REASON in ast.unparse(node.test):
+            deferred.update(
+                id(sub) for sub in ast.walk(node) if _REASON in written_attributes(sub)
+            )
+
+    deferring = assigning = 0
+    for node in ast.walk(tree):
+        count = written_attributes(node).count(_REASON)
+        if count:
+            if id(node) in deferred:
+                deferring += count
+            else:
+                assigning += count
+        elif isinstance(node, ast.Call):
+            func = node.func
+            name = func.id if isinstance(func, ast.Name) else getattr(func, "attr", "")
+            if name in _TRACE_FUNNELS:
+                assigning += sum(1 for kw in node.keywords if kw.arg == _REASON)
+    return deferring, assigning
+
+
+#: (label, body of a function, expected ``(deferring, assigning)``). The
+#: census only means something if every way of writing the reason lands
+#: in one bucket; the third case is the one that used to land in neither.
+_CENSUS_CASES = [
+    (
+        "deferring",
+        "    if not t.fallback_reason:\n        t.fallback_reason = r",
+        (1, 0),
+    ),
+    ("funnel keyword", "    _set_trace(tr, lm, fallback_reason=r)", (0, 1)),
+    ("bare assignment", "    t.fallback_reason = r", (0, 1)),
+    (
+        "guarded on something else",
+        "    if t is not None:\n        t.fallback_reason = r",
+        (0, 1),
+    ),
+    ("tuple unpacking", "    a.fallback_reason, b.other = r, s", (0, 1)),
+    ("the other funnel", "    put(lid, fallback_reason=r)", (0, 1)),
+    ("read only", "    x = t.fallback_reason", (0, 0)),
+    ("constructing a value", "    d = LineDecision(fallback_reason=r)", (0, 0)),
+]
+
+
+@pytest.mark.parametrize(
+    ("label", "body", "expected"), _CENSUS_CASES, ids=lambda v: str(v)
+)
+def test_every_way_of_writing_a_reason_lands_in_a_bucket(
+    label: str, body: str, expected: tuple[int, int]
+) -> None:
+    """A write counted in neither bucket is a writer the census cannot see.
+
+    The first version of ``_reason_writes`` recognised exactly two shapes
+    — assignment under an ``if`` naming the field, and a ``_set_trace``
+    keyword — and silently dropped everything else. ``t.fallback_reason =
+    r``, which is how someone breaking `ADR-013` would most plausibly
+    write it, scored ``(0, 0)``: the pin below would have stayed at
+    ``(2, 0)`` with a third writer clobbering every reason it met."""
+    got = _classify(ast.parse(f"def f(t, tr, lm, r, s, a, b, lid, x, d):\n{body}\n"))
+    assert got == expected, (
+        f"{label}: classified {got}, expected {expected}. A write the census "
+        "puts in neither bucket is invisible to the pin below."
+    )
 
 
 def test_the_precedence_rule_is_split_four_ways_against_three() -> None:
@@ -507,11 +578,17 @@ def test_the_precedence_rule_is_split_four_ways_against_three() -> None:
     tests. ADR-013 settles which way the split should go when `RM-01`
     collapses it: the single writer defers on all seven paths.
 
-    When that lands there is ONE writer, and this test should be deleted
-    rather than adjusted — a census of one is not a rule."""
-    guarded, unguarded = _reason_writes()
-    assert (guarded, unguarded) == (2, 0), (
-        f"the precedence split moved to {guarded} deferring / {unguarded} "
+    `RM-01` has landed and the census did NOT collapse to one: the
+    reason has two writers, ``decide.py::fall_back`` and
+    ``reconcile.py::_reconcile_one_pair``, both deferring. That is by
+    construction — the exclusivity ratchet covers ``corrected_text`` and
+    ``status``, and says so; the reason lives on the trace and is this
+    file's to watch. So two is the number, and the rule still has more
+    than one site to be a rule about. If it ever does reach one, delete
+    this test rather than adjust it — a census of one is not a rule."""
+    deferring, assigning = _reason_writes()
+    assert (deferring, assigning) == (2, 0), (
+        f"the precedence split moved to {deferring} deferring / {assigning} "
         "assigning writes. If that was deliberate, update the behavioural "
         "pins above in the same commit — they are what says which reason a "
         "consumer actually sees."
