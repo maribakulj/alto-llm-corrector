@@ -17,6 +17,7 @@ import pytest
 from corrigenda.core.editing import EditScript, ReplaceLine
 from corrigenda.core.protocols import ProducerMetadata
 from corrigenda.core.quality import RoutingPolicy
+from corrigenda.core.schemas import HyphenRole
 from corrigenda.formats.alto.parser import build_document_manifest
 
 from tests._paths import REPO
@@ -144,6 +145,60 @@ def test_apply_ocr_manifest_keeps_gt_when_engine_returned_nothing():
     first = doc.pages[0].lines[0]
     ocred, _ = vb.apply_ocr_manifest(doc, {first.line_id: ""})
     assert ocred.pages[0].lines[0].ocr_text == first.ocr_text
+
+
+def test_swapping_the_text_re_derives_the_hyphenation() -> None:
+    """The note and the text may not disagree — the defect the 2026-08-14
+    campaign found in itself.
+
+    Both input modes parse the GROUND-TRUTH ALTO and then overwrite every
+    ``ocr_text``. Hyphenation is detected in the parser's first pass, on
+    the text present then, so without a re-derivation the manifest keeps
+    break marks read off the HUMAN transcription while carrying engine
+    text that has none. No parser can produce that state: a heuristic
+    PART1 is heuristic BECAUSE its text ends on a break mark.
+
+    On ``corpus/37-GT-BNL`` it made 21 of 94 break lines incoherent, and
+    the pipeline reverted their pairs — read as a quality regression when
+    it was an artefact of the harness.
+    """
+    doc = build_document_manifest([(_SAMPLE, _SAMPLE.name)])
+    marked = doc.pages[0].lines[0]
+
+    # The GT half: a line the parser reads as a break line.
+    marked.ocr_text = "conti⸗"
+    vb.rederive_heuristic_hyphenation(doc)
+    assert marked.hyphen_role is HyphenRole.PART1, (
+        "a line whose text ends on a repertoire break mark must be PART1 — "
+        "otherwise this test is not exercising the derivation at all"
+    )
+
+    # The OCR half: the engine dropped the mark, as Tesseract does on all
+    # 24 of the corpus's ``⸗`` lines.
+    ocred, _ = vb.apply_ocr_manifest(doc, {marked.line_id: "conti"})
+    out = ocred.pages[0].lines[0]
+    assert out.ocr_text == "conti"
+    assert out.hyphen_role is HyphenRole.NONE, (
+        "the break note survived a text swap that removed the break mark: "
+        "the manifest now claims a hyphenation the text it carries does "
+        "not show, and the pair reconciler will revert both members"
+    )
+
+
+def test_explicit_hyphenation_survives_a_text_swap() -> None:
+    """Markup-asserted hyphenation is NOT text-derived, so swapping the
+    text does not invalidate it. Only the heuristic side is recomputed —
+    dropping an engine's own ``SUBS_TYPE`` would be a different lie."""
+    doc = build_document_manifest([(_SAMPLE, _SAMPLE.name)])
+    line = doc.pages[0].lines[0]
+    line.hyphen_role = HyphenRole.PART1
+    line.hyphen_source_explicit = True
+    line.hyphen_subs_content = "continuation"
+
+    ocred, _ = vb.apply_ocr_manifest(doc, {line.line_id: "no mark here"})
+    out = ocred.pages[0].lines[0]
+    assert out.hyphen_role is HyphenRole.PART1
+    assert out.hyphen_subs_content == "continuation"
 
 
 @pytest.mark.asyncio
