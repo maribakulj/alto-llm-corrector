@@ -20,19 +20,27 @@ a boundary: the interesting assertion is no longer "the list shrank" but
 FIRST statement anywhere in the package that writes ``corrected_text`` or
 ``status`` outside the sole writer.
 
-Same semantics as ``test_orchestrator_budget.py``, deliberately: an entry
-may shrink, never grow; an entry that reaches zero must be deleted rather
-than left at zero; a write in a function that is not listed fails
-immediately. ``core/decide.py`` is exempt — it is the destination, and
-the exemption was written before the module existed so that `RM-01` adds
-a file rather than also amending this rule.
+The burn-down machinery went with the burn-down. Two tests here walked
+``_WRITE_SITES`` entry by entry — shrink-only, and delete-at-zero, the
+semantics ``test_orchestrator_budget.py`` still runs on its own non-empty
+dicts. At zero they walked nothing: one skipped every run with "got empty
+parameter set", the other passed green on an empty loop. The list itself
+stays, as the record of what was migrated and as the comparand below,
+but nothing iterates it any more — the docstring above already forbids
+refilling it, so the only path that would have woken those two tests is
+a path the file rules out.
+
+``core/decide.py`` is exempt — it is the destination. Which makes it the
+one thing that must be checked positively, and
+``test_only_the_sole_writer_is_exempt`` is where: an empty scan is the
+right answer here AND what a broken scan returns, so something has to
+assert the scanner can still see a write. What counts as one is
+``tests/_ast_writes.py``'s business.
 """
 
 from __future__ import annotations
 
 import ast
-
-import pytest
 
 from tests._ast_writes import written_attributes
 from tests._paths import SRC
@@ -44,8 +52,9 @@ SRC = SRC
 #: ``test_fallback_reason_precedence.py``.
 _DECISION_FIELDS = frozenset({"corrected_text", "status"})
 
-#: The module that will own these writes. Exempt before it exists so
-#: `RM-01` adds a file rather than also amending this test.
+#: The module that owns these writes. The exemption predates the module —
+#: written that way so `RM-01` added a file rather than also amending this
+#: test — and outlives the migration unchanged.
 _SOLE_WRITER = "core/decide.py"
 
 #: Every function writing a decision field outside the sole writer, with
@@ -112,31 +121,6 @@ def test_no_unlisted_function_writes_a_decision() -> None:
     )
 
 
-@pytest.mark.parametrize("key", sorted(_WRITE_SITES))
-def test_known_write_sites_only_shrink(key: str) -> None:
-    sites = _write_sites()
-    if key not in sites:
-        pytest.fail(
-            f"{key} no longer writes a decision — remove its entry, the "
-            "entry is the debt, not the function."
-        )
-    assert sites[key] <= _WRITE_SITES[key], (
-        f"{key} grew to {sites[key]} decision writes, over its pinned "
-        f"{_WRITE_SITES[key]}. Known write sites may only shrink."
-    )
-
-
-def test_emptied_sites_are_not_still_listed() -> None:
-    """`RM-01` migrates one site per commit; an entry that reached zero has
-    to go, or the list stops describing what is left."""
-    sites = _write_sites()
-    done = sorted(key for key in _WRITE_SITES if key not in sites)
-    assert not done, (
-        f"{done} no longer write a decision — drop them from _WRITE_SITES "
-        "so the remaining entries are the remaining work."
-    )
-
-
 def test_the_total_is_the_debt_and_only_goes_down() -> None:
     """One number, so progress is legible without diffing a dict."""
     total = sum(_write_sites().values())
@@ -152,15 +136,12 @@ def test_the_total_is_the_debt_and_only_goes_down() -> None:
 
 
 def test_only_the_sole_writer_is_exempt() -> None:
-    """``core/decide.py`` may write decisions freely; nothing else may.
+    """The exempt module has to be a writer, or the boundary is vacuous.
 
-    Deliberately holds at the END state too: when ``_WRITE_SITES`` is
-    empty the scan returns nothing and the exemption is still the only
-    one. A test that asserted "migration under way" would start failing
-    exactly when `RM-01` finished."""
-    assert not [key for key in _write_sites() if key.startswith(_SOLE_WRITER)]
-    if not (SRC / _SOLE_WRITER).exists():
-        pytest.skip("core/decide.py does not exist yet — RM-01 creates it")
+    This is the anti-vacuity guard: ``test_no_unlisted_...`` above passes
+    on an empty scan, and an empty scan is also what a broken scan
+    returns. If the one module allowed to write the field has stopped
+    writing it, the scan is not measuring what it claims to."""
     assert (
         (SRC / _SOLE_WRITER).read_text(encoding="utf-8").count(".corrected_text = ")
     ), "the sole writer must actually write the field it is exempt for"
