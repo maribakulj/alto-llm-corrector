@@ -80,9 +80,12 @@ CORRECTION of a PART1 to end on a break mark
 when it does not. Before `542c783` these lines were not pairs, so the
 reconciler was never called on them.
 
-**The model erases `⸗` on 36 of 36 occurrences, in every run of both
-campaigns** — it never once kept one. That part is solid and
-harness-independent.
+**The model never erases a break mark, and never sees a `⸗`.** Counted
+against the INPUT rather than against the reference: the Tesseract
+sidecar contains **zero** `⸗` (the reference has 36), so there was never
+one to erase. Of the 73 lines whose input does end on a repertoire mark,
+the model drops it on **0**. What it does not do is re-invent the 21
+marks the OCR lost — and not inventing is the behaviour asked of it.
 
 ### …but most of these reverts are an artefact of this harness
 
@@ -106,8 +109,9 @@ detecting 24 more marks in the GT half of it.
 
 **The honest reading:** the CER movement between the two campaigns is
 real and correctly measured, but it is mostly this harness, not a
-production behaviour. The production-real slice — source carries the
-mark, model erases it, pair reverts — is **4 lines**, not 24.
+production behaviour. After the fix (`2e0b7bc`) the pair reverts drop
+from 24 to 6, and only one of those is a break mark lost between input
+and output — the model rendered a `-` as `=`, outside the repertoire.
 
 The measurement-validity defect is the most useful thing this campaign
 found, and it applies to the July campaign too: **neither campaign's
@@ -138,34 +142,40 @@ imposes on a real document.
 campaign does NOT price it at the 0.009 gap above — that gap is mostly
 harness. What it does establish:
 
-- the erasure itself is total and perfectly reproducible (36/36
-  occurrences, ten runs across two campaigns), and it is a property of
-  the model, not of the harness;
-- when the source genuinely carries the mark, erasing it costs the whole
-  pair: `reconcile_hyphen_pair` reverts both members. Here that is 4
-  lines. On a corpus whose OCR reads `⸗` correctly it would be all of
-  them.
+- the model does not drop break marks: 0 of the 73 lines whose input
+  carries one loses it;
+- when a mark IS lost between input and output, the pair reverts whole —
+  `reconcile_hyphen_pair` takes both members. After the harness fix that
+  is 1 line in the whole corpus, and it is a mark the model rendered as
+  `=` rather than dropped.
 
 Pricing `M4` needs a corpus where the input text and the hyphenation
-markup come from the same place. That is a prerequisite this campaign
-discovered, not a result it delivered.
+markup come from the same place, and a restatement of what `M4` is even
+claiming. That is a prerequisite this campaign discovered, not a result
+it delivered.
 
-Both substitutions re-measured here, five runs:
+Both of `M4`'s "systematic normalisations" are misattributed, and this
+campaign is what shows it. Counted against the input, per character:
 
-| | lines | occurrences | July |
+| occurrences | reference | OCR input | output |
 |---|---|---|---|
-| `⸗` U+2E17 erased | 34 / 34, every run | 36 / 36, every run | 34 / 34, 36 / 36 |
-| `’` U+2019 → `'` | 50 – 58 / 127 | 64 – 74 / 161 | 54 / 127, 69 / 161 |
+| `⸗` U+2E17 | 36 | **0** | 0 |
+| `’` U+2019 | 161 | **2** | **94** |
+| `'` U+0027 | 0 | 116 | 67 |
 
-`⸗` is total and perfectly reproducible: the model never returns one.
-`’` is partial and varies run to run — July's "all 69 occurrences" is the
-right count but the wrong quantifier; it is 69 of 161.
+The break mark never reaches the model. The typographic apostrophe is
+destroyed by the OCR and **repaired** by the model — 50 lines improved on
+that character alone, **0 degraded**. July's "the model replaced U+2019
+on 69 occurrences with U+0027" has the direction backwards: the loss was
+the engine's, and the model recovered most of it.
 
-Making the producer preserve `⸗` is still the right move — a corrector
-that silently swaps a Fraktur break mark for a modern hyphen is altering
-the document, which is the one thing this library promises not to do.
-But its price on delivered quality is not measured yet, for the reason
-above.
+So `M4` as written — "recover the 16.5 % of CER owed to two systematic
+normalisations" — rests on a reversed reading of both its examples.
+Whatever remains of `M4` needs restating before it can be sized.
+
+There is no producer instruction to write here: the producer is not the
+one dropping the mark. The recoverable loss, if any, sits upstream in the
+OCR, which is outside this library's scope by design.
 
 ## Caveats
 
