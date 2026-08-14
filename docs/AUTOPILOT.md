@@ -142,8 +142,17 @@ le cas de la page vide ; `T3` a trouvé `L10` et la promesse de jointure fausse.
 ne teste rien). S'arrêter après six propriétés ajoutées sans qu'aucune ne
 trouve de défaut — à ce stade l'écart est ailleurs et il faut le mesurer.
 
-**Compteur : 4 propriétés ajoutées, 0 défaut trouvé** (2026-08-13). Deux
+**Compteur : 5 propriétés ajoutées, 0 défaut trouvé** (2026-08-13). Une
 avant l'arrêt prévu par la borne.
+
+**Question ouverte, à trancher par le mainteneur avant la 6ᵉ.** La borne dit
+« s'arrêter après six propriétés **sans qu'aucune ne trouve de défaut** ».
+Deux des trois dernières n'ont trouvé aucun défaut du produit mais ont
+exhibé un **angle mort de la suite** : une mutation réaliste qui laisse les
+1400+ autres tests au vert. Est-ce que ça compte comme « trouver quelque
+chose » ? Si oui la borne recule ; si non elle tombe au prochain réveil et
+il faut aller mesurer l'écart ailleurs. La boucle ne tranche pas : elle
+s'arrêtera à 6 comme écrit, et posera la question ici.
 
 Ce que la mutation délibérée a déjà payé, deux fois :
 
@@ -250,6 +259,18 @@ Une ligne par réveil : date, item, résultat, ou la raison de l'arrêt.
   somme des pertes par ligne reproduit l'agrégat — une promesse **écrite dans
   le contrat et vérifiée nulle part**, la famille `R1`. Aucun défaut trouvé.
   Prochain réveil : suite de `T1`/`T3` (4 propriétés avant la borne).
+- 2026-08-13 (filet) — PR #72 verte 17/17, `mergeable_state: clean`, 0 fil
+  de revue. `T1`/`T3` : **1 propriété ajoutée** — ce que le rapport dit du
+  fichier, relu dans le fichier. Le réécriveur documente son raccourci (les
+  textes de sortie sont lus sur l'arbre, « without a second full parse of
+  the output ») ; rien ne relisait les octets réellement rendus. **Deuxième
+  angle mort de la suite entière en deux tours** : `.replace(b"\xc2\xa0",
+  b" ")` sur `etree.tostring`, une expression, laisse les **1407** autres
+  tests au vert pendant que chaque fichier livré perd son espace insécable.
+  Compteur à 5/6, et la question de ce que « trouver un défaut » veut dire
+  est posée plus haut plutôt que tranchée. Prochain réveil : la 6ᵉ propriété
+  déclenche la borne — donc `S4` (documentation seule) si le mainteneur n'a
+  pas répondu.
 - 2026-08-13 (filet) — aucune PR ouverte, donc aucun événement : le filet
   fait exactement ce pour quoi il existe. Branche repartie de `main`, **PR
   #72 ouverte et abonnée**, puis `T1`/`T3` : **2 propriétés ajoutées**. (1)
