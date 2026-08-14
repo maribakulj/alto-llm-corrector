@@ -16,7 +16,8 @@ sur **événement** de la PR — résultat de CI, commentaire de revue, push,
 conflit de merge — et rend la main quand la PR est verte et qu'il n'y a rien
 en attente.
 
-**PR courante :** ouverte le 2026-08-14 depuis `main` après le merge de
+**PR courante :** [#73](https://github.com/maribakulj/corrigenda/pull/73),
+ouverte le 2026-08-14 depuis `main` après le merge de
 [#72](https://github.com/maribakulj/corrigenda/pull/72), et abonnée.
 
 Quand une PR est mergée, la souscription meurt avec elle et **la boucle n'a
