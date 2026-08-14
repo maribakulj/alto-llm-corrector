@@ -4,7 +4,7 @@ Ce fichier est **l'état**, pas un compte rendu. Une session réveillée par la
 Routine n'a pas mon contexte : elle a ce fichier, `docs/PLAN.md`, et le dépôt.
 Si les trois se contredisent, `docs/PLAN.md` gagne et ce fichier est corrigé.
 
-Dernière mise à jour : 2026-08-12.
+Dernière mise à jour : 2026-08-13.
 
 ---
 
@@ -16,15 +16,16 @@ sur **événement** de la PR — résultat de CI, commentaire de revue, push,
 conflit de merge — et rend la main quand la PR est verte et qu'il n'y a rien
 en attente.
 
-**PR courante : aucune.** [#71](https://github.com/maribakulj/corrigenda/pull/71)
-a été mergée le 2026-08-13 ; la branche `claude/rm-session-10-nettoyages-qb74pu`
-est close et la souscription aux événements avec elle.
+**PR courante :** [#72](https://github.com/maribakulj/corrigenda/pull/72),
+ouverte le 2026-08-13 depuis `main` après le merge de
+[#71](https://github.com/maribakulj/corrigenda/pull/71), et abonnée.
 
-**Donc la boucle n'a plus de moteur événementiel tant qu'aucune PR n'est
-ouverte** — c'est le filet toutes les 6 h qui reprend la main, et c'est normal,
-pas une panne. Le premier geste d'une nouvelle tranche est d'ouvrir une PR
-depuis une branche neuve partant de `main`, puis de s'y abonner : sans ça,
-« verte » n'a rien à qualifier.
+Quand une PR est mergée, la souscription meurt avec elle et **la boucle n'a
+plus de moteur événementiel tant qu'aucune autre n'est ouverte** — c'est le
+filet toutes les 6 h qui reprend la main, et c'est normal, pas une panne. Le
+premier geste d'une nouvelle tranche est donc d'ouvrir une PR depuis une
+branche neuve partant de `main`, puis de s'y abonner : sans ça, « verte »
+n'a rien à qualifier.
 
 Ordre de priorité à chaque réveil, sans exception :
 
@@ -141,15 +142,34 @@ le cas de la page vide ; `T3` a trouvé `L10` et la promesse de jointure fausse.
 ne teste rien). S'arrêter après six propriétés ajoutées sans qu'aucune ne
 trouve de défaut — à ce stade l'écart est ailleurs et il faut le mesurer.
 
-**Compteur : 2 propriétés ajoutées, 0 défaut trouvé** (2026-08-13). Quatre
+**Compteur : 5 propriétés ajoutées, 0 défaut trouvé** (2026-08-13). Une
 avant l'arrêt prévu par la borne.
 
-Ce que la mutation délibérée a déjà payé : la première version de la
-propriété « l'ordre des fichiers » comparait les octets livrés, passait au
-vert, et **ne détectait pas** la famille de défaut pour laquelle elle était
-écrite — `F4` corrompait le script d'édition en laissant le XML correct. La
-règle n'est pas une formalité : elle a transformé une propriété décorative en
-propriété réelle.
+**Question ouverte, à trancher par le mainteneur avant la 6ᵉ.** La borne dit
+« s'arrêter après six propriétés **sans qu'aucune ne trouve de défaut** ».
+Deux des trois dernières n'ont trouvé aucun défaut du produit mais ont
+exhibé un **angle mort de la suite** : une mutation réaliste qui laisse les
+1400+ autres tests au vert. Est-ce que ça compte comme « trouver quelque
+chose » ? Si oui la borne recule ; si non elle tombe au prochain réveil et
+il faut aller mesurer l'écart ailleurs. La boucle ne tranche pas : elle
+s'arrêtera à 6 comme écrit, et posera la question ici.
+
+Ce que la mutation délibérée a déjà payé, deux fois :
+
+- la première version de la propriété « l'ordre des fichiers » comparait les
+  octets livrés, passait au vert, et **ne détectait pas** la famille de
+  défaut pour laquelle elle était écrite — `F4` corrompait le script
+  d'édition en laissant le XML correct ;
+- la mutation qui fait réutiliser le `postProcessingStep` précédent au lieu
+  de l'ajouter laisse **toute la suite au vert** sauf la propriété qui vient
+  d'être écrite. Ce n'est plus une vérification de la propriété, c'est une
+  mesure de ce qu'elle apporte, et c'est la façon la moins chère de
+  distinguer une propriété neuve d'une redite.
+
+**Conséquence de méthode, à garder** : chaque nouvelle propriété se juge sur
+sa mutation, et la mutation se lance **sur toute la suite**, pas seulement
+sur le module. Une propriété que d'autres tests attrapent déjà n'est pas
+fausse — elle ne compte simplement pas contre la borne.
 
 ### 4. `S4` — geler ce qui peut l'être
 
@@ -239,6 +259,29 @@ Une ligne par réveil : date, item, résultat, ou la raison de l'arrêt.
   somme des pertes par ligne reproduit l'agrégat — une promesse **écrite dans
   le contrat et vérifiée nulle part**, la famille `R1`. Aucun défaut trouvé.
   Prochain réveil : suite de `T1`/`T3` (4 propriétés avant la borne).
+- 2026-08-13 (filet) — PR #72 verte 17/17, `mergeable_state: clean`, 0 fil
+  de revue. `T1`/`T3` : **1 propriété ajoutée** — ce que le rapport dit du
+  fichier, relu dans le fichier. Le réécriveur documente son raccourci (les
+  textes de sortie sont lus sur l'arbre, « without a second full parse of
+  the output ») ; rien ne relisait les octets réellement rendus. **Deuxième
+  angle mort de la suite entière en deux tours** : `.replace(b"\xc2\xa0",
+  b" ")` sur `etree.tostring`, une expression, laisse les **1407** autres
+  tests au vert pendant que chaque fichier livré perd son espace insécable.
+  Compteur à 5/6, et la question de ce que « trouver un défaut » veut dire
+  est posée plus haut plutôt que tranchée. Prochain réveil : la 6ᵉ propriété
+  déclenche la borne — donc `S4` (documentation seule) si le mainteneur n'a
+  pas répondu.
+- 2026-08-13 (filet) — aucune PR ouverte, donc aucun événement : le filet
+  fait exactement ce pour quoi il existe. Branche repartie de `main`, **PR
+  #72 ouverte et abonnée**, puis `T1`/`T3` : **2 propriétés ajoutées**. (1)
+  `T3` — rejouer le script d'édition rendu doit reproduire le fichier rendu,
+  une promesse écrite dans la docstring de `_build_final_edit_script` et
+  comparée nulle part ; (2) `T1` — une seconde passe sur la sortie ne bouge
+  rien sauf le `postProcessingStep` qu'elle ajoute. **La seconde a trouvé un
+  angle mort de la suite entière** : réutiliser le pas de provenance au lieu
+  de l'ajouter laisse les 1404 autres tests au vert. Aucun défaut dans le
+  code. Compteur à 4/6. Prochain réveil : `T1`/`T3` (2 avant la borne), puis
+  `S4` en documentation seule.
 - 2026-08-13 — **PR #71 mergée** dans `main` (27 commits). Avant merge, deux
   décisions déléguées ont été trouvées **vidées de leur contenu** par la
   découverte que `S3b` était déjà fait : « pas d'extension de surface tant que
