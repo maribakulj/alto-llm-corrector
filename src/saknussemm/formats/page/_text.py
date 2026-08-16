@@ -54,37 +54,63 @@ def canonical_textequiv(el: etree._Element, ns: str) -> etree._Element | None:
     return min(equivs, key=_index_of)
 
 
-def _unicode_text(te: etree._Element | None, ns: str) -> str:
-    """The ``Unicode`` text of a TextEquiv (NFC), or '' when missing."""
+def _unicode_text(te: etree._Element | None, ns: str, *, verbatim: bool = False) -> str:
+    """The ``Unicode`` text of a TextEquiv (NFC), or '' when missing.
+
+    ``verbatim=True`` returns the codepoints the FILE carries, without the
+    NFC pass — see :func:`canonical_line_text`.
+    """
     if te is None:
         return ""
     uni = te.find(_tag("Unicode", ns))
     if uni is None or uni.text is None:
         return ""
-    return nfc(uni.text)
+    return uni.text if verbatim else nfc(uni.text)
 
 
-def word_text(word: etree._Element, ns: str) -> str:
+def word_text(word: etree._Element, ns: str, *, verbatim: bool = False) -> str:
     """Canonical text of a single ``Word`` (NFC, not stripped)."""
-    return _unicode_text(canonical_textequiv(word, ns), ns)
+    return _unicode_text(canonical_textequiv(word, ns), ns, verbatim=verbatim)
 
 
-def word_texts(textline: etree._Element, ns: str) -> list[str]:
+def word_texts(
+    textline: etree._Element, ns: str, *, verbatim: bool = False
+) -> list[str]:
     """Canonical text of each ``Word`` child, in document order."""
-    return [word_text(w, ns) for w in _direct_children(textline, "Word", ns)]
+    return [
+        word_text(w, ns, verbatim=verbatim)
+        for w in _direct_children(textline, "Word", ns)
+    ]
 
 
-def canonical_line_text(textline: etree._Element, ns: str) -> str:
+def canonical_line_text(
+    textline: etree._Element, ns: str, *, verbatim: bool = False
+) -> str:
     """Build a line's logical text (P2): NFC + strip.
 
-    Line-level canonical ``TextEquiv`` wins; otherwise the space-joined
-    canonical ``Unicode`` of the ``Word`` children.
+        Line-level canonical ``TextEquiv`` wins; otherwise the space-joined
+        canonical ``Unicode`` of the ``Word`` children.
+
+        ``verbatim=True`` is the same walk with the NFC pass OFF: what the
+        file's codepoints say, rather than the logical reading of them. The two
+        differ whenever the source is decomposed — ``e`` + U+0301 in the file
+        against U+00E9 in the decision — and the fidelity scale needs both to
+        tell ``exact`` from ``source_spelling``.
+
+    It was long held that PAGE substituted nothing on read, so a second
+        reading would be pointless. NFC *is* a substitution: a run over a
+        decomposed document reported every line as ``exact`` while the file
+        spelled several of them otherwise. ALTO carries the same second
+        reading, for the same reason and since longer.
     """
     line_equiv = canonical_textequiv(textline, ns)
     if line_equiv is not None:
-        return _unicode_text(line_equiv, ns).replace("\r", "").strip()
-    words = [w for w in word_texts(textline, ns) if w]
-    return nfc(" ".join(words)).replace("\r", "").strip()
+        return (
+            _unicode_text(line_equiv, ns, verbatim=verbatim).replace("\r", "").strip()
+        )
+    words = [w for w in word_texts(textline, ns, verbatim=verbatim) if w]
+    joined = " ".join(words)
+    return (joined if verbatim else nfc(joined)).replace("\r", "").strip()
 
 
 def line_has_direct_textequiv(textline: etree._Element, ns: str) -> bool:
