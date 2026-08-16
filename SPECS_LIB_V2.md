@@ -654,13 +654,13 @@ alias d'import dépréciés pendant une version mineure.
 - **`CorrectionReport` public** : le `LineTrace` actuel (source → entrée
   modèle → sortie modèle → projeté → texte ré-extrait, chemin rewriter,
   raison de repli) devient un artefact de sortie **documenté, schéma JSON
-  stable versionné** — plus seulement un fichier interne du backend. C'est
+  stable versionné** — plus seulement un fichier interne d'un hôte. C'est
   la matière d'un diff/aperçu côté consommateur.
 - **Dry-run** : depuis ADR-011 (2026-07), TOUT run est un dry-run côté
   moteur — il n'écrit jamais rien ; il renvoie rapport + EditScript
   normalisé + XML corrigé (`result.corrected_files`). La « vraie »
   écriture est le choix de l'appelant (`result.write(dir)`, ou la
-  transaction du backend). Usage : prévisualisation, ou mesure sans
+  transaction de l'hôte). Usage : prévisualisation, ou mesure sans
   écriture par un consommateur qui benche.
 - Les événements (`PipelineEventType`) restent la seule interface de
   progression ; `chunk_downgraded` (F1) s'ajoute au contrat SSE.
@@ -697,8 +697,8 @@ alias d'import dépréciés pendant une version mineure.
 OCR ; segmentation/analyse de mise en page ; métriques d'évaluation
 (CER/WER…) ; rendu HTML/visualisation ; IIIF ; conversion générique
 ALTO↔PAGE↔TEI (on **corrige dans** un format, on ne convertit pas entre
-formats) ; gestion de jobs/persistance/SSE (backend) ; providers HTTP
-concrets (backend ou paquet séparé) ; NER/enrichissement sémantique.
+formats) ; gestion de jobs/persistance/SSE (l'affaire d'un hôte) ; providers HTTP
+concrets (un hôte, ou un paquet séparé) ; NER/enrichissement sémantique.
 
 **Et — explicitement — toute manipulation de pixels (I4)** : chargement
 d'image, découpe/crop, mise à l'échelle, encodage base64, construction d'un
@@ -749,9 +749,12 @@ PAGE XML (contrairement à `alto-core`, qui devient faux en v1.1).
 la belle alternative métaphorique. Décision avant le premier tag — on ne
 renomme pas un paquet publié.
 
-Le paquet reste dans le monorepo `lidenbrock`
-(`packages/<nom>/`) ; le backend le consomme par dépendance de chemin comme
-aujourd'hui, les externes par PyPI.
+Le paquet vit dans `packages/lidenbrock/` — un reste de l'époque où ce
+dépôt en contenait plusieurs, et qui disparaîtra quand l'arbre sera
+aplati. Ses consommateurs l'installent comme n'importe qui : depuis git
+tant que rien n'est publié, depuis PyPI ensuite. Aucun n'a de chemin
+privilégié vers lui, et c'est ce qui garantit que le chemin normal
+fonctionne.
 
 ---
 

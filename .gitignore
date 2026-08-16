@@ -13,7 +13,6 @@ env/
 
 # Node
 node_modules/
-frontend/dist/
 
 # IDE
 .idea/
@@ -37,8 +36,6 @@ htmlcov/
 .coverage
 coverage.xml
 
-# vitest / v8 coverage (frontend)
-frontend/coverage/
 
 # Run output from scripts/run_vision.py (--out defaults to ./vision_out).
 # Corrected XML plus a report.json carrying token usage and response ids:
