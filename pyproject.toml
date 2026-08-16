@@ -1,16 +1,191 @@
-# Workspace root — uv.
-#
-# One member since the demo moved out on 2026-08-16. It stays for as
-# long as `packages/lidenbrock/` is a subdirectory rather than the
-# repository root; flattening the tree retires this file with it.
-
 [project]
-name = "lidenbrock-workspace"
-version = "0.0.0"
-description = "Workspace root — not published"
+name = "lidenbrock"
+# Single source of truth for the version: src/lidenbrock/__init__.py
+# `__version__`. Bump it there + add a CHANGELOG.md entry to release.
+dynamic = ["version"]
+description = "Structure-safe post-OCR correction of heritage transcriptions (ALTO, PAGE XML) — parsers, rewriters, hyphenation reconciler, span edit protocol."
+readme = "README.md"
+# License declared via classifier only — both `license = "Apache-2.0"`
+# (PEP 639 string) and `license = {file = "..."}` (dict form) produce
+# Metadata 2.4 fields (`license-expression`, `license-file`) that
+# twine < 7 rejects. Once twine 7+ is widely deployed, switch back to
+# `license = "Apache-2.0"`. LICENSE file is still in the sdist via
+# the hatch.build.targets.sdist include below.
 requires-python = ">=3.11"
-
-[tool.uv.workspace]
-members = [
-    "packages/lidenbrock",
+authors = [
+    { name = "lidenbrock contributors" },
 ]
+keywords = ["alto", "page-xml", "ocr", "xml", "llm", "digital-heritage", "transkribus", "escriptorium"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Text Processing :: Markup :: XML",
+]
+dependencies = [
+    "pydantic>=2.0,<3.0",
+    "lxml>=6.1,<7.0",
+]
+
+[project.optional-dependencies]
+# QE scorer (ROADMAP V3 Phase 3): the zero-shot D'AlemBERT pseudo-perplexity
+# scorer behind core.quality.QEScorer. RUNTIME is onnxruntime + tokenizers
+# only — NO torch, NO transformers (the heavy conversion lives in the
+# dev-time scripts/export_masked_lm_onnx.py, never on the install path).
+qe = [
+    "onnxruntime>=1.17,<2.0",
+    "tokenizers>=0.15,<1.0",
+    "numpy>=1.24,<3.0",
+]
+
+# Vision chain (ROADMAP V3 Phase 4): the lidenbrock[vision] producer decodes,
+# validates and crops page images and calls a multimodal provider. Pillow is
+# the ONLY image dependency and it is imported LAZILY, inside
+# integrations/vision.py — never at module import and never on the base
+# install path (enforced by the I4 static scan + the runtime import contract
+# in tests/test_import_contract.py). The pixel-blind correction engine never
+# pulls it. Keep this the single image dep: heavier stacks (cv2, torch) stay
+# out by construction (I4 blocklist).
+vision = [
+    "pillow>=10.0,<12.0",
+]
+
+# Test toolchain. Same reason as `typecheck` below, and it arrived the same
+# way — by being wrong. `test_release_tooling.py` parses the workflow YAML;
+# it passed locally (a dev venv has PyYAML through some other dependency)
+# and failed on all three Python versions in CI, whose install line was the
+# real, undeclared test-dependency list. A test env assembled by hand in a
+# workflow file is not a declaration: it drifts from the local one silently,
+# and the first thing it costs is a red CI on a green local run.
+test = [
+    "pytest",
+    "pytest-asyncio",
+    "pytest-cov",
+    "hypothesis",
+    "pyyaml",
+]
+
+# Type-checking toolchain. Not a runtime extra: it exists so that
+# `mypy --strict src/lidenbrock` means the same thing locally and in CI.
+# lxml-stubs is load-bearing — without it `_Element.attrib` degrades to
+# `Any` and strict mode silently checks less than the lidenbrock-types job
+# does. The mypy pin is exact so a new release never turns a green local
+# run red in CI (or the reverse).
+typecheck = [
+    "mypy==1.15.0",
+    "lxml-stubs",
+]
+
+[project.urls]
+Homepage = "https://github.com/maribakulj/lidenbrock"
+Issues = "https://github.com/maribakulj/lidenbrock/issues"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+# Read __version__ from the package — keeps pyproject.toml and the
+# importable `lidenbrock.__version__` in lockstep.
+path = "src/lidenbrock/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/lidenbrock"]
+
+[tool.hatch.build.targets.sdist]
+# Leading slashes are load-bearing: hatchling matches these as PATTERNS, so
+# an unanchored `README.md` matches every README at any depth — it was
+# silently shipping `tests/corpus_gt/README.md` and
+# `tests/external_corpus/pinned/README.md`. No corpus DATA ever left (the
+# XML matched nothing), but an allowlist that admits files nobody listed is
+# not an allowlist. `tests/test_packaging_excludes_corpora.py` now reads the
+# BUILT sdist rather than this declaration.
+include = [
+    "/src/lidenbrock",
+    "/README.md",
+    "/CHANGELOG.md",
+    "/LICENSE",
+]
+
+# ---------------------------------------------------------------------------
+# ruff — CI lints src/ only; this config keeps `ruff check tests/` and the
+# pre-commit hook clean too. The test
+# ignores mirror the backend's: compact test code uses `l` loop vars, keeps
+# locals for readability, and imports late in a few end-to-end cases.
+# ---------------------------------------------------------------------------
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["E402", "E741", "F841"]
+
+# ---------------------------------------------------------------------------
+# pytest — the external_corpus marker gates tests that need the fetched
+# Gallica corpus (V4.2 phase 3): they self-skip when the corpus cache is
+# absent, and only the dedicated non-blocking CI job fetches it.
+# ---------------------------------------------------------------------------
+[tool.pytest.ini_options]
+markers = [
+    "external_corpus: needs the fetched external ALTO corpus (tests/external_corpus/fetch.py)",
+]
+
+# ---------------------------------------------------------------------------
+# coverage — the package now carries the algorithm tests (F11) and gates its
+# own coverage (~85% DoD; currently ~91%). The `lidenbrock-tests` CI job runs
+# pytest with --cov=lidenbrock.
+# ---------------------------------------------------------------------------
+[tool.coverage.run]
+source = ["lidenbrock"]
+branch = true
+# integrations/qe.py is the lidenbrock[qe] extra: it only runs with
+# onnxruntime + the exported D'AlemBERT bundle present, which the default
+# CI test job cannot provide (heavy deps + a 545 MB model). It has its own
+# suite (tests/test_qe_dalembert.py) that self-skips when the extra/bundle
+# is absent, so gating the core coverage on it would falsely read 0%.
+# integrations/vision.py is the lidenbrock[vision] extra (Pillow), same deal:
+# its suite self-skips without the extra, so it is omitted from the core gate.
+omit = ["*/__init__.py", "*/integrations/qe.py", "*/integrations/vision.py"]
+
+[tool.coverage.report]
+fail_under = 85
+show_missing = true
+exclude_lines = [
+    "pragma: no cover",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+]
+
+# ---------------------------------------------------------------------------
+# mypy — the package ships `py.typed` (PEP 561) and is checked in --strict
+# mode (F12 / §8.3). The `lidenbrock-types` CI job runs
+# `mypy --strict src/lidenbrock` with lxml-stubs installed.
+# ---------------------------------------------------------------------------
+[tool.mypy]
+python_version = "3.11"
+strict = true
+files = ["src/lidenbrock"]
+
+[[tool.mypy.overrides]]
+# lxml ships partial stubs (lxml-stubs); a few dynamic corners remain
+# untyped. We install lxml-stubs in CI; this keeps the odd residual
+# module import from failing strict mode.
+module = ["lxml.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# The lidenbrock[qe] runtime deps are lazy-imported inside
+# integrations/qe.py and absent from the mypy CI env (it installs only the
+# package + lxml-stubs). Treat them as untyped so --strict still runs.
+module = ["onnxruntime.*", "tokenizers.*", "numpy.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# lidenbrock[vision]: Pillow is lazy-imported inside integrations/vision.py
+# and absent from the mypy CI env. Same treatment as the qe deps — untyped
+# so --strict still runs; the module coerces every value it returns to a
+# concrete type so no Any leaks past the seam.
+module = ["PIL.*"]
+ignore_missing_imports = true

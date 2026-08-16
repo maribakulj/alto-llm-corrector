@@ -40,9 +40,6 @@ concurrency:
 jobs:
   build-and-publish:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: packages/lidenbrock
     # Map the dispatch input to an Environment so PyPI/TestPyPI rules
     # (required reviewers, branch protection) can be configured per
     # target without touching this file.
@@ -191,7 +188,7 @@ jobs:
         uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b  # release/v1
         with:
           repository-url: https://test.pypi.org/legacy/
-          packages-dir: packages/lidenbrock/dist/
+          packages-dir: dist/
           # Plan V4.3 — PEP 740 digital attestations: the publish action
           # signs the distributions with the workflow's OIDC identity and
           # uploads the provenance alongside; PyPI displays and serves it.
@@ -204,7 +201,7 @@ jobs:
         if: inputs.target == 'pypi'
         uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b  # release/v1
         with:
-          packages-dir: packages/lidenbrock/dist/
+          packages-dir: dist/
           attestations: true
           verbose: true
 
@@ -214,6 +211,6 @@ jobs:
         with:
           name: lidenbrock-dist-${{ inputs.target }}
           path: |
-            packages/lidenbrock/dist/
-            packages/lidenbrock/sbom/
+            dist/
+            sbom/
           if-no-files-found: error

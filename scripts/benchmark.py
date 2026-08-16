@@ -41,7 +41,7 @@ import tracemalloc
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(REPO_ROOT / "packages" / "lidenbrock" / "src"))
+sys.path.insert(0, str(REPO_ROOT / "src"))
 
 import lidenbrock  # noqa: E402
 from lidenbrock import (
@@ -58,7 +58,7 @@ from lidenbrock.core.schemas import ConfidencePolicy, CorrectionRequest  # noqa:
 
 BENCHMARK_VERSION = "1"
 DEFAULT_CORPUS = (
-    REPO_ROOT / "packages" / "lidenbrock" / "tests" / "corpus_gt" / "manifest.json"
+    REPO_ROOT / "tests" / "corpus_gt" / "manifest.json"
 )
 
 

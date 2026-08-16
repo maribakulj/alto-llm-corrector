@@ -31,8 +31,10 @@ from lidenbrock.producers.rules import (
     default_french_ocr_rules,
 )
 
-# Repo-relative sample (this script lives in packages/lidenbrock/examples/).
-SAMPLE = Path(__file__).resolve().parents[3] / "examples" / "sample.xml"
+# The sample sits beside this script: both are in ``examples/``, one level
+# under the repository root. Anchoring on the OWN directory rather than
+# counting up to the root is what makes this survive the next move.
+SAMPLE = Path(__file__).resolve().parent / "sample.xml"
 
 
 class PrintObserver:

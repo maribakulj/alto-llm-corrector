@@ -35,13 +35,13 @@ from dataclasses import dataclass
 from pathlib import Path
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(_REPO_ROOT / "packages" / "lidenbrock" / "src"))
+sys.path.insert(0, str(_REPO_ROOT / "src"))
 
 import lidenbrock  # noqa: E402
 from lidenbrock.core.alignment import align_tokens  # noqa: E402
 
 DEFAULT_CORPUS = (
-    _REPO_ROOT / "packages" / "lidenbrock" / "tests" / "corpus_gt" / "manifest.json"
+    _REPO_ROOT / "tests" / "corpus_gt" / "manifest.json"
 )
 
 
