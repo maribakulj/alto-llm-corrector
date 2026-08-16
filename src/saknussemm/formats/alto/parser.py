@@ -473,7 +473,34 @@ def build_document_manifest(
 
     ``pairing_policy`` is applied to both intra-page and cross-page
     hyphen linking; the default vets heuristic pairs geometrically.
+
+    A file that is not ALTO is REFUSED, not read as an empty document.
+    This parser used to find no ALTO pages in a valid PAGE file and return
+    a manifest of zero pages and zero lines — the silent mis-read
+    ``formats/loader.py`` warns about in its module docstring, and which
+    cost more than the warning suggested: 63 test modules import this
+    function directly, so any property anyone tried to assert on a PAGE
+    document held over nothing and reported success. Refusing here fixes
+    every one of those call sites at once, without editing them.
+
+    Hosts should still come through ``formats/loader.py``, which dispatches
+    on the document instead of being told. This is the guard for when they
+    do not.
     """
+    from saknussemm.errors import ParseError
+    from saknussemm.formats.loader import sniff_format  # local: loader imports us
+
+    for xml_path, source_name in files:
+        detected = sniff_format(xml_path)
+        if detected != "alto":
+            raise ParseError(
+                f"{source_name!r} is {detected.upper()}, not ALTO. Reading "
+                "it here would find no ALTO pages and yield an EMPTY "
+                "manifest — a run over nothing that reports success. Use "
+                "saknussemm.formats.loader.build_document_manifest, which "
+                "picks the parser from the document."
+            )
+
     source_files: list[str] = []
     page_offset = 0
     line_offset = 0
