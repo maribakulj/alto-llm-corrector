@@ -2,100 +2,54 @@
 
 ## Repo layout
 
-**One deliverable, and a demonstration of it that is scheduled to go.**
+**One deliverable.** `packages/lidenbrock/` is the correction library: the
+only packaged Python distribution (hatchling), and the reason this
+repository exists. Everything beside it serves it — the plan, the ADRs, the
+audits, the fixtures.
 
-- **`packages/lidenbrock/`** — the correction library. The only
-  *packaged* Python distribution (hatchling; PyPI publication is
-  prepared by `.github/workflows/publish-lidenbrock.yml` but has not
-  happened yet — no tag, no release), and the only thing that outlives
-  this repository's current shape.
-- **`backend/`** — the demo's FastAPI app, imported as a flat `app`
-  package via `PYTHONPATH` (deliberately **not** a built package; see
-  the note in `backend/pyproject.toml`). It exists to show the library
-  working, and is removed with the demo.
-
-  The practical rule this implies, and the one worth holding on to: a
-  change is only allowed to flow **from** the library **to** the demo.
-  If a demo need seems to require the library to import, name or
-  special-case it, the need is either a missing injection point in the
-  library (fix it there, generically) or out of scope
-  (`SPECS_LIB_V2.md` §12 and §15) — never a dependency edge.
-- **`frontend/`** — React + TypeScript + Vite (`lidenbrock-frontend`,
-  private).
+The web demonstration and the benchmark left on 2026-08-16 and live in
+[`lidenbrock-demo`](https://github.com/maribakulj/lidenbrock-demo) and
+[`cinoc`](https://github.com/maribakulj/cinoc). They import this library.
+It imports neither, and a change that would reverse that direction is out
+of scope rather than clever.
 
 ## Local dev setup
 
 ```bash
-# lidenbrock is a sibling package; install it first so backend's imports resolve.
-pip install -e packages/lidenbrock
-
-# Then the backend itself.
-pip install -r backend/requirements.txt -r backend/requirements-dev.txt
-
-# Optional: pre-commit hooks (ruff, mypy, end-of-file-fixer, ...).
-pre-commit install
+cd packages/lidenbrock
+pip install -e '.[test,typecheck]'
 ```
 
-> **Why two commands?**
-> Earlier the backend's `requirements.txt` listed
-> `-e ../packages/lidenbrock` and relied on the cwd being `backend/` when
-> pip ran. That fails silently when contributors install from the root
-> or from arbitrary CI paths. The two-step install above is cwd-agnostic.
+Both extras are declared in `pyproject.toml` rather than assembled by hand,
+so they mean the same thing here and in CI. That is not tidiness: the test
+toolchain used to live in a workflow's `pip install` line, and a test needing
+PyYAML went green locally and red on all three Python versions.
+
+Without `lxml-stubs` (in `[typecheck]`), `mypy --strict` checks **less** than
+CI does — `_Element.attrib` degrades to `Any` and strict mode goes quiet.
 
 ## Running things
 
 ```bash
-# Library tests (coverage gate: 85%)
-cd packages/lidenbrock && pytest
-
-# Backend tests (coverage gate: 80% on `app`; e2e run separately)
-cd backend && pytest -m "not e2e" --cov
-cd backend && pytest tests/e2e          # real uvicorn + fake provider
-
-# Linters / type-checker (run from the relevant package root)
-ruff check . && ruff format --check .
-mypy --strict src/lidenbrock            # from packages/lidenbrock/
-mypy --explicit-package-bases app       # from backend/
-
-# Backend dev server
-cd backend && uvicorn app.main:app --reload --port 8000
-
-# Frontend
-cd frontend && npm install && npm run dev   # tests: npx vitest run
-
-# Regenerate the OpenAPI snapshot + generated TS types (CI fails on drift)
-scripts/generate-frontend-api-types.sh
-```
-
-## Docker
-
-`docker-compose.yml` builds with `context: .` (repo root) so the
-backend Dockerfile can reach `packages/lidenbrock/`:
-
-```bash
-docker-compose up                   # backend on :8000, frontend on :5173
-docker build -t lidenbrock .        # single-image HF Spaces build (port 7860)
+cd packages/lidenbrock
+pytest                                   # coverage gate 85%
+pytest tests/test_x0000002.py::test_name -v
+mypy --strict src/lidenbrock
+ruff check src tests && ruff format --check src tests
 ```
 
 ## CI gates (all must pass)
 
-Python 3.11 / 3.12 / 3.13 where applicable:
+Five jobs, all on the library: lint, types, tests (3.11 / 3.12 / 3.13 with
+the coverage gate), the external-corpus invariants, and the build — which
+constructs the wheel and sdist and smoke-installs the wheel under every
+supported Python, so a packaging regression fails here rather than at
+release time.
 
-- `lidenbrock-lint`, `lidenbrock-types` (mypy --strict),
-  `lidenbrock-tests` (coverage ≥ 85%), `lidenbrock-build`
-- `backend-lint`, `backend-types`, `backend-tests` (coverage ≥ 80% on
-  `app` — the library carries its own separate gate), `backend-e2e`
-  (real uvicorn server + deliberately sabotaged fake provider),
-  `backend-security` (bandit + pip-audit)
-- `frontend` (lint, typecheck, vitest, build, npm audit),
-  `frontend-api-types-drift` (regenerates the OpenAPI snapshot +
-  generated types and fails on any diff)
-- `docker-build` (all three images built; the root image is
-  smoke-tested: `/health`, the real SPA at `/`, a built asset,
-  `/health/ready`)
-
-`backend-types` and `backend-tests` block on `lidenbrock-tests` — a
-broken core can't sneak through.
+**Green locally is not green in CI.** CI runs three Python versions; a
+gesture that passes here can fail there, and has. That is what the pull
+request is for, and why "the CI is green" and not "the suite passes on my
+machine" is the condition for merging.
 
 ## Documentation rules
 

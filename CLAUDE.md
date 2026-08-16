@@ -6,13 +6,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Lidenbrock is a post-OCR text-correction **library** (`packages/lidenbrock/`, ALTO and PAGE XML). It does NOT do OCR, resegmentation, line merging/splitting, translation, or text modernization.
 
-**The library is the deliverable; the web app is a temporary demo of it.** The FastAPI backend + React frontend (using OpenAI, Anthropic, Mistral, Google Gemini) exist to show the library working in a browser, and **will be removed when the library reaches its final form**. Consequences that bind day-to-day work:
+**This repository is the library, and nothing else.** Two sibling repositories consume it, and both import it — never the reverse:
 
-- Dependencies flow **one way only** — the demo imports the library, never the reverse. A demo need that seems to require the library to name or special-case it is either a missing injection point (fix it generically in the library) or out of scope (`SPECS_LIB_V2.md` §12, §15).
-- Only `packages/lidenbrock/` is packaged, versioned and under SemVer. `backend/` and `frontend/` are neither.
-- `docs/API.md` and `SECURITY.md` describe the DEMO and retire with it; `packages/lidenbrock/docs/` is the library's and survives.
+| repository | what it is |
+|---|---|
+| [`lidenbrock-demo`](https://github.com/maribakulj/lidenbrock-demo) | the FastAPI + React web demonstration. Left this repository on 2026-08-16 |
+| [`cinoc`](https://github.com/maribakulj/cinoc) | the benchmark: pipelines compared on ground truth, 24 metrics, significance tests |
 
-Normative docs: `README.md`, `SPECS_LIB_V2.md` (the contract — what the library must be), `docs/PLAN.md` (**the single live plan** — what remains and in what order), `packages/lidenbrock/docs/`, `docs/API.md`, `SECURITY.md`, `CONTRIBUTING.md`. Findings live in `docs/audit/` and carry no plan. Everything under `docs/history/` is frozen history — never trust it for current module locations, and never update it to match code.
+A consumer's need that seems to require this library to name or special-case it is either a missing injection point — fix it generically, here — or out of scope (`SPECS_LIB_V2.md` §12, §15).
+
+Normative docs: `README.md`, `SPECS_LIB_V2.md` (the contract — what the library must be), `docs/PLAN.md` (**the single live plan** — what remains and in what order), `packages/lidenbrock/docs/`, `CONTRIBUTING.md`. Findings live in `docs/audit/` and carry no plan. Everything under `docs/history/` is frozen history — never trust it for current module locations, and never update it to match code. It also predates the rename and says `corrigenda` throughout; that is deliberate, and its README says why.
 
 There is exactly ONE plan. Three competing, unratified ones were consolidated into `docs/PLAN.md` on 2026-07-25 and the originals moved to `docs/history/`; do not write a second, and do not revive the old ones.
 
@@ -23,43 +26,22 @@ Two standing rules from that plan, in force until it says otherwise:
 
 ## Tech Stack
 
-- **Library:** Python 3.11+, Pydantic v2, lxml, httpx — no FastAPI/server dependency
-- **Backend:** FastAPI, uvicorn, sse-starlette (flat `app` package, not built/packaged)
-- **Frontend:** React + TypeScript + Vite + Tailwind CSS (`lidenbrock-frontend`)
-- **Deployment:** docker-compose (dev: backend:8000 + frontend:5173) or single Dockerfile for HF Spaces (port 7860, frontend built as static files served by FastAPI). `DEPLOYMENT_PROFILE=demo|proxy_protected` (`institutional` = deprecated alias; see SECURITY.md)
-- **Storage:** `{JOB_STORAGE_DIR:-/tmp/app-jobs}/{job_id}/` on disk, job state in memory, no database. Orphan job dirs are reclaimed at startup
+- **Python 3.11+, Pydantic v2, lxml, httpx.** No server dependency, no framework: the library opens no socket, stores no credential and writes no file unless asked.
+- Optional extras: `[vision]` (Pillow, lazy-imported) and `[qe]`. `[typecheck]` and `[test]` are toolchains, declared so they mean the same thing locally and in CI.
 
 ## Common Commands
 
 ```bash
-# Library
 cd packages/lidenbrock
-pip install -e '.[typecheck]'   # mypy pin + lxml-stubs; without the stubs
-                                # mypy checks LESS than CI does
-pytest                          # coverage gate 85%
+pip install -e '.[test,typecheck]'   # the two toolchains, declared once in
+                                     # pyproject so they mean the same thing
+                                     # here and in CI. Without lxml-stubs,
+                                     # mypy checks LESS than CI does.
+pytest                               # coverage gate 85%
 mypy --strict src/lidenbrock
+ruff check src tests && ruff format --check src tests
 
-# Backend
-cd backend
-pip install -e ../packages/lidenbrock && pip install -r requirements.txt -r requirements-dev.txt
-uvicorn app.main:app --reload --port 8000
-pytest -m "not e2e"             # coverage gate 80% on `app`
-pytest tests/e2e                # real uvicorn + fake provider
-pytest tests/test_store.py::test_name -v  # single test
-
-# Frontend
-cd frontend
-npm install
-npm run dev     # dev server on :5173
-npx vitest run && npx tsc --noEmit && npm run lint
-npm run build   # production build
-
-# OpenAPI snapshot + generated TS types (CI fails on drift)
-scripts/generate-frontend-api-types.sh
-
-# Docker
-docker-compose up               # full local dev stack
-docker build -t lidenbrock .    # HF Spaces single container
+pytest tests/test_x0000002.py::test_name -v   # a single test
 ```
 
 ## Architecture
@@ -78,20 +60,7 @@ The correction flow is: **Parse → Chunk → Enrich → LLM Call → Validate �
 8. `core/outcome.py` — the three ways a chunk ends and what each does to its lines: success, fallback, absorbed error. Guards live in `core/guards.py`, the edit protocol in `core/editing.py`
 9. `formats/alto/rewriter.py` — Rewrites ALTO XML with corrected text, reconstructing HYP/SUBS_* elements for hyphen pairs. Never modifies TextLine geometry attributes (ID, HPOS, VPOS, WIDTH, HEIGHT)
 
-Line identity is always **(page_id, line_id)** — line_id alone repeats across files. This holds in the library, the API read models, and the frontend (`frontend/src/lib/lineKey.ts`).
-
-### Demo backend (`backend/app/`) — temporary, see Project Overview
-
-- `api/jobs.py` — job endpoints; upload-slot reservation before reading bodies; uploads stream to disk in 1 MiB chunks
-- `api/signed_urls.py` — capability tokens travel ONLY in the `X-Job-Token` header; header-less surfaces (EventSource, `<img>`) use short-lived signed `?sig=` credentials scoped to job + purpose
-- `jobs/store.py` — in-memory JobStore (SSE fan-out, TTL eviction, startup orphan reclaim)
-- `jobs/runner.py` — drives `CorrectionPipeline`, owns job lifecycle incl. `cancelled`
-- `jobs/cancellation.py` — per-job cancel events for `POST /api/jobs/{id}/cancel`
-- `providers/` — `BaseProvider` implementations (`list_models()`, `complete_structured()`), structured JSON output with provider-specific fallbacks; system prompt in `base.py` (rule 13: correct hyphenated lines individually)
-
-### API surface (the demo's)
-
-See `docs/API.md`; the OpenAPI schema is the contract (CI drift-checks `frontend/openapi.snapshot.json` and `frontend/src/types/api.generated.ts`; frontend REST types alias the generated ones).
+Line identity is always **(page_id, line_id)** — line_id alone repeats across files, so keying anything on it is a bug waiting for a two-file document (`ADR-001`). Every consumer inherits the rule; none may relax it.
 
 ## Critical Design Rules
 
@@ -101,6 +70,4 @@ See `docs/API.md`; the OpenAPI schema is the contract (CI drift-checks `frontend
 - **Conservative heuristic mode**: When hyphenation is detected heuristically (no SUBS_TYPE in source), no SUBS_CONTENT is invented.
 - **Fallback to source**: On ambiguity or repeated LLM failure, always fall back to original OCR text rather than guessing.
 - **ALTO geometry**: The rewriter redistributes token widths proportionally within a TextLine but never changes the TextLine's own coordinates.
-- **A lost SSE stream is never a job failure**: the frontend falls back to status polling; only the server's verdict (or 404) is terminal.
-- **Tokens never in URLs**: header or scoped `?sig=` only.
 - **Tests**: every fix ships with the test that fails before it. Audit-trail references (`Audit-Fxx`, waves) stay in PRs/issues, not in new code comments.

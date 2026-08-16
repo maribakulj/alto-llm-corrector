@@ -109,12 +109,11 @@ quelqu'un qui n'a pas suivi le travail.
 PR courante est ouverte et abonnée, et le smoke-test de déploiement de `cinoc`
 teste une route qui existe.
 
-- réconcilier ce journal (trois PR mergées après la dernière entrée) et la
-  section `M` du plan ✅ *(fait, cette PR)*
-- inscrire les dix décisions du 2026-08-16 dans `docs/PLAN.md` ✅ *(idem)*
-- `cinoc` : `deploy-space.yml` interroge `/api/reports`, route supprimée qui
-  répond 404, avec un `curl -s` sans `-f` — **le smoke passe au vert sans rien
-  tester** sauf `/health`
+- réconcilier ce journal et la section `M` du plan ✅
+- inscrire les dix décisions du 2026-08-16 dans `docs/PLAN.md` ✅
+- `cinoc` : la sonde de smoke interrogeait `/api/reports`, route supprimée
+  répondant 404, en `curl -s` sans `-f` ✅ *(cinoc #80, mergée)*
+- armer réellement la boucle ✅
 
 ### 2. Phase 1 — la scission
 
@@ -298,3 +297,30 @@ Une ligne par réveil : date, item, résultat, ou la raison de l'arrêt.
   des pages aplaties et ne lit jamais `Line.id` ; `lidenbrock` garantit la
   ligne et ne sait mesurer qu'un CER, dans un script faussé. Dix décisions en
   ont découlé (`docs/PLAN.md`), et cette file est réécrite autour.
+- 2026-08-16 — **le renommage.** `corrigenda` devient `lidenbrock` : 1979
+  occurrences, 312 fichiers, quatre chemins, PR #80. Les quatre empreintes
+  de parité d'octets ont bougé et ont été **classées avant d'être
+  re-figées**, en rendant la même fixture avec le code d'avant dans un
+  worktree : trois lignes de diff, toutes dans le tampon de provenance,
+  10280 octets des deux côtés — les deux noms font la même longueur. Zéro
+  dérive de ligne. `docs/history/` garde l'ancien nom, et une note en tête
+  dit pourquoi : ces documents ont été écrits quand c'était le nom, et
+  l'historique git le portera de toute façon. L'ordre des imports du
+  backend a cassé — trouvé par la CI, pas en local, parce que la règle
+  n'était activée que d'un côté. **Même leçon que l'extra `[test]` deux PR
+  plus tôt : ce qui n'est déclaré qu'à un endroit finit par diverger.**
+- 2026-08-16 — **la scission.** `lidenbrock-demo` créé, public, 282 commits
+  filtrés, 467 tests. Puis PR #81 : 148 fichiers retirés d'ici. Deux
+  oublis de ma part rattrapés par un rouge plutôt que par un silence —
+  l'installation depuis git échouait (`Multiple top-level packages
+  discovered in a flat-layout`, d'où `#subdirectory=`), et un **second**
+  `Dockerfile` copiait encore la bibliothèque. Le premier a transformé
+  l'aplatissement de l'arbre en nécessité technique et non plus en
+  préférence.
+- 2026-08-16 — **trouvé en cherchant autre chose.** En cherchant un corpus
+  multi-pages pour `M1`, la sonde Gallica a buté sur des ALTO BnF refusés à
+  la porte : namespace d'éditeur (`bibnum.bnf.fr/ns/alto_prod`), et
+  déclaration d'encodage fausse (ISO-8859-1 annoncé, UTF-8 réel). Les deux
+  fermés, PR #79. Le parseur et le réécriveur étaient agnostiques depuis
+  toujours — **la porte était le seul endroit marqué du dépôt.** `M1` reste
+  ouvert : le corpus n'a pas été trouvé, le défaut si.

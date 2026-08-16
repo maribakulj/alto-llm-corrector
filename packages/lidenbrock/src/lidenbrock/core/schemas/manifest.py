@@ -65,12 +65,20 @@ class PipelineEventType(str, Enum):
 
     Only events the pipeline itself (or a host reporting the pipeline's
     metrics) can emit live here. Server-side job lifecycle
-    (started/completed/failed/cancelled/queued) and SSE transport
-    events (keepalive/error) are the HOST's vocabulary — the demo
-    backend owns them in ``app.jobs.events.JobEventType``. The wire
-    strings of both enums are part of the SSE contract with the
-    frontend, enforced by ``backend/tests/test_sse_event_contract.py``
-    at every CI run, and stay stable across releases.
+    (started/completed/failed/cancelled/queued) and transport events
+    (keepalive/error) are a HOST's vocabulary and belong to the host, in
+    its own enum: this library opens no socket and knows nothing about
+    delivery.
+
+    The wire strings are part of a host's contract with its clients, so
+    they stay stable across releases and change only through the same
+    door as any other public rename.
+
+    The guard that used to be named here lived in the demo application
+    and left with it on 2026-08-16. Naming a test in a repository this
+    one does not own would be a reference that rots without anyone
+    noticing — which is the failure this docstring would otherwise
+    demonstrate rather than describe.
     """
 
     # Document / page / chunk lifecycle (emitted by CorrectionPipeline)
