@@ -12,12 +12,12 @@ from pathlib import Path
 
 import pytest
 
-from lidenbrock.core.protocols import ProducerMetadata
-from lidenbrock import CorrectionPipeline
-from lidenbrock.core.editing import EditScript, ReplaceLine
-from lidenbrock.core.schemas import CorrectionReport, HyphenRole
-from lidenbrock.formats.page.parser import build_document_manifest
-from lidenbrock.formats.page.rewriter import extract_output_texts, rewrite_page_file
+from saknussemm.core.protocols import ProducerMetadata
+from saknussemm import CorrectionPipeline
+from saknussemm.core.editing import EditScript, ReplaceLine
+from saknussemm.core.schemas import CorrectionReport, HyphenRole
+from saknussemm.formats.page.parser import build_document_manifest
+from saknussemm.formats.page.rewriter import extract_output_texts, rewrite_page_file
 
 from tests._paths import EXAMPLES
 

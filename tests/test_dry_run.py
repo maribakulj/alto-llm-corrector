@@ -14,8 +14,8 @@ from typing import Any
 
 import pytest
 
-from lidenbrock import CorrectionPipeline, CorrectionReport
-from lidenbrock.formats.alto.parser import build_document_manifest
+from saknussemm import CorrectionPipeline, CorrectionReport
+from saknussemm.formats.alto.parser import build_document_manifest
 
 from tests._paths import EXAMPLES
 
@@ -104,7 +104,7 @@ async def test_run_returns_normalized_edit_script():
     """§4 — the run returns the normalized EditScript it applied. With
     the identity provider every op is a replace_line whose text equals
     the line's OCR text, one op per corrected line."""
-    from lidenbrock.core.editing import EditScript, ReplaceLine
+    from saknussemm.core.editing import EditScript, ReplaceLine
 
     result = await _run()
     script = result.edit_script

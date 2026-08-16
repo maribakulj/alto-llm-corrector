@@ -45,9 +45,9 @@ Trois invariants fondateurs, hérités de l'existant et non négociables :
   1. `core/` et les formats ne touchent jamais un pixel, et n'importent
      jamais de bibliothèque d'image. Ligne rouge (§12), vérifiée par le scan
      statique I4.
-  2. L'installation de base (`pip install lidenbrock`) n'embarque **aucune**
+  2. L'installation de base (`pip install saknussemm`) n'embarque **aucune**
      dépendance image : `dependencies` se limite à Pydantic et lxml.
-  3. L'extra `lidenbrock[vision]` — `integrations/vision.py`, le producteur
+  3. L'extra `saknussemm[vision]` — `integrations/vision.py`, le producteur
      de référence — **décode, oriente et crope effectivement des pixels**,
      avec Pillow pour seule dépendance image, importée **paresseusement à
      l'intérieur des fonctions** pour que le chemin d'installation de base ne
@@ -125,9 +125,9 @@ ensuite, chacun avec sa preuve.
 > étage qui touche un vendeur.
 
 ```
-lidenbrock/
+saknussemm/
 ├── __init__.py              # surface de sommet (PEP 562 : formats/producteurs paresseux)
-├── errors.py                # hiérarchie LidenbrockError (§8.4)
+├── errors.py                # hiérarchie SaknussemmError (§8.4)
 ├── facade.py                # load / correct / correct_sync — le chemin en 3 lignes (§2)
 ├── core/                    # pur : zéro I/O, zéro réseau, zéro lxml
 │   ├── schemas/             # manifest / policies / producer / report — tout réexporté
@@ -162,7 +162,7 @@ lidenbrock/
 └── integrations/            # le seul étage qui connaît un vendeur
     ├── llm.py               # contrat provider LLM (payload, schéma de sortie, prompt)
     ├── qe.py                # estimateur de qualité
-    └── vision.py            # extra `lidenbrock[vision]` — Pillow, import paresseux (I4)
+    └── vision.py            # extra `saknussemm[vision]` — Pillow, import paresseux (I4)
 ```
 
 Règle d'import : `core` n'importe rien de `formats` ni `producers` ;
@@ -518,7 +518,7 @@ Chaque entrée : constat → règle normative. Toutes sont **v1.0** sauf mention
 > **Statut (2026-08-01) — la surface de sommet est CALCULÉE, et provisoire
 > jusqu'au gel.**
 >
-> `lidenbrock.__all__` portait **95 symboles**, jamais ratifiés : accumulés
+> `saknussemm.__all__` portait **95 symboles**, jamais ratifiés : accumulés
 > un ajout à la fois, chacun justifié le jour où il a été fait. `S3b` l'a
 > réduite aux **68** qu'atteignent deux clôtures transitives, calculées et
 > non choisies :
@@ -538,7 +538,7 @@ Chaque entrée : constat → règle normative. Toutes sont **v1.0** sauf mention
 > une stabilité que rien ne soutient.
 >
 > Provisoire garde son sens : la série `0.9.x` est explicitement libre de
-> couper encore (`packages/lidenbrock/docs/versioning.md`) si une clôture se
+> couper encore (`packages/saknussemm/docs/versioning.md`) si une clôture se
 > révèle fausse. Ce que le cliquet
 > (`tests/test_public_api_snapshot.py`) garantit, c'est que la liste ne peut
 > pas **regrandir**. Rien n'est gelé sous SemVer avant `1.0.0`.
@@ -546,9 +546,9 @@ Chaque entrée : constat → règle normative. Toutes sont **v1.0** sauf mention
 > **Deux portes, deux garanties** (déjà énoncé dans `versioning.md`, répété
 > ici parce que c'est la section normative) :
 >
-> - `lidenbrock.*` — la porte d'entrée. Sous SemVer strict **à partir de
+> - `saknussemm.*` — la porte d'entrée. Sous SemVer strict **à partir de
 >   `1.0.0`**, et déjà réduite à la clôture calculée.
-> - `lidenbrock.core.*`, `lidenbrock.formats.*`, `lidenbrock.producers.*` —
+> - `saknussemm.core.*`, `saknussemm.formats.*`, `saknussemm.producers.*` —
 >   les chemins de modules. Supportés et documentés ; c'est la porte que le
 >   dépôt emprunte lui-même (**864 imports par chemin de module contre 65
 >   depuis le sommet**), et un symbole rétrogradé par `S3b` y reste
@@ -598,7 +598,7 @@ reconcile_hyphen_pair(...), check_line(...), plan_page(...)
 #   retirant la promesse plutôt qu'en l'honorant : le gel de
 #   fonctionnalités suspend l'extension de l'API publique, et `S3` réduit
 #   la surface au lieu de l'élargir. Ils restent importables depuis
-#   `lidenbrock.core.hyphenation` / `.guards` / `.planner`, comme tout ce
+#   `saknussemm.core.hyphenation` / `.guards` / `.planner`, comme tout ce
 #   que `S3` rétrogradera.
 ```
 
@@ -740,8 +740,8 @@ Chaque tranche laisse la lib **publiable et verte** ; pas de branche longue.
 
 ## 14. Nom & packaging
 
-`alto-core`, `lidenbrock`, `anastylose` sont libres sur PyPI (vérifié).
-Recommandation : **`lidenbrock`** — le terme d'imprimerie désignant la liste
+`alto-core`, `saknussemm`, `anastylose` sont libres sur PyPI (vérifié).
+Recommandation : **`saknussemm`** — le terme d'imprimerie désignant la liste
 des corrections d'un texte imprimé : c'est littéralement ce qu'est un
 `EditScript`, ça porte le domaine patrimonial, et ça survit à l'extension
 PAGE XML (contrairement à `alto-core`, qui devient faux en v1.1).
@@ -749,7 +749,7 @@ PAGE XML (contrairement à `alto-core`, qui devient faux en v1.1).
 la belle alternative métaphorique. Décision avant le premier tag — on ne
 renomme pas un paquet publié.
 
-Le paquet vit dans `packages/lidenbrock/` — un reste de l'époque où ce
+Le paquet vit dans `packages/saknussemm/` — un reste de l'époque où ce
 dépôt en contenait plusieurs, et qui disparaîtra quand l'arbre sera
 aplati. Ses consommateurs l'installent comme n'importe qui : depuis git
 tant que rien n'est publié, depuis PyPI ensuite. Aucun n'a de chemin

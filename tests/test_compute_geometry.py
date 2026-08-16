@@ -17,8 +17,8 @@ from __future__ import annotations
 
 import pytest
 
-from lidenbrock.core.schemas import HyphenRole, LineStatus
-from lidenbrock.formats.alto.rewriter import (
+from saknussemm.core.schemas import HyphenRole, LineStatus
+from saknussemm.formats.alto.rewriter import (
     _compute_geometry,
     _is_space_token,
     _tokenize,
@@ -217,7 +217,7 @@ def test_f6_trailing_whitespace_geometry_tiles_cleanly(corrected):
     PART1 slow-path rebuild must still yield non-overlapping children
     summing exactly to the line WIDTH — pre-fix the HYP was placed at
     last_word end, on top of the trailing SP's range."""
-    from lidenbrock.formats.alto.rewriter import _rebuild_line
+    from saknussemm.formats.alto.rewriter import _rebuild_line
 
     tl = _part1_line_element()
     lm = _line("T1", "unseulmot-", role=HyphenRole.PART1, explicit=True)
@@ -231,7 +231,7 @@ def test_f6_trailing_whitespace_geometry_tiles_cleanly(corrected):
 
 def test_f6_no_whitespace_geometry_unchanged():
     """Non-regression: the trim must not alter a clean rebuild."""
-    from lidenbrock.formats.alto.rewriter import _rebuild_line
+    from saknussemm.formats.alto.rewriter import _rebuild_line
 
     tl_clean = _part1_line_element()
     lm = _line("T1", "unseulmot-", role=HyphenRole.PART1, explicit=True)
@@ -246,7 +246,7 @@ def test_f6_no_whitespace_geometry_unchanged():
 
 @pytest.mark.parametrize("bad_width", ["1e999", "inf", "-inf", "nan", "abc"])
 def test_review_w1_hyp_width_overflow_falls_back_to_estimate(bad_width):
-    from lidenbrock.formats.alto.rewriter import _rebuild_line
+    from saknussemm.formats.alto.rewriter import _rebuild_line
 
     tl = _part1_line_element()
     tl[-1].set("WIDTH", bad_width)  # the HYP child
@@ -263,8 +263,8 @@ def test_review_w1_hyp_width_overflow_falls_back_to_estimate(bad_width):
 def test_review_w1_hyp_width_overflow_end_to_end(tmp_path):
     """A malformed upload (HYP WIDTH="1e999" on an explicit PART1) with a
     word-count-changing correction must not abort the whole rewrite."""
-    from lidenbrock.formats.alto.parser import parse_alto_file
-    from lidenbrock.formats.alto.rewriter import rewrite_alto_file
+    from saknussemm.formats.alto.parser import parse_alto_file
+    from saknussemm.formats.alto.rewriter import rewrite_alto_file
 
     xml = _ALTO_ONE_LINE.format(text="placeholder").replace(
         '<String CONTENT="placeholder" HPOS="10" VPOS="10" WIDTH="900" HEIGHT="20"/>',

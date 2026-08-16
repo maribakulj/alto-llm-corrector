@@ -13,9 +13,9 @@ from __future__ import annotations
 
 import pytest
 
-from lidenbrock import CorrectionPipeline, LineStatus
-from lidenbrock.core.guards import check_line
-from lidenbrock.formats.alto.parser import build_document_manifest
+from saknussemm import CorrectionPipeline, LineStatus
+from saknussemm.core.guards import check_line
+from saknussemm.formats.alto.parser import build_document_manifest
 
 from tests._pipeline_harness import DictProvider
 
@@ -71,7 +71,7 @@ async def test_features_reach_the_report_decision_stage() -> None:
     """Every line that went through per-line acceptance carries the
     guard's measurements; hyphen-unit members decide through the
     reconciler instead and stay (documented) feature-less."""
-    from lidenbrock import HyphenRole
+    from saknussemm import HyphenRole
 
     doc, result = await _run({})  # identity run
     role_by_id = {lm.line_id: lm.hyphen_role for page in doc.pages for lm in page.lines}

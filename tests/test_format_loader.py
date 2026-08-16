@@ -15,11 +15,11 @@ from pathlib import Path
 
 import pytest
 
-from lidenbrock.errors import ParseError
-from lidenbrock.formats.alto.parser import (
+from saknussemm.errors import ParseError
+from saknussemm.formats.alto.parser import (
     build_document_manifest as build_alto_manifest,
 )
-from lidenbrock.formats.loader import build_document_manifest, sniff_format
+from saknussemm.formats.loader import build_document_manifest, sniff_format
 
 from tests._pipeline_harness import EXAMPLES
 

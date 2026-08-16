@@ -31,11 +31,11 @@ from pathlib import Path
 import pytest
 from hypothesis import HealthCheck, given, settings
 
-from lidenbrock import CorrectionPipeline
-from lidenbrock.core.protocols import ProducerMetadata
-from lidenbrock.core.schemas import CorrectionReport, RetryPolicy
-from lidenbrock.formats.alto.parser import build_document_manifest
-from lidenbrock.producers.rules import RulesProducer, SubstitutionRule
+from saknussemm import CorrectionPipeline
+from saknussemm.core.protocols import ProducerMetadata
+from saknussemm.core.schemas import CorrectionReport, RetryPolicy
+from saknussemm.formats.alto.parser import build_document_manifest
+from saknussemm.producers.rules import RulesProducer, SubstitutionRule
 
 from tests._alto_gen import rich_alto_documents
 from tests._pipeline_harness import DictProvider
@@ -169,7 +169,7 @@ def test_the_invariant_actually_catches_the_l9_shape() -> None:
     Without this, a bug in the assertion would make every case above pass
     vacuously — which is exactly how the family survived this long.
     """
-    from lidenbrock.core.schemas import DecisionStage, LineOutcome, ProposalStage
+    from saknussemm.core.schemas import DecisionStage, LineOutcome, ProposalStage
 
     bad = CorrectionReport(
         run_id="r",
@@ -189,7 +189,7 @@ def test_the_invariant_actually_catches_the_l9_shape() -> None:
 
 
 def test_the_invariant_catches_a_fallback_that_changed_the_text() -> None:
-    from lidenbrock.core.schemas import DecisionStage, LineOutcome
+    from saknussemm.core.schemas import DecisionStage, LineOutcome
 
     bad = CorrectionReport(
         run_id="r",

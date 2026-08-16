@@ -22,11 +22,11 @@ from pathlib import Path
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from lidenbrock.errors import CorrectionError
-from lidenbrock.formats.alto.parser import (
+from saknussemm.errors import CorrectionError
+from saknussemm.formats.alto.parser import (
     build_document_manifest as build_alto_manifest,
 )
-from lidenbrock.formats.page.parser import (
+from saknussemm.formats.page.parser import (
     build_document_manifest as build_page_manifest,
 )
 

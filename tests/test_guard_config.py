@@ -14,8 +14,8 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from lidenbrock.core.guards import check_line
-from lidenbrock.core.schemas import DEFAULT_GUARD_CONFIG, GuardConfig
+from saknussemm.core.guards import check_line
+from saknussemm.core.schemas import DEFAULT_GUARD_CONFIG, GuardConfig
 
 
 def test_guard_config_is_frozen():

@@ -16,10 +16,10 @@ from typing import Any
 
 import pytest
 
-from lidenbrock import CorrectionPipeline
-from lidenbrock.errors import ParseError
-from lidenbrock.formats.loader import build_document_manifest
-from lidenbrock.formats.validation import (
+from saknussemm import CorrectionPipeline
+from saknussemm.errors import ParseError
+from saknussemm.formats.loader import build_document_manifest
+from saknussemm.formats.validation import (
     SCHEMA_BY_NAMESPACE,
     _schema_for,
     validate_bytes,

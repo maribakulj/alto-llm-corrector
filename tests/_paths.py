@@ -34,7 +34,7 @@ REPO = Path(__file__).resolve().parents[1]
 PKG = REPO
 
 #: The library's importable source tree.
-SRC = PKG / "src" / "lidenbrock"
+SRC = PKG / "src" / "saknussemm"
 
 #: This directory.
 TESTS = PKG / "tests"

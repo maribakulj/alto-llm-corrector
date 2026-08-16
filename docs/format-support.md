@@ -1,12 +1,12 @@
 # ALTO / PAGE version support matrix
 
-What lidenbrock accepts, what it writes back, and what it can check
+What saknussemm accepts, what it writes back, and what it can check
 against an official schema. "Parse/rewrite" is
 namespace-tolerant: the parsers accept any root namespace matching the
 format marker (`loc.gov/standards/alto` / `primaresearch.org/PAGE`) and
 the rewriter re-emits the document in its ORIGINAL namespace. "XSD
-bundled" means `lidenbrock.formats.validation` can validate that
-namespace offline (schemas + provenance: `../src/lidenbrock/formats/xsd/`).
+bundled" means `saknussemm.formats.validation` can validate that
+namespace offline (schemas + provenance: `../src/saknussemm/formats/xsd/`).
 
 | Format | Root namespace | Parse / rewrite | XSD bundled |
 |---|---|---|---|
@@ -35,7 +35,7 @@ namespace offline (schemas + provenance: `../src/lidenbrock/formats/xsd/`).
 ## API
 
 ```python
-from lidenbrock.formats.validation import validate_file, validate_bytes
+from saknussemm.formats.validation import validate_file, validate_bytes
 
 violations = validate_file(Path("scan.xml"))   # [] == valid
 violations = validate_bytes(xml_bytes, source_name="scan.xml")

@@ -14,14 +14,14 @@ So the rule is written down and mechanical rather than left to taste:
   3. no method that writes anything.
 
 Rule 3 is the one with the subtle boundary. The dicts inside ARE the
-run's live state: ``traces`` is written by :mod:`lidenbrock.core.decide`,
+run's live state: ``traces`` is written by :mod:`saknussemm.core.decide`,
 and the manifests in ``line_by_id`` are what a run mutates. The workspace
 does not make them immutable and never claimed to. What it must not do is
 offer a door of its own — the moment it grows ``def record(...)`` it has
 become the writer, and `RM-01` put the writer somewhere else on purpose.
 
 Run state — counters, metrics, usage, the abort probe — belongs to
-:class:`~lidenbrock.core.context.RunContext`. That separation is the
+:class:`~saknussemm.core.context.RunContext`. That separation is the
 whole reason two objects exist instead of one.
 """
 
@@ -29,7 +29,7 @@ from __future__ import annotations
 
 import dataclasses
 
-from lidenbrock.core.workspace import PageWorkspace
+from saknussemm.core.workspace import PageWorkspace
 
 #: The three indices, and nothing else. Adding a field here is a design
 #: decision that has to be argued in a diff, not a convenience.

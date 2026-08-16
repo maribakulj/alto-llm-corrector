@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import pytest
 
-from lidenbrock.core.protocols import ProducerMetadata
+from saknussemm.core.protocols import ProducerMetadata
 
 from tests._docs import _ALTO_ONE_LINE
 
@@ -27,11 +27,11 @@ async def test_f4_producer_ops_do_not_collide_across_files(tmp_path):
     matching at DIFFERENT offsets. Pre-fix the last chunk overwrote
     _producer_ops['L1'], so file A's op lost its span (degraded to
     replace_line) — or worse, could carry file B's span."""
-    from lidenbrock import CorrectionPipeline
-    from lidenbrock.core.editing import ReplaceSpan, apply_edit_script
-    from lidenbrock.core.editing import EditScript
-    from lidenbrock.formats.alto.parser import build_document_manifest
-    from lidenbrock.producers.rules import RulesProducer, SubstitutionRule
+    from saknussemm import CorrectionPipeline
+    from saknussemm.core.editing import ReplaceSpan, apply_edit_script
+    from saknussemm.core.editing import EditScript
+    from saknussemm.formats.alto.parser import build_document_manifest
+    from saknussemm.producers.rules import RulesProducer, SubstitutionRule
     from tests._pipeline_harness import RecordingObserver
 
     path_a = tmp_path / "a.xml"
@@ -75,10 +75,10 @@ async def test_review_w1_edit_script_ops_attributable_across_files(tmp_path):
     file qualifier: a consumer replaying the whole script could not
     attribute each op to its file. Ops must now carry the page_id and
     apply_edit_script(page_id=…) must scope replay to one page."""
-    from lidenbrock import CorrectionPipeline
-    from lidenbrock.core.editing import EditScript, apply_edit_script
-    from lidenbrock.formats.alto.parser import build_document_manifest
-    from lidenbrock.producers.rules import RulesProducer, SubstitutionRule
+    from saknussemm import CorrectionPipeline
+    from saknussemm.core.editing import EditScript, apply_edit_script
+    from saknussemm.formats.alto.parser import build_document_manifest
+    from saknussemm.producers.rules import RulesProducer, SubstitutionRule
     from tests._pipeline_harness import RecordingObserver
 
     path_a = tmp_path / "a.xml"

@@ -9,8 +9,8 @@ the passes and compare, which is the whole point of `RM-05a`.
 
 from __future__ import annotations
 
-from lidenbrock.core.identity import LineRef, line_ref
-from lidenbrock.core.schemas import (
+from saknussemm.core.identity import LineRef, line_ref
+from saknussemm.core.schemas import (
     BlockManifest,
     Coords,
     DocumentManifest,

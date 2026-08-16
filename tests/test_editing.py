@@ -12,7 +12,7 @@ import hashlib
 
 import pytest
 
-from lidenbrock.core.editing import (
+from saknussemm.core.editing import (
     EditScript,
     MatchAnchor,
     RangeAnchor,
@@ -22,9 +22,9 @@ from lidenbrock.core.editing import (
     normalize_anchor,
     replace_line_script,
 )
-from lidenbrock.core.schemas import GuardConfig, HyphenRole, LineManifest, Coords
-from lidenbrock.formats.alto.parser import build_document_manifest
-from lidenbrock.formats.alto.rewriter import rewrite_alto_file
+from saknussemm.core.schemas import GuardConfig, HyphenRole, LineManifest, Coords
+from saknussemm.formats.alto.parser import build_document_manifest
+from saknussemm.formats.alto.rewriter import rewrite_alto_file
 
 from tests._paths import EXAMPLES
 

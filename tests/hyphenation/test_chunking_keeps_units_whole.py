@@ -26,9 +26,9 @@ from __future__ import annotations
 
 import pytest
 
-from lidenbrock.core.pairing import forward_partner_id, link_hyphen_pairs
-from lidenbrock.core.planner import plan_page
-from lidenbrock.core.schemas import (
+from saknussemm.core.pairing import forward_partner_id, link_hyphen_pairs
+from saknussemm.core.planner import plan_page
+from saknussemm.core.schemas import (
     ChunkGranularity,
     ChunkPlannerConfig,
     Coords,
@@ -36,7 +36,7 @@ from lidenbrock.core.schemas import (
     PageManifest,
     PairingPolicy,
 )
-from lidenbrock.formats.page.parser import _assign_hyphen_roles
+from saknussemm.formats.page.parser import _assign_hyphen_roles
 
 
 def _page(texts: list[str]) -> PageManifest:
@@ -236,7 +236,7 @@ class TestTheWindowReachesForItsWholeUnit:
 
     @staticmethod
     def _reach(texts: list[str], start: int, end: int) -> int:
-        from lidenbrock.core.planner import _unit_reach
+        from saknussemm.core.planner import _unit_reach
 
         page = _page(texts)
         _assign_hyphen_roles(page.lines)
@@ -269,7 +269,7 @@ class TestTheWindowReachesForItsWholeUnit:
         page = _page(["por-", "te", "autre"])
         _assign_hyphen_roles(page.lines)
         link_hyphen_pairs(page.lines, PairingPolicy(geometric_checks=False))
-        from lidenbrock.core.planner import _unit_reach
+        from saknussemm.core.planner import _unit_reach
 
         index_by_id = {lm.line_id: i for i, lm in enumerate(page.lines)}
         # Asking about a window that STARTS after the PART1: the link points
@@ -281,7 +281,7 @@ class TestTheWindowReachesForItsWholeUnit:
         _assign_hyphen_roles(page.lines)
         page.lines[0].hyphen_pair_line_id = "P2_L0"
         page.lines[0].hyphen_pair_page_id = "P2"
-        from lidenbrock.core.planner import _unit_reach
+        from saknussemm.core.planner import _unit_reach
 
         assert _unit_reach(page.lines, {"L0": 0}, 0, 1) == 1
 
@@ -312,7 +312,7 @@ class TestTheImageCapBatcherKeepsVisibleMembersTogether:
         lines the batcher skips for having role NONE — passing for a reason
         that has nothing to do with what is being tested.
         """
-        from lidenbrock.core.schemas import HyphenRole
+        from saknussemm.core.schemas import HyphenRole
 
         out: dict[str, LineManifest] = {}
         for index, (line_id, (role, pair, forward)) in enumerate(spec.items()):
@@ -331,8 +331,8 @@ class TestTheImageCapBatcherKeepsVisibleMembersTogether:
         return out
 
     def _batches(self, line_by_id, cap: int) -> list[list[str]]:
-        from lidenbrock.core.batching import _split_for_image_cap
-        from lidenbrock.core.schemas import (
+        from saknussemm.core.batching import _split_for_image_cap
+        from saknussemm.core.schemas import (
             ChunkGranularity,
             ChunkRequest,
             ModelCapabilities,
@@ -388,7 +388,7 @@ class TestTheImageCapBatcherKeepsVisibleMembersTogether:
         """The honest outcome when a unit cannot fit: refuse, with the reason.
         Before the fix an incomplete unit slipped past this check entirely and
         was quietly split — the failure mode the error exists to prevent."""
-        from lidenbrock.errors import ConfigurationError
+        from saknussemm.errors import ConfigurationError
 
         lines = self._lines(
             {

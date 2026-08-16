@@ -25,11 +25,11 @@ from __future__ import annotations
 from pathlib import Path
 
 
-from lidenbrock import CorrectionPipeline
-from lidenbrock.core.editing import EditScript, ReplaceLine
-from lidenbrock.core.protocols import ProducerMetadata
-from lidenbrock.core.schemas import ChunkPlannerConfig, HyphenRole
-from lidenbrock.formats.alto.parser import build_document_manifest
+from saknussemm import CorrectionPipeline
+from saknussemm.core.editing import EditScript, ReplaceLine
+from saknussemm.core.protocols import ProducerMetadata
+from saknussemm.core.schemas import ChunkPlannerConfig, HyphenRole
+from saknussemm.formats.alto.parser import build_document_manifest
 
 _NS = "http://www.loc.gov/standards/alto/ns-v3#"
 

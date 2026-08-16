@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""lidenbrock quickstart — correct an ALTO file end-to-end, offline.
+"""saknussemm quickstart — correct an ALTO file end-to-end, offline.
 
 Runs the full pipeline on the repo's ``examples/sample.xml`` with two
 producers, no network and no API key:
@@ -23,9 +23,9 @@ import asyncio
 import sys
 from pathlib import Path
 
-from lidenbrock import CorrectionPipeline
-from lidenbrock.formats.alto.parser import build_document_manifest
-from lidenbrock.producers.rules import (
+from saknussemm import CorrectionPipeline
+from saknussemm.formats.alto.parser import build_document_manifest
+from saknussemm.producers.rules import (
     RulesProducer,
     SubstitutionRule,
     default_french_ocr_rules,

@@ -41,12 +41,12 @@ from typing import Any
 
 import pytest
 
-from lidenbrock.core.acceptance import _apply_line_acceptance, _apply_unit_reverts
-from lidenbrock.core.identity import line_ref
-from lidenbrock.core.outcome import _extend_to_units, _fall_back_to_source
-from lidenbrock.core.pipeline import CorrectionPipeline
-from lidenbrock.core.reconcile import _refresh_pair_traces
-from lidenbrock.core.schemas import (
+from saknussemm.core.acceptance import _apply_line_acceptance, _apply_unit_reverts
+from saknussemm.core.identity import line_ref
+from saknussemm.core.outcome import _extend_to_units, _fall_back_to_source
+from saknussemm.core.pipeline import CorrectionPipeline
+from saknussemm.core.reconcile import _refresh_pair_traces
+from saknussemm.core.schemas import (
     Coords,
     GuardConfig,
     HyphenRole,
@@ -54,8 +54,8 @@ from lidenbrock.core.schemas import (
     LineStatus,
     LossPolicy,
 )
-from lidenbrock.core.workspace import PageWorkspace
-from lidenbrock.formats.loader import build_document_manifest
+from saknussemm.core.workspace import PageWorkspace
+from saknussemm.formats.loader import build_document_manifest
 
 from tests.decision._state import document, line
 

@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import pytest
 
-from lidenbrock.core.schemas import (
+from saknussemm.core.schemas import (
     ChunkGranularity,
     ChunkPlannerConfig,
     ChunkRequest,

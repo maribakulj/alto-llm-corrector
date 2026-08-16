@@ -10,9 +10,9 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from lidenbrock.core.protocols import require_capabilities
-from lidenbrock.core.schemas import ModelCapabilities
-from lidenbrock.errors import ConfigurationError
+from saknussemm.core.protocols import require_capabilities
+from saknussemm.core.schemas import ModelCapabilities
+from saknussemm.errors import ConfigurationError
 
 
 def test_defaults_are_a_text_model():

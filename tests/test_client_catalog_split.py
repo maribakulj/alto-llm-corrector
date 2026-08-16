@@ -12,13 +12,13 @@ from typing import Any
 
 import pytest
 
-from lidenbrock import CorrectionPipeline
-from lidenbrock.core.protocols import (
+from saknussemm import CorrectionPipeline
+from saknussemm.core.protocols import (
     BaseProvider,
     ModelCatalog,
     StructuredCompletionClient,
 )
-from lidenbrock.formats.alto.parser import build_document_manifest
+from saknussemm.formats.alto.parser import build_document_manifest
 
 from tests._paths import EXAMPLES
 

@@ -17,9 +17,9 @@ from pathlib import Path
 
 import pytest
 
-from lidenbrock.errors import DuplicateIdError, ParseError
-from lidenbrock.formats.alto.parser import parse_alto_file
-from lidenbrock.formats.page.parser import parse_page_file
+from saknussemm.errors import DuplicateIdError, ParseError
+from saknussemm.formats.alto.parser import parse_alto_file
+from saknussemm.formats.page.parser import parse_page_file
 
 from tests.identity._docs import (
     _ALTO_IDLESS,

@@ -16,7 +16,7 @@ sur **événement** de la PR — résultat de CI, commentaire de revue, push,
 conflit de merge — et rend la main quand la PR est verte et qu'il n'y a rien
 en attente.
 
-**PR courante :** [#77](https://github.com/maribakulj/lidenbrock/pull/77),
+**PR courante :** [#77](https://github.com/maribakulj/saknussemm/pull/77),
 ouverte le 2026-08-16 depuis `main`, et abonnée. Une PR jumelle vit dans
 `cinoc` — [#80](https://github.com/maribakulj/cinoc/pull/80) — et la boucle
 surveille les deux : depuis le 2026-08-16 le travail s'étend à trois dépôts,
@@ -57,8 +57,8 @@ rouge là-bas — c'est précisément à ça que sert la PR, et c'est pour ça q
 ## Règles permanentes
 
 1. **Un geste, un commit vert.** La suite de la bibliothèque passe avant
-   chaque commit (`pytest` dans `packages/lidenbrock`), plus `ruff check`,
-   `ruff format --check` et `python -m mypy --strict src/lidenbrock` avec le
+   chaque commit (`pytest` dans `packages/saknussemm`), plus `ruff check`,
+   `ruff format --check` et `python -m mypy --strict src/saknussemm` avec le
    pin de `[typecheck]` — le `mypy` du conteneur peut être d'une autre version
    et ne pas voir pydantic ; 55 faux positifs en sont sortis une fois.
 2. **En cas de doute, s'arrêter et écrire la question.** Ne jamais trancher un
@@ -120,13 +120,13 @@ teste une route qui existe.
 **Fini quand** les trois dépôts existent, chacun avec sa CI verte, et
 qu'aucun ne contient ce qui appartient à un autre.
 
-- `lidenbrock-demo` : extraire `backend/`, `frontend/`, `tools/e2e/`,
+- `saknussemm-demo` : extraire `backend/`, `frontend/`, `tools/e2e/`,
   `Dockerfile`, `docker-compose.yml`, `docs/API.md`, `SECURITY.md`,
   `.github/workflows/hf-sync.yml`
 - `cinoc` : recevoir `corpus/`, `measurements/`, `integrations/qe.py` et les
   quatre scripts QE
 - ici : **retirer** le banc local (décision n°3), aplatir
-  `packages/lidenbrock/*` à la racine, réduire la CI aux cinq jobs de la
+  `packages/saknussemm/*` à la racine, réduire la CI aux cinq jobs de la
   bibliothèque
 - garder ici : `examples/` — **60 fichiers de test en dépendent**, les
   fixtures sont la suite de tests d'une bibliothèque de parsing
@@ -160,7 +160,7 @@ Voir le tableau plus bas.
 
 **Fini quand** `cinoc` sait répondre à « ce correcteur a-t-il déplacé du texte
 entre les lignes ? ». Cinq briques, chacune utile à `cinoc` indépendamment de
-`lidenbrock` :
+`saknussemm` :
 
 1. une étape `LAYOUT → LAYOUT` et une source ALTO/PAGE — aujourd'hui un run
    part **uniquement d'une image**
@@ -173,7 +173,7 @@ entre les lignes ? ». Cinq briques, chacune utile à `cinoc` indépendamment de
 5. la **vision pour l'adapter Ollama**, aujourd'hui `text_only` — c'est ce qui
    débloque `M3` à coût nul
 
-Puis le moteur `lidenbrock` lui-même (décisions n°4 et n°5).
+Puis le moteur `saknussemm` lui-même (décisions n°4 et n°5).
 
 ### 6. Phase 5 — la mesure, sur le banc
 
@@ -292,12 +292,12 @@ Une ligne par réveil : date, item, résultat, ou la raison de l'arrêt.
   cartographie de `cinoc` par trois agents. Deux constats qui ne venaient
   d'aucun document : `cinoc` **est** le banc que ce plan s'apprêtait à
   reconstruire (1667 tests, 96 % de couverture, 24 métriques, Space en ligne),
-  et il ne mentionne `lidenbrock` **nulle part**. Les deux projets sont
+  et il ne mentionne `saknussemm` **nulle part**. Les deux projets sont
   complémentaires sur la ligne exacte où chacun est aveugle : `cinoc` compare
-  des pages aplaties et ne lit jamais `Line.id` ; `lidenbrock` garantit la
+  des pages aplaties et ne lit jamais `Line.id` ; `saknussemm` garantit la
   ligne et ne sait mesurer qu'un CER, dans un script faussé. Dix décisions en
   ont découlé (`docs/PLAN.md`), et cette file est réécrite autour.
-- 2026-08-16 — **le renommage.** `corrigenda` devient `lidenbrock` : 1979
+- 2026-08-16 — **le renommage.** `corrigenda` devient `saknussemm` : 1979
   occurrences, 312 fichiers, quatre chemins, PR #80. Les quatre empreintes
   de parité d'octets ont bougé et ont été **classées avant d'être
   re-figées**, en rendant la même fixture avec le code d'avant dans un
@@ -309,7 +309,7 @@ Une ligne par réveil : date, item, résultat, ou la raison de l'arrêt.
   backend a cassé — trouvé par la CI, pas en local, parce que la règle
   n'était activée que d'un côté. **Même leçon que l'extra `[test]` deux PR
   plus tôt : ce qui n'est déclaré qu'à un endroit finit par diverger.**
-- 2026-08-16 — **la scission.** `lidenbrock-demo` créé, public, 282 commits
+- 2026-08-16 — **la scission.** `saknussemm-demo` créé, public, 282 commits
   filtrés, 467 tests. Puis PR #81 : 148 fichiers retirés d'ici. Deux
   oublis de ma part rattrapés par un rouge plutôt que par un silence —
   l'installation depuis git échouait (`Multiple top-level packages
@@ -325,7 +325,7 @@ Une ligne par réveil : date, item, résultat, ou la raison de l'arrêt.
   toujours — **la porte était le seul endroit marqué du dépôt.** `M1` reste
   ouvert : le corpus n'a pas été trouvé, le défaut si.
 - 2026-08-16 (suite) — **la scission est finie, et onze dettes avec.**
-  `lidenbrock` ne contient plus que la bibliothèque : 347 fichiers suivis,
+  `saknussemm` ne contient plus que la bibliothèque : 347 fichiers suivis,
   la démo dans son dépôt, les corpus et les campagnes au banc, le scorer QE
   déposé là-bas aussi. Réglé au passage : la porte marquée sur un namespace
   d'éditeur, une déclaration d'encodage crue sur parole, l'environnement de

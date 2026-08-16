@@ -14,9 +14,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from lidenbrock import CorrectionPipeline, LineRef
-from lidenbrock.core.pairing import preserve_break_char
-from lidenbrock.formats.loader import build_document_manifest
+from saknussemm import CorrectionPipeline, LineRef
+from saknussemm.core.pairing import preserve_break_char
+from saknussemm.formats.loader import build_document_manifest
 
 from tests._pipeline_harness import DictProvider
 

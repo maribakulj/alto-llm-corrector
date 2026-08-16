@@ -10,8 +10,8 @@ Pins:
 from __future__ import annotations
 
 
-from lidenbrock.formats.alto.parser import build_document_manifest, parse_alto_file
-from lidenbrock.core.schemas import HyphenRole, PairingPolicy
+from saknussemm.formats.alto.parser import build_document_manifest, parse_alto_file
+from saknussemm.core.schemas import HyphenRole, PairingPolicy
 
 from tests._pipeline_harness import EXAMPLES as _EXAMPLES
 
@@ -64,7 +64,7 @@ def test_realistic_gap_policy_keeps_adjacent_pairs():
 def test_vertical_gap_skipped_across_pages():
     """VPOS restarts on every page, so max_vertical_gap must not be
     applied to a cross-page candidate (post-audit F7 fix)."""
-    from lidenbrock.core.schemas import Coords, LineManifest
+    from saknussemm.core.schemas import Coords, LineManifest
 
     def _line(page: str, vpos: int) -> LineManifest:
         return LineManifest(

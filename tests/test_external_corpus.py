@@ -30,19 +30,19 @@ from pathlib import Path
 
 import pytest
 
-from lidenbrock.core.identity import LineRef, line_ref
-from lidenbrock.core.schemas import HyphenRole, LineStatus
-from lidenbrock.errors import CorrectionError
-from lidenbrock.formats.alto.parser import build_document_manifest
+from saknussemm.core.identity import LineRef, line_ref
+from saknussemm.core.schemas import HyphenRole, LineStatus
+from saknussemm.errors import CorrectionError
+from saknussemm.formats.alto.parser import build_document_manifest
 
 from tests._pipeline_harness import DictProvider, RecordingObserver
-from lidenbrock.core.pipeline import CorrectionPipeline
+from saknussemm.core.pipeline import CorrectionPipeline
 
 from tests._paths import TESTS
 
 _CACHE = Path(
     os.environ.get(
-        "LIDENBROCK_EXTERNAL_CORPUS_DIR",
+        "SAKNUSSEMM_EXTERNAL_CORPUS_DIR",
         TESTS / "external_corpus" / ".cache",
     )
 )

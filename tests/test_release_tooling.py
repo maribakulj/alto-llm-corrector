@@ -5,10 +5,10 @@ code. The publish pipeline lives in three places that must stay in
 sync:
 
     .github/workflows/ci.yml                  (version coherence gate)
-    .github/workflows/publish-lidenbrock.yml   (HEAD-tag + version check)
-    scripts/release-lidenbrock.sh              (local release rehearsal)
+    .github/workflows/publish-saknussemm.yml   (HEAD-tag + version check)
+    scripts/release-saknussemm.sh              (local release rehearsal)
 
-Each one extracts ``lidenbrock.__version__`` from ``__init__.py`` with
+Each one extracts ``saknussemm.__version__`` from ``__init__.py`` with
 the same regex. If the regex drifts in one file, the others silently
 fall behind — a class of bug that only surfaces at release time, when
 the cost of a fix is highest.
@@ -29,8 +29,8 @@ _REPO_ROOT = REPO
 # add another consumer (eg. a new GitHub Action), append it here.
 _VERSION_REGEX_FILES: list[Path] = [
     _REPO_ROOT / ".github" / "workflows" / "ci.yml",
-    _REPO_ROOT / ".github" / "workflows" / "publish-lidenbrock.yml",
-    _REPO_ROOT / "scripts" / "release-lidenbrock.sh",
+    _REPO_ROOT / ".github" / "workflows" / "publish-saknussemm.yml",
+    _REPO_ROOT / "scripts" / "release-saknussemm.sh",
 ]
 
 

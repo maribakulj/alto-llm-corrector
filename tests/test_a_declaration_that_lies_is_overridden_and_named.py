@@ -16,8 +16,8 @@ also know how to say *no*, or it is not a rule, it is a habit.
 
 from __future__ import annotations
 
-import lidenbrock
-from lidenbrock.formats._xml import mislabelled_utf8, read_source_tree
+import saknussemm
+from saknussemm.formats._xml import mislabelled_utf8, read_source_tree
 
 from tests._paths import EXAMPLES
 
@@ -68,7 +68,7 @@ def test_both_files_deliver_the_same_correct_text():
     """
     witness = "cléricales"
     for fixture in (LIES, TRUTHFUL_LATIN1):
-        doc = lidenbrock.load(str(fixture))
+        doc = saknussemm.load(str(fixture))
         texts = [
             line.ocr_text
             for page in doc.manifest.pages
@@ -80,10 +80,10 @@ def test_both_files_deliver_the_same_correct_text():
 
 def test_only_the_lying_file_records_an_override():
     """Same text out, different accounting — and that is the whole point."""
-    lying = lidenbrock.load(str(LIES)).manifest
+    lying = saknussemm.load(str(LIES)).manifest
     assert lying.source_encodings == {LIES.name: "ISO-8859-1"}
 
-    truthful = lidenbrock.load(str(TRUTHFUL_LATIN1)).manifest
+    truthful = saknussemm.load(str(TRUTHFUL_LATIN1)).manifest
     assert truthful.source_encodings == {}
 
 

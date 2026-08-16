@@ -15,10 +15,10 @@ from pathlib import Path
 
 import pytest
 
-from lidenbrock.core.protocols import ProducerMetadata
-from lidenbrock import CorrectionPipeline
-from lidenbrock.formats.alto.parser import build_document_manifest
-from lidenbrock.producers.rules import RulesProducer, SubstitutionRule
+from saknussemm.core.protocols import ProducerMetadata
+from saknussemm import CorrectionPipeline
+from saknussemm.formats.alto.parser import build_document_manifest
+from saknussemm.producers.rules import RulesProducer, SubstitutionRule
 
 from tests._paths import EXAMPLES
 
@@ -43,7 +43,7 @@ async def test_result_carries_the_rewritten_bytes() -> None:
     """The result's bytes are the decided artefact: re-extracting the
     per-line texts from them (public round-trip helper) reproduces every
     decision's final text, in the formats' whitespace-normal form."""
-    from lidenbrock.formats.alto.rewriter import extract_output_texts
+    from saknussemm.formats.alto.rewriter import extract_output_texts
 
     doc = build_document_manifest([(_SAMPLE, _SAMPLE.name)])
     result = await _pipeline().run(

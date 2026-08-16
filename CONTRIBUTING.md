@@ -2,13 +2,13 @@
 
 ## Repo layout
 
-**One deliverable.** `packages/lidenbrock/` is the correction library: the
+**One deliverable.** `packages/saknussemm/` is the correction library: the
 only packaged Python distribution (hatchling), and the reason this
 repository exists. Everything beside it serves it — the plan, the ADRs, the
 audits, the fixtures.
 
 The web demonstration and the benchmark left on 2026-08-16 and live in
-[`lidenbrock-demo`](https://github.com/maribakulj/lidenbrock-demo) and
+[`saknussemm-demo`](https://github.com/maribakulj/saknussemm-demo) and
 [`cinoc`](https://github.com/maribakulj/cinoc). They import this library.
 It imports neither, and a change that would reverse that direction is out
 of scope rather than clever.
@@ -16,7 +16,7 @@ of scope rather than clever.
 ## Local dev setup
 
 ```bash
-cd packages/lidenbrock
+cd packages/saknussemm
 pip install -e '.[test,typecheck]'
 ```
 
@@ -31,10 +31,10 @@ CI does — `_Element.attrib` degrades to `Any` and strict mode goes quiet.
 ## Running things
 
 ```bash
-cd packages/lidenbrock
+cd packages/saknussemm
 pytest                                   # coverage gate 85%
 pytest tests/test_x0000002.py::test_name -v
-mypy --strict src/lidenbrock
+mypy --strict src/saknussemm
 ruff check src tests && ruff format --check src tests
 ```
 
@@ -54,7 +54,7 @@ machine" is the condition for merging.
 ## Documentation rules
 
 Normative docs are the ones listed in the README's documentation map
-(README, `SPECS_LIB_V2.md`, `packages/lidenbrock/docs/`, `docs/API.md`,
+(README, `SPECS_LIB_V2.md`, `packages/saknussemm/docs/`, `docs/API.md`,
 `SECURITY.md`, this file). Everything under `docs/history/` is frozen
 design/audit history — never update it to match the code; write the
 current truth in a normative doc instead. Audit-trail references

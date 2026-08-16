@@ -13,10 +13,10 @@ Tests:
 from __future__ import annotations
 
 
-from lidenbrock.formats.alto.parser import parse_alto_file
-from lidenbrock.formats.alto.rewriter import rewrite_alto_file
+from saknussemm.formats.alto.parser import parse_alto_file
+from saknussemm.formats.alto.rewriter import rewrite_alto_file
 
-from lidenbrock.core.schemas import HyphenRole, LineStatus
+from saknussemm.core.schemas import HyphenRole, LineStatus
 
 from tests._pipeline_harness import run_pipeline
 

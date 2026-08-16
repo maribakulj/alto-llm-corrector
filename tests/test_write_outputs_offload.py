@@ -17,8 +17,8 @@ from __future__ import annotations
 import asyncio
 import time
 
-from lidenbrock.core.pipeline import CorrectionPipeline
-from lidenbrock.formats.alto.parser import build_document_manifest
+from saknussemm.core.pipeline import CorrectionPipeline
+from saknussemm.formats.alto.parser import build_document_manifest
 from tests._pipeline_harness import DictProvider, RecordingObserver
 from tests.test_planner_budget_and_cross_chunk_guard import _write_doc
 
@@ -42,7 +42,7 @@ class _SlowRewriteAdapter:
 
 
 def test_review_w3_rewrite_does_not_block_the_event_loop(tmp_path):
-    from lidenbrock.formats.loader import adapter_for_format
+    from saknussemm.formats.loader import adapter_for_format
 
     path = _write_doc(tmp_path)
     doc = build_document_manifest([(path, "doc.xml")])

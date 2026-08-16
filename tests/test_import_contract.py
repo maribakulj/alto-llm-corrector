@@ -1,7 +1,7 @@
 """§3 import-rule contract — the module graph is law, not convention.
 
 Rules enforced:
-  1. ``lidenbrock.core`` (and ``errors``) never import lxml, formats or
+  1. ``saknussemm.core`` (and ``errors``) never import lxml, formats or
      producers — statically NOR at import time (subprocess-verified: no
      ``lxml`` in ``sys.modules`` after importing every core module).
   2. Exactly TWO composition sites, NAMED — ``_render_outputs``
@@ -36,7 +36,7 @@ from tests._paths import SRC
 
 SRC = SRC
 
-FORBIDDEN_IN_CORE = ("lxml", "lidenbrock.formats", "lidenbrock.producers")
+FORBIDDEN_IN_CORE = ("lxml", "saknussemm.formats", "saknussemm.producers")
 
 
 def _imports(tree: ast.AST) -> list[tuple[str, int]]:
@@ -94,7 +94,7 @@ def _functions_reaching_out(path: Path) -> set[str]:
         and any(
             name
             for name, _ in _imports(node)
-            if name.startswith(("lidenbrock.formats", "lidenbrock.producers"))
+            if name.startswith(("saknussemm.formats", "saknussemm.producers"))
         )
     }
 
@@ -146,8 +146,8 @@ def test_no_core_module_reaches_out_at_import_time():
 
 
 #: ``core`` modules that import the package root. This is a real cycle —
-#: ``lidenbrock/__init__`` imports ``core.pipeline`` imports ``core.rendering``
-#: imports ``lidenbrock`` — broken only by the imports being function-local.
+#: ``saknussemm/__init__`` imports ``core.pipeline`` imports ``core.rendering``
+#: imports ``saknussemm`` — broken only by the imports being function-local.
 #:
 #: `RM-07` looked at closing it and decided NOT to, on the merits rather
 #: than on effort. The cycle carries one symbol, ``__version__``, a module
@@ -170,7 +170,7 @@ _SELF_IMPORT_SITES = {
 def test_the_package_self_import_stays_where_it_was_measured():
     """A known cycle, held at two sites (`RM-07`).
 
-    Not a violation of the §3 rule — ``lidenbrock`` is not ``formats`` or
+    Not a violation of the §3 rule — ``saknussemm`` is not ``formats`` or
     ``producers`` — which is exactly why nothing was watching it. Decided
     open, so it is pinned open: the point is that "we know about it" and
     "it cannot grow" are different properties, and only the second one
@@ -180,7 +180,7 @@ def test_the_package_self_import_stays_where_it_was_measured():
     for f in _core_files():
         tree = ast.parse(f.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
-            if isinstance(node, ast.ImportFrom) and node.module == "lidenbrock":
+            if isinstance(node, ast.ImportFrom) and node.module == "saknussemm":
                 rel = f.relative_to(SRC).as_posix()
                 found.setdefault(rel, set()).update(a.name for a in node.names)
     assert set(found) == set(_SELF_IMPORT_SITES), (
@@ -203,10 +203,10 @@ def test_importing_core_never_loads_lxml():
     pays zero lxml import cost — and can run where lxml isn't installed."""
     code = (
         "import sys; "
-        "import lidenbrock.core.pipeline, lidenbrock.core.schemas, "
-        "lidenbrock.core.guards, lidenbrock.core.validator, "
-        "lidenbrock.core.hyphenation, lidenbrock.core.planner, "
-        "lidenbrock.core.protocols, lidenbrock.errors; "
+        "import saknussemm.core.pipeline, saknussemm.core.schemas, "
+        "saknussemm.core.guards, saknussemm.core.validator, "
+        "saknussemm.core.hyphenation, saknussemm.core.planner, "
+        "saknussemm.core.protocols, saknussemm.errors; "
         "sys.exit(1 if 'lxml' in sys.modules else 0)"
     )
     proc = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
@@ -215,10 +215,10 @@ def test_importing_core_never_loads_lxml():
 
 def test_producers_are_pure_and_formats_ignore_producers():
     for f in sorted((SRC / "producers").glob("*.py")):
-        bad = _violations(f, ("lxml", "lidenbrock.formats"))
+        bad = _violations(f, ("lxml", "saknussemm.formats"))
         assert not bad, bad
     for f in sorted((SRC / "formats").rglob("*.py")):
-        bad = _violations(f, ("lidenbrock.producers",))
+        bad = _violations(f, ("saknussemm.producers",))
         assert not bad, bad
 
 
@@ -273,7 +273,7 @@ def test_importing_core_quality_stays_pure():
     """The QE seam lives in the core (protocol + heuristic baseline) and
     must stay dependency-free: importing it never loads the extra."""
     code = (
-        "import sys; import lidenbrock.core.quality as _; "
+        "import sys; import saknussemm.core.quality as _; "
         "heavy = ('onnxruntime', 'torch', 'transformers', 'tokenizers'); "
         "sys.exit(1 if any(m in sys.modules for m in heavy) else 0)"
     )
@@ -286,9 +286,9 @@ def test_importing_core_quality_stays_pure():
 # ---------------------------------------------------------------------------
 # I4 — pixel-blindness is a property of the IMPORT
 # GRAPH, not the file tree. The static AST scan (test_edit_producer.py) is a
-# cheap first line; THIS is the honest proof: importing lidenbrock (the base
+# cheap first line; THIS is the honest proof: importing saknussemm (the base
 # install surface — core + eagerly-loaded producers + schemas) must pull no
-# image library into sys.modules, even with the opt-in lidenbrock[vision]
+# image library into sys.modules, even with the opt-in saknussemm[vision]
 # producer sitting in the same package. Pillow arrives ONLY when a caller
 # constructs the vision producer, never before.
 # ---------------------------------------------------------------------------
@@ -296,15 +296,15 @@ def test_importing_core_quality_stays_pure():
 IMAGE_LIBS = ("PIL", "cv2", "imageio", "skimage", "wand", "torchvision")
 
 
-def test_importing_lidenbrock_never_loads_an_image_lib():
+def test_importing_saknussemm_never_loads_an_image_lib():
     code = (
-        "import sys; import lidenbrock as _; "
+        "import sys; import saknussemm as _; "
         f"libs = {IMAGE_LIBS!r}; "
         "sys.exit(1 if any(m.split('.')[0] in libs for m in sys.modules) else 0)"
     )
     proc = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
     assert proc.returncode == 0, (
-        f"importing lidenbrock loaded an image lib\n{proc.stderr}"
+        f"importing saknussemm loaded an image lib\n{proc.stderr}"
     )
 
 
@@ -312,7 +312,7 @@ def test_importing_pipeline_never_loads_an_image_lib():
     """The engine entry point specifically — the correction path a run takes
     is pixel-free even though a vision producer plugs into its §4.1 seam."""
     code = (
-        "import sys; import lidenbrock.core.pipeline as _; "
+        "import sys; import saknussemm.core.pipeline as _; "
         f"libs = {IMAGE_LIBS!r}; "
         "sys.exit(1 if any(m.split('.')[0] in libs for m in sys.modules) else 0)"
     )
@@ -328,7 +328,7 @@ def test_importing_vision_module_never_loads_pillow_at_import():
     pay the image runtime — it arrives only when a crop is actually taken
     (mirrors the qe scorer's contract)."""
     code = (
-        "import sys; import lidenbrock.integrations.vision as _; "
+        "import sys; import saknussemm.integrations.vision as _; "
         f"libs = {IMAGE_LIBS!r}; "
         "sys.exit(1 if any(m.split('.')[0] in libs for m in sys.modules) else 0)"
     )

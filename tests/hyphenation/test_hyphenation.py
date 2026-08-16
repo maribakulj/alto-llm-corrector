@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from lidenbrock.core.hyphenation import (
+from saknussemm.core.hyphenation import (
     enrich_chunk_lines,
     reconcile_hyphen_pair,
 )
 
-from lidenbrock.core.schemas import Coords, HyphenRole, LineManifest
+from saknussemm.core.schemas import Coords, HyphenRole, LineManifest
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -858,9 +858,9 @@ def test_reconcile_explicit_accepts_nfd_join_against_nfc_subs():
 
 def test_boundary_word_diverged_invariant_to_normalization_form():
     """Comparing OCR 'café' (NFC) to corrected 'café' (NFD) must NOT flag divergence."""
-    # Private helper of the reconciler — pulled from lidenbrock directly
+    # Private helper of the reconciler — pulled from saknussemm directly
     # since the backend re-export shim no longer surfaces privates.
-    from lidenbrock.core.hyphenation import _part2_boundary_word_diverged
+    from saknussemm.core.hyphenation import _part2_boundary_word_diverged
 
     nfc_text = "café au lait"
     nfd_text = unicodedata.normalize("NFD", "café") + " au lait"

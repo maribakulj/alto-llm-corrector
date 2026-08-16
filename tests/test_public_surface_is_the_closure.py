@@ -1,4 +1,4 @@
-"""What `lidenbrock.__all__` holds, recomputed on every run.
+"""What `saknussemm.__all__` holds, recomputed on every run.
 
 `S3b` cut the surface to a computed closure on 2026-08-01 and
 ``test_public_api_snapshot`` pins the resulting list. This module is its
@@ -52,8 +52,8 @@ import dataclasses
 import inspect
 import typing
 
-import lidenbrock
-from lidenbrock import facade
+import saknussemm
+from saknussemm import facade
 
 #: Exported without being reachable from either promise — on purpose, with
 #: the reason. This is the list that has to stay short: a surface reaches 95
@@ -64,7 +64,7 @@ _DELIBERATE: dict[str, str] = {
     "correct_sync": "the façade itself",
     "__version__": "a dunder",
     "sanitize_error": "the one helper the backend imports from the top (3 sites)",
-    "LidenbrockError": "the error hierarchy is the API, not a returned type",
+    "SaknussemmError": "the error hierarchy is the API, not a returned type",
     "CorrectionError": "deprecation alias, removed at 1.0",
     "ParseError": "the error hierarchy",
     "DuplicateIdError": "the error hierarchy",
@@ -152,7 +152,7 @@ def _closure(seeds: set[type]) -> set[str]:
         current = queue.pop()
         if current in seen or not inspect.isclass(current):
             continue
-        if not getattr(current, "__module__", "").startswith("lidenbrock"):
+        if not getattr(current, "__module__", "").startswith("saknussemm"):
             continue
         seen.add(current)
         for annotation in _referenced_by(current):
@@ -176,15 +176,15 @@ def _producer_seam_closure() -> set[str]:
     """
     return _closure(
         {
-            lidenbrock.EditProducer,
-            lidenbrock.PipelineObserver,
-            lidenbrock.CorrectionRequest,
+            saknussemm.EditProducer,
+            saknussemm.PipelineObserver,
+            saknussemm.CorrectionRequest,
         }
     )
 
 
 def _third_seam_closure() -> set[str]:
-    return _closure({lidenbrock.CorrectionPipeline}) - _producer_seam_closure()
+    return _closure({saknussemm.CorrectionPipeline}) - _producer_seam_closure()
 
 
 def test_the_facade_closure_is_fully_exported() -> None:
@@ -194,10 +194,10 @@ def test_the_facade_closure_is_fully_exported() -> None:
     value nobody can name. This is where that gets caught — when the field is
     added, not when someone tries to use it.
     """
-    missing = sorted(_return_closure() - set(lidenbrock.__all__))
+    missing = sorted(_return_closure() - set(saknussemm.__all__))
     assert not missing, (
         f"type(s) reachable from what the façade returns but absent from "
-        f"lidenbrock.__all__: {missing}. Either export them or stop returning "
+        f"saknussemm.__all__: {missing}. Either export them or stop returning "
         "a value that carries them."
     )
 
@@ -214,7 +214,7 @@ def test_the_return_closure_has_not_quietly_shrunk() -> None:
 
 def test_the_producer_seam_is_fully_exported() -> None:
     """The second promise, held to the same standard as the first."""
-    missing = sorted(_producer_seam_closure() - set(lidenbrock.__all__))
+    missing = sorted(_producer_seam_closure() - set(saknussemm.__all__))
     assert not missing, (
         f"type(s) an EditProducer implementer must name but cannot import "
         f"from the top: {missing}. The README promises this seam; a promise "
@@ -230,7 +230,7 @@ def test_the_third_seam_costs_exactly_what_was_decided() -> None:
     Shrinking it means someone exported one, which is a surface decision and
     should arrive with the snapshot, the CHANGELOG and versioning.md.
     """
-    cost = _third_seam_closure() - set(lidenbrock.__all__)
+    cost = _third_seam_closure() - set(saknussemm.__all__)
     assert cost == _THIRD_SEAM, (
         f"the third seam's cost changed.\n"
         f"  added:   {sorted(cost - _THIRD_SEAM)}\n"
@@ -243,7 +243,7 @@ def test_the_third_seam_costs_exactly_what_was_decided() -> None:
 
 def test_nothing_is_exported_outside_both_promises_but_the_named() -> None:
     """A symbol in neither promise is how a surface reaches 95."""
-    outside = set(lidenbrock.__all__) - _return_closure() - _producer_seam_closure()
+    outside = set(saknussemm.__all__) - _return_closure() - _producer_seam_closure()
     unexpected = sorted(outside - set(_DELIBERATE))
     assert not unexpected, (
         f"symbol(s) exported without being reachable from either promise and "

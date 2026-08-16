@@ -27,10 +27,10 @@ from __future__ import annotations
 import json
 
 import pytest
-from lidenbrock.core.retry import _RetryDecision
-from lidenbrock.core.retry import _classify_retry
-from lidenbrock.core.validator import HyphenIntegrityError
-from lidenbrock.core.protocols import ProviderTransientError
+from saknussemm.core.retry import _RetryDecision
+from saknussemm.core.retry import _classify_retry
+from saknussemm.core.validator import HyphenIntegrityError
+from saknussemm.core.protocols import ProviderTransientError
 
 
 # ---------------------------------------------------------------------------
@@ -174,7 +174,7 @@ def test_llm_output_json_decode_error_linear_backoff():
 class _RawHttpStatusErrorLike(Exception):
     """Stub mimicking the raw ``httpx.HTTPStatusError`` a provider's
     wrapper deliberately leaks on a 4xx-non-429. Defined locally so
-    lidenbrock stays http-library-agnostic — the contract under test is
+    saknussemm stays http-library-agnostic — the contract under test is
     "any non-matching exception → non-retryable", and a real
     ``HTTPStatusError`` doesn't match any of the four isinstance checks
     either. The full backend-side wiring (with the real httpx exception)

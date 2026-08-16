@@ -12,12 +12,12 @@ from pathlib import Path
 
 import pytest
 
-from lidenbrock import CorrectionPipeline
-from lidenbrock.core.schemas import ConfidencePolicy
-from lidenbrock.core.confidence import HeuristicScorer
-from lidenbrock.core.alignment import align_tokens
-from lidenbrock.formats.alto.parser import build_document_manifest
-from lidenbrock.formats.page.parser import (
+from saknussemm import CorrectionPipeline
+from saknussemm.core.schemas import ConfidencePolicy
+from saknussemm.core.confidence import HeuristicScorer
+from saknussemm.core.alignment import align_tokens
+from saknussemm.formats.alto.parser import build_document_manifest
+from saknussemm.formats.page.parser import (
     build_document_manifest as build_page_manifest,
 )
 

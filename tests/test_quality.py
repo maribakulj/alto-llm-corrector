@@ -3,15 +3,15 @@
 The pre-LLM "does this line need correction?" signal and the Router
 that turns it into skip/llm/escalate. Pure, deterministic, opt-in.
 The load-bearing regression test: historical orthography (long-s,
-u-for-v) must NOT read as "needs correction" — lidenbrock preserves it.
+u-for-v) must NOT read as "needs correction" — saknussemm preserves it.
 """
 
 from __future__ import annotations
 
 import pytest
 
-from lidenbrock.core.quality import RoutingPolicy
-from lidenbrock.core.quality import (
+from saknussemm.core.quality import RoutingPolicy
+from saknussemm.core.quality import (
     HeuristicQEScorer,
     QEScorer,
     RoutingDecision,

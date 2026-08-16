@@ -54,7 +54,7 @@ _REPO_ROOT = _PACKAGE_ROOT  # flat tree: the package IS the repository
 #: Everything the sdist is allowed to carry. Widening this list is a
 #: licensing decision, not a packaging convenience.
 _ALLOWED_SDIST_ENTRIES = {
-    "/src/lidenbrock",
+    "/src/saknussemm",
     "/README.md",
     "/CHANGELOG.md",
     "/LICENSE",
@@ -98,7 +98,7 @@ def test_the_sdist_include_list_is_still_an_allowlist() -> None:
 
 def test_the_wheel_ships_the_package_and_nothing_else() -> None:
     wheel = _pyproject()["tool"]["hatch"]["build"]["targets"]["wheel"]
-    assert wheel["packages"] == ["src/lidenbrock"]
+    assert wheel["packages"] == ["src/saknussemm"]
 
 
 def test_no_campaign_corpus_lives_here_any_more() -> None:

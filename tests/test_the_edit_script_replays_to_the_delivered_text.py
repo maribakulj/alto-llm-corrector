@@ -42,11 +42,11 @@ from __future__ import annotations
 
 from lxml import etree
 
-from lidenbrock.core.editing import apply_edit_script
-from lidenbrock.core.schemas import LineStatus
-from lidenbrock.formats.alto._ns import _detect_namespace
-from lidenbrock.formats.alto._text import reconstruct_textline
-from lidenbrock.formats.alto.parser import build_document_manifest
+from saknussemm.core.editing import apply_edit_script
+from saknussemm.core.schemas import LineStatus
+from saknussemm.formats.alto._ns import _detect_namespace
+from saknussemm.formats.alto._text import reconstruct_textline
+from saknussemm.formats.alto.parser import build_document_manifest
 
 from tests._paths import EXAMPLES
 from tests._pipeline_harness import PipelineRun, run_pipeline

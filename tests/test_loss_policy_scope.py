@@ -22,10 +22,10 @@ from pathlib import Path
 
 from lxml import etree
 
-from lidenbrock.core.schemas import LossPolicy
-from lidenbrock.formats.alto.parser import build_document_manifest
-from lidenbrock.formats.alto.rewriter import rewrite_alto_file
-from lidenbrock.formats.page.parser import (
+from saknussemm.core.schemas import LossPolicy
+from saknussemm.formats.alto.parser import build_document_manifest
+from saknussemm.formats.alto.rewriter import rewrite_alto_file
+from saknussemm.formats.page.parser import (
     build_document_manifest as build_page_manifest,
 )
 

@@ -11,10 +11,10 @@ derive from the envelope via ``provenance_labels()``.
 
 from __future__ import annotations
 
-from lidenbrock.core.pipeline import CorrectionPipeline
-from lidenbrock.core.protocols import ProducerMetadata
-from lidenbrock.producers.llm_edit import LLMEditProducer
-from lidenbrock.producers.rules import RulesProducer, default_french_ocr_rules
+from saknussemm.core.pipeline import CorrectionPipeline
+from saknussemm.core.protocols import ProducerMetadata
+from saknussemm.producers.llm_edit import LLMEditProducer
+from saknussemm.producers.rules import RulesProducer, default_french_ocr_rules
 
 from tests._pipeline_harness import DictProvider
 

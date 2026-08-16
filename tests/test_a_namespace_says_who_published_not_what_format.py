@@ -26,12 +26,12 @@ would credit them with work they do not do.
 from __future__ import annotations
 
 import pytest
-from lidenbrock.core.schemas import HyphenRole
-from lidenbrock.errors import ParseError
-from lidenbrock.formats._xml import detect_namespace
-from lidenbrock.formats.alto.parser import build_document_manifest
-from lidenbrock.formats.alto.rewriter import rewrite_alto_file
-from lidenbrock.formats.loader import sniff_format
+from saknussemm.core.schemas import HyphenRole
+from saknussemm.errors import ParseError
+from saknussemm.formats._xml import detect_namespace
+from saknussemm.formats.alto.parser import build_document_manifest
+from saknussemm.formats.alto.rewriter import rewrite_alto_file
+from saknussemm.formats.loader import sniff_format
 from lxml import etree
 
 from tests._paths import EXAMPLES

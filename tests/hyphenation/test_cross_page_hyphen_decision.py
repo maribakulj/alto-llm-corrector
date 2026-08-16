@@ -28,9 +28,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from lidenbrock.core.pipeline import CorrectionPipeline
-from lidenbrock.core.schemas import HyphenRole
-from lidenbrock.formats.alto.parser import build_document_manifest
+from saknussemm.core.pipeline import CorrectionPipeline
+from saknussemm.core.schemas import HyphenRole
+from saknussemm.formats.alto.parser import build_document_manifest
 
 from tests._pipeline_harness import DictProvider
 

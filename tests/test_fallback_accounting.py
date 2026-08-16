@@ -24,12 +24,12 @@ import pytest
 
 from tests._pipeline_harness import apply_decisions
 
-from lidenbrock.core.protocols import ProducerMetadata
-from lidenbrock import CorrectionPipeline, ValidationError
-from lidenbrock.core.editing import EditScript, ReplaceLine
-from lidenbrock.core.schemas import LineStatus
-from lidenbrock.formats.alto.parser import build_document_manifest
-from lidenbrock.producers.rules import RulesProducer, SubstitutionRule
+from saknussemm.core.protocols import ProducerMetadata
+from saknussemm import CorrectionPipeline, ValidationError
+from saknussemm.core.editing import EditScript, ReplaceLine
+from saknussemm.core.schemas import LineStatus
+from saknussemm.formats.alto.parser import build_document_manifest
+from saknussemm.producers.rules import RulesProducer, SubstitutionRule
 
 from tests._paths import EXAMPLES
 

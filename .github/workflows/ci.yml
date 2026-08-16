@@ -19,7 +19,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  lidenbrock-lint:
+  saknussemm-lint:
     runs-on: ubuntu-latest
     # Wave-5 review — no job may idle toward the 6 h default.
     timeout-minutes: 10
@@ -40,7 +40,7 @@ jobs:
       - name: Version coherence (__init__.py ↔ CHANGELOG.md)
         # Roadmap L7 / P5 — bumping `__version__` without a matching
         # CHANGELOG entry was caught only at release-script time
-        # (scripts/release-lidenbrock.sh:55-59); now CI blocks the
+        # (scripts/release-saknussemm.sh:55-59); now CI blocks the
         # commit. The check accepts both `## [X.Y.Z]` and
         # `## [X.Y.Z] — date` heading shapes already used in the file.
         # The regex's optional `(?::\s*[^=]+)?` clause tolerates a future
@@ -50,10 +50,10 @@ jobs:
         run: |
           VERSION=$(python -c "
           import re, pathlib
-          init = pathlib.Path('src/lidenbrock/__init__.py').read_text()
+          init = pathlib.Path('src/saknussemm/__init__.py').read_text()
           m = re.search(r\"__version__\\s*(?::\\s*[^=]+)?=\\s*['\\\"]([^'\\\"]+)['\\\"]\", init)
           if not m:
-              raise SystemExit('__version__ not found in src/lidenbrock/__init__.py')
+              raise SystemExit('__version__ not found in src/saknussemm/__init__.py')
           print(m.group(1))
           ")
           echo "Detected __version__: ${VERSION}"
@@ -63,7 +63,7 @@ jobs:
           fi
           echo "Version coherence OK: __init__.py == CHANGELOG.md == ${VERSION}"
 
-  lidenbrock-types:
+  saknussemm-types:
     # F12 / §8.3 — the package ships py.typed and must pass mypy --strict.
     runs-on: ubuntu-latest
     # Wave-5 review — no job may idle toward the 6 h default.
@@ -74,16 +74,16 @@ jobs:
         with:
           python-version: "3.11"
           cache: pip
-      - name: Install lidenbrock (editable) + mypy + stubs
+      - name: Install saknussemm (editable) + mypy + stubs
         # The toolchain is declared in pyproject.toml's `typecheck` extra —
         # keep it there, not pinned a second time here, so a local
         # `pip install -e '.[typecheck]'` checks exactly what this job does.
         run: pip install -e '.[typecheck]'
       - name: mypy --strict
-        run: mypy --strict src/lidenbrock
+        run: mypy --strict src/saknussemm
 
-  lidenbrock-tests:
-    # Matrix the test suite across every Python version lidenbrock's
+  saknussemm-tests:
+    # Matrix the test suite across every Python version saknussemm's
     # `requires-python` and Trove classifiers claim to support. Without
     # this, the 3.12/3.13 classifiers in pyproject.toml were unverified
     # promises and a 3.12-only regression would only surface to PyPI
@@ -102,7 +102,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
-      - name: Install lidenbrock (editable) + the test and vision extras
+      - name: Install saknussemm (editable) + the test and vision extras
         # The test toolchain is declared ONCE, in pyproject's `[test]` extra,
         # so `pip install -e '.[test]'` means the same thing here and on a
         # developer's machine. It used to be this hand-written list, which is
@@ -122,9 +122,9 @@ jobs:
         # rather than staying as a second thing nothing runs.
         run: pip install -e '.[test,vision]'
       - name: pytest + coverage gate (85%)
-        run: pytest tests/ --cov=lidenbrock --cov-report=term --cov-report=xml
+        run: pytest tests/ --cov=saknussemm --cov-report=term --cov-report=xml
 
-  lidenbrock-external-corpus:
+  saknussemm-external-corpus:
     # Plan V4.2 phase 3 — invariants over REAL Gallica ALTO never seen
     # during development (tests/external_corpus/manifest.json). NON-
     # BLOCKING by design while it builds a track record: the fetch
@@ -143,15 +143,15 @@ jobs:
           cache: pip
       - name: Fetch external corpus from Gallica
         run: python tests/external_corpus/fetch.py
-      - name: Install lidenbrock (editable) + the test extra
+      - name: Install saknussemm (editable) + the test extra
         run: pip install -e '.[test]'
       - name: pytest (external corpus invariants)
         run: pytest -m external_corpus tests/test_external_corpus.py -v
 
-  lidenbrock-build:
+  saknussemm-build:
     # Catch packaging regressions (broken classifiers, missing files in
     # the wheel/sdist) here, before they bite us at PyPI release time.
-    # Matrix mirrors `lidenbrock-tests` so the wheel smoke-install is
+    # Matrix mirrors `saknussemm-tests` so the wheel smoke-install is
     # exercised under every supported Python — a 3.13-only metadata
     # incompatibility (eg. a hatchling plugin) would otherwise sail
     # past CI and break consumers downstream.
@@ -187,8 +187,8 @@ jobs:
         # dependencies, or import-time errors.
         #
         # _smoke_imports.py is the single source of truth shared with
-        # the publish workflow and scripts/release-lidenbrock.sh — it
-        # iterates `lidenbrock.__all__` so any drift trips here. See
+        # the publish workflow and scripts/release-saknussemm.sh — it
+        # iterates `saknussemm.__all__` so any drift trips here. See
         # roadmap L5 / B6.
         run: |
           python -m venv /tmp/wheel-smoke
@@ -211,7 +211,7 @@ jobs:
         if: matrix.python-version == '3.11'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         with:
-          name: lidenbrock-dist
+          name: saknussemm-dist
           path: dist/
           if-no-files-found: error
 

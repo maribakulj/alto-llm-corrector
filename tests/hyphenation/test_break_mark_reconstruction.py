@@ -31,7 +31,7 @@ from __future__ import annotations
 import pytest
 from lxml import etree
 
-from lidenbrock.formats.alto._text import _DEDUP_MARKS, reconstruct_textline
+from saknussemm.formats.alto._text import _DEDUP_MARKS, reconstruct_textline
 
 from tests._pipeline_harness import EXAMPLES
 
@@ -82,7 +82,7 @@ class TestTheSoftHyphenCollapseIsDeliberate:
         # repertoire minus U+00AD, so widening the repertoire (L6) widens
         # this too and only the soft hyphen stays out. Admitting it would
         # put a soft hyphen into ocr_text that the round-trip cannot carry.
-        from lidenbrock.core.pairing import HYPHEN_CHARS
+        from saknussemm.core.pairing import HYPHEN_CHARS
 
         assert "­" not in _DEDUP_MARKS
         assert set(_DEDUP_MARKS) == set(HYPHEN_CHARS) - {"­"}
@@ -126,9 +126,9 @@ class TestAMixedRoleLineKeepsItsForwardMark:
     """
 
     def test_the_two_explicitness_flags_can_disagree(self) -> None:
-        from lidenbrock.core.pairing import forward_break_is_explicit
-        from lidenbrock.core.schemas import HyphenRole
-        from lidenbrock.formats.alto.parser import parse_alto_file
+        from saknussemm.core.pairing import forward_break_is_explicit
+        from saknussemm.core.schemas import HyphenRole
+        from saknussemm.formats.alto.parser import parse_alto_file
 
         path = EXAMPLES / "X0000002.xml"
         pages, _ = parse_alto_file(path, path.name)
@@ -145,9 +145,9 @@ class TestAMixedRoleLineKeepsItsForwardMark:
         assert forward_break_is_explicit(line) is False
 
     def test_the_forward_mark_survives_the_rewrite(self) -> None:
-        from lidenbrock.core.schemas import LineStatus
-        from lidenbrock.formats.alto.parser import parse_alto_file
-        from lidenbrock.formats.alto.rewriter import rewrite_alto_file
+        from saknussemm.core.schemas import LineStatus
+        from saknussemm.formats.alto.parser import parse_alto_file
+        from saknussemm.formats.alto.rewriter import rewrite_alto_file
 
         path = EXAMPLES / "X0000002.xml"
         pages, _ = parse_alto_file(path, path.name)
@@ -173,7 +173,7 @@ class TestTheRepertoireIsJustifiedByEvidence:
     grounds that it looks like a hyphen."""
 
     def test_the_unambiguous_unicode_hyphens_pair(self) -> None:
-        from lidenbrock.core.pairing import HYPHEN_CHARS, trailing_hyphen_char
+        from saknussemm.core.pairing import HYPHEN_CHARS, trailing_hyphen_char
 
         for mark in ("‐", "‑"):  # U+2010 HYPHEN, U+2011 NON-BREAKING HYPHEN
             assert trailing_hyphen_char(f"administra{mark}", HYPHEN_CHARS) == mark
@@ -182,7 +182,7 @@ class TestTheRepertoireIsJustifiedByEvidence:
         # `=` is an equals sign; U+2013 is a dialogue dash or a range. Both
         # appear ZERO times in the 40 corpus files, so there is no evidence
         # they are needed and a known reason they would misfire.
-        from lidenbrock.core.pairing import HYPHEN_CHARS
+        from saknussemm.core.pairing import HYPHEN_CHARS
 
         assert "=" not in HYPHEN_CHARS
         assert "–" not in HYPHEN_CHARS
@@ -190,7 +190,7 @@ class TestTheRepertoireIsJustifiedByEvidence:
     def test_a_year_range_still_does_not_pair(self) -> None:
         # The alphabetic-char requirement is what keeps the repertoire safe
         # to widen at all.
-        from lidenbrock.core.pairing import HYPHEN_CHARS, trailing_hyphen_char
+        from saknussemm.core.pairing import HYPHEN_CHARS, trailing_hyphen_char
 
         assert trailing_hyphen_char("en 1789-", HYPHEN_CHARS) is None
         assert trailing_hyphen_char("n°5‐", HYPHEN_CHARS) is None

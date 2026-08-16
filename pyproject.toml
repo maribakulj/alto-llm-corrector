@@ -1,6 +1,6 @@
 [project]
-name = "lidenbrock"
-# Single source of truth for the version: src/lidenbrock/__init__.py
+name = "saknussemm"
+# Single source of truth for the version: src/saknussemm/__init__.py
 # `__version__`. Bump it there + add a CHANGELOG.md entry to release.
 dynamic = ["version"]
 description = "Structure-safe post-OCR correction of heritage transcriptions (ALTO, PAGE XML) — parsers, rewriters, hyphenation reconciler, span edit protocol."
@@ -13,7 +13,7 @@ readme = "README.md"
 # the hatch.build.targets.sdist include below.
 requires-python = ">=3.11"
 authors = [
-    { name = "lidenbrock contributors" },
+    { name = "saknussemm contributors" },
 ]
 keywords = ["alto", "page-xml", "ocr", "xml", "llm", "digital-heritage", "transkribus", "escriptorium"]
 classifiers = [
@@ -30,7 +30,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# Vision chain (ROADMAP V3 Phase 4): the lidenbrock[vision] producer decodes,
+# Vision chain (ROADMAP V3 Phase 4): the saknussemm[vision] producer decodes,
 # validates and crops page images and calls a multimodal provider. Pillow is
 # the ONLY image dependency and it is imported LAZILY, inside
 # integrations/vision.py — never at module import and never on the base
@@ -58,9 +58,9 @@ test = [
 ]
 
 # Type-checking toolchain. Not a runtime extra: it exists so that
-# `mypy --strict src/lidenbrock` means the same thing locally and in CI.
+# `mypy --strict src/saknussemm` means the same thing locally and in CI.
 # lxml-stubs is load-bearing — without it `_Element.attrib` degrades to
-# `Any` and strict mode silently checks less than the lidenbrock-types job
+# `Any` and strict mode silently checks less than the saknussemm-types job
 # does. The mypy pin is exact so a new release never turns a green local
 # run red in CI (or the reverse).
 typecheck = [
@@ -69,8 +69,8 @@ typecheck = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/maribakulj/lidenbrock"
-Issues = "https://github.com/maribakulj/lidenbrock/issues"
+Homepage = "https://github.com/maribakulj/saknussemm"
+Issues = "https://github.com/maribakulj/saknussemm/issues"
 
 [build-system]
 requires = ["hatchling"]
@@ -78,11 +78,11 @@ build-backend = "hatchling.build"
 
 [tool.hatch.version]
 # Read __version__ from the package — keeps pyproject.toml and the
-# importable `lidenbrock.__version__` in lockstep.
-path = "src/lidenbrock/__init__.py"
+# importable `saknussemm.__version__` in lockstep.
+path = "src/saknussemm/__init__.py"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/lidenbrock"]
+packages = ["src/saknussemm"]
 
 [tool.hatch.build.targets.sdist]
 # Leading slashes are load-bearing: hatchling matches these as PATTERNS, so
@@ -93,7 +93,7 @@ packages = ["src/lidenbrock"]
 # not an allowlist. `tests/test_packaging_excludes_corpora.py` now reads the
 # BUILT sdist rather than this declaration.
 include = [
-    "/src/lidenbrock",
+    "/src/saknussemm",
     "/README.md",
     "/CHANGELOG.md",
     "/LICENSE",
@@ -124,11 +124,11 @@ markers = [
 
 # ---------------------------------------------------------------------------
 # coverage — the package now carries the algorithm tests (F11) and gates its
-# own coverage (~85% DoD; currently ~91%). The `lidenbrock-tests` CI job runs
-# pytest with --cov=lidenbrock.
+# own coverage (~85% DoD; currently ~91%). The `saknussemm-tests` CI job runs
+# pytest with --cov=saknussemm.
 # ---------------------------------------------------------------------------
 [tool.coverage.run]
-source = ["lidenbrock"]
+source = ["saknussemm"]
 branch = true
 # Nothing is omitted any more. `integrations/qe.py` was, because it needed
 # onnxruntime and a 545 MB model no CI could fetch; it left for the bench on
@@ -149,13 +149,13 @@ exclude_lines = [
 
 # ---------------------------------------------------------------------------
 # mypy — the package ships `py.typed` (PEP 561) and is checked in --strict
-# mode (F12 / §8.3). The `lidenbrock-types` CI job runs
-# `mypy --strict src/lidenbrock` with lxml-stubs installed.
+# mode (F12 / §8.3). The `saknussemm-types` CI job runs
+# `mypy --strict src/saknussemm` with lxml-stubs installed.
 # ---------------------------------------------------------------------------
 [tool.mypy]
 python_version = "3.11"
 strict = true
-files = ["src/lidenbrock"]
+files = ["src/saknussemm"]
 
 [[tool.mypy.overrides]]
 # lxml ships partial stubs (lxml-stubs); a few dynamic corners remain
@@ -165,7 +165,7 @@ module = ["lxml.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
-# lidenbrock[vision]: Pillow is lazy-imported inside integrations/vision.py
+# saknussemm[vision]: Pillow is lazy-imported inside integrations/vision.py
 # and absent from the mypy CI env. Same treatment as the qe deps — untyped
 # so --strict still runs; the module coerces every value it returns to a
 # concrete type so no Any leaks past the seam.

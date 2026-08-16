@@ -29,8 +29,8 @@ import ast
 
 import pytest
 
-from lidenbrock.core.guards import check_line
-from lidenbrock.core.schemas import GuardConfig
+from saknussemm.core.guards import check_line
+from saknussemm.core.schemas import GuardConfig
 
 from tests._paths import SRC
 

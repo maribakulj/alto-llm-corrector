@@ -47,15 +47,20 @@ corpus files, pinned by sha256:
     ``<postProcessingStep>``. No TextLine, String, SP, HYP, text or geometry
     drift — the identity path still never rebuilds a line.
 
-    Rename to lidenbrock (2026-08-16) — all four hashes moved by exactly
+    Rename to saknussemm (2026-08-16) — all four hashes moved by exactly
     one line. The library writes its own name into the provenance it
     stamps, so ``<softwareName>`` and the step description carry the new
     one. Classified by rendering the SAME fixture with the pre-rename code
     in a git worktree and diffing the two outputs: three diff lines, all in
     the ``<postProcessingStep>``, and the two files are the same 10280
-    bytes — the two names happen to be the same length, so not even the
-    byte count moved. Zero TextLine, String, SP, HYP, text or geometry
-    drift.
+    bytes — all three names happen to be ten characters, so not even the byte
+    count moved. Zero TextLine, String, SP, HYP, text or geometry drift.
+
+    The second rename was classified the same way rather than assumed to
+    be the same event: same fixture, pre-rename code in a git worktree,
+    two outputs diffed. One line, in the `<postProcessingStep>`. A hash
+    that moves for a known reason still has to be shown to have moved for
+    THAT reason.
 
 If a hash moves, do NOT regenerate blindly: re-run the classifier
 (scratch parity_classify.py pattern — parse both outputs, diff per
@@ -87,8 +92,8 @@ import hashlib
 
 import pytest
 
-from lidenbrock.formats.alto.parser import build_document_manifest
-from lidenbrock.formats.alto.rewriter import rewrite_alto_file
+from saknussemm.formats.alto.parser import build_document_manifest
+from saknussemm.formats.alto.rewriter import rewrite_alto_file
 
 from tests._paths import EXAMPLES
 
@@ -96,18 +101,18 @@ _EXAMPLES = EXAMPLES
 
 _GOLDEN = {
     ("sample.xml", "identity"): (
-        "ce37668d37e7f66e5969be156741a1a9b5128d69ee1b2c0ad0ee14eca54b4848"
+        "6b1c8ea81c28076a10b65a8e147442063a4e8671cd4ee870ba67021920c0ed16"
     ),
     ("sample.xml", "scripted"): (
-        "23ff0f53e6c0af4118271ccecc0bfc061223bbb0952e9a742dd4253b765ad17d"
+        "063fb36595536afcfb36a2138e9923c4d5dd227a3e4034f06fa2042b7ab2c8ef"
     ),
     ("X0000002.xml", "identity"): (
-        "44366df9a2675f332f9532c93f95838d46f7bfed8f757bf8ca0db2fcf486a04f"
+        "6b29f2269127f5ec9af15b6196e2e4c2ef48db4bf804aa616c2e0477f4db102a"
     ),
     # See the module docstring, "Mixed-role break fix": one TextLine of 566
     # regained the trailing dash the writer used to drop.
     ("X0000002.xml", "scripted"): (
-        "6f8eb080915715c8b13f752e497a0a84b00cb01379a682616793d05f9dd2ca0e"
+        "d5b35e71ae41f6a8d8960cd180b88ce808a867d184cb92b984ee8e91a2764701"
     ),
 }
 
@@ -152,7 +157,7 @@ def test_corpus_output_bytes_are_pinned(filename: str, scenario: str) -> None:
 def test_identity_output_equals_source_reserialisation() -> None:
     """Identity corrections must not perturb a single TextLine: the output
     re-parses to the same per-line text as the source for every line."""
-    from lidenbrock.formats.alto.rewriter import extract_output_texts
+    from saknussemm.formats.alto.rewriter import extract_output_texts
 
     xml_path = _EXAMPLES / "X0000002.xml"
     doc = build_document_manifest([(xml_path, xml_path.name)])

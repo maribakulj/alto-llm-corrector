@@ -49,8 +49,8 @@ from pathlib import Path
 
 from lxml import etree
 
-from lidenbrock.core.pipeline import CorrectionPipeline
-from lidenbrock.formats.alto.parser import build_document_manifest
+from saknussemm.core.pipeline import CorrectionPipeline
+from saknussemm.formats.alto.parser import build_document_manifest
 
 from tests._paths import EXAMPLES
 from tests._pipeline_harness import DictProvider, RecordingObserver

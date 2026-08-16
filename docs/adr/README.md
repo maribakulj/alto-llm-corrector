@@ -14,7 +14,7 @@ Format: `NNN-short-slug.md`, statuses `accepted | superseded by NNN`.
 | [002](002-sse-loss-degrades-to-polling.md) | A lost SSE stream degrades to status polling, never fails the job |
 <!-- 004 left with the demo on 2026-08-16: deployment profiles are the
      web application's decision, not the library's. It lives in
-     lidenbrock-demo/docs/. The number is not reused — a gap is honest,
+     saknussemm-demo/docs/. The number is not reused — a gap is honest,
      a renumbering would break every citation ever written. -->
 | [003](003-tokens-never-in-urls.md) | Capability tokens are header-only; URLs carry scoped signed credentials |
 | [005](005-pipeline-one-run-per-instance.md) | `CorrectionPipeline`: one run per instance, manifest is consumed — superseded by ADR-011 slice E |

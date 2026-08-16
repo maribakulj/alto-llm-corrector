@@ -13,7 +13,7 @@ silently rewrites a file it was asked not to touch.
 
 from __future__ import annotations
 
-from lidenbrock.formats.page._custom import strip_offset_groups
+from saknussemm.formats.page._custom import strip_offset_groups
 
 
 def test_strip_offset_groups_unit():
@@ -28,7 +28,7 @@ def test_strip_offset_groups_unit():
 
 
 def test_f12_kept_group_spacing_preserved_verbatim():
-    from lidenbrock.formats.page._custom import strip_offset_groups
+    from saknussemm.formats.page._custom import strip_offset_groups
 
     new, removed = strip_offset_groups(
         "readingOrder{index:0;} textStyle {offset:0;length:3;}"
@@ -38,7 +38,7 @@ def test_f12_kept_group_spacing_preserved_verbatim():
 
 
 def test_f12_inter_group_source_text_preserved_between_kept_groups():
-    from lidenbrock.formats.page._custom import strip_offset_groups
+    from saknussemm.formats.page._custom import strip_offset_groups
 
     new, removed = strip_offset_groups(
         "readingOrder {index:0;}  structure {type:heading;} textStyle {offset:1;}"
@@ -49,20 +49,20 @@ def test_f12_inter_group_source_text_preserved_between_kept_groups():
 
 
 def test_f12_nothing_removed_is_byte_identity():
-    from lidenbrock.formats.page._custom import strip_offset_groups
+    from saknussemm.formats.page._custom import strip_offset_groups
 
     src = "readingOrder{index:0;}   structure {type:heading;}"
     assert strip_offset_groups(src) == (src, 0)
 
 
 def test_f12_all_groups_removed_yields_empty():
-    from lidenbrock.formats.page._custom import strip_offset_groups
+    from saknussemm.formats.page._custom import strip_offset_groups
 
     assert strip_offset_groups("textStyle {offset:0;length:3;}") == ("", 1)
 
 
 def test_f12_canonical_transkribus_spacing_unchanged():
-    from lidenbrock.formats.page._custom import strip_offset_groups
+    from saknussemm.formats.page._custom import strip_offset_groups
 
     new, removed = strip_offset_groups(
         "readingOrder {index:0;} textStyle {offset:12;length:5;}"

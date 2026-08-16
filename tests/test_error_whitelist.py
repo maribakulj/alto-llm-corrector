@@ -25,11 +25,11 @@ import pytest
 
 from tests._pipeline_harness import apply_decisions
 
-from lidenbrock.core.protocols import ProducerMetadata
-from lidenbrock import CorrectionPipeline
-from lidenbrock.core.protocols import ProviderTransientError
-from lidenbrock.core.schemas import LineStatus, RetryPolicy
-from lidenbrock.formats.alto.parser import build_document_manifest
+from saknussemm.core.protocols import ProducerMetadata
+from saknussemm import CorrectionPipeline
+from saknussemm.core.protocols import ProviderTransientError
+from saknussemm.core.schemas import LineStatus, RetryPolicy
+from saknussemm.formats.alto.parser import build_document_manifest
 
 from tests._paths import EXAMPLES
 

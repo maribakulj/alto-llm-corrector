@@ -6,9 +6,9 @@ from pathlib import Path
 
 from lxml import etree
 
-from lidenbrock.formats.alto._ns import _detect_namespace
-from lidenbrock.formats.alto.parser import build_document_manifest
-from lidenbrock.formats.alto.rewriter import rewrite_alto_file
+from saknussemm.formats.alto._ns import _detect_namespace
+from saknussemm.formats.alto.parser import build_document_manifest
+from saknussemm.formats.alto.rewriter import rewrite_alto_file
 
 _NS = "http://www.loc.gov/standards/alto/ns-v4#"
 
@@ -100,7 +100,7 @@ def test_processing_step_carries_version_and_fingerprint(tmp_path: Path):
     descs = _processing_step_descriptions(xml_bytes)
     assert descs, "no processingStep written"
     assert any("openai/gpt-x" in d for d in descs)
-    assert any("lidenbrock 9.9.9" in d for d in descs)
+    assert any("saknussemm 9.9.9" in d for d in descs)
     assert any("config deadbeefcafe0000" in d for d in descs)
 
 
@@ -112,7 +112,7 @@ def test_processing_step_backwards_compatible_without_provenance(tmp_path: Path)
         xml_path, doc.pages, provider="openai", model="gpt-x"
     )
     descs = _processing_step_descriptions(xml_bytes)
-    assert any(d == "Post-OCR correction via openai/gpt-x (lidenbrock)" for d in descs)
+    assert any(d == "Post-OCR correction via openai/gpt-x (saknussemm)" for d in descs)
 
 
 def _write_ocr(tmp_path: Path) -> Path:
@@ -138,12 +138,12 @@ def test_ocrprocessing_file_records_the_pass(tmp_path: Path):
     descs = _post_processing_descriptions(xml_bytes)
     assert descs, "no postProcessingStep written into <OCRProcessing>"
     assert any("openai/gpt-x" in d for d in descs)
-    assert any("lidenbrock 9.9.9" in d for d in descs)
+    assert any("saknussemm 9.9.9" in d for d in descs)
     assert any("config deadbeefcafe0000" in d for d in descs)
-    # lidenbrock names itself as the processing software, not just in prose.
+    # saknussemm names itself as the processing software, not just in prose.
     root = etree.fromstring(xml_bytes)
     ns = _detect_namespace(root)
     name_tag = f"{{{ns}}}softwareName" if ns else "softwareName"
-    assert any((el.text or "") == "lidenbrock" for el in root.iter(name_tag))
+    assert any((el.text or "") == "saknussemm" for el in root.iter(name_tag))
     # The original OCR step is preserved, not replaced.
     assert any((el.text or "") == "Tesseract" for el in root.iter(name_tag))

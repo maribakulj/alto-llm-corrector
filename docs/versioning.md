@@ -9,7 +9,7 @@ break is still a deliberate act (snapshot-test change + CHANGELOG entry).
 external review of the public API required by the release plan.
 
 **The top-level surface has been cut, and is provisional until the
-freeze.** `lidenbrock.__all__` held 95 symbols, accumulated one addition
+freeze.** `saknussemm.__all__` held 95 symbols, accumulated one addition
 at a time rather than designed. `S3b` (2026-08-01) reduced it to the
 **68** that two computed closures reach — see *What is public* below for
 what those closures are and why the format-adapter seam is deliberately
@@ -22,10 +22,10 @@ that the list cannot *grow* back.
 
 ## SemVer, strictly
 
-From `1.0.0`, `lidenbrock` follows [Semantic Versioning](https://semver.org):
+From `1.0.0`, `saknussemm` follows [Semantic Versioning](https://semver.org):
 
 - **MAJOR** — any breaking change to the public surface: removing or
-  renaming a symbol listed in `lidenbrock.__all__`, changing an
+  renaming a symbol listed in `saknussemm.__all__`, changing an
   entry-point signature (`run`, `run_sync`, `for_provider`,
   `apply_edit_script`, …), a breaking change to the `CorrectionReport`
   JSON shape, or a behavioural change that alters output bytes for
@@ -44,7 +44,7 @@ CHANGELOG entry.
 Two doors, and the difference between them is the guarantee, not the
 mechanism — both resolve to the same objects.
 
-- **`lidenbrock.*`** — everything listed in `lidenbrock.__all__`. Under
+- **`saknussemm.*`** — everything listed in `saknussemm.__all__`. Under
   strict SemVer *from 1.0.0*; provisional until then (see above).
 
   Since `S3b` (2026-08-01) that list is **computed, not chosen**: 68
@@ -54,9 +54,9 @@ mechanism — both resolve to the same objects.
   sentence advertises. A name is in `__all__` because one of those two
   closures reaches it, and for no other reason. It was 95 before, reached
   by accretion.
-- **The submodule paths** documented in the README (`lidenbrock.core.*`,
-  `lidenbrock.formats.alto` / `lidenbrock.formats.page`,
-  `lidenbrock.producers.*`). Supported and documented — this is the door
+- **The submodule paths** documented in the README (`saknussemm.core.*`,
+  `saknussemm.formats.alto` / `saknussemm.formats.page`,
+  `saknussemm.producers.*`). Supported and documented — this is the door
   the repository itself uses (864 module-path imports against 65
   top-level ones), and the one a symbol demoted by `S3b` keeps.
 
@@ -102,7 +102,7 @@ library's own `CORRECTION_REPORT_VERSION` says what THIS install emits, so a
 consumer comparing it against a report it just loaded learns nothing about
 that report.
 
-That is why the constant is not in `lidenbrock.__all__` while
+That is why the constant is not in `saknussemm.__all__` while
 `EDIT_PROTOCOL_VERSION` is: the edit protocol's version is something a
 producer must *declare*, the report's is something a reader *finds*. The
 asymmetry was previously unexplained and read as an oversight. When a tool
@@ -110,7 +110,7 @@ does need the constant — a writer checking what it is about to emit — it is
 importable by module path like anything else the top level does not carry:
 
 ```python
-from lidenbrock.core.schemas import CORRECTION_REPORT_VERSION
+from saknussemm.core.schemas import CORRECTION_REPORT_VERSION
 ```
 
 ## Byte-parity discipline
@@ -137,4 +137,4 @@ aliases. After 1.0.0:
 - Python: 3.11+ (new minors may raise the floor in a MINOR release, with
   one release of notice in the CHANGELOG).
 - pydantic 2.x and lxml 6.x are the supported dependency majors; bumping
-  either major is a lidenbrock MAJOR unless proven byte-compatible.
+  either major is a saknussemm MAJOR unless proven byte-compatible.

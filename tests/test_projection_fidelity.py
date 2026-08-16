@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import pytest
 
-from lidenbrock.core.fidelity import (
+from saknussemm.core.fidelity import (
     FIDELITY_ORDER,
     ProjectionFidelity,
     classify_projection_fidelity,

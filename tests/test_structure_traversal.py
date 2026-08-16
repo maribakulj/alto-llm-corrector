@@ -20,8 +20,8 @@ from __future__ import annotations
 import textwrap
 from pathlib import Path
 
-from lidenbrock.formats.alto.parser import parse_alto_file
-from lidenbrock.formats.page.parser import parse_page_file
+from saknussemm.formats.alto.parser import parse_alto_file
+from saknussemm.formats.page.parser import parse_page_file
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -316,8 +316,8 @@ from tests.identity._docs import _tb as _tb_optional_id  # noqa: E402
 def test_idless_region_under_reading_order_keeps_document_order():
     from lxml import etree
 
-    from lidenbrock.formats.page._ns import _detect_namespace
-    from lidenbrock.formats.page.parser import _regions_in_reading_order
+    from saknussemm.formats.page._ns import _detect_namespace
+    from saknussemm.formats.page.parser import _regions_in_reading_order
 
     # Regions [A(id), B(NO id), C(id)] with ReadingOrder [C, A]. The
     # declaration says nothing about B; sorting would yank B to the end.

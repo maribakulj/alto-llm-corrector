@@ -51,18 +51,18 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
-from lidenbrock import CorrectionPipeline
-from lidenbrock.core.editing import EditScript, ReplaceLine
-from lidenbrock.core.protocols import ProducerMetadata
-from lidenbrock.core.schemas import DocumentManifest, HyphenRole
-from lidenbrock.formats.alto.parser import (
+from saknussemm import CorrectionPipeline
+from saknussemm.core.editing import EditScript, ReplaceLine
+from saknussemm.core.protocols import ProducerMetadata
+from saknussemm.core.schemas import DocumentManifest, HyphenRole
+from saknussemm.formats.alto.parser import (
     build_document_manifest as build_alto_manifest,
 )
-from lidenbrock.formats.alto.rewriter import extract_output_texts as extract_alto_texts
-from lidenbrock.formats.page.parser import (
+from saknussemm.formats.alto.rewriter import extract_output_texts as extract_alto_texts
+from saknussemm.formats.page.parser import (
     build_document_manifest as build_page_manifest,
 )
-from lidenbrock.formats.page.rewriter import extract_output_texts as extract_page_texts
+from saknussemm.formats.page.rewriter import extract_output_texts as extract_page_texts
 
 from tests._paths import EXAMPLES
 

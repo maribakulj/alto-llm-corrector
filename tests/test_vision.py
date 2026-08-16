@@ -1,4 +1,4 @@
-"""lidenbrock[vision] pixel-pure cropper.
+"""saknussemm[vision] pixel-pure cropper.
 
 Self-skips when Pillow (the ``[vision]`` extra) is absent — like the qe
 suite. Every fixture is drawn by Pillow in-process: no network, no API
@@ -16,8 +16,8 @@ pytest.importorskip("PIL")
 
 from PIL import Image  # noqa: E402
 
-from lidenbrock.core.protocols import EditProducer, ProducerOptions  # noqa: E402
-from lidenbrock.core.schemas import (  # noqa: E402
+from saknussemm.core.protocols import EditProducer, ProducerOptions  # noqa: E402
+from saknussemm.core.schemas import (  # noqa: E402
     ChunkGranularity,
     Coords,
     CorrectionRequest,
@@ -27,8 +27,8 @@ from lidenbrock.core.schemas import (  # noqa: E402
     LineGeometry,
     Usage,
 )
-from lidenbrock.errors import ConfigurationError  # noqa: E402
-from lidenbrock.integrations.vision import (  # noqa: E402
+from saknussemm.errors import ConfigurationError  # noqa: E402
+from saknussemm.integrations.vision import (  # noqa: E402
     Crop,
     ImagePart,
     VisionEditProducer,
@@ -313,8 +313,8 @@ def test_vision_producer_drives_the_full_pipeline(tmp_path: Path) -> None:
     """End to end: the pipeline copies the ImageAsset + geometry into the
     §4.1 envelope, the producer crops real ALTO geometry and the run
     completes. An echo VLM keeps it deterministic (identity corrections)."""
-    from lidenbrock import CorrectionPipeline
-    from lidenbrock.formats.alto.parser import build_document_manifest
+    from saknussemm import CorrectionPipeline
+    from saknussemm.formats.alto.parser import build_document_manifest
 
     sample = EXAMPLES / "sample.xml"
     doc = build_document_manifest([(sample, sample.name)])
@@ -359,8 +359,8 @@ def test_digestless_asset_records_no_image_digest(tmp_path: Path) -> None:
     """Only a digest the asset already carries is recorded — an ImageAsset
     built by hand without a sha256 contributes none (the core never opens
     the file to compute one, I4)."""
-    from lidenbrock import CorrectionPipeline
-    from lidenbrock.formats.alto.parser import build_document_manifest
+    from saknussemm import CorrectionPipeline
+    from saknussemm.formats.alto.parser import build_document_manifest
 
     sample = EXAMPLES / "sample.xml"
     doc = build_document_manifest([(sample, sample.name)])

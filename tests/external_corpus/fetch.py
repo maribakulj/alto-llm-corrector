@@ -1,7 +1,7 @@
 """Fetch the external ALTO corpus from Gallica (V4.2 phase 3).
 
 Downloads the per-page ALTO of every document pinned in manifest.json
-into ``.cache/`` next to this file (or ``$LIDENBROCK_EXTERNAL_CORPUS_DIR``).
+into ``.cache/`` next to this file (or ``$SAKNUSSEMM_EXTERNAL_CORPUS_DIR``).
 The corpus is EXTERNAL by design: real files from real OCR pipelines,
 never used while developing the library, so the tests built on it do not
 share the code's assumptions.
@@ -40,7 +40,7 @@ import urllib.request
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-CACHE = Path(os.environ.get("LIDENBROCK_EXTERNAL_CORPUS_DIR", HERE / ".cache"))
+CACHE = Path(os.environ.get("SAKNUSSEMM_EXTERNAL_CORPUS_DIR", HERE / ".cache"))
 ALTO_URL = "https://gallica.bnf.fr/RequestDigitalElement?O={ark}&E=ALTO&Deb={page}"
 RETRIES = 3
 TIMEOUT = 60
@@ -52,7 +52,7 @@ def _download(ark: str, page: int) -> bytes | None:
     for attempt in range(1, RETRIES + 1):
         try:
             req = urllib.request.Request(
-                url, headers={"User-Agent": "lidenbrock-external-corpus/1.0"}
+                url, headers={"User-Agent": "saknussemm-external-corpus/1.0"}
             )
             with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:
                 payload = resp.read()

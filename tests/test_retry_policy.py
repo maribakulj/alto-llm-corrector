@@ -11,9 +11,9 @@ from __future__ import annotations
 
 import pytest
 
-from lidenbrock.core.retry import _classify_retry
-from lidenbrock.core.protocols import ProviderTransientError
-from lidenbrock.core.schemas import DEFAULT_RETRY_POLICY, RetryPolicy
+from saknussemm.core.retry import _classify_retry
+from saknussemm.core.protocols import ProviderTransientError
+from saknussemm.core.schemas import DEFAULT_RETRY_POLICY, RetryPolicy
 
 
 def test_default_reproduces_historical_ramp():

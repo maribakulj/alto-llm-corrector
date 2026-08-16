@@ -26,9 +26,9 @@ from pathlib import Path
 import pytest
 from hypothesis import given, settings
 
-from lidenbrock.core.identity import LineRef, line_ref
-from lidenbrock.core.pairing import backward_partner_ref, forward_partner_ref
-from lidenbrock.core.schemas import HyphenRole, LineManifest, PageManifest
+from saknussemm.core.identity import LineRef, line_ref
+from saknussemm.core.pairing import backward_partner_ref, forward_partner_ref
+from saknussemm.core.schemas import HyphenRole, LineManifest, PageManifest
 
 from tests._alto_gen import rich_alto_documents
 from tests.test_properties_hypothesis import _write_tmp
@@ -87,7 +87,7 @@ def assert_roles_match_their_links(pages: list[PageManifest]) -> None:
 
 
 def _pages_of(path: Path) -> list[PageManifest]:
-    from lidenbrock.formats.alto.parser import build_document_manifest
+    from saknussemm.formats.alto.parser import build_document_manifest
 
     return list(build_document_manifest([(path, path.name)]).pages)
 
@@ -118,7 +118,7 @@ def test_links_are_symmetric_on_the_real_fixtures(name: str) -> None:
 def test_a_multi_file_document_keeps_its_seam_symmetric(tmp_path: Path) -> None:
     """The cross-page seam is where the two slots are written by different
     passes — ``link_cross_page_hyphens`` rather than ``link_hyphen_pairs``."""
-    from lidenbrock.formats.alto.parser import build_document_manifest
+    from saknussemm.formats.alto.parser import build_document_manifest
 
     alto = (
         '<?xml version="1.0" encoding="UTF-8"?>\n'
@@ -147,7 +147,7 @@ def test_a_multi_file_document_keeps_its_seam_symmetric(tmp_path: Path) -> None:
 
 def test_the_invariant_catches_a_one_sided_link() -> None:
     """Guard the guard."""
-    from lidenbrock.core.schemas import Coords
+    from saknussemm.core.schemas import Coords
 
     def _line(lid: str, **kw) -> LineManifest:
         return LineManifest(

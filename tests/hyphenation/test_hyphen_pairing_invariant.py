@@ -23,8 +23,8 @@ long as the guarantee holds.
 from __future__ import annotations
 
 
-from lidenbrock.core.schemas import HyphenRole
-from lidenbrock.formats.alto.parser import parse_alto_file
+from saknussemm.core.schemas import HyphenRole
+from saknussemm.formats.alto.parser import parse_alto_file
 
 from tests._pipeline_harness import EXAMPLES, run_pipeline
 

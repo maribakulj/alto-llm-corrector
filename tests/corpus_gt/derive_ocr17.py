@@ -3,7 +3,7 @@
 Upstream artifact this script exists for: in the OCR17+ Transkribus
 exports, the RAW file's line-level ``TextEquiv`` already carries the
 corrected reading — the genuine OCR output (``cukiuent``, ``eft``…)
-survives only on the ``Word`` elements. lidenbrock reads lines, so a
+survives only on the ``Word`` elements. saknussemm reads lines, so a
 naive raw-vs-corrected pair is identical at line level and measures
 nothing.
 
@@ -28,7 +28,7 @@ from pathlib import Path
 
 from lxml import etree
 
-from lidenbrock.formats._xml import make_safe_parser
+from saknussemm.formats._xml import make_safe_parser
 
 _REPO_ROOT = Path(__file__).resolve().parents[4]
 _EXAMPLES = _REPO_ROOT / "examples" / "page"

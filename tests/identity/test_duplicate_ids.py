@@ -25,31 +25,31 @@ from pathlib import Path
 
 import pytest
 
-from lidenbrock.core.pipeline import CorrectionPipeline
-from lidenbrock.core.schemas import (
+from saknussemm.core.pipeline import CorrectionPipeline
+from saknussemm.core.schemas import (
     Coords,
     DocumentManifest,
     LineManifest,
     PageManifest,
 )
-from lidenbrock.errors import (
+from saknussemm.errors import (
     CorrectionError,
     DuplicateIdError,
     ParseError,
 )
-from lidenbrock.formats.alto.parser import (
+from saknussemm.formats.alto.parser import (
     build_document_manifest as build_alto_manifest,
 )
-from lidenbrock.formats.alto.parser import parse_alto_file
-from lidenbrock.formats.alto.rewriter import (
+from saknussemm.formats.alto.parser import parse_alto_file
+from saknussemm.formats.alto.rewriter import (
     extract_output_texts as extract_alto_texts,
 )
-from lidenbrock.formats.alto.rewriter import rewrite_alto_file
-from lidenbrock.formats.page.parser import parse_page_file
-from lidenbrock.formats.page.rewriter import (
+from saknussemm.formats.alto.rewriter import rewrite_alto_file
+from saknussemm.formats.page.parser import parse_page_file
+from saknussemm.formats.page.rewriter import (
     extract_output_texts as extract_page_texts,
 )
-from lidenbrock.formats.page.rewriter import rewrite_page_file
+from saknussemm.formats.page.rewriter import rewrite_page_file
 
 from tests._pipeline_harness import DictProvider, RecordingObserver
 

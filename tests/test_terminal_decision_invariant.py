@@ -21,13 +21,13 @@ from __future__ import annotations
 
 import pytest
 
-from lidenbrock.core import driver as driver_module
-from lidenbrock.core.protocols import ProducerMetadata
-from lidenbrock import CorrectionPipeline, ValidationError
-from lidenbrock.core.decisions import derive_decision_set
-from lidenbrock.core.schemas import LineStatus, PipelineEventType
-from lidenbrock.formats.alto.parser import build_document_manifest
-from lidenbrock.producers.rules import RulesProducer, SubstitutionRule
+from saknussemm.core import driver as driver_module
+from saknussemm.core.protocols import ProducerMetadata
+from saknussemm import CorrectionPipeline, ValidationError
+from saknussemm.core.decisions import derive_decision_set
+from saknussemm.core.schemas import LineStatus, PipelineEventType
+from saknussemm.formats.alto.parser import build_document_manifest
+from saknussemm.producers.rules import RulesProducer, SubstitutionRule
 
 from tests._paths import EXAMPLES
 
@@ -110,7 +110,7 @@ async def test_partial_decisions_survive_the_absorb(monkeypatch) -> None:
 
     # Tiny windows → several chunks per page, so call #1 succeeds and
     # later chunks fail.
-    from lidenbrock.core.schemas import ChunkPlannerConfig
+    from saknussemm.core.schemas import ChunkPlannerConfig
 
     doc = build_document_manifest([(_SAMPLE, _SAMPLE.name)])
     observer = _EventLog()

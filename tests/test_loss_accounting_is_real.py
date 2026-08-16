@@ -28,23 +28,23 @@ from pathlib import Path
 import pytest
 from lxml import etree
 
-from lidenbrock.core.losses import (
+from saknussemm.core.losses import (
     COUNTS_INVALIDATION,
     INVALIDATION_COUNTER,
     INVALIDATION_UNIT,
     AttributeClass,
     AttributeFate,
 )
-from lidenbrock.formats.alto.losses import (
+from saknussemm.formats.alto.losses import (
     ALTO_STRING_ATTRIBUTES,
     fate_of,
     is_countable_loss,
     is_invalidated,
 )
-from lidenbrock.core.schemas import LineStatus
-from lidenbrock.formats.alto._ns import _detect_namespace
-from lidenbrock.formats.alto.parser import parse_alto_file
-from lidenbrock.formats.alto.rewriter import rewrite_alto_file
+from saknussemm.core.schemas import LineStatus
+from saknussemm.formats.alto._ns import _detect_namespace
+from saknussemm.formats.alto.parser import parse_alto_file
+from saknussemm.formats.alto.rewriter import rewrite_alto_file
 
 from tests._paths import EXAMPLES
 
@@ -332,7 +332,7 @@ def test_both_formats_report_the_invalidation_under_one_key() -> None:
     ALTO said nothing while PAGE said ``conf_dropped``. One key, one unit,
     both formats; a consumer must not need to know which format produced a
     report to find out whether its OCR confidence survived."""
-    from lidenbrock.formats.page.rewriter import PageRewriterMetrics
+    from saknussemm.formats.page.rewriter import PageRewriterMetrics
 
     assert INVALIDATION_COUNTER in PageRewriterMetrics()._loss_counters()
     assert "conf_dropped" not in PageRewriterMetrics()._loss_counters()

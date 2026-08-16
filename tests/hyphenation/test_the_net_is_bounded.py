@@ -6,7 +6,7 @@ directory silently stops being the whole net, and `S1` reopens the same
 question it opened this time — *which files break if I touch this?*
 
 So the answer is pinned rather than hoped for. Every module that reaches
-``lidenbrock.core.pairing``, ``.units`` or ``.hyphenation`` lives in this
+``saknussemm.core.pairing``, ``.units`` or ``.hyphenation`` lives in this
 directory, except five named below, each for a reason that is not "it grew
 there".
 
@@ -32,7 +32,7 @@ HERE = "hyphenation"
 
 #: The three modules `S1` will rewrite. A test that imports one of them is
 #: a test that can break when it does.
-_HYPHEN_MODULES = re.compile(r"lidenbrock\.core\.(pairing|units|hyphenation)\b")
+_HYPHEN_MODULES = re.compile(r"saknussemm\.core\.(pairing|units|hyphenation)\b")
 
 #: Test modules outside this directory that reach one of the three, and
 #: why each one is not a hyphenation test that wandered off.

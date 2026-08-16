@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import asyncio
 
-from lidenbrock.core.protocols import ProducerOptions
-from lidenbrock.core.editing import RangeAnchor, ReplaceSpan, apply_edit_script
-from lidenbrock.formats.alto.parser import build_document_manifest
-from lidenbrock.producers.rules import (
+from saknussemm.core.protocols import ProducerOptions
+from saknussemm.core.editing import RangeAnchor, ReplaceSpan, apply_edit_script
+from saknussemm.formats.alto.parser import build_document_manifest
+from saknussemm.producers.rules import (
     RulesProducer,
     SubstitutionRule,
     default_french_ocr_rules,
@@ -105,7 +105,7 @@ def test_target_ids_restrict_emission():
 
 def test_produce_contract_shape_returns_no_usage():
     """§5.1 — produce(payload, *, options) over an CorrectionRequest."""
-    from lidenbrock.core.schemas import (
+    from saknussemm.core.schemas import (
         ChunkGranularity,
         LineContext,
         CorrectionRequest,
@@ -135,7 +135,7 @@ def test_rules_pass_over_descartes_page_applies_cleanly():
         / "page"
         / "Descartes1637_Discours_btv1b86069594_corrected_0014_page_raw.xml"
     )
-    from lidenbrock.formats.page.parser import build_document_manifest as page_doc
+    from saknussemm.formats.page.parser import build_document_manifest as page_doc
 
     doc = page_doc([(xml, xml.name)])
     canonical = {lm.line_id: lm.ocr_text for p in doc.pages for lm in p.lines}
@@ -185,7 +185,7 @@ def test_lexicon_guard_matches_nfd_entry():
 
 
 def _rules_producer(lexicon: set[str]):
-    from lidenbrock.producers.rules import RulesProducer, SubstitutionRule
+    from saknussemm.producers.rules import RulesProducer, SubstitutionRule
 
     return RulesProducer(
         [
@@ -222,7 +222,7 @@ def test_f11_edits_in_distinct_tokens_unaffected():
 
 
 def test_f11_single_guarded_edit_behaviour_unchanged():
-    from lidenbrock.producers.rules import RulesProducer, SubstitutionRule
+    from saknussemm.producers.rules import RulesProducer, SubstitutionRule
 
     producer = RulesProducer(
         [SubstitutionRule("rn", "m", lexicon_guarded=True)],

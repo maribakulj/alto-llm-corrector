@@ -13,13 +13,13 @@ import dataclasses
 
 import pytest
 
-from lidenbrock.core.protocols import ProducerMetadata
-from lidenbrock import CorrectionPipeline
-from lidenbrock.core.decisions import derive_decision_set
-from lidenbrock.core.identity import LineRef
-from lidenbrock.core.schemas import LineStatus
-from lidenbrock.formats.alto.parser import build_document_manifest
-from lidenbrock.producers.rules import RulesProducer, SubstitutionRule
+from saknussemm.core.protocols import ProducerMetadata
+from saknussemm import CorrectionPipeline
+from saknussemm.core.decisions import derive_decision_set
+from saknussemm.core.identity import LineRef
+from saknussemm.core.schemas import LineStatus
+from saknussemm.formats.alto.parser import build_document_manifest
+from saknussemm.producers.rules import RulesProducer, SubstitutionRule
 
 from tests.hyphenation.test_unit_fallback_atomicity import _XPAGE_ALTO, _Null
 
@@ -73,7 +73,7 @@ async def test_fallback_reason_travels_onto_the_decision(tmp_path) -> None:
     from tests.hyphenation.test_unit_fallback_atomicity import _FailsPages
 
     doc, src = _doc(tmp_path)
-    from lidenbrock.core.schemas import RetryPolicy
+    from saknussemm.core.schemas import RetryPolicy
 
     pipeline = CorrectionPipeline(
         producer=_FailsPages({"L0", "L1"}),

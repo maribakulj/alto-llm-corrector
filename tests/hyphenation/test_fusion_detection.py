@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import pytest
 
-from lidenbrock.core.validator import (
+from saknussemm.core.validator import (
     HyphenIntegrityError,
     _validate_hyphen_integrity,
 )
