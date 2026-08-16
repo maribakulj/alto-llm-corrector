@@ -16,9 +16,11 @@ sur **événement** de la PR — résultat de CI, commentaire de revue, push,
 conflit de merge — et rend la main quand la PR est verte et qu'il n'y a rien
 en attente.
 
-**PR courante :** [#72](https://github.com/maribakulj/corrigenda/pull/72),
-ouverte le 2026-08-13 depuis `main` après le merge de
-[#71](https://github.com/maribakulj/corrigenda/pull/71), et abonnée.
+**PR courante :** [#77](https://github.com/maribakulj/corrigenda/pull/77),
+ouverte le 2026-08-16 depuis `main`, et abonnée. Une PR jumelle vit dans
+`cinoc` — [#80](https://github.com/maribakulj/cinoc/pull/80) — et la boucle
+surveille les deux : depuis le 2026-08-16 le travail s'étend à trois dépôts,
+donc « verte » se qualifie sur chacun de ceux qu'un geste touche.
 
 Quand une PR est mergée, la souscription meurt avec elle et **la boucle n'a
 plus de moteur événementiel tant qu'aucune autre n'est ouverte** — c'est le
