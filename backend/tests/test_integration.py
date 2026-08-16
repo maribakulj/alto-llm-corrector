@@ -11,8 +11,8 @@ from typing import Any
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from lidenbrock.formats.alto.parser import build_document_manifest, parse_alto_file
 from fastapi.testclient import TestClient
+from lidenbrock.formats.alto.parser import build_document_manifest, parse_alto_file
 from lxml import etree
 
 from app.jobs.runner import JobRunner
