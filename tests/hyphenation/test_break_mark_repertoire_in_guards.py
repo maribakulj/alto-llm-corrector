@@ -6,13 +6,13 @@ nonetheless tested the ASCII hyphen alone — ``endswith("-")``,
 ``rstrip("-")`` — which is not a corner case in this repository:
 
     PART1/BOTH lines by trailing mark, over the 1711 ALTO/PAGE lines of
-    ``examples/`` and ``corpus/``:
+    ``examples/`` and the BnL corpus:
         U+002D  -   331
         U+2E17  ⸗    24
         U+00AC  ¬     8
 
 **32 of 363 hyphenated lines**, 8.8%, fell outside every one of those checks.
-Not latent: ``corpus/37-GT-BNL`` is Fraktur ground truth and its break mark is
+Not latent: the BnL corpus (in the bench repository since 2026-08-16) is Fraktur ground truth and its break mark is
 ``⸗``.
 
 Each test below states the consequence rather than the code shape, and each

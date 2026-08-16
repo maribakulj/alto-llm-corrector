@@ -510,7 +510,7 @@ class TestDiagnosticTraces:
 #: 37-page BNL ground-truth corpus is in this mode, and so is any export
 #: whose OCR engine did not mark hyphenation.
 #:
-#: Transcribed from the real regression: corpus/37-GT-BNL/0020.xml lines
+#: Transcribed from the real regression: the BnL corpus, page 0020 (bench repository) lines
 #: TL_0003..TL_0005 ("d'impor-" / "tantes ... l'orga-" / "nisation ...").
 HEURISTIC_CHAINED_XML = _alto_xml("""\
           <TextLine ID="TL1" HPOS="100" VPOS="100" WIDTH="2000" HEIGHT="60">
