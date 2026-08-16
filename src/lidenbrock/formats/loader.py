@@ -28,11 +28,8 @@ from lidenbrock.core.schemas import (
 from lidenbrock.errors import ConfigurationError, ParseError
 from lidenbrock.formats._xml import (
     classified_parse_errors,
-    detect_namespace,
-    local_name,
     mislabelled_utf8,
-    read_source_tree,
-    tag,
+    read_source_header,
 )
 
 _ALTO_MARKER = "loc.gov/standards/alto"
@@ -67,17 +64,21 @@ def sniff_format(path: Path) -> str:
     survives a full round-trip. This door was the only branded place.
     """
     with classified_parse_errors(path.name):
-        root = read_source_tree(path).getroot()
-    ns = detect_namespace(root)
-    if _ALTO_MARKER in ns:
-        return "alto"
-    if _PAGE_MARKER in ns:
-        return "page"
-    fmt = _ROOT_LOCAL_NAME.get(local_name(root))
-    if fmt is not None and root.find(tag(_MANDATORY_CHILD[fmt], ns)) is not None:
-        return fmt
+        ns, root_name, _ = read_source_header(path)
+        if _ALTO_MARKER in ns:
+            return "alto"
+        if _PAGE_MARKER in ns:
+            return "page"
+        # Only a vendor namespace pays for the second question, and only it
+        # needs to: the two standard markers answered above without reading
+        # past the root element.
+        fmt = _ROOT_LOCAL_NAME.get(root_name)
+        if fmt is not None:
+            _, _, found = read_source_header(path, _MANDATORY_CHILD[fmt])
+            if found:
+                return fmt
     raise ParseError(
-        f"{path.name!r}: root {local_name(root)!r} in namespace {ns!r} is "
+        f"{path.name!r}: root {root_name!r} in namespace {ns!r} is "
         "neither ALTO nor PAGE — lidenbrock recognises a standard namespace, "
         f"or a root named {sorted(_ROOT_LOCAL_NAME)} carrying its schema's "
         "mandatory element (ALTO: Layout, PAGE: Page). Parse other formats "

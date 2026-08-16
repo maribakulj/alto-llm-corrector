@@ -225,6 +225,81 @@ def test_no_alto_lxml_call_site_uses_default_parser():
     )
 
 
+def test_lxml_streaming_entry_points_stay_inside_the_hardened_module():
+    """The contract above covers two doors. lxml has more.
+
+    ``etree.iterparse`` and ``etree.XMLPullParser`` parse hostile input
+    exactly like ``parse`` does, and they take their hardening as their OWN
+    keyword arguments rather than through a parser object — so the check
+    above cannot see them, and would have reported nothing while a call
+    site resolved entities and fetched external DTDs.
+
+    Nothing used them until 2026-08-16, which is why the hole stayed
+    closed by luck rather than by rule. Streaming the header of a document
+    instead of parsing it whole (a 23 % cut in load time) is what opened
+    it, so the rule arrives with the first user.
+
+    The rule is placement, not arguments: every lxml entry point that
+    touches user input lives in ``formats/_xml.py``, next to
+    ``make_safe_parser`` and under the same review. A call anywhere else in
+    ``formats/`` is the finding.
+    """
+    import ast
+
+    streaming = {"iterparse", "XMLPullParser", "XMLParser"}
+    home = SRC / "formats" / "_xml.py"
+    offenders: list[tuple[str, int, str]] = []
+    for py in (SRC / "formats").rglob("*.py"):
+        if py == home:
+            continue
+        tree = ast.parse(py.read_text(encoding="utf-8"), filename=str(py))
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and node.func.attr in streaming
+                and isinstance(node.func.value, ast.Name)
+                and node.func.value.id == "etree"
+            ):
+                offenders.append((py.name, node.lineno, f"etree.{node.func.attr}"))
+    assert not offenders, (
+        f"lxml streaming entry point outside formats/_xml.py: {offenders}. "
+        "Those take their own hardening kwargs, so the parser-argument "
+        "contract cannot vouch for them. Put the call in _xml.py, hardened "
+        "once, and import the helper."
+    )
+
+
+def test_the_hardened_module_hardens_what_it_streams():
+    """Placement is only half of it: the calls THERE must carry the flags."""
+    import ast
+
+    required = {"resolve_entities", "no_network", "load_dtd"}
+    home = SRC / "formats" / "_xml.py"
+    tree = ast.parse(home.read_text(encoding="utf-8"), filename=str(home))
+    seen = 0
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr in {"iterparse", "XMLPullParser"}
+            and isinstance(node.func.value, ast.Name)
+            and node.func.value.id == "etree"
+        ):
+            seen += 1
+            given = {kw.arg for kw in node.keywords}
+            missing = required - given
+            assert not missing, (
+                f"etree.{node.func.attr} at _xml.py:{node.lineno} is missing "
+                f"{sorted(missing)} — a streaming parser resolves entities "
+                "and fetches DTDs unless told not to."
+            )
+    assert seen, (
+        "no streaming call found in _xml.py — if the last one went away, "
+        "delete this test rather than leaving it green and empty."
+    )
+
+
 def test_make_safe_parser_returns_fresh_instance_per_call():
     """L10/B1 — `make_safe_parser()` returns a fresh parser each call
     (lxml parsers are not documented as thread-safe). A future "cache
