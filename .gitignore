@@ -42,3 +42,9 @@ coverage.xml
 # a run artifact, never a source file.
 /vision_out*/
 /corrected/
+
+# Le tier TÉLÉCHARGÉ du corpus externe : re-tiré à chaque run de CI par
+# tests/external_corpus/fetch.py. Le committer figerait dans le dépôt ce
+# que le script existe pour aller chercher — et le tier qui doit vivre
+# ici, lui, s'appelle pinned/ et est versionné exprès.
+tests/external_corpus/.cache/
