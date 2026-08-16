@@ -31,35 +31,50 @@ from __future__ import annotations
 
 import collections
 
+import pytest
+
 from tests._pipeline_harness import run_pipeline
 
-#: A document whose lines carry per-token confidences worth invalidating.
-_CORPUS = "X0000002.xml"
+#: One document per format. ALTO was the only one for a while, and that
+#: was the weaker half of the check: there the two surfaces agree
+#: STRUCTURALLY — a single ``record()`` site feeds the aggregate *from* the
+#: per-line counters, so they cannot drift. PAGE is where the property has
+#: teeth: ``PageRewriterMetrics.as_losses()`` and the per-line deltas are
+#: computed independently, which is the shape `R1` had.
+#:
+#: PAGE could not be exercised here at all until 2026-08-16: the harness
+#: imported the ALTO parser directly, so a PAGE file returned an empty
+#: manifest and any property asserted on it passed over nothing.
+_CORPORA = [
+    "X0000002.xml",
+    "page/Descartes1637_Discours_btv1b86069594_corrected_0014_page_raw.xml",
+]
 
 #: How many lines the run must actually damage. Below this the sum is small
 #: enough to agree by luck.
 _MINIMUM_DAMAGED_LINES = 3
 
 
-def _a_run_that_loses_something() -> object:
+def _a_run_that_loses_something(corpus: str) -> object:
     """Correct a few lines in a way that changes their word count.
 
     A changed word count rebuilds the line, which invalidates the OCR
     confidence the source asserted about the old reading — a real loss, and
     one the matrix says is counted per line.
     """
-    baseline = run_pipeline(_CORPUS, {})
+    baseline = run_pipeline(corpus, {})
     targets = [
         (outcome.line_id, outcome.source_text)
         for outcome in baseline.result.report.lines
         if outcome.source_text and len(outcome.source_text.split()) > 3
     ][:4]
     corrections = {line_id: f"{text} ajoute" for line_id, text in targets}
-    return run_pipeline(_CORPUS, corrections).result.report
+    return run_pipeline(corpus, corrections).result.report
 
 
-def test_the_per_line_losses_sum_to_the_aggregate() -> None:
-    report = _a_run_that_loses_something()
+@pytest.mark.parametrize("corpus", _CORPORA, ids=lambda c: c.split("/")[-1][:12])
+def test_the_per_line_losses_sum_to_the_aggregate(corpus: str) -> None:
+    report = _a_run_that_loses_something(corpus)
 
     per_line: collections.Counter[str] = collections.Counter()
     for outcome in report.lines:
@@ -76,9 +91,10 @@ def test_the_per_line_losses_sum_to_the_aggregate() -> None:
     )
 
 
-def test_the_run_really_loses_something() -> None:
+@pytest.mark.parametrize("corpus", _CORPORA, ids=lambda c: c.split("/")[-1][:12])
+def test_the_run_really_loses_something(corpus: str) -> None:
     """Otherwise the assertion above compares two empty dictionaries."""
-    report = _a_run_that_loses_something()
+    report = _a_run_that_loses_something(corpus)
 
     assert report.format_losses, (
         "the run lost nothing, so the agreement above is vacuous. Either "
