@@ -21,7 +21,9 @@ from pathlib import Path
 
 import pytest
 
-_REPO_ROOT = Path(__file__).resolve().parents[2]
+from tests._paths import REPO
+
+_REPO_ROOT = REPO
 
 # Files that all use the same `__version__` extraction regex. If you
 # add another consumer (eg. a new GitHub Action), append it here.
