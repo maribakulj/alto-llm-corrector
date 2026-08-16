@@ -27,6 +27,7 @@ from corrigenda.formats.alto._ns import (
     _int_attr,
     _tag,
     make_safe_parser,
+    read_source_tree,
 )
 from corrigenda.formats.alto._text import reconstruct_textline
 from corrigenda.core.protocols import RewriteResult
@@ -912,7 +913,7 @@ def rewrite_alto_file(
     # Hardened parser — see corrigenda.formats.alto._ns.make_safe_parser docstring
     # for the rationale. Using lxml's default here would expose every
     # rewrite to entity-amplification DoS via crafted ALTO uploads.
-    tree = etree.parse(str(xml_path), make_safe_parser())
+    tree = read_source_tree(xml_path)
     root = tree.getroot()
     ns = _detect_namespace(root)
     metrics = RewriterMetrics()

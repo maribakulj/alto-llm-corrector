@@ -15,6 +15,7 @@ from corrigenda.core._parse import parse_int_tolerant
 from corrigenda.formats._xml import (
     detect_namespace as _detect_namespace,
     make_safe_parser as make_safe_parser,
+    read_source_tree as read_source_tree,
     tag as _tag,
 )
 
@@ -90,6 +91,7 @@ __all__ = [
     "_detect_namespace",
     "_tag",
     "make_safe_parser",
+    "read_source_tree",
     "supports_metadata_item",
     "polygon_to_bbox",
 ]

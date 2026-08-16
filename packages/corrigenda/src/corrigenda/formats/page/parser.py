@@ -43,7 +43,7 @@ from corrigenda.formats._xml import classified_parse_errors
 from corrigenda.formats.page._ns import (
     _detect_namespace,
     _tag,
-    make_safe_parser,
+    read_source_tree,
     polygon_to_bbox,
 )
 from corrigenda.formats.page._text import canonical_line_text
@@ -191,7 +191,7 @@ def _parse_page_file(
     global_line_offset: int,
     pairing_policy: PairingPolicy,
 ) -> tuple[list[PageManifest], etree._Element]:
-    tree = etree.parse(str(xml_path), make_safe_parser())
+    tree = read_source_tree(xml_path)
     root = tree.getroot()
     ns = _detect_namespace(root)
 

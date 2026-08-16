@@ -244,6 +244,21 @@ class DocumentManifest(BaseModel):
     #: requires an explicit ``format_adapter`` on the pipeline — there is
     #: no implicit default format.
     source_format: str | None = None
+    #: Source files whose XML declaration did not match their bytes, as
+    #: ``{source_file: declared_encoding}``. The library read them as what
+    #: they ARE — always UTF-8, which is the only override the rule makes —
+    #: and names it here rather than performing it in silence: read as
+    #: declared, a UTF-8 file labelled ``ISO-8859-1`` yields ``clÃ©ricales``
+    #: where the document says ``cléricales``, and a corrector handed that
+    #: will repair it, delivering a text change no report could tell apart
+    #: from a correction (`V1`). The source file is never modified.
+    #:
+    #: A plain mapping rather than a named type on purpose: the public
+    #: surface is at its computed closure, and a new type reachable from
+    #: this model would extend it as a side effect. ``used`` would be the
+    #: constant ``"utf-8"`` in every entry, so nothing is lost.
+    #: Empty in the overwhelmingly common case.
+    source_encodings: dict[str, str] = Field(default_factory=dict)
 
     # ADR-011 — the counters are DERIVED from the pages. A stored copy
     # could contradict the content (the old validator existed to catch
