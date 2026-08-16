@@ -13,7 +13,6 @@ from copy import copy
 from dataclasses import dataclass
 from pathlib import Path
 
-import pytest
 from lidenbrock.formats.alto._text import reconstruct_textline
 from lidenbrock.core.hyphenation import (
     reconcile_hyphen_pair,
@@ -358,7 +357,6 @@ class TestChainedRewriting:
 X0000002_PATH = EXAMPLES / "X0000002.xml"
 
 
-@pytest.mark.skipif(not X0000002_PATH.exists(), reason="X0000002.xml not found")
 class TestX0000002ChainedZone:
     """Verify chained zone TL000016-TL000019 in real corpus."""
 

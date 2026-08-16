@@ -12,7 +12,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
 from lidenbrock.formats.alto.parser import parse_alto_file
 from lidenbrock.formats.alto.rewriter import rewrite_alto_file
 from lxml import etree
@@ -182,7 +181,6 @@ class TestContentPlusHypDash:
 SAMPLE_PATH = EXAMPLES / "sample.xml"
 
 
-@pytest.mark.skipif(not SAMPLE_PATH.exists(), reason="sample.xml not found")
 class TestSampleXmlDoubleDash:
     """Verify sample.xml no longer produces double-dash in ocr_text."""
 
