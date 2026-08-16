@@ -103,87 +103,64 @@ mesure. La file suit désormais les phases des décisions du 2026-08-16.
 Dans l'ordre. Un item se ferme quand son « fini quand » est vérifiable par
 quelqu'un qui n'a pas suivi le travail.
 
-### 1. Phase 0 — socle d'autonomie
+### ~~Phases 0 à 2~~ — **faites le 2026-08-16**
 
-**Fini quand** : ce fichier et `docs/PLAN.md` ne contredisent plus le dépôt, la
-PR courante est ouverte et abonnée, et le smoke-test de déploiement de `cinoc`
-teste une route qui existe.
+Le socle d'autonomie, la scission en trois dépôts, et le gros de « la
+bibliothèque devient publiable ». Ce dépôt ne contient plus que la
+bibliothèque : la démo est dans `saknussemm-demo`, les corpus, les
+campagnes, leur outillage et le scorer QE sont au banc. La CI est passée de
+13 jobs à 5 et exécute désormais l'extra `[vision]`, que rien ne lançait.
 
-- réconcilier ce journal et la section `M` du plan ✅
-- inscrire les dix décisions du 2026-08-16 dans `docs/PLAN.md` ✅
-- `cinoc` : la sonde de smoke interrogeait `/api/reports`, route supprimée
-  répondant 404, en `curl -s` sans `-f` ✅ *(cinoc #80, mergée)*
-- armer réellement la boucle ✅
+Le projet a aussi été renommé deux fois le même jour — `corrigenda` →
+`lidenbrock` → `saknussemm` — et l'arbre a été aplati : la bibliothèque
+EST le dépôt.
 
-### 2. Phase 1 — la scission
+### 1. Phase 3 — `0.10.0rc1`, puis `0.10.0`
 
-**Fini quand** les trois dépôts existent, chacun avec sa CI verte, et
-qu'aucun ne contient ce qui appartient à un autre.
+**Bloqué sur le mainteneur, et sur lui seul.** Deux configurations
+externes que personne d'autre ne peut faire : déclarer le *trusted
+publisher* sur pypi.org **et** test.pypi.org — projet `saknussemm`, dépôt
+`saknussemm`, workflow `publish-saknussemm.yml` — et créer les
+environments GitHub `testpypi` et `pypi`. Sans eux, le premier dispatch
+échoue à l'échange OIDC.
 
-- `saknussemm-demo` : extraire `backend/`, `frontend/`, `tools/e2e/`,
-  `Dockerfile`, `docker-compose.yml`, `docs/API.md`, `SECURITY.md`,
-  `.github/workflows/hf-sync.yml`
-- `cinoc` : recevoir `corpus/`, `measurements/`, `integrations/qe.py` et les
-  quatre scripts QE
-- ici : **retirer** le banc local (décision n°3), aplatir
-  `packages/saknussemm/*` à la racine, réduire la CI aux cinq jobs de la
-  bibliothèque
-- garder ici : `examples/` — **60 fichiers de test en dépendent**, les
-  fixtures sont la suite de tests d'une bibliothèque de parsing
+Ce qui reste ici : couper une section de release dans un `CHANGELOG` qui
+porte 1316 lignes sous `[Unreleased]`. Le geste demande de connaître le
+numéro, donc il suit la décision de publier plutôt que de la précéder.
 
-**Attention, mesuré** : dans `corpus/37-GT-BNL`, les XML pèsent 552 Ko et les
-PNG 33 Mo. La bibliothèque garde ses fixtures pour ~2 Mo et laisse partir tout
-le poids. Cinq fichiers de test seulement touchent au corpus.
+### 2. `T1`/`T3` — la liste des promesses
 
-### 3. Phase 2 — la bibliothèque devient publiable
+**La liste existe** : `docs/promises.md`, relevé du 2026-08-16. La borne
+n'est plus un compteur mais une couverture, et l'item se ferme quand la
+liste est couverte.
 
-**Fini quand** aucun code livré n'échappe à la CI et que le `CHANGELOG` porte
-une section de version.
+Fermées le jour même : quatre invariants d'EditScript dont les gardes
+existaient et que rien n'atteignait, plus deux promesses étendues à PAGE.
+Restent des « partielles », et trois « aucune » qui demandent une décision
+— figer l'union `EditOp`, faire converger les deux voies d'édition sur un
+même verdict, comparer les rôles de césure entre formats.
 
-- **le trou le plus sérieux** : aucun job n'installe `[vision]` ni `[qe]`.
-  `tests/test_vision.py` (14 tests) se saute en silence sur les trois versions
-  de Python, et `integrations/vision.py` est hors de la porte de couverture.
-  Ajouter un job qui installe Pillow (gratuit) ; `[qe]` part au banc, ce qui
-  ferme l'autre moitié
-- couper une section de release dans le `CHANGELOG` (1316 lignes sous
-  `[Unreleased]`)
-- `T1`/`T3` sous sa nouvelle borne : établir d'abord la **liste des promesses**
-  de `SPECS_LIB_V2.md`, puis une propriété par promesse non gardée
-- `CLAUDE.md`, `README`, `CONTRIBUTING` remis en accord avec un dépôt sans démo
+**Un trou d'implémentation attend un arbitrage** : `E5b`, la garde du
+mot-frontière, qui n'existe pas. Sa forme est une décision de conception,
+écrite dans `docs/promises.md`.
 
-### 4. Phase 3 — `0.10.0rc1`, puis `0.10.0`
+### 3. Phase 4 — l'intégration au banc
 
-**Passe la main au CLI** pour le dispatch et les deux configurations externes.
-Voir le tableau plus bas.
+Inchangée, et c'est le plus gros morceau restant. Cinq briques à ajouter à
+`cinoc`, chacune utile indépendamment de cette bibliothèque : une étape
+`LAYOUT → LAYOUT` et une source ALTO/PAGE ; des métriques d'identité de
+ligne ; la dé-césure dans le projecteur ; des runs répétés ; la vision pour
+l'adapter Ollama.
 
-### 5. Phase 4 — l'intégration au banc
+Le corpus et les campagnes sont déjà là-bas. Le scorer QE aussi, en dépôt
+d'attente — l'intégrer demande un arbitrage, un scorer n'étant pas une
+brique de pipeline.
 
-**Fini quand** `cinoc` sait répondre à « ce correcteur a-t-il déplacé du texte
-entre les lignes ? ». Cinq briques, chacune utile à `cinoc` indépendamment de
-`saknussemm` :
+### 4. Phase 5 — la mesure, puis Phase 6 — `review_required`
 
-1. une étape `LAYOUT → LAYOUT` et une source ALTO/PAGE — aujourd'hui un run
-   part **uniquement d'une image**
-2. des métriques d'**identité de ligne** — `Line.id` est parsé et réécrit des
-   deux côtés, **aucune métrique ne le lit** ; le patron existe pour les régions
-3. la **dé-césure** `HypPart1/2` dans le projecteur — spécifiée dans le code,
-   différée depuis toujours
-4. des **runs répétés** — zéro mécanisme aujourd'hui, toute la dispersion
-   affichée est inter-documents ; c'est ce que `M2` exige
-5. la **vision pour l'adapter Ollama**, aujourd'hui `text_only` — c'est ce qui
-   débloque `M3` à coût nul
-
-Puis le moteur `saknussemm` lui-même (décisions n°4 et n°5).
-
-### 6. Phase 5 — la mesure, sur le banc
-
-`M2` rejouée post-correctif, `M3` par modèles locaux, `M1` (qui demande aussi
-la notion de volume côté banc), `M7`. `M5` reste ici : c'est une porte de CI de
-ce dépôt, et elle demande de retirer `continue-on-error`.
-
-### 7. Phase 6 — `review_required` (`G1`-`G3`)
-
-La dernière fonctionnalité, et un ADR avant toute ligne de code. `V4`.
+Inchangées. `M5` est fermé (trois pages Gallica épinglées bloquent
+désormais un merge), `M4` est retiré sur mesure, et `M3` ne coûte plus rien
+— Ollama et ses modèles vision sont déjà sur la machine.
 
 ## Passe la main au CLI
 
@@ -352,3 +329,26 @@ Une ligne par réveil : date, item, résultat, ou la raison de l'arrêt.
   couper une section de release dans un `CHANGELOG` qui porte 1316 lignes
   sous `[Unreleased]`. Reste au mainteneur, et ça bloque la `0.10.0rc1` :
   les secrets HF de la démo, et le *trusted publisher* PyPI.
+- 2026-08-16 (fin de journée) — **le relevé des promesses a expliqué un
+  motif que je prenais pour de la négligence.** Il disait « PAGE est le
+  format sous-gardé », six promesses partielles pour cette seule raison. En
+  cherchant pourquoi, j'ai trouvé que le harnais de tests importait le
+  parseur ALTO directement — et que **63 modules de tests font pareil**,
+  six seulement passant par le loader. Sur un fichier PAGE valide, chacun
+  obtenait un manifeste de 0 page et 0 ligne, sans erreur. Toute propriété
+  qu'on y aurait affirmée passait au vert sur un run vide.
+
+  Le plus instructif : **un test épinglait cette mauvaise lecture comme
+  comportement attendu**, avec un commentaire disant « the silent mis-read,
+  still true ». Le danger était connu, documenté dans le docstring du
+  loader, et testé — traité comme un fait de la vie qu'on contourne plutôt
+  que comme un défaut qu'on retire.
+
+  Fermé à la source : le parseur ALTO refuse désormais ce qui n'est pas de
+  l'ALTO, ce qui corrige les 63 sites d'un coup sans en éditer un seul. Et
+  le harnais refuse un manifeste sans lignes, quelle qu'en soit la cause —
+  c'est la partie qui survit au correctif.
+
+  **La règle que j'en tire, pour les prochains tours** : quand une famille
+  entière de propriétés est faible sur un axe, chercher l'outil avant de
+  chercher la négligence. Personne n'a de raison de soupçonner un test vert.
