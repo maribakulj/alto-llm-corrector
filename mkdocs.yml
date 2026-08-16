@@ -1,5 +1,5 @@
 # Minimal mkdocs site for lidenbrock (P5).
-# Build locally:  pip install mkdocs && mkdocs serve -f packages/lidenbrock/mkdocs.yml
+# Build locally:  pip install mkdocs && mkdocs serve
 # Publishing the site (GitHub Pages / RTD) is a maintainer action; the
 # markdown sources under docs/ are fully readable on GitHub without it.
 site_name: lidenbrock

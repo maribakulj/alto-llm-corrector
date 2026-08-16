@@ -47,10 +47,10 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from tests._paths import REPO
+from tests._paths import REPO, SRC as _SRC
 
 REPO = REPO
-SRC = REPO / "packages" / "lidenbrock" / "src" / "lidenbrock"
+SRC = _SRC  # the arithmetic lives in tests._paths, and only there
 ADR_DIR = REPO / "docs" / "adr"
 SPEC = REPO / "SPECS_LIB_V2.md"
 

@@ -36,6 +36,17 @@ from tests._paths import TESTS
 #: that never climbs is not depth arithmetic and is not matched.
 _CLIMBS = re.compile(r"Path\(__file__\)(?:\.resolve\(\))?\.(parent\b|parents\[)")
 
+#: The second shape, and the one that got through. Flattening the tree on
+#: 2026-08-16 broke a line that took a name already derived from the file
+#: and climbed two more levels off it — depth arithmetic the pattern above
+#: cannot see, because ``Path(__file__)`` is nowhere near it. (Written in
+#: words for the same reason as the docstring: this module scans for the
+#: shape and would otherwise report itself, which it did on the first run.)
+#: Climbing two or more levels off ANY name is the tell — one hop up is
+#: ordinary, "the directory this file is in"; a chain of them is a claim
+#: about how deep the tree is.
+_CLIMBS_FROM_A_NAME = re.compile(r"\b\w+\.parent\.parent\b|\b\w+\.parents\[[1-9]")
+
 #: Files allowed to know where they are.
 _ANCHORED_ON_PURPOSE = {
     "_paths.py": "the definition — something has to compute it once",
@@ -58,9 +69,10 @@ def test_no_module_walks_up_from_its_own_file() -> None:
         relative = str(path.relative_to(TESTS))
         if relative in _ANCHORED_ON_PURPOSE:
             continue
-        hits = _CLIMBS.findall(path.read_text(encoding="utf-8"))
+        source = path.read_text(encoding="utf-8")
+        hits = len(_CLIMBS.findall(source)) + len(_CLIMBS_FROM_A_NAME.findall(source))
         if hits:
-            offenders[relative] = len(hits)
+            offenders[relative] = hits
     assert not offenders, (
         f"module(s) computing a path from their own depth: {offenders}. "
         "Import REPO / PKG / SRC / TESTS / EXAMPLES from tests._paths "

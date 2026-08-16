@@ -39,7 +39,7 @@ import pytest
 from tests._paths import SRC
 
 SRC = SRC
-EXAMPLES = SRC.parent.parent.parent.parent / "examples"
+from tests._paths import EXAMPLES  # noqa: E402  (the arithmetic lives there)
 
 #: Modules gated behind an optional dependency. Nothing on the base install
 #: path may import these.

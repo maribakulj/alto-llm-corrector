@@ -63,9 +63,10 @@ from tests._ast_writes import written_attributes
 from tests._paths import SRC
 
 SRC = SRC
-REPO = SRC.parent.parent.parent.parent
+from tests._paths import REPO  # noqa: E402
+
 EXAMPLES = REPO / "examples"
-CORPUS_GT = SRC.parent.parent / "tests" / "corpus_gt"
+CORPUS_GT = REPO / "tests" / "corpus_gt"
 
 
 def _one_line(reason: str | None = None):

@@ -7,12 +7,17 @@ non-commercial reuse from commercial reuse of it. A test fixture is the
 first; a wheel on PyPI is a redistribution channel whose downstream use
 nobody controls.
 
-That is fine today for a reason worth pinning rather than rediscovering:
-the corpora live at the REPOSITORY root, outside ``packages/lidenbrock/``
-entirely, and the sdist declares an explicit four-entry allowlist. Both
-facts are load-bearing and both are one careless edit away from being
-false — a ``sdist.include`` widened to ``".."``, a corpus moved under the
-package "so the tests can find it".
+It used to rest on two facts. The corpora lived at the repository root,
+OUTSIDE ``packages/lidenbrock/`` — so no corpus could be under the
+distribution root at all — and the sdist declared an explicit four-entry
+allowlist.
+
+**The first fact is gone.** Flattening the tree on 2026-08-16 made the
+package root the repository root, and ``corpus/`` is now inside it. The
+layout no longer protects anything; the allowlist is alone. That is not a
+regression to fix — it is a defence that was traded for a flat tree, and
+the trade is only safe because the checks below read the BUILT artefacts
+rather than the configuration.
 
 **And asserting the declaration was not enough.** This file used to check
 only that ``sdist.include`` still held its four entries, which it did —
@@ -43,7 +48,7 @@ import pytest
 from tests._paths import PKG
 
 _PACKAGE_ROOT = PKG
-_REPO_ROOT = _PACKAGE_ROOT.parent.parent
+_REPO_ROOT = _PACKAGE_ROOT  # flat tree: the package IS the repository
 
 #: Everything the sdist is allowed to carry. Widening this list is a
 #: licensing decision, not a packaging convenience.
@@ -95,13 +100,37 @@ def test_the_wheel_ships_the_package_and_nothing_else() -> None:
     assert wheel["packages"] == ["src/lidenbrock"]
 
 
-def test_the_corpora_live_outside_the_package() -> None:
-    """If a corpus were moved under the package it would ship in the wheel,
-    allowlist or not."""
+def test_the_corpora_are_kept_out_by_the_allowlist_not_by_geography() -> None:
+    """What used to protect the corpora, and what protects them now.
+
+    Until 2026-08-16 the package sat in ``packages/lidenbrock/`` and the
+    corpora sat above it, so no corpus COULD be under the distribution
+    root and this test asserted exactly that. Flattening the tree removed
+    that guarantee: the package root is the repository root, and
+    ``corpus/`` is now inside it.
+
+    Nothing was quietly lost, but something was **traded**, and it is
+    worth naming. The remaining defence is not a layout, it is a pair of
+    allowlists — ``sdist.include`` (four anchored entries) and the wheel's
+    ``packages = ["src/lidenbrock"]`` — and the tests either side of this
+    one check them against the artefacts that were actually BUILT, not
+    against what the configuration claims. That distinction is not
+    theoretical: the declaration passed while the built sdist carried two
+    corpus READMEs, because hatchling matched the entries as patterns.
+
+    So this test now pins the premise those other two rest on: the corpora
+    are present, they are inside the distribution root, and therefore the
+    allowlist is the only thing standing between them and a release.
+    """
     corpus_root = _REPO_ROOT / "corpus"
     assert corpus_root.is_dir(), "fixture check: the corpora are expected here"
-    assert _PACKAGE_ROOT not in corpus_root.parents
-    assert not (_PACKAGE_ROOT / "corpus").exists()
+    assert _PACKAGE_ROOT in corpus_root.parents, (
+        "the tree is flat: corpus/ is expected INSIDE the distribution root. "
+        "If this fails, the layout changed again and the comment above is "
+        "now the wrong story — re-read it before adjusting the assertion."
+    )
+    wheel = _pyproject()["tool"]["hatch"]["build"]["targets"]["wheel"]
+    assert not any("corpus" in entry for entry in wheel["packages"])
 
 
 def test_the_package_tree_carries_no_scan_payload() -> None:

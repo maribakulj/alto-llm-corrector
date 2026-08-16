@@ -21,11 +21,15 @@ from __future__ import annotations
 
 from pathlib import Path
 
-#: The repository root — ``packages/lidenbrock/tests`` is three deep.
-REPO = Path(__file__).resolve().parents[3]
+#: The repository root — ``tests/`` sits directly under it since the tree
+#: was flattened on 2026-08-16.
+REPO = Path(__file__).resolve().parents[1]
 
-#: The library's distribution root (``pyproject.toml`` lives here).
-PKG = REPO / "packages" / "lidenbrock"
+#: The library's distribution root (``pyproject.toml`` lives here). The
+#: same directory as ``REPO`` now, and kept as a distinct name on purpose:
+#: the two answer different questions, and a caller asking for the
+#: distribution root should not have to know they currently coincide.
+PKG = REPO
 
 #: The library's importable source tree.
 SRC = PKG / "src" / "lidenbrock"
