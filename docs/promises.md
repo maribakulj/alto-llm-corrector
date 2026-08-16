@@ -61,7 +61,7 @@ serait moulée sur l'existant et n'aurait rien trouvé.
 | §6.3 | rôles de césure équivalents entre formats | **aucune** — le test qui porte ce titre compare deux variantes du **même** format |
 | — | somme des pertes par ligne = agrégat | **fermée le 2026-08-16** — étendue à PAGE, le format où les deux comptes sont calculés indépendamment. Ils s'accordent : vérifié, plus supposé |
 | — | le rapport dit du fichier ce qui y est | **partielle** — contenus et identités gardés, compteurs non |
-| — | rejouer le script rendu reproduit le fichier | **partielle** — ALTO seulement, alors que PAGE porte les transformations post-décision que la propriété existe pour attraper |
+| — | rejouer le script rendu reproduit le fichier | **fermée le 2026-08-16** — étendue à PAGE, le format qui porte des transformations *après* la décision |
 | — | niveaux de fidélité déclarés | **partielle** — ALTO seulement ; PAGE ne peut structurellement jamais annoncer `source_spelling`, et que ce soit correct n'est vérifié nulle part |
 | — | `run()` ne mute jamais son entrée | **partielle** — jamais comparé sur l'objet entier ; les champs de césure, que le planificateur modifie réellement sur sa copie, ne sont pas couverts |
 | — | identité de ligne = `(page_id, line_id)` | **gardée**, ALTO et PAGE |
@@ -118,8 +118,19 @@ négligence : l'outil principal ne pouvait pas exercer ce format, et il
 écrit dans le module même qui existe pour empêcher ça.
 
 Le harnais refuse désormais un manifeste sans lignes, quelle qu'en soit la
-cause — mauvais parseur, fixture vide, chemin résolu ailleurs. C'est la
-partie du correctif qui survivra au correctif.
+cause — mauvais parseur, fixture vide, chemin résolu ailleurs.
+
+**Et le défaut a été fermé à sa source**, parce qu'il ne se limitait pas au
+harnais : **63 modules de tests importent le parseur ALTO directement**,
+six seulement passent par le loader. Le parseur ALTO refuse désormais un
+document qui n'est pas de l'ALTO, au lieu d'en rendre un manifeste vide —
+ce qui corrige les 63 sites d'un coup, sans en éditer un seul.
+
+Le plus parlant : **un test épinglait la mauvaise lecture comme
+comportement attendu**, avec un commentaire disant « the silent mis-read,
+still true ». Le danger était connu, documenté, testé — et traité comme un
+fait de la vie qu'on contourne, plutôt que comme un défaut qu'on retire. Ce
+test affirme maintenant le refus.
 
 ## Ce qui a été fermé depuis le relevé
 

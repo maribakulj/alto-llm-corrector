@@ -64,11 +64,27 @@ def test_alto_batch_matches_the_direct_alto_builder():
     )
 
 
-def test_page_file_builds_a_page_manifest_not_an_empty_alto_one():
-    """The regression this module exists for: the ALTO parser applied to
-    this exact file yields 0 pages / 0 lines without raising."""
-    empty = build_alto_manifest([(_PAGE_SAMPLE, _PAGE_SAMPLE.name)])
-    assert empty.total_lines == 0  # the silent mis-read, still true
+def test_the_alto_parser_refuses_a_page_file_instead_of_emptying_it():
+    """The regression this module exists for, closed at the source.
+
+    Until 2026-08-16 this test asserted the opposite, with a comment
+    reading "the silent mis-read, still true": the ALTO parser applied to
+    a valid PAGE file found no ALTO pages and returned a manifest of zero
+    pages and zero lines, without raising. The loader existed as the way
+    around it, and the hazard was pinned here as a fact of life.
+
+    It was not a fact of life, it was a defect with a test protecting it.
+    63 test modules import the ALTO parser directly, so any property
+    anyone tried to assert on a PAGE document held over an empty run and
+    reported success — which is the likeliest explanation for PAGE being
+    the under-guarded format across the whole promise audit.
+
+    Refusing costs nothing legitimate: a caller who wants ALTO has ALTO,
+    and a caller who does not know what it has is exactly who should be
+    going through the loader.
+    """
+    with pytest.raises(ParseError, match="not ALTO"):
+        build_alto_manifest([(_PAGE_SAMPLE, _PAGE_SAMPLE.name)])
 
     manifest = build_document_manifest([(_PAGE_SAMPLE, _PAGE_SAMPLE.name)])
     assert manifest.source_format == "page"

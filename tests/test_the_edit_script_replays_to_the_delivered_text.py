@@ -40,13 +40,15 @@ end.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from lxml import etree
 
 from saknussemm.core.editing import apply_edit_script
 from saknussemm.core.schemas import LineStatus
 from saknussemm.formats.alto._ns import _detect_namespace
 from saknussemm.formats.alto._text import reconstruct_textline
-from saknussemm.formats.alto.parser import build_document_manifest
+from saknussemm.formats.loader import build_document_manifest
 
 from tests._paths import EXAMPLES
 from tests._pipeline_harness import PipelineRun, run_pipeline
@@ -207,4 +209,69 @@ def test_the_run_exercises_both_outcomes() -> None:
         assert delivered[line_id] == canonical[line_id], (
             f"{line_id} reverted yet the file does not carry its source "
             "text — the fixture no longer produces the case it exists for."
+        )
+
+
+# ---------------------------------------------------------------------------
+# The same property, on PAGE. It could not be written before 2026-08-16:
+# the harness imported the ALTO parser, so a PAGE file produced an empty
+# manifest and any assertion here would have held over nothing.
+#
+# PAGE is where this property has the most to catch. Its rewriter applies
+# transformations AFTER the decision — the break character is forced back
+# to the source's spelling, `Word` children are dropped when a correction
+# changes the word count — and each of those is a chance for the delivered
+# text to stop matching the script that claims to produce it.
+# ---------------------------------------------------------------------------
+
+_PAGE_CORPUS = "page/Descartes1637_Discours_btv1b86069594_corrected_0014_page_raw.xml"
+
+
+def _delivered_page_text_by_line(xml: bytes, tmp_path: Path) -> dict[str, str]:
+    """Re-read a delivered PAGE file with the library's own PAGE parser.
+
+    Parsing the artefact rather than trusting the run's own view is the
+    whole point: the ALTO half of this file uses the rewriter's reader for
+    the same reason. A test that reconstructs the text its own way proves
+    that two test helpers agree.
+    """
+    written = tmp_path / "delivered.page.xml"
+    written.write_bytes(xml)
+    doc = build_document_manifest([(written, written.name)])
+    return {lm.line_id: lm.ocr_text for page in doc.pages for lm in page.lines}
+
+
+def test_replaying_the_script_reproduces_the_delivered_page_file(
+    tmp_path: Path,
+) -> None:
+    source = build_document_manifest([(EXAMPLES / _PAGE_CORPUS, _PAGE_CORPUS)])
+    canonical = {lm.line_id: lm.ocr_text for page in source.pages for lm in page.lines}
+
+    targets = [lid for lid, text in canonical.items() if len(text.split()) > 3][:5]
+    assert targets, "the PAGE fixture has no line long enough to correct"
+    run = run_pipeline(
+        _PAGE_CORPUS,
+        {line_id: f"{canonical[line_id]} ajoute" for line_id in targets},
+    )
+
+    delivered = _delivered_page_text_by_line(
+        run.result.corrected_files[_PAGE_CORPUS], tmp_path
+    )
+    replayed = _replay(run, canonical)
+
+    changed = {
+        line_id for line_id, text in delivered.items() if canonical.get(line_id) != text
+    }
+    assert changed, (
+        "no line changed in the delivered PAGE file, so the comparison "
+        "below holds over nothing"
+    )
+    for line_id in sorted(changed):
+        assert replayed.get(line_id) == delivered[line_id], (
+            f"{line_id}: replaying the delivered script does not reproduce "
+            f"the delivered PAGE text.\n"
+            f"  replayed:  {replayed.get(line_id)!r}\n"
+            f"  delivered: {delivered[line_id]!r}\n"
+            "The script is the run's account of what it did; a line the "
+            "file spells differently is an edit the account does not carry."
         )
