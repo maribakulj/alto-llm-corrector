@@ -74,8 +74,14 @@ from corrigenda import CorrectionPipeline  # noqa: E402
 from corrigenda.core.editing import EditScript, ReplaceLine  # noqa: E402
 from corrigenda.core.protocols import ProducerMetadata  # noqa: E402
 from corrigenda.core.quality import RoutingPolicy  # noqa: E402
+from corrigenda.core.pairing import (  # noqa: E402
+    HYPHEN_CHARS,
+    link_hyphen_pairs,
+    trailing_hyphen_char,
+)
 from corrigenda.core.schemas import (  # noqa: E402
     DocumentManifest,
+    HyphenRole,
     ImageAsset,
     ImageTransform,
 )
@@ -125,6 +131,52 @@ def corpus_cer(pairs: list[tuple[str, str]]) -> float:
 # ---------------------------------------------------------------------------
 
 
+def rederive_heuristic_hyphenation(doc: DocumentManifest) -> None:
+    """Re-derive text-detected hyphenation after the input text is swapped in.
+
+    Both input modes build the manifest by parsing the GROUND-TRUTH ALTO
+    and then overwriting every ``ocr_text``. Hyphenation is detected in
+    the parser's first pass, on the text present at parse time — so
+    without this, the manifest keeps hyphenation derived from the HUMAN
+    transcription while carrying OCR text. That is a state no parser can
+    produce: a heuristic PART1 is heuristic *because* its text ends on a
+    break mark, so the note and the text cannot disagree.
+
+    Measured on ``corpus/37-GT-BNL`` with the 2026-07-25 sidecar: the GT
+    has 24 lines ending in ``⸗``, the Tesseract reading has **zero**, and
+    22 of the 94 PART1/BOTH lines ended up marked as break lines over
+    text with no break mark. `542c783` — which taught the parser the
+    whole repertoire — made that reachable, and the 2026-08-14 campaign
+    read the resulting pair fallbacks as a quality regression. They were
+    an artefact of this function's absence.
+
+    Explicit hyphenation (``SUBS_TYPE``/``HYP`` in the markup) is left
+    alone: it is asserted by the file, not read off the text, so swapping
+    the text does not invalidate it. This corpus has none — all 94 break
+    lines are heuristic.
+
+    The derivation itself stays in the library: ``trailing_hyphen_char``
+    is the parser's own predicate (repertoire + the alphabetic-before
+    rule that rejects ``1789-``), and ``link_hyphen_pairs`` is the
+    parser's own second pass (geometric vetting, blank lines skipped
+    over). What lives here is the wiring, not a second copy of the rule.
+    """
+    for page in doc.pages:
+        for line in page.lines:
+            if line.hyphen_source_explicit or line.hyphen_forward_explicit:
+                continue
+            line.hyphen_role = HyphenRole.NONE
+            line.hyphen_pair_line_id = None
+            line.hyphen_pair_page_id = None
+            line.hyphen_subs_content = None
+            line.hyphen_forward_pair_id = None
+            line.hyphen_forward_pair_page_id = None
+            line.hyphen_forward_subs_content = None
+            if trailing_hyphen_char(line.ocr_text, HYPHEN_CHARS) is not None:
+                line.hyphen_role = HyphenRole.PART1
+        link_hyphen_pairs(page.lines)
+
+
 def apply_ocr_manifest(
     doc: DocumentManifest, readings: dict[str, str]
 ) -> tuple[DocumentManifest, dict[tuple[str, str], str]]:
@@ -147,6 +199,7 @@ def apply_ocr_manifest(
             raw = readings.get(line.line_id)
             if raw:
                 line.ocr_text = raw
+    rederive_heuristic_hyphenation(ocred)
     return ocred, gt_by_line
 
 
@@ -178,6 +231,7 @@ def degrade_manifest(
             ]
             line.ocr_text = " ".join(tokens)
             index += 1
+    rederive_heuristic_hyphenation(degraded)
     return degraded, gt_by_line
 
 
