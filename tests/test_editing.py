@@ -366,3 +366,117 @@ def test_e2_rejects_colocated_insertion_and_replacement():
     # rejected as an overlap, so '6' can never survive a supposed [2,7) wipe.
     assert "6" not in res.text_by_id.get("l1", "0123456789")[:6] or res.rejected
     assert any(r.reason == "e2_overlap" for r in res.rejected)
+
+
+# ---------------------------------------------------------------------------
+# The four EditScript invariants the promise audit found unguarded
+# (`docs/promises.md`, 2026-08-16). Three were live guards that no test ever
+# reached; the fourth had a test carrying the property's name and not
+# testing it.
+# ---------------------------------------------------------------------------
+
+
+def test_e2_right_to_left_is_the_only_order_that_gives_this_result():
+    """E2 — spans apply right to left, and here it is the difference.
+
+    The test that carried this name replaced one character with one
+    character, twice. Both orders give the same string, so it asserted the
+    property's name and not the property: applying left to right would have
+    passed it unchanged.
+
+    A length-CHANGING replacement is what separates them. Growing ``[0,2)``
+    by one character shifts every offset after it, so a naive left-to-right
+    pass would then read ``[5,6)`` off the *new* string and hit the wrong
+    character. The two results are spelled out below rather than computed,
+    because a test that derives its expectation the same way the code does
+    proves only that the code agrees with itself.
+    """
+    res = apply_edit_script(
+        EditScript(
+            ops=[
+                ReplaceSpan(
+                    line_id="l1", anchor=RangeAnchor(start=0, end=2), text="XYZ"
+                ),
+                ReplaceSpan(line_id="l1", anchor=RangeAnchor(start=5, end=6), text="Q"),
+            ]
+        ),
+        {"l1": "abcdefgh"},
+    )
+    assert res.text_by_id == {"l1": "XYZcdeQgh"}
+    assert res.text_by_id["l1"] != "XYZcdQfgh", (
+        "this is what a left-to-right pass produces: the second span read "
+        "its offsets off the string the first one had already grown"
+    )
+
+
+def test_e3_a_newline_is_refused_on_the_span_path_too():
+    """E3 — the guard exists in the span branch; nothing reached it.
+
+    Every newline test went through ``replace_line``. A line separator
+    arriving inside a span replacement would have been caught, but only by
+    luck of implementation rather than by anything that would notice if the
+    branch were removed.
+    """
+    res = apply_edit_script(
+        EditScript(
+            ops=[
+                ReplaceSpan(
+                    line_id="l1", anchor=RangeAnchor(start=0, end=3), text="ab\ncd"
+                )
+            ]
+        ),
+        {"l1": "abcdefgh"},
+    )
+    assert any(r.reason == "e3_newline" for r in res.rejected)
+    assert res.text_by_id.get("l1", "abcdefgh") == "abcdefgh"
+
+
+def test_e3_a_span_may_not_empty_the_line():
+    """E3 — deletion by span is allowed, emptying the line is not.
+
+    The permissive half was tested (``text=""`` accepted while the line
+    survives); the refusal that bounds it was a dead branch. Without it,
+    "a span may delete" would have no edge.
+    """
+    res = apply_edit_script(
+        EditScript(
+            ops=[ReplaceSpan(line_id="l1", anchor=RangeAnchor(start=0, end=3), text="")]
+        ),
+        {"l1": "abc"},
+    )
+    assert res.rejected, "emptying a line by span must be refused"
+    assert res.text_by_id.get("l1", "abc") == "abc"
+
+
+def test_e4_the_budget_is_per_line_and_accumulates_across_ops():
+    """E4 — two ops, each under the per-op bound, over it together.
+
+    Every E4 test used a single operation, which cannot distinguish a
+    per-op bound from a per-line one: with one op the two are the same
+    number. The accumulation is the whole point of saying "per line", and
+    it was the one thing unexercised.
+
+    Sized against the same line by a first op that is accepted, so a
+    failure here means the budget did not carry across — not that the
+    single op was already too large.
+    """
+    line = "a" * 40
+    guards = GuardConfig(edit_line_max_changed_chars=12)
+    res = apply_edit_script(
+        EditScript(
+            ops=[
+                ReplaceSpan(
+                    line_id="l1", anchor=RangeAnchor(start=0, end=8), text="bbbbbbbb"
+                ),
+                ReplaceSpan(
+                    line_id="l1", anchor=RangeAnchor(start=20, end=28), text="cccccccc"
+                ),
+            ]
+        ),
+        {"l1": line},
+        guard_config=guards,
+    )
+    assert res.rejected, (
+        "8 + 8 changed characters must exceed a 12-character line budget; "
+        "if this passes, the budget is being applied per operation"
+    )

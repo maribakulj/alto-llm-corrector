@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Saknussemm is a post-OCR text-correction **library** (`packages/saknussemm/`, ALTO and PAGE XML). It does NOT do OCR, resegmentation, line merging/splitting, translation, or text modernization.
+Saknussemm is a post-OCR text-correction **library** (ALTO and PAGE XML). It does NOT do OCR, resegmentation, line merging/splitting, translation, or text modernization.
 
 **This repository is the library, and nothing else.** Two sibling repositories consume it, and both import it — never the reverse:
 
@@ -15,7 +15,7 @@ Saknussemm is a post-OCR text-correction **library** (`packages/saknussemm/`, AL
 
 A consumer's need that seems to require this library to name or special-case it is either a missing injection point — fix it generically, here — or out of scope (`SPECS_LIB_V2.md` §12, §15).
 
-Normative docs: `README.md`, `SPECS_LIB_V2.md` (the contract — what the library must be), `docs/PLAN.md` (**the single live plan** — what remains and in what order), `packages/saknussemm/docs/`, `CONTRIBUTING.md`. Findings live in `docs/audit/` and carry no plan. Everything under `docs/history/` is frozen history — never trust it for current module locations, and never update it to match code. It also predates the rename and says `corrigenda` throughout; that is deliberate, and its README says why.
+Normative docs: `README.md`, `SPECS_LIB_V2.md` (the contract — what the library must be), `docs/PLAN.md` (**the single live plan** — what remains and in what order), `docs/promises.md` (what the contract promises and what guards it), `CONTRIBUTING.md`. Findings live in `docs/audit/` and carry no plan. Everything under `docs/history/` is frozen history — never trust it for current module locations, and never update it to match code. It also predates the rename and says `corrigenda` throughout; that is deliberate, and its README says why.
 
 There is exactly ONE plan. Three competing, unratified ones were consolidated into `docs/PLAN.md` on 2026-07-25 and the originals moved to `docs/history/`; do not write a second, and do not revive the old ones.
 
@@ -32,7 +32,6 @@ Two standing rules from that plan, in force until it says otherwise:
 ## Common Commands
 
 ```bash
-cd packages/saknussemm
 pip install -e '.[test,typecheck]'   # the two toolchains, declared once in
                                      # pyproject so they mean the same thing
                                      # here and in CI. Without lxml-stubs,
@@ -46,7 +45,7 @@ pytest tests/test_x0000002.py::test_name -v   # a single test
 
 ## Architecture
 
-### Core Pipeline (in `packages/saknussemm/src/saknussemm/`)
+### Core Pipeline (in `src/saknussemm/`)
 
 The correction flow is: **Parse → Chunk → Enrich → LLM Call → Validate → Reconcile → Rewrite**
 
