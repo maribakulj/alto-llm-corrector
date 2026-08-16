@@ -16,7 +16,11 @@ Répartition des rôles, à tenir :
 - **`docs/history/`** est gelé. Ne jamais s'y fier pour l'état courant, et ne
   jamais y renvoyer depuis un document normatif.
 
-Dernière mise à jour : 2026-08-06, après un audit structurel externe (§ `RM`).
+Dernière mise à jour : 2026-08-16 — dix arbitrages qui redécoupent le
+périmètre (§ « Décisions déléguées — 2026-08-16 »). Ils ne rouvrent aucun item
+et n'en ferment aucun : ils sortent de ce dépôt la démo, le banc et les corpus,
+et déplacent l'exécution de la mesure vers `cinoc`. Révision précédente :
+2026-08-06, après un audit structurel externe (§ `RM`).
 Cette révision **ne change ni le diagnostic ni les priorités** : elle ajoute une
 vague `RM` de dette *structurelle* — un défaut latent, un instrument de mesure
 faussé, et de la réduction — qui ne ferme aucun item `L`, `R` ou `M` mais rend
@@ -143,6 +147,102 @@ Ce que l'épisode laisse, et qui est plus utile que la décision annulée :
 (`M2`/`M3`), les licences de corpus (`M5`/`M6`), la conception de
 `review_required` (`G*`), et le tag de publication. Ils passent par le CLI —
 voir `docs/AUTOPILOT.md`.
+
+---
+
+## Décisions déléguées — 2026-08-16
+
+Dix arbitrages, pris par le mainteneur après une revue d'état complète et une
+cartographie de `cinoc`. Ils **ne rouvrent aucun item `L`, `R`, `S` ou `RM`**
+et ne contestent aucun constat. Ils déplacent des frontières : ce que ce dépôt
+contient, où la mesure s'exécute, et ce qui vaut publication. Comme le bloc du
+2026-08-11, chacun est réversible en modifiant ce paragraphe.
+
+**1. Trois dépôts, un seul livrable.** `corrigenda` est la **bibliothèque, et
+rien d'autre**. Deux dépôts la servent sans en faire partie : `cinoc` (le banc,
+qui existait déjà et que personne ici n'avait relié au projet) et
+`corrigenda-demo` (la démo web, qui sort d'ici). La règle de dépendance de
+`CLAUDE.md` est inchangée et s'étend : **les deux importent la bibliothèque,
+jamais l'inverse.**
+
+**2. La démo part maintenant, pas « à la forme finale ».** `backend/`,
+`frontend/`, `tools/e2e/`, `Dockerfile`, `docker-compose.yml`, `docs/API.md`,
+`SECURITY.md` et le workflow HF Spaces s'en vont dans `corrigenda-demo`.
+`SECURITY.md` disait déjà « la démo se retire quand la bibliothèque atteint sa
+forme finale » — la date était la seule chose qui manquait. Effet de bord
+gratuit : le workflow `Sync to HF Spaces`, **rouge à chaque push depuis au
+moins le 2026-08-14** parce que Hugging Face refuse les PNG de corpus, part
+avec ce qu'il déployait.
+
+**3. Le banc local est RETIRÉ, pas déménagé.** `scripts/vision_benchmark.py`
+(759 l.), `benchmark.py`, `run_vision.py`, `providers_multimodal.py`,
+`audit_run_lines.py` ne sont pas portés ailleurs : `cinoc` fait la même chose
+avec 24 métriques au lieu d'une, des tests de significativité, et une métrique
+validée à 1e-9 contre le scorer HIPE officiel. **Porter un instrument dont on
+vient de prouver qu'il fausse ses propres résultats serait porter le défaut
+avec.** Les corpus (`corpus/`, 43 Mo) et les campagnes (`measurements/`) le
+suivent : la GT ALTO+images de `37-GT-BNL` est exactement la couche
+structurelle qui manque au corpus texte que `cinoc` possède déjà sur la même
+source.
+
+**4. `corrigenda` devient une brique du socle de `cinoc`**, derrière un extra
+`cinoc[corrigenda]`, comme les 19 autres moteurs — et non un plugin tiers. Un
+plugin tiers est **refusé en mode public par conception** là-bas, donc il
+n'apparaîtrait jamais dans la vitrine ; or la comparaison « OCR→LLM nu » contre
+« OCR→corrigenda(LLM) » est la démonstration la plus directe de ce que cette
+bibliothèque apporte.
+
+**5. Le module réutilise la couche fournisseur de `cinoc`.** Le module prend un
+paramètre `llm=<adapter>` plutôt que d'embarquer ses propres clients : il
+hérite ainsi des quatre fournisseurs, du cap de concurrence réseau, des retries
+429 et des seize prompts curés par période.
+
+**6. Le scorer QE part au banc.** `integrations/qe.py` et ses quatre scripts
+rejoignent `cinoc`. La question que le scorer pose — « est-ce que ça vaut le
+coup d'appeler le modèle sur cette ligne ? » — est **économique**, et `cinoc`
+porte déjà une section de rapport économie (coût, débit, Pareto, coût
+marginal). Ce dépôt garde le **protocole** `QEScorer`, qui est le point
+d'injection ; il perd une implémentation qu'aucune CI n'exécute, dont les tests
+se sautent partout, dont la calibration presse-19e est provisoire, et dont le
+bundle de 545 Mo n'a **aucun canal de distribution** — `pip install
+corrigenda[qe]` livre aujourd'hui un extra inutilisable.
+
+**7. `0.10.0rc1` avant `0.10.0`, et le tag n'est pas une exigence de PyPI.**
+Vérifié : ni PyPI, ni TestPyPI, ni l'OIDC ne demandent de tag. C'est
+`.github/workflows/publish-corrigenda.yml` qui l'exige, dans une étape écrite
+exprès pour qu'un `workflow_dispatch` distrait ne publie pas ce que `main`
+pointe. La contrainte est donc **la nôtre**, et négociable. Elle n'est pas
+levée : on tague un `rc` de répétition. Ce qui ne se reprend pas n'est pas le
+tag (`git tag -d` suffit) mais le **numéro consommé sur l'index** — d'où le
+`rc`, qui répète sans dépenser `0.10.0`. La décision n°2 du 2026-08-11
+(« aucun tag avant une v1 aboutie ») **tient** : un `rc` de répétition
+TestPyPI n'est pas la publication d'une version.
+
+**8. La borne de `T1`/`T3` cesse d'être un compteur.** Le compteur mesurait
+l'effort, pas la couverture, et il butait sur une question qu'il ne pouvait pas
+trancher : deux des cinq propriétés n'avaient trouvé aucun défaut du produit
+mais un **angle mort de la suite entière** — une mutation réaliste que les 1400
+autres tests laissaient au vert. Remplacé par une **liste finie** : *chaque
+promesse vérifiable énoncée dans `SPECS_LIB_V2.md` a au moins une propriété
+métamorphique ou différentielle qui la garde, prouvée par mutation.* Quand la
+liste est couverte, `T1`/`T3` est **clos**, pas épuisé. Premier geste de
+l'item : établir la liste des promesses, qui est aussi un livrable citable
+pour la revue externe `P3`.
+
+**9. Périmètre sur `cinoc`.** On n'y touche que pour ce que l'intégration
+exige, et on y réconcilie le journal **pour les parties touchées seulement**.
+Ce dépôt-là a sa propre dette — 31 commits non journalisés, aucun tag git, sa
+1.0 non coupée — qui reste au calendrier de son mainteneur. Réconcilier avant
+de toucher n'est pas négociable : c'est la règle n°6 de `docs/AUTOPILOT.md`,
+et `cinoc` en a besoin plus encore qu'ici.
+
+**10. `M3` se fait en local, à coût nul.** Voir la section `M`. Cela retire la
+dernière dépendance budgétaire de la route vers `1.0.0`.
+
+**Ce qui n'est pas délégué et ne l'est toujours pas** : la surface publique,
+toute dépense au-delà du plafond convenu, et tout tag ou publication. S'y
+ajoute la **liste des corpus à télécharger**, qui est un choix de projet et non
+un critère technique.
 
 ---
 
@@ -1786,13 +1886,21 @@ qu'avec la vérité terrain. En production il n'y en a pas.
 
 | id | item |
 |---|---|
-| M1 | Le chemin **inter-pages n'est mesuré par aucun run** : aucun fichier du corpus ne finit sur un mot coupé, et le banc traite chaque fichier comme un document d'une page. Construire un corpus multi-pages réel (`bpt6k3265015q` f2/f3) |
-| M2 | Variance : deux runs identiques donnent 0.0252 et 0.0266 (6 %). **≥5 runs par configuration, publier une fourchette, jamais une décimale isolée** |
-| M3 | **≥2 familles de modèles** (Anthropic est déjà câblé) pour séparer ce qui tient du système de ce qui tient du modèle |
-| M4 | Récupérer les **16,5 %** de CER dus à deux normalisations systématiques (`⸗` effacé 34/34, `’`→`'` 69/69) : consigne de prompt ou normalisation inverse. Feed direct de `G2` |
-| M5 | Remplir `tests/external_corpus/pinned/` — vide aujourd'hui (un `README.md`), et le tier téléchargé est `continue-on-error` : **aucune page externe ne bloque un merge**. Le corpus épinglé permet de bloquer sans dépendre de gallica.bnf.fr ; c'est le corpus de `T2` |
+**Où ces items s'exécutent — changé le 2026-08-16.** `M1`-`M4` et `M7` ne
+s'exécutent plus dans ce dépôt : le banc local (`scripts/vision_benchmark.py`
+et ses voisins) est **retiré**, pas déménagé, au profit de `cinoc`. La raison
+est dans la décision n°6 ci-dessus. Ce qui reste ici est le **critère** — la
+règle de publication ci-dessous, et `M5`, qui est une porte de CI de ce dépôt.
+
+| id | item |
+|---|---|
+| M1 | Le chemin **inter-pages n'est mesuré par aucun run** : aucun fichier du corpus ne finit sur un mot coupé, et le banc traite chaque fichier comme un document d'une page. **Constat élargi le 2026-08-16** : `cinoc` n'a pas non plus la notion de document multi-pages — tous ses importeurs émettent un document par page et son standardiseur tronque au premier feuillet. `M1` demande donc un corpus multi-pages réel **et** la notion de volume côté banc |
+| M2 | Variance : **≥5 runs par configuration, publier une fourchette, jamais une décimale isolée**. **Campagne du 2026-08-14 : faite, puis invalidée par elle-même.** Les cinq runs (0.0338–0.0357, écart 5,6 %) précèdent le correctif de banc `2e0b7bc` et héritent donc du défaut qu'ils ont trouvé — l'appariement de césure était dérivé de la référence humaine et non du texte donné au moteur. Le contrefactuel (0.0243–0.0263) est un re-calcul, pas une mesure. **Une campagne post-correctif reste due**, et elle se fera sur `cinoc`, qui n'a aujourd'hui **aucun mécanisme de runs répétés** — c'est la brique 4 de la phase d'intégration |
+| M3 | **≥2 familles de modèles** pour séparer ce qui tient du système de ce qui tient du modèle. **Débloqué le 2026-08-16, à coût nul** : Ollama est installé en local avec `qwen3-vl:8b` (famille Qwen) et `gemma4:12b` (famille Google), face à Mistral. Des poids locaux figés sont *plus* reproductibles qu'un instantané d'API, qui peut être déprécié. Prérequis : l'adapter Ollama de `cinoc` est `text_only`, il lui faut la vision |
+| M4 | ~~Récupérer les **16,5 %** de CER dus à deux normalisations systématiques~~ — **prémisse réfutée par la campagne du 2026-08-14, item à réécrire avant d'être chiffré.** Les deux exemples sont mal attribués : le signe de coupure `⸗` **n'atteint jamais le modèle** (l'OCR d'entrée en contient zéro, la référence 36), et l'apostrophe typographique est détruite par l'OCR puis **réparée** par le modèle (50 lignes améliorées, 0 dégradée). La perte récupérable, s'il en reste, est en amont dans l'OCR — hors périmètre de cette bibliothèque par conception |
+| M5 | Remplir `tests/external_corpus/pinned/` — vide aujourd'hui (un `README.md`), et le tier téléchargé est `continue-on-error` : **aucune page externe ne bloque un merge**. Le corpus épinglé permet de bloquer sans dépendre de gallica.bnf.fr ; c'est le corpus de `T2`. **Reste dans ce dépôt** : c'est une porte de CI d'ici, pas une campagne de mesure |
 | M6 | Corpus GT : 2 paires réelles seulement dans `tests/corpus_gt/`. Sourcer de la GT publiée plutôt que la fabriquer |
-| M7 | Rendre publiables : CER **et** WER, lignes améliorées / dégradées / faux positifs, **analyse par classe Unicode**, et mesure séparée sur OCR mauvais / moyen / déjà propre. Re-mesurer après `542c783` (24 césures `⸗` entrées dans l'appariement depuis le run) |
+| M7 | Rendre publiables : CER **et** WER, lignes améliorées / dégradées / faux positifs, **analyse par classe Unicode**, et mesure séparée sur OCR mauvais / moyen / déjà propre. **Largement acquis par le déménagement** : `cinoc` porte 24 métriques dont CER, CER diplomatique, WER, MER, taux d'insertion/délétion, hallucination, sur-normalisation, et des tests de significativité. Restent à ajouter là-bas : la ventilation par classe Unicode générale et la strate « qualité d'OCR d'entrée » |
 
 Aucune revendication de qualité ne sort du dépôt sans `M2` + `M3`.
 

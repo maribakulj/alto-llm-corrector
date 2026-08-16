@@ -4,7 +4,7 @@ Ce fichier est **l'état**, pas un compte rendu. Une session réveillée par la
 Routine n'a pas mon contexte : elle a ce fichier, `docs/PLAN.md`, et le dépôt.
 Si les trois se contredisent, `docs/PLAN.md` gagne et ce fichier est corrigé.
 
-Dernière mise à jour : 2026-08-13.
+Dernière mise à jour : 2026-08-16.
 
 ---
 
@@ -93,112 +93,96 @@ La boucle s'arrête — et écrit pourquoi ici — dès que l'une est vraie :
 
 ## La file
 
+**Réécrite le 2026-08-16.** Les cinq items précédents sont clos ou déplacés :
+`S3b` et `RM-08` étaient déjà faits, `T1`/`T3` change de borne (décision n°8),
+`S4` reste de la documentation pure, et `M1` part au banc avec le reste de la
+mesure. La file suit désormais les phases des décisions du 2026-08-16.
+
 Dans l'ordre. Un item se ferme quand son « fini quand » est vérifiable par
 quelqu'un qui n'a pas suivi le travail.
 
-### ~~1. `S3b`~~ — **déjà fait, retiré de la file le 2026-08-12**
+### 1. Phase 0 — socle d'autonomie
 
-`S3b` a été exécuté le **2026-08-01** et affiné par `RM-04` le 2026-08-06. Les
-66 symboles actuels sont la clôture calculée, pas une accumulation, et
-`tests/test_public_api_snapshot.py` porte le raisonnement complet.
+**Fini quand** : ce fichier et `docs/PLAN.md` ne contredisent plus le dépôt, la
+PR courante est ouverte et abonnée, et le smoke-test de déploiement de `cinoc`
+teste une route qui existe.
 
-Cet item figurait ici parce que `docs/PLAN.md` le décrivait encore comme
-différé. **C'est le premier vrai piège de cette file** : un item peut être
-clos dans le code et ouvert dans le plan, et la file hérite du plan. Corollaire
-ajouté aux règles permanentes : *avant d'attaquer un item, vérifier dans le
-code qu'il est encore ouvert.*
+- réconcilier ce journal (trois PR mergées après la dernière entrée) et la
+  section `M` du plan ✅ *(fait, cette PR)*
+- inscrire les dix décisions du 2026-08-16 dans `docs/PLAN.md` ✅ *(idem)*
+- `cinoc` : `deploy-space.yml` interroge `/api/reports`, route supprimée qui
+  répond 404, avec un `curl -s` sans `-f` — **le smoke passe au vert sans rien
+  tester** sauf `/health`
 
-Ce que la tentative laisse : `tests/test_public_surface_is_the_closure.py`,
-qui **recalcule** les deux clôtures de promesse à chaque run (34 types
-retournés, 17 types du seam producteur, tous exportés) et épingle le prix du
-troisième seam — les 9 noms que fermer `format_adapter`/`qe_scorer`/
-`routing_policy`/`confidence_policy` coûterait, comme prix d'une décision et
-non comme défaut.
+### 2. Phase 1 — la scission
 
-### ~~2. `RM-08`~~ — **clos par la mesure le 2026-08-12, sans fusion**
+**Fini quand** les trois dépôts existent, chacun avec sa CI verte, et
+qu'aucun ne contient ce qui appartient à un autre.
 
-Le constat était périmé, et la règle n°6 l'a attrapé : vérifié dans le code,
-les deux projections lisent zéro pointeur et partagent la dérivation. Ce ne
-sont plus des résolveurs parallèles mais **deux filtres d'une dérivation**,
-qui divergent sur une chaîne quittant la page — le routeur voit `{}`, le
-batcher voit les deux membres présents, et fusionner changerait l'un des deux
-comportements en silence.
+- `corrigenda-demo` : extraire `backend/`, `frontend/`, `tools/e2e/`,
+  `Dockerfile`, `docker-compose.yml`, `docs/API.md`, `SECURITY.md`,
+  `.github/workflows/hf-sync.yml`
+- `cinoc` : recevoir `corpus/`, `measurements/`, `integrations/qe.py` et les
+  quatre scripts QE
+- ici : **retirer** le banc local (décision n°3), aplatir
+  `packages/corrigenda/*` à la racine, réduire la CI aux cinq jobs de la
+  bibliothèque
+- garder ici : `examples/` — **60 fichiers de test en dépendent**, les
+  fixtures sont la suite de tests d'une bibliothèque de parsing
 
-`tests/hyphenation/test_the_unit_projections_are_not_duplicates.py` l'exhibe
-plutôt que de l'affirmer, et rouvrira l'item tout seul si un changement futur
-les rend d'accord partout. Détail et raison dans `docs/PLAN.md`.
+**Attention, mesuré** : dans `corpus/37-GT-BNL`, les XML pèsent 552 Ko et les
+PNG 33 Mo. La bibliothèque garde ses fixtures pour ~2 Mo et laisse partir tout
+le poids. Cinq fichiers de test seulement touchent au corpus.
 
-### 3. `T1` / `T3` — étendre métamorphiques et différentiels
+### 3. Phase 2 — la bibliothèque devient publiable
 
-**État : entamé, sans fin définie — donc borné ici.**
+**Fini quand** aucun code livré n'échappe à la CI et que le `CHANGELOG` porte
+une section de version.
 
-Le plan est explicite sur le pourquoi : les deux défauts d'intégrité de ligne
-du 25 juillet sont sortis de la **mesure**, pas des tests, parce que « la
-population de tests est trop proche des abstractions du code ». `T1` a trouvé
-le cas de la page vide ; `T3` a trouvé `L10` et la promesse de jointure fausse.
+- **le trou le plus sérieux** : aucun job n'installe `[vision]` ni `[qe]`.
+  `tests/test_vision.py` (14 tests) se saute en silence sur les trois versions
+  de Python, et `integrations/vision.py` est hors de la porte de couverture.
+  Ajouter un job qui installe Pillow (gratuit) ; `[qe]` part au banc, ce qui
+  ferme l'autre moitié
+- couper une section de release dans le `CHANGELOG` (1316 lignes sous
+  `[Unreleased]`)
+- `T1`/`T3` sous sa nouvelle borne : établir d'abord la **liste des promesses**
+  de `SPECS_LIB_V2.md`, puis une propriété par promesse non gardée
+- `CLAUDE.md`, `README`, `CONTRIBUTING` remis en accord avec un dépôt sans démo
 
-**Borne** : trois propriétés nouvelles par réveil au maximum, chacune devant
-échouer sur une mutation délibérée du code avant d'être commitée (sinon elle
-ne teste rien). S'arrêter après six propriétés ajoutées sans qu'aucune ne
-trouve de défaut — à ce stade l'écart est ailleurs et il faut le mesurer.
+### 4. Phase 3 — `0.10.0rc1`, puis `0.10.0`
 
-**Compteur : 5 propriétés ajoutées, 0 défaut trouvé** (2026-08-13). Une
-avant l'arrêt prévu par la borne.
+**Passe la main au CLI** pour le dispatch et les deux configurations externes.
+Voir le tableau plus bas.
 
-**Question ouverte, à trancher par le mainteneur avant la 6ᵉ.** La borne dit
-« s'arrêter après six propriétés **sans qu'aucune ne trouve de défaut** ».
-Deux des trois dernières n'ont trouvé aucun défaut du produit mais ont
-exhibé un **angle mort de la suite** : une mutation réaliste qui laisse les
-1400+ autres tests au vert. Est-ce que ça compte comme « trouver quelque
-chose » ? Si oui la borne recule ; si non elle tombe au prochain réveil et
-il faut aller mesurer l'écart ailleurs. La boucle ne tranche pas : elle
-s'arrêtera à 6 comme écrit, et posera la question ici.
+### 5. Phase 4 — l'intégration au banc
 
-Ce que la mutation délibérée a déjà payé, deux fois :
+**Fini quand** `cinoc` sait répondre à « ce correcteur a-t-il déplacé du texte
+entre les lignes ? ». Cinq briques, chacune utile à `cinoc` indépendamment de
+`corrigenda` :
 
-- la première version de la propriété « l'ordre des fichiers » comparait les
-  octets livrés, passait au vert, et **ne détectait pas** la famille de
-  défaut pour laquelle elle était écrite — `F4` corrompait le script
-  d'édition en laissant le XML correct ;
-- la mutation qui fait réutiliser le `postProcessingStep` précédent au lieu
-  de l'ajouter laisse **toute la suite au vert** sauf la propriété qui vient
-  d'être écrite. Ce n'est plus une vérification de la propriété, c'est une
-  mesure de ce qu'elle apporte, et c'est la façon la moins chère de
-  distinguer une propriété neuve d'une redite.
+1. une étape `LAYOUT → LAYOUT` et une source ALTO/PAGE — aujourd'hui un run
+   part **uniquement d'une image**
+2. des métriques d'**identité de ligne** — `Line.id` est parsé et réécrit des
+   deux côtés, **aucune métrique ne le lit** ; le patron existe pour les régions
+3. la **dé-césure** `HypPart1/2` dans le projecteur — spécifiée dans le code,
+   différée depuis toujours
+4. des **runs répétés** — zéro mécanisme aujourd'hui, toute la dispersion
+   affichée est inter-documents ; c'est ce que `M2` exige
+5. la **vision pour l'adapter Ollama**, aujourd'hui `text_only` — c'est ce qui
+   débloque `M3` à coût nul
 
-**Conséquence de méthode, à garder** : chaque nouvelle propriété se juge sur
-sa mutation, et la mutation se lance **sur toute la suite**, pas seulement
-sur le module. Une propriété que d'autres tests attrapent déjà n'est pas
-fausse — elle ne compte simplement pas contre la borne.
+Puis le moteur `corrigenda` lui-même (décisions n°4 et n°5).
 
-### 4. `S4` — geler ce qui peut l'être
+### 6. Phase 5 — la mesure, sur le banc
 
-**État : partiel, et le reste est en grande partie hors d'atteinte.**
+`M2` rejouée post-correctif, `M3` par modèles locaux, `M1` (qui demande aussi
+la notion de volume côté banc), `M7`. `M5` reste ici : c'est une porte de CI de
+ce dépôt, et elle demande de retirer `continue-on-error`.
 
-`Coords` et `DocumentManifest` sont gelés. `PageManifest`/`BlockManifest` sont
-écrits par la désambiguïsation de `page_id` dans `core/pairing.py` — territoire
-interdit. `LineManifest` a 246 sites d'affectation et **est** l'état de travail
-du run.
+### 7. Phase 6 — `review_required` (`G1`-`G3`)
 
-**Autorisé ici** : uniquement documenter précisément ce qui bloque chaque type,
-avec la mesure. **Interdit** : toucher `core/pairing.py`, ou entreprendre le
-gel de `LineManifest`, qui est « un type de travail distinct » et non une
-annotation.
-
-### 5. `M1` (moitié hors-ligne) — préparer le corpus multi-pages
-
-**État : à faire, et c'est la seule moitié de `M*` qui ne demande pas de run.**
-
-Le chemin inter-pages n'est mesuré par **aucun** run : aucun fichier du corpus
-ne finit sur un mot coupé, et le banc traite chaque fichier comme un document
-d'une page. `corpus/BnF-bpt6k3265015q/` ne contient qu'un feuillet
-(`X0000002`).
-
-**Autorisé** : construire la fixture multi-pages à partir de ce qui est déjà
-dans le dépôt, et écrire le harnais qui la consommera. **Interdit** :
-télécharger quoi que ce soit — c'est `M5`/`M6`, licence et réseau, donc CLI.
-
----
+La dernière fonctionnalité, et un ADR avant toute ligne de code. `V4`.
 
 ## Passe la main au CLI
 
@@ -207,12 +191,15 @@ listés pour que la raison soit lisible, pas pour être contournés.
 
 | item | ce qu'il exige |
 |---|---|
-| `M2`, `M3` | ≥5 runs par configuration, ≥2 familles de modèles : clés API, budget, réseau |
-| `M4`, `M7` | re-mesurer après `542c783` : les mêmes runs |
-| `M5`, `M6` | télécharger et **trancher des licences** de corpus externes |
+| `M2` | la moitié Mistral coûte de l'argent : plafond de dépense, donc arbitrage |
+| `M5`, `M6` | **quels** corpus télécharger — un choix de projet, pas un critère technique. Les licences, elles, sont tranchées (`Gate 0`) |
 | `G1`-`G3` | `review_required` : décider *quelles règles* envoient en revue — conception |
-| `P1`, `P2` | l'upload exige l'OIDC de GitHub Actions ; le tag est une décision de publication |
+| `P1`, `P2` | deux configurations externes que seul le mainteneur peut faire : déclarer le *trusted publisher* sur pypi.org **et** test.pypi.org, et créer les environments GitHub `testpypi` / `pypi`. Puis dispatcher le workflow |
 | `P3` | revue humaine externe |
+
+**Ce qui a quitté ce tableau le 2026-08-16** : `M3` ne demande plus ni clé ni
+budget (modèles locaux, décision n°10) ; `M4` est réfuté et doit être réécrit
+avant d'être planifié ; `M7` est largement acquis par le déménagement au banc.
 
 **Rappel qui vaut contrainte** : aucune revendication chiffrée ne sort du
 dépôt sans `M2` + `M3`. Vérifié le 2026-08-11 — les deux `README` ne portent
@@ -288,3 +275,24 @@ Une ligne par réveil : date, item, résultat, ou la raison de l'arrêt.
   `S3b` n'a pas coupé » ne contraignait plus rien, et « `S3b` avant tout tag »
   était satisfait avant d'être écrit. Reformulées, pas laissées. **Prochain
   geste : nouvelle branche depuis `main`, nouvelle PR, s'y abonner.**
+- 2026-08-14 — **PR #72 mergée**, puis #74 (`T3` : la même phrase posée au
+  réécriveur PAGE) et #75 (les deux cliquets de décision ne voyaient qu'une
+  orthographe de l'écriture). Ces trois tours **n'ont pas été journalisés à
+  l'époque** : la boucle a mergé sans repasser ici, ce que la règle du dépôt
+  interdit. Réparé le 2026-08-16, à la lecture.
+- 2026-08-16 — **PR #76 mergée** : la campagne `M2`, cinq runs. Non journalisée
+  non plus, et c'est la plus coûteuse des trois omissions, parce que la
+  campagne **invalide ses propres chiffres** : le correctif de banc `2e0b7bc`
+  arrive après les cinq runs. La ligne `M2` du plan décrivait encore la
+  campagne comme à faire, avec les chiffres de juillet. Le motif est celui que
+  `D*` avait fermé et qui revient dès qu'on cesse de le surveiller : **le plan
+  décrit l'intention, le code décrit l'état, et personne ne les rapproche.**
+- 2026-08-16 — revue d'état complète demandée par le mainteneur, puis
+  cartographie de `cinoc` par trois agents. Deux constats qui ne venaient
+  d'aucun document : `cinoc` **est** le banc que ce plan s'apprêtait à
+  reconstruire (1667 tests, 96 % de couverture, 24 métriques, Space en ligne),
+  et il ne mentionne `corrigenda` **nulle part**. Les deux projets sont
+  complémentaires sur la ligne exacte où chacun est aveugle : `cinoc` compare
+  des pages aplaties et ne lit jamais `Line.id` ; `corrigenda` garantit la
+  ligne et ne sait mesurer qu'un CER, dans un script faussé. Dix décisions en
+  ont découlé (`docs/PLAN.md`), et cette file est réécrite autour.
