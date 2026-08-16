@@ -141,13 +141,18 @@ markers = [
 source = ["lidenbrock"]
 branch = true
 # integrations/qe.py is the lidenbrock[qe] extra: it only runs with
-# onnxruntime + the exported D'AlemBERT bundle present, which the default
-# CI test job cannot provide (heavy deps + a 545 MB model). It has its own
-# suite (tests/test_qe_dalembert.py) that self-skips when the extra/bundle
-# is absent, so gating the core coverage on it would falsely read 0%.
-# integrations/vision.py is the lidenbrock[vision] extra (Pillow), same deal:
-# its suite self-skips without the extra, so it is omitted from the core gate.
-omit = ["*/__init__.py", "*/integrations/qe.py", "*/integrations/vision.py"]
+# onnxruntime plus a 545 MB exported model, which no CI can reasonably
+# fetch. Its suite self-skips when the extra is absent, so gating on it
+# would read a false 0%. That module is leaving for the bench rather than
+# staying here as a second thing nothing runs.
+#
+# integrations/vision.py used to be omitted for the same stated reason, and
+# the reason was wrong. Measured 2026-08-16: the module is 96% covered by
+# its own 20 tests — it was never untested, it was untested IN CI, because
+# no job installed [vision] and `importorskip("PIL")` turned a whole module
+# into one quiet skip. The exclusion was hiding a well-tested file, and
+# removing it costs 0.01 points of total coverage.
+omit = ["*/__init__.py", "*/integrations/qe.py"]
 
 [tool.coverage.report]
 fail_under = 85

@@ -102,14 +102,25 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
-      - name: Install lidenbrock (editable) + the test extra
+      - name: Install lidenbrock (editable) + the test and vision extras
         # The test toolchain is declared ONCE, in pyproject's `[test]` extra,
         # so `pip install -e '.[test]'` means the same thing here and on a
         # developer's machine. It used to be this hand-written list, which is
         # how a test that needs PyYAML went green locally and red on all three
         # Python versions: the workflow file was the real dependency list, and
         # nothing kept it in step with anyone's venv.
-        run: pip install -e '.[test]'
+        #
+        # `[vision]` is here because without it 36 tests DID NOT RUN, on any
+        # Python version, and said nothing: `tests/test_vision.py` opens with
+        # `importorskip("PIL")`, so a whole module reported as one quiet skip
+        # while `integrations/vision.py` sat outside the coverage gate as
+        # well. Shipping a producer that CI never executes is the gap this
+        # closes — and the cost is one wheel.
+        #
+        # `[qe]` is deliberately NOT here: it needs onnxruntime and a 545 MB
+        # model no CI can reasonably fetch. That module leaves for the bench
+        # rather than staying as a second thing nothing runs.
+        run: pip install -e '.[test,vision]'
       - name: pytest + coverage gate (85%)
         run: pytest tests/ --cov=lidenbrock --cov-report=term --cov-report=xml
 
