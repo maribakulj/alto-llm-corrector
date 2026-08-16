@@ -49,7 +49,7 @@ serait moulée sur l'existant et n'aurait rien trouvé.
 | E4a | borne de dérive **par op** | **partielle** — une seule op : rien ne prouve le « par op », ni le contrôle négatif sous la borne |
 | E4b | budget de caractères modifiés, élagage préfixe/suffixe | **gardée** — le mieux tenu du lot |
 | E4c | le budget est **par ligne**, cumulé sur plusieurs ops | **fermée le 2026-08-16** — deux ops de 8 caractères, refusées sous un budget de 12, acceptées sous 20 : c'est le cumul qui décide |
-| E5a | une ligne de césure garde son tiret final | **partielle** — rôle `BOTH` et marques non-ASCII (`⸗`, `¬`) absents, alors que le répertoire est paramétré partout ailleurs |
+| E5a | une ligne de césure garde son tiret final | **fermée le 2026-08-16** — `test_e5_covers_every_break_mark_and_both_roles.py` balaie les six marques du répertoire × les deux rôles ouvrants, dans les deux sens (sectionner est refusé, préserver passe) plus un contrôle sur `NONE`. La marque que la suite exerçait, `-`, est la seule que le corpus n'emploie pas : les fixtures appariées marquent tout avec `¬` |
 | E5b | son **mot-frontière** ne peut pas être supprimé | **aucune, et la garde n'existe pas** — voir plus bas |
 | E6a | les gardes s'appliquent au texte issu d'un span | **partielle** — l'étage sémantique n'est jamais exercé sur une sortie de span |
 | E6b | span et `replace_line` obtiennent le même verdict sur le même résultat | **aucune** |
