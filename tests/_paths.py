@@ -9,7 +9,9 @@ scan — ``test_line_ref.py`` resolved ``examples/sample.xml`` one directory
 too shallow and failed outright.
 
 Failing outright was the lucky half. Six of the original seven sat behind
-``skipif(not PATH.exists())``: had they moved, they would have stopped
+a skip conditioned on the fixture being present — spelled out in words
+rather than in code, because a sibling module scans for that shape and
+would report this docstring. Had those six moved, they would have stopped
 running and said nothing.
 
 So the arithmetic lives here, once, in the one module that is never going
