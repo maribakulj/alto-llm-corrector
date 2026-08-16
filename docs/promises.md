@@ -58,7 +58,7 @@ serait moulée sur l'existant et n'aurait rien trouvé.
 | — | parité d'octets ALTO quand rien ne change | **partielle** — sha256 golden + sous-ensemble verbatim, pas la sérialisation entière |
 | — | parité d'octets PAGE | **partielle, proche d'aucune** — texte seulement, aucun sha256 |
 | §6.3 | texte canonique identique entre formats | **gardée**, sur une page |
-| §6.3 | rôles de césure équivalents entre formats | **aucune** — le test qui porte ce titre compare deux variantes du **même** format |
+| §6.3 | rôles de césure équivalents entre formats | **fermée le 2026-08-16** — `test_hyphen_roles_agree_across_formats.py` compare les deux détections sur les fixtures appariées : 44 lignes partagées, zéro désaccord sur rôle, partenaire, contenu `SUBS` et caractère explicite. Deux mutations se sont révélées inertes : la branche `BOTH` des deux parseurs est redérivée par le linker partagé |
 | — | somme des pertes par ligne = agrégat | **fermée le 2026-08-16** — étendue à PAGE, le format où les deux comptes sont calculés indépendamment. Ils s'accordent : vérifié, plus supposé |
 | — | le rapport dit du fichier ce qui y est | **partielle** — contenus et identités gardés, compteurs non |
 | — | rejouer le script rendu reproduit le fichier | **fermée le 2026-08-16** — étendue à PAGE, le format qui porte des transformations *après* la décision |
