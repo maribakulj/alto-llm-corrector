@@ -27,7 +27,7 @@ Two standing rules from that plan, in force until it says otherwise:
 ## Tech Stack
 
 - **Python 3.11+, Pydantic v2, lxml, httpx.** No server dependency, no framework: the library opens no socket, stores no credential and writes no file unless asked.
-- Optional extras: `[vision]` (Pillow, lazy-imported) and `[qe]`. `[typecheck]` and `[test]` are toolchains, declared so they mean the same thing locally and in CI.
+- One optional extra: `[vision]` (Pillow, lazy-imported — CI installs it, so its tests actually run). `[typecheck]` and `[test]` are toolchains, declared in `pyproject` so they mean the same thing locally and in CI. `[qe]` left for the bench on 2026-08-16: it needed a 545 MB model no CI could fetch, so nothing ever ran it.
 
 ## Common Commands
 

@@ -197,7 +197,7 @@ paramètre `llm=<adapter>` plutôt que d'embarquer ses propres clients : il
 hérite ainsi des quatre fournisseurs, du cap de concurrence réseau, des retries
 429 et des seize prompts curés par période.
 
-**6. Le scorer QE part au banc.** `integrations/qe.py` et ses quatre scripts
+**6. Le scorer QE part au banc — fait le 2026-08-16.** `integrations/qe.py` et ses quatre scripts
 rejoignent `cinoc`. La question que le scorer pose — « est-ce que ça vaut le
 coup d'appeler le modèle sur cette ligne ? » — est **économique**, et `cinoc`
 porte déjà une section de rapport économie (coût, débit, Pareto, coût
@@ -1120,11 +1120,20 @@ symboles sous SemVer. Il ne bloque en revanche pas `0.10.0`, que
 
 ---
 
-## État de la porte `0.10.0` — relevé du 2026-08-11
+## État de la porte `0.10.0` — relevé du 2026-08-11, revu le 2026-08-16
 
 L'information existait, éparpillée sur six sections. Rassemblée ici, elle dit
 quelque chose que personne n'avait formulé : **les cinq critères exigibles pour
 `0.10.0` sont tenus, et ce qui reste est de la mécanique de publication.**
+
+**Revue du 2026-08-16 — un sixième critère est tombé, et deux points de
+mécanique ont changé.** `V7` (« un corpus externe versionné bloque un
+merge ») n'était pas exigible pour `0.10.0` mais pour `1.0.0` ; il est
+tenu depuis que `tests/external_corpus/pinned/` porte trois pages Gallica
+réelles. `V9` se lit désormais autrement : les corpus de campagne ne sont
+plus dans ce dépôt du tout, et ce qui reste — 1,89 Mo de pages épinglées —
+est tenu hors de l'artefact par l'allowlist seule, vérifiée sur les
+distributions **construites**.
 
 | critère | exigé pour | état, et par quoi il est établi |
 |---|---|---|
@@ -1137,9 +1146,19 @@ quelque chose que personne n'avait formulé : **les cinq critères exigibles pou
 Ce qui reste, et ce n'est pas de la correction :
 
 1. **`P1` fin** — l'upload TestPyPI. Toute la chaîne a été rejouée en local le
-   2026-08-01 ; l'upload exige l'OIDC de GitHub Actions, donc un tag, donc
-   `P2`. C'est la seule dépendance circulaire du lot et elle se casse en
-   taguant.
+   2026-08-01. **Précision du 2026-08-16, parce que la formulation était
+   trop courte** : ni PyPI, ni TestPyPI, ni l'OIDC n'exigent de tag. C'est
+   `publish-lidenbrock.yml` qui l'exige, dans une étape écrite exprès pour
+   qu'un `workflow_dispatch` distrait ne publie pas ce que `main` pointe.
+   La contrainte est donc la nôtre. Elle n'est pas levée : on tague un
+   `rc`, qui répète sans consommer le numéro `0.10.0` — ce qui ne se
+   reprend pas est le numéro sur l'index, pas le tag.
+
+   **Deux préalables que seul le mainteneur peut faire** : déclarer le
+   *trusted publisher* sur pypi.org **et** test.pypi.org — sur le nom du
+   FICHIER de workflow, qui a changé avec le renommage — et créer les
+   environments GitHub `testpypi` / `pypi`. Sans eux, le premier dispatch
+   échoue à l'échange OIDC.
 2. **`P2`** — `0.9.0` → `0.10.0` dans `__version__` (le `pyproject` le lit),
    entrée `CHANGELOG.md`, tag `lidenbrock-v0.10.0`, SBOM, publier l'artefact
    **testé**.
@@ -1897,7 +1916,7 @@ règle de publication ci-dessous, et `M5`, qui est une porte de CI de ce dépôt
 | M1 | Le chemin **inter-pages n'est mesuré par aucun run** : aucun fichier du corpus ne finit sur un mot coupé, et le banc traite chaque fichier comme un document d'une page. **Constat élargi le 2026-08-16** : `cinoc` n'a pas non plus la notion de document multi-pages — tous ses importeurs émettent un document par page et son standardiseur tronque au premier feuillet. `M1` demande donc un corpus multi-pages réel **et** la notion de volume côté banc |
 | M2 | Variance : **≥5 runs par configuration, publier une fourchette, jamais une décimale isolée**. **Campagne du 2026-08-14 : faite, puis invalidée par elle-même.** Les cinq runs (0.0338–0.0357, écart 5,6 %) précèdent le correctif de banc `2e0b7bc` et héritent donc du défaut qu'ils ont trouvé — l'appariement de césure était dérivé de la référence humaine et non du texte donné au moteur. Le contrefactuel (0.0243–0.0263) est un re-calcul, pas une mesure. **Une campagne post-correctif reste due**, et elle se fera sur `cinoc`, qui n'a aujourd'hui **aucun mécanisme de runs répétés** — c'est la brique 4 de la phase d'intégration |
 | M3 | **≥2 familles de modèles** pour séparer ce qui tient du système de ce qui tient du modèle. **Débloqué le 2026-08-16, à coût nul** : Ollama est installé en local avec `qwen3-vl:8b` (famille Qwen) et `gemma4:12b` (famille Google), face à Mistral. Des poids locaux figés sont *plus* reproductibles qu'un instantané d'API, qui peut être déprécié. Prérequis : l'adapter Ollama de `cinoc` est `text_only`, il lui faut la vision |
-| M4 | ~~Récupérer les **16,5 %** de CER dus à deux normalisations systématiques~~ — **prémisse réfutée par la campagne du 2026-08-14, item à réécrire avant d'être chiffré.** Les deux exemples sont mal attribués : le signe de coupure `⸗` **n'atteint jamais le modèle** (l'OCR d'entrée en contient zéro, la référence 36), et l'apostrophe typographique est détruite par l'OCR puis **réparée** par le modèle (50 lignes améliorées, 0 dégradée). La perte récupérable, s'il en reste, est en amont dans l'OCR — hors périmètre de cette bibliothèque par conception |
+| ~~M4~~ | **retiré le 2026-08-16, sur mesure.** L'item disait : récupérer les 16,5 % de CER dus à deux « normalisations systématiques » du modèle, par consigne de prompt ou normalisation inverse. Ses deux exemples sont mal attribués, et le compte contre l'ENTRÉE plutôt que contre la référence le montre : le signe de coupure `⸗` **n'atteint jamais le modèle** (0 occurrence dans l'OCR d'entrée, 36 dans la référence — il n'y en a jamais eu à effacer), et l'apostrophe typographique est **détruite par l'OCR puis réparée par le modèle** (50 lignes améliorées, 0 dégradée). Il n'y a donc rien à récupérer *ici* : la perte est en amont, dans l'OCR, hors du périmètre de cette bibliothèque par conception. **Ce qui survit et vaut mieux que l'item** : compter une substitution contre l'entrée et non contre la référence, faute de quoi on attribue au correcteur ce que l'OCR a fait. Et le cas `⸗` reste une entrée de `G2` — une substitution qui porte sur *toutes* les occurrences d'un signe est invisible ligne à ligne et évidente au run |
 | ~~M5~~ | **fait (2026-08-16).** Trois pages Gallica réelles épinglées — *Le Temps* du 1ᵉʳ janvier 1890 (quotidien multi-colonnes, 1,7 Mo), et deux monographies de 1850 dont une en mode texte. 1,89 Mo pour deux époques et deux mises en page. Les trois empreintes étaient déjà dans `manifest.json` et le téléchargement les a vérifiées **sans dérive**. Mesuré : le tier épinglé fait tourner **6 tests hors ligne et sans marqueur** là où l'état d'avant en sautait 2 — le corpus externe ne contribuait donc à **aucun** merge. Le tier téléchargé reste `continue-on-error` à dessein : il dépend de gallica.bnf.fr, et une panne de réseau ne doit pas arrêter un merge |
 | M6 | Corpus GT : 2 paires réelles seulement dans `tests/corpus_gt/`. Sourcer de la GT publiée plutôt que la fabriquer |
 | M7 | Rendre publiables : CER **et** WER, lignes améliorées / dégradées / faux positifs, **analyse par classe Unicode**, et mesure séparée sur OCR mauvais / moyen / déjà propre. **Largement acquis par le déménagement** : `cinoc` porte 24 métriques dont CER, CER diplomatique, WER, MER, taux d'insertion/délétion, hallucination, sur-normalisation, et des tests de significativité. Restent à ajouter là-bas : la ventilation par classe Unicode générale et la strate « qualité d'OCR d'entrée » |

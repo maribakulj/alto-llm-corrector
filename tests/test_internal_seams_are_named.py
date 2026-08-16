@@ -220,11 +220,6 @@ _SEAMS: dict[str, tuple[str, str]] = {
         "value",
         "namespace in, compiled schema out",
     ),
-    "lidenbrock.integrations.qe._deglyph": ("value", "text in, text out"),
-    "lidenbrock.integrations.qe._deglyph_with_map": (
-        "value",
-        "the same, plus the offset map the caller needs to attribute a score",
-    ),
 }
 
 
