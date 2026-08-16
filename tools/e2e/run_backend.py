@@ -4,7 +4,7 @@ mock vendor. Runtime patch only — the repository is not modified."""
 import os
 import sys
 
-sys.path.insert(0, "/home/user/corrigenda/backend")
+sys.path.insert(0, "/home/user/lidenbrock/backend")
 os.environ.setdefault("LOG_FORMAT", "plain")
 os.environ.setdefault("LOG_LEVEL", "INFO")
 

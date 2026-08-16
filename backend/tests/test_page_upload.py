@@ -7,7 +7,7 @@ parser yields an EMPTY manifest (0 pages, 0 lines) without raising, so:
 - a mixed ALTO+PAGE upload silently dropped every PAGE line and
   completed on the ALTO subset alone.
 `create_job` now builds its manifest through the format-sniffing
-`corrigenda.formats.loader`, which also refuses mixed batches.
+`lidenbrock.formats.loader`, which also refuses mixed batches.
 """
 
 from __future__ import annotations

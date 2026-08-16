@@ -16,7 +16,7 @@ sur **événement** de la PR — résultat de CI, commentaire de revue, push,
 conflit de merge — et rend la main quand la PR est verte et qu'il n'y a rien
 en attente.
 
-**PR courante :** [#77](https://github.com/maribakulj/corrigenda/pull/77),
+**PR courante :** [#77](https://github.com/maribakulj/lidenbrock/pull/77),
 ouverte le 2026-08-16 depuis `main`, et abonnée. Une PR jumelle vit dans
 `cinoc` — [#80](https://github.com/maribakulj/cinoc/pull/80) — et la boucle
 surveille les deux : depuis le 2026-08-16 le travail s'étend à trois dépôts,
@@ -57,8 +57,8 @@ rouge là-bas — c'est précisément à ça que sert la PR, et c'est pour ça q
 ## Règles permanentes
 
 1. **Un geste, un commit vert.** La suite de la bibliothèque passe avant
-   chaque commit (`pytest` dans `packages/corrigenda`), plus `ruff check`,
-   `ruff format --check` et `python -m mypy --strict src/corrigenda` avec le
+   chaque commit (`pytest` dans `packages/lidenbrock`), plus `ruff check`,
+   `ruff format --check` et `python -m mypy --strict src/lidenbrock` avec le
    pin de `[typecheck]` — le `mypy` du conteneur peut être d'une autre version
    et ne pas voir pydantic ; 55 faux positifs en sont sortis une fois.
 2. **En cas de doute, s'arrêter et écrire la question.** Ne jamais trancher un
@@ -121,13 +121,13 @@ teste une route qui existe.
 **Fini quand** les trois dépôts existent, chacun avec sa CI verte, et
 qu'aucun ne contient ce qui appartient à un autre.
 
-- `corrigenda-demo` : extraire `backend/`, `frontend/`, `tools/e2e/`,
+- `lidenbrock-demo` : extraire `backend/`, `frontend/`, `tools/e2e/`,
   `Dockerfile`, `docker-compose.yml`, `docs/API.md`, `SECURITY.md`,
   `.github/workflows/hf-sync.yml`
 - `cinoc` : recevoir `corpus/`, `measurements/`, `integrations/qe.py` et les
   quatre scripts QE
 - ici : **retirer** le banc local (décision n°3), aplatir
-  `packages/corrigenda/*` à la racine, réduire la CI aux cinq jobs de la
+  `packages/lidenbrock/*` à la racine, réduire la CI aux cinq jobs de la
   bibliothèque
 - garder ici : `examples/` — **60 fichiers de test en dépendent**, les
   fixtures sont la suite de tests d'une bibliothèque de parsing
@@ -161,7 +161,7 @@ Voir le tableau plus bas.
 
 **Fini quand** `cinoc` sait répondre à « ce correcteur a-t-il déplacé du texte
 entre les lignes ? ». Cinq briques, chacune utile à `cinoc` indépendamment de
-`corrigenda` :
+`lidenbrock` :
 
 1. une étape `LAYOUT → LAYOUT` et une source ALTO/PAGE — aujourd'hui un run
    part **uniquement d'une image**
@@ -174,7 +174,7 @@ entre les lignes ? ». Cinq briques, chacune utile à `cinoc` indépendamment de
 5. la **vision pour l'adapter Ollama**, aujourd'hui `text_only` — c'est ce qui
    débloque `M3` à coût nul
 
-Puis le moteur `corrigenda` lui-même (décisions n°4 et n°5).
+Puis le moteur `lidenbrock` lui-même (décisions n°4 et n°5).
 
 ### 6. Phase 5 — la mesure, sur le banc
 
@@ -293,8 +293,8 @@ Une ligne par réveil : date, item, résultat, ou la raison de l'arrêt.
   cartographie de `cinoc` par trois agents. Deux constats qui ne venaient
   d'aucun document : `cinoc` **est** le banc que ce plan s'apprêtait à
   reconstruire (1667 tests, 96 % de couverture, 24 métriques, Space en ligne),
-  et il ne mentionne `corrigenda` **nulle part**. Les deux projets sont
+  et il ne mentionne `lidenbrock` **nulle part**. Les deux projets sont
   complémentaires sur la ligne exacte où chacun est aveugle : `cinoc` compare
-  des pages aplaties et ne lit jamais `Line.id` ; `corrigenda` garantit la
+  des pages aplaties et ne lit jamais `Line.id` ; `lidenbrock` garantit la
   ligne et ne sait mesurer qu'un CER, dans un script faussé. Dix décisions en
   ont découlé (`docs/PLAN.md`), et cette file est réécrite autour.

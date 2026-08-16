@@ -53,6 +53,6 @@ portent aucune métadonnée de droits — c'est une lacune de l'archive d'origin
 pas une ambiguïté de statut, et cette section est la trace demandée.
 
 Ce corpus **ne part pas dans le paquet distribué** : il vit à la racine du
-dépôt, hors de `packages/corrigenda/`, et `pyproject.toml` déclare un allowlist
+dépôt, hors de `packages/lidenbrock/`, et `pyproject.toml` déclare un allowlist
 `sdist.include` explicite de quatre entrées qui ne le contient pas. Épinglé par
 `tests/test_packaging_excludes_corpora.py`.

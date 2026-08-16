@@ -1,5 +1,18 @@
 # Historical documents — non-normative
 
+> **The library was called `corrigenda` until 2026-08-16; it is now
+> `lidenbrock`.** Every document in this directory uses the old name, and
+> deliberately keeps it. They were written when that was the name, and the
+> rule that governs this directory — never update it to match the code —
+> is the same rule that forbids rewriting them now. So is the git history
+> around them: the commits, the pull-request titles and the SHAs these
+> documents cite all carry the old name, permanently.
+>
+> Nothing outside this directory does. The code, the package, the
+> published artefact and the living documentation carry `lidenbrock` only.
+> If you are reading these files to find out what something is called
+> today, that is the one question they cannot answer — and never could.
+
 Everything in this directory is **design and audit history**, kept for
 provenance. These documents are frozen: they contradict each other and
 the current code in places (module locations, response shapes,

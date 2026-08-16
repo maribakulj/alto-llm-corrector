@@ -17,16 +17,16 @@ import warnings
 from collections.abc import Callable
 from pathlib import Path
 
-from corrigenda import (
+from lidenbrock import (
     CorrectionAborted,
     CorrectionPipeline,
     CorrectionResult,
     LineRef,
     sanitize_error,
 )
-from corrigenda.core.events import ReconcileStats
-from corrigenda.core.protocols import ProviderPermanentError
-from corrigenda.core.schemas import PairingPolicy
+from lidenbrock.core.events import ReconcileStats
+from lidenbrock.core.protocols import ProviderPermanentError
+from lidenbrock.core.schemas import PairingPolicy
 
 from app.jobs.events import JobEventType
 from app.jobs.observers import CompositeObserver, JobStoreObserver, LoggingObserver
@@ -332,7 +332,7 @@ class JobRunner:
         )
 
         # Fan events out to the job store (for SSE clients) and to the
-        # standard logger (for operators). ADR-006: corrigenda never
+        # standard logger (for operators). ADR-006: lidenbrock never
         # logs by itself — adapters here own the routing.
         #
         # §5.1 resorption — credentials go into the producer (via the
@@ -352,7 +352,7 @@ class JobRunner:
             # honest; omitting it silently reverted to DEFAULT_PAIRING_POLICY.
             pairing_policy=pairing_policy,
         )
-        # `run_id` is corrigenda's generic identifier; we feed it the
+        # `run_id` is lidenbrock's generic identifier; we feed it the
         # server-side `job_id` so trace.json correlates with the API.
         result = await pipeline.run(
             document_manifest=document_manifest,

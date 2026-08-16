@@ -4,9 +4,9 @@
 
 **One deliverable, and a demonstration of it that is scheduled to go.**
 
-- **`packages/corrigenda/`** — the correction library. The only
+- **`packages/lidenbrock/`** — the correction library. The only
   *packaged* Python distribution (hatchling; PyPI publication is
-  prepared by `.github/workflows/publish-corrigenda.yml` but has not
+  prepared by `.github/workflows/publish-lidenbrock.yml` but has not
   happened yet — no tag, no release), and the only thing that outlives
   this repository's current shape.
 - **`backend/`** — the demo's FastAPI app, imported as a flat `app`
@@ -20,14 +20,14 @@
   special-case it, the need is either a missing injection point in the
   library (fix it there, generically) or out of scope
   (`SPECS_LIB_V2.md` §12 and §15) — never a dependency edge.
-- **`frontend/`** — React + TypeScript + Vite (`corrigenda-frontend`,
+- **`frontend/`** — React + TypeScript + Vite (`lidenbrock-frontend`,
   private).
 
 ## Local dev setup
 
 ```bash
-# corrigenda is a sibling package; install it first so backend's imports resolve.
-pip install -e packages/corrigenda
+# lidenbrock is a sibling package; install it first so backend's imports resolve.
+pip install -e packages/lidenbrock
 
 # Then the backend itself.
 pip install -r backend/requirements.txt -r backend/requirements-dev.txt
@@ -38,7 +38,7 @@ pre-commit install
 
 > **Why two commands?**
 > Earlier the backend's `requirements.txt` listed
-> `-e ../packages/corrigenda` and relied on the cwd being `backend/` when
+> `-e ../packages/lidenbrock` and relied on the cwd being `backend/` when
 > pip ran. That fails silently when contributors install from the root
 > or from arbitrary CI paths. The two-step install above is cwd-agnostic.
 
@@ -46,7 +46,7 @@ pre-commit install
 
 ```bash
 # Library tests (coverage gate: 85%)
-cd packages/corrigenda && pytest
+cd packages/lidenbrock && pytest
 
 # Backend tests (coverage gate: 80% on `app`; e2e run separately)
 cd backend && pytest -m "not e2e" --cov
@@ -54,7 +54,7 @@ cd backend && pytest tests/e2e          # real uvicorn + fake provider
 
 # Linters / type-checker (run from the relevant package root)
 ruff check . && ruff format --check .
-mypy --strict src/corrigenda            # from packages/corrigenda/
+mypy --strict src/lidenbrock            # from packages/lidenbrock/
 mypy --explicit-package-bases app       # from backend/
 
 # Backend dev server
@@ -70,19 +70,19 @@ scripts/generate-frontend-api-types.sh
 ## Docker
 
 `docker-compose.yml` builds with `context: .` (repo root) so the
-backend Dockerfile can reach `packages/corrigenda/`:
+backend Dockerfile can reach `packages/lidenbrock/`:
 
 ```bash
 docker-compose up                   # backend on :8000, frontend on :5173
-docker build -t corrigenda .        # single-image HF Spaces build (port 7860)
+docker build -t lidenbrock .        # single-image HF Spaces build (port 7860)
 ```
 
 ## CI gates (all must pass)
 
 Python 3.11 / 3.12 / 3.13 where applicable:
 
-- `corrigenda-lint`, `corrigenda-types` (mypy --strict),
-  `corrigenda-tests` (coverage ≥ 85%), `corrigenda-build`
+- `lidenbrock-lint`, `lidenbrock-types` (mypy --strict),
+  `lidenbrock-tests` (coverage ≥ 85%), `lidenbrock-build`
 - `backend-lint`, `backend-types`, `backend-tests` (coverage ≥ 80% on
   `app` — the library carries its own separate gate), `backend-e2e`
   (real uvicorn server + deliberately sabotaged fake provider),
@@ -94,13 +94,13 @@ Python 3.11 / 3.12 / 3.13 where applicable:
   smoke-tested: `/health`, the real SPA at `/`, a built asset,
   `/health/ready`)
 
-`backend-types` and `backend-tests` block on `corrigenda-tests` — a
+`backend-types` and `backend-tests` block on `lidenbrock-tests` — a
 broken core can't sneak through.
 
 ## Documentation rules
 
 Normative docs are the ones listed in the README's documentation map
-(README, `SPECS_LIB_V2.md`, `packages/corrigenda/docs/`, `docs/API.md`,
+(README, `SPECS_LIB_V2.md`, `packages/lidenbrock/docs/`, `docs/API.md`,
 `SECURITY.md`, this file). Everything under `docs/history/` is frozen
 design/audit history — never update it to match the code; write the
 current truth in a normative doc instead. Audit-trail references

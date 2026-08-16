@@ -25,7 +25,7 @@ def _http_status_error(status: int) -> httpx.HTTPStatusError:
 
 @pytest.mark.parametrize("status", [408, 425])
 def test_self_healing_4xx_are_transient(status):
-    from corrigenda.core.protocols import ProviderTransientError
+    from lidenbrock.core.protocols import ProviderTransientError
 
     result = _wrap_if_transient(_http_status_error(status))
     assert isinstance(result, ProviderTransientError)
@@ -33,7 +33,7 @@ def test_self_healing_4xx_are_transient(status):
 
 @pytest.mark.parametrize("status", [400, 401, 403, 404, 422])
 def test_other_4xx_stay_permanent(status):
-    from corrigenda.core.protocols import ProviderPermanentError
+    from lidenbrock.core.protocols import ProviderPermanentError
 
     assert isinstance(_wrap_if_transient(_http_status_error(status)), ProviderPermanentError)
 

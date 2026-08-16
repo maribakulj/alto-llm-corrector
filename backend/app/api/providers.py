@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from corrigenda import sanitize_error
-from corrigenda.core.protocols import (
+from lidenbrock import sanitize_error
+from lidenbrock.core.protocols import (
     ProviderPermanentError,
     ProviderTransientError,
 )

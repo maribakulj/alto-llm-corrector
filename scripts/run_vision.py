@@ -48,7 +48,7 @@ import sys
 from pathlib import Path
 
 _REPO = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(_REPO / "packages" / "corrigenda" / "src"))
+sys.path.insert(0, str(_REPO / "packages" / "lidenbrock" / "src"))
 sys.path.insert(0, str(_REPO))
 
 from scripts.providers_multimodal import (  # noqa: E402
@@ -57,14 +57,14 @@ from scripts.providers_multimodal import (  # noqa: E402
     supports_temperature,
 )
 
-import corrigenda  # noqa: E402
-from corrigenda.core.quality import HeuristicQEScorer, RoutingPolicy  # noqa: E402
-from corrigenda.core.schemas import GuardConfig, ModelCapabilities  # noqa: E402
-from corrigenda.integrations.vision import (  # noqa: E402
+import lidenbrock  # noqa: E402
+from lidenbrock.core.quality import HeuristicQEScorer, RoutingPolicy  # noqa: E402
+from lidenbrock.core.schemas import GuardConfig, ModelCapabilities  # noqa: E402
+from lidenbrock.integrations.vision import (  # noqa: E402
     VisionEditProducer,
     build_image_asset,
 )
-from corrigenda.producers.rules import (  # noqa: E402
+from lidenbrock.producers.rules import (  # noqa: E402
     RulesProducer,
     default_french_ocr_rules,
 )
@@ -111,12 +111,12 @@ class _Progress:
 async def main_async(args: argparse.Namespace) -> int:
     xml = Path(args.xml)
     image = Path(args.image)
-    doc = corrigenda.load(xml)
+    doc = lidenbrock.load(xml)
 
     scale = (args.dpi / _MM10_PER_INCH) if args.dpi else 1.0
     transform = None
     if scale != 1.0:
-        from corrigenda.core.schemas import ImageTransform
+        from lidenbrock.core.schemas import ImageTransform
 
         transform = ImageTransform(scale_x=scale, scale_y=scale)
 
@@ -168,7 +168,7 @@ async def main_async(args: argparse.Namespace) -> int:
     else:
         kwargs.update(producer=vision)
 
-    pipeline = corrigenda.CorrectionPipeline(
+    pipeline = lidenbrock.CorrectionPipeline(
         observer=_Progress(),
         # A VLM reads the image, not the OCR — the text guard's
         # source-similarity floor would reject correct heavy corrections.

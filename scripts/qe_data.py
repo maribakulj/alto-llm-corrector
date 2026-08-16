@@ -35,13 +35,13 @@ from dataclasses import dataclass
 from pathlib import Path
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(_REPO_ROOT / "packages" / "corrigenda" / "src"))
+sys.path.insert(0, str(_REPO_ROOT / "packages" / "lidenbrock" / "src"))
 
-import corrigenda  # noqa: E402
-from corrigenda.core.alignment import align_tokens  # noqa: E402
+import lidenbrock  # noqa: E402
+from lidenbrock.core.alignment import align_tokens  # noqa: E402
 
 DEFAULT_CORPUS = (
-    _REPO_ROOT / "packages" / "corrigenda" / "tests" / "corpus_gt" / "manifest.json"
+    _REPO_ROOT / "packages" / "lidenbrock" / "tests" / "corpus_gt" / "manifest.json"
 )
 
 
@@ -52,7 +52,7 @@ class Degradation:
     ``clean`` is the substring as it appears in modern/corrected text;
     ``ocr`` is the plausible OCR misreading a scripted degradation
     injects. The DIRECTION is the opposite of
-    ``corrigenda.core.confidence.DEFAULT_CONFUSIONS`` (which maps the
+    ``lidenbrock.core.confidence.DEFAULT_CONFUSIONS`` (which maps the
     OCR form back to the correct one) — kept as its own curated,
     UNI-directional table so the generated errors are realistic, not
     every bidirectional pair fired blindly.
@@ -128,7 +128,7 @@ def real_labels(raw_text: str, ref_text: str) -> tuple[list[str], list[int]]:
 
 
 def _line_texts(path: Path) -> dict[str, str]:
-    document = corrigenda.load(path)
+    document = lidenbrock.load(path)
     return {
         lm.line_id: lm.ocr_text for page in document.manifest.pages for lm in page.lines
     }

@@ -1,5 +1,5 @@
 ---
-title: Corrigenda
+title: Lidenbrock
 emoji: 📄
 colorFrom: blue
 colorTo: indigo
@@ -7,10 +7,10 @@ sdk: docker
 pinned: false
 ---
 
-# Corrigenda
+# Lidenbrock
 
-**The deliverable is a Python library** — `corrigenda`, in
-[`packages/corrigenda/`](packages/corrigenda/): post-OCR text correction of
+**The deliverable is a Python library** — `lidenbrock`, in
+[`packages/lidenbrock/`](packages/lidenbrock/): post-OCR text correction of
 **ALTO and PAGE XML**, structure-safe, with no server and no vendor wired in.
 That is the thing that gets published, versioned and supported.
 
@@ -38,7 +38,7 @@ Upload one or more ALTO or PAGE XML files, choose a provider and model, and get 
 **Formats:** ALTO v2/v3/v4 and PAGE 2013/2019/2024 (other PAGE dates parse
 tolerantly). Both are first-class: same engine, same guarantees, same
 `DocumentManifest`. See
-[`packages/corrigenda/docs/format-support.md`](packages/corrigenda/docs/format-support.md)
+[`packages/lidenbrock/docs/format-support.md`](packages/lidenbrock/docs/format-support.md)
 for the version matrix and what each one validates against.
 
 ---
@@ -53,12 +53,12 @@ docs outlive the demo**; demo docs go with it. Everything under
 
 | Doc | Scope |
 |---|---|
-| [`packages/corrigenda/README.md`](packages/corrigenda/README.md) | The library's own front page — this is what a PyPI reader sees, and it stands alone |
-| `SPECS_LIB_V2.md` | Normative spec for the `corrigenda` library — what it **must be** |
+| [`packages/lidenbrock/README.md`](packages/lidenbrock/README.md) | The library's own front page — this is what a PyPI reader sees, and it stands alone |
+| `SPECS_LIB_V2.md` | Normative spec for the `lidenbrock` library — what it **must be** |
 | [`docs/PLAN.md`](docs/PLAN.md) | **The single live plan** — what remains, in what order, and what `1.0` requires. There is exactly one; do not write a second |
 | [`docs/audit/`](docs/audit/) | Findings, with evidence — what has been **observed**. Carries no plan |
-| `packages/corrigenda/docs/` | Library guides: [`quickstart`](packages/corrigenda/docs/quickstart.md), [`formats`](packages/corrigenda/docs/formats.md) (how the two backends are built), [`format-support`](packages/corrigenda/docs/format-support.md) (which versions, and what validates), [`edit-protocol`](packages/corrigenda/docs/edit-protocol.md), [`versioning`](packages/corrigenda/docs/versioning.md), and [`reading-a-report`](packages/corrigenda/docs/reading-a-report.md) — what each number in a run's report does **and does not** mean |
-| `packages/corrigenda/CHANGELOG.md` | The library's released changes (SemVer) |
+| `packages/lidenbrock/docs/` | Library guides: [`quickstart`](packages/lidenbrock/docs/quickstart.md), [`formats`](packages/lidenbrock/docs/formats.md) (how the two backends are built), [`format-support`](packages/lidenbrock/docs/format-support.md) (which versions, and what validates), [`edit-protocol`](packages/lidenbrock/docs/edit-protocol.md), [`versioning`](packages/lidenbrock/docs/versioning.md), and [`reading-a-report`](packages/lidenbrock/docs/reading-a-report.md) — what each number in a run's report does **and does not** mean |
+| `packages/lidenbrock/CHANGELOG.md` | The library's released changes (SemVer) |
 | [`docs/adr/`](docs/adr/) | Architecture decision records — why a design is what it is. Some record demo decisions (002, 003, 004); those retire with it |
 
 **The demo — accurate today, removed with the app:**
@@ -81,7 +81,7 @@ meet before it can claim to be one. The **top-level import surface is
 provisional until `1.0.0`** but no longer accidental: `S3b` cut it from 95
 accumulated symbols to the **68** two computed closures reach, and demoted
 symbols stay importable from their own module
-([`packages/corrigenda/docs/versioning.md`](packages/corrigenda/docs/versioning.md)).
+([`packages/lidenbrock/docs/versioning.md`](packages/lidenbrock/docs/versioning.md)).
 
 **Historical:** everything under [`docs/history/`](docs/history/) is
 frozen design & audit trail (original specs, migration and audit logs).
@@ -100,8 +100,8 @@ a decision was made, never for *where* code lives today.
 ## Local installation
 
 ```bash
-git clone https://github.com/maribakulj/corrigenda.git
-cd corrigenda
+git clone https://github.com/maribakulj/lidenbrock.git
+cd lidenbrock
 
 # Copy the example env file (edit if needed)
 cp .env.example .env
@@ -175,7 +175,7 @@ Single-worker on purpose — see Dockerfile comments. A multi-worker setup would
 
 ## Hyphenation Reconciler
 
-ALTO files often encode inter-line hyphenation via `SUBS_TYPE="HypPart1/HypPart2"` and `SUBS_CONTENT` attributes, or via a trailing dash heuristic; PAGE carries no equivalent markup, so pairing there is heuristic only. The **Hyphenation Reconciler** (`corrigenda.core.hyphenation`, in the `packages/corrigenda` library) treats such pairs as atomic units in both formats:
+ALTO files often encode inter-line hyphenation via `SUBS_TYPE="HypPart1/HypPart2"` and `SUBS_CONTENT` attributes, or via a trailing dash heuristic; PAGE carries no equivalent markup, so pairing there is heuristic only. The **Hyphenation Reconciler** (`lidenbrock.core.hyphenation`, in the `packages/lidenbrock` library) treats such pairs as atomic units in both formats:
 
 - Both lines are always sent in the **same LLM chunk** — never split across requests.
 - The LLM is instructed to correct each line individually without moving text between them.

@@ -83,10 +83,10 @@ check_untyped_defs = false
 ignore_missing_imports = true
 # `app.alto`, `app.jobs.chunk_planner/validator/line_acceptance/correction_pipeline`,
 # `app.protocols`, and `app.schemas` are re-export shims forwarding to
-# corrigenda. mypy needs implicit_reexport=true to chase `from X import *`
-# through them without requiring an `__all__` in the corrigenda modules.
+# lidenbrock. mypy needs implicit_reexport=true to chase `from X import *`
+# through them without requiring an `__all__` in the lidenbrock modules.
 implicit_reexport = true
-# Pure-domain modules now live in corrigenda; the shims point there.
+# Pure-domain modules now live in lidenbrock; the shims point there.
 [[tool.mypy.overrides]]
 module = [
     "app.jobs.runner",
@@ -127,7 +127,7 @@ pythonpath = ["."]
 markers = [
     "e2e: end-to-end scenarios against a real uvicorn backend + mock vendor",
 ]
-# Surface DeprecationWarnings so upstream API changes (corrigenda, FastAPI,
+# Surface DeprecationWarnings so upstream API changes (lidenbrock, FastAPI,
 # Pydantic, ...) reach us early instead of breaking suddenly. Switch to
 # "error" once the baseline is clean.
 
@@ -137,8 +137,8 @@ markers = [
 
 [tool.coverage.run]
 # Measure only app.* (HTTP + adapters living in backend). The pure
-# pipeline (corrigenda.*) carries its own tests and coverage gate in
-# packages/corrigenda (F11 — the algorithm tests were repatriated there),
+# pipeline (lidenbrock.*) carries its own tests and coverage gate in
+# packages/lidenbrock (F11 — the algorithm tests were repatriated there),
 # so measuring it from the backend run would undercount it now that those
 # tests no longer live here.
 source = ["app"]

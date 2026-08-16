@@ -13,11 +13,11 @@
 #        -o requirements-lock.txt requirements.in
 #   3. pytest
 #
-# NOTE: corrigenda is a sibling package in this monorepo, NOT listed here.
+# NOTE: lidenbrock is a sibling package in this monorepo, NOT listed here.
 # Install it separately before backend (so the cwd-relative path doesn't
 # bite us depending on where pip is run from):
 #
-#   pip install -e packages/corrigenda   # from the repo root
+#   pip install -e packages/lidenbrock   # from the repo root
 #   pip install -r backend/requirements.txt -r backend/requirements-dev.txt
 #
 # CI follows this two-step install. The Dockerfiles do too. See

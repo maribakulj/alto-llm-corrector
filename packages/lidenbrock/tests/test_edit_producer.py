@@ -1,0 +1,365 @@
+"""EditProducer contract, vision envelope, LLM adapter, and I4 (§5.1, §4.1)."""
+
+from __future__ import annotations
+
+import ast
+from pathlib import Path
+from typing import Any
+
+import pytest
+from pydantic import ValidationError as PydValidationError
+
+from lidenbrock.core.protocols import ProducerOptions
+from lidenbrock.core.editing import EditScript, ReplaceLine
+from lidenbrock.core.hyphenation import enrich_chunk_lines
+from lidenbrock.core.protocols import EditProducer, require_page_images
+from lidenbrock.core.schemas import (
+    PageManifest,
+    ChunkGranularity,
+    Coords,
+    ImageAsset,
+    ImageTransform,
+    LineManifest,
+    CorrectionRequest,
+    RetryPolicy,
+    Usage,
+)
+from lidenbrock.errors import ConfigurationError
+from lidenbrock.producers.llm_edit import LLMEditProducer
+from lidenbrock.producers.rules import RulesProducer, default_french_ocr_rules
+
+from tests._paths import SRC
+
+_SRC = SRC
+
+
+def _line(line_id: str, page_id: str = "pg") -> LineManifest:
+    return LineManifest(
+        line_id=line_id,
+        page_id=page_id,
+        block_id="b",
+        line_order_global=0,
+        line_order_in_block=0,
+        coords=Coords(hpos=1, vpos=2, width=3, height=4),
+        ocr_text="text",
+    )
+
+
+# ---------------------------------------------------------------------------
+# Contract shape
+# ---------------------------------------------------------------------------
+
+
+def test_rules_and_llm_producers_have_wants_flags():
+    r = RulesProducer(default_french_ocr_rules())
+    assert r.wants_geometry is False and r.wants_image is False
+
+
+# ---------------------------------------------------------------------------
+# Vision envelope copy (§4.1) — compiler copies geometry, never opens a pixel
+# ---------------------------------------------------------------------------
+
+
+def test_enrich_omits_geometry_by_default():
+    lm = _line("l1")
+    inputs = enrich_chunk_lines([lm], {"l1": lm})
+    assert inputs[0].geometry is None
+
+
+def test_enrich_copies_geometry_when_requested():
+    lm = _line("l1", page_id="pageA")
+    inputs = enrich_chunk_lines(
+        [lm],
+        {"l1": lm},
+        include_geometry=True,
+        page_dims={"pageA": (1000, 2000)},
+    )
+    geo = inputs[0].geometry
+    assert geo is not None
+    assert geo.coords == lm.coords
+    assert geo.page_width == 1000 and geo.page_height == 2000
+
+
+def test_payload_carries_opaque_image_ref():
+    lm = _line("l1")
+    payload = CorrectionRequest(
+        granularity=ChunkGranularity.LINE,
+        document_id="d",
+        page_id="pg",
+        lines=enrich_chunk_lines([lm], {"l1": lm}),
+        image_ref="s3://bucket/page1.tif",  # opaque, never opened
+    )
+    assert payload.image_ref == "s3://bucket/page1.tif"
+
+
+# ---------------------------------------------------------------------------
+# require_page_images (§5.1) — one image per PAGE, never per file
+# ---------------------------------------------------------------------------
+
+
+class _VisionProducer:
+    wants_geometry = True
+    wants_image = True
+
+    async def produce(self, payload: CorrectionRequest, *, options: RetryPolicy):
+        return EditScript(ops=[]), None
+
+
+def _page(page_id: str, source: str) -> PageManifest:
+    return PageManifest(
+        page_id=page_id,
+        source_file=source,
+        page_index=0,
+        page_width=1000,
+        page_height=1000,
+        blocks=[],
+        lines=[],
+    )
+
+
+def test_text_producer_never_requires_images():
+    require_page_images(RulesProducer([]), [_page("P1", "a.xml")], None)  # no raise
+
+
+def test_vision_producer_without_images_raises():
+    with pytest.raises(ConfigurationError):
+        require_page_images(_VisionProducer(), [_page("P1", "a.xml")], None)
+
+
+def test_vision_producer_missing_page_raises():
+    """Coverage is PER PAGE: a multipage file with one ref is incomplete —
+    the historical per-file mapping silently sent page 1's scan for every
+    page of the file."""
+    pages = [_page("P1", "a.xml"), _page("P2", "a.xml")]
+    with pytest.raises(ConfigurationError, match="P2"):
+        require_page_images(_VisionProducer(), pages, {"P1": "img-p1"})
+
+
+def test_vision_producer_with_all_pages_ok():
+    pages = [_page("P1", "a.xml"), _page("P2", "a.xml")]
+    require_page_images(
+        _VisionProducer(), pages, {"P1": "img-p1", "P2": "img-p2"}
+    )  # no raise
+
+
+# ---------------------------------------------------------------------------
+# ImageAsset — the structured, recommended page image
+# ---------------------------------------------------------------------------
+
+
+def test_correction_request_accepts_image_asset_verbatim():
+    """The §4.1 envelope carries the richer ImageAsset, not only a bare str:
+    before ``image_ref`` was typed ``str | None`` and pydantic
+    rejected a model here."""
+    asset = ImageAsset(
+        page_id="P1",
+        uri="scan.tif",
+        sha256="ab" * 32,
+        media_type="image/tiff",
+        pixel_width=2000,
+        pixel_height=3000,
+        frame_index=2,
+        exif_orientation=6,
+        transform=ImageTransform(scale_x=2.0, scale_y=2.0),
+    )
+    req = CorrectionRequest(
+        granularity=ChunkGranularity.LINE,
+        document_id="d",
+        page_id="P1",
+        lines=[],
+        image_ref=asset,
+    )
+    assert req.image_ref is asset
+    # A bare ImageRef still rides the same field.
+    assert (
+        CorrectionRequest(
+            granularity=ChunkGranularity.LINE,
+            document_id="d",
+            page_id="P1",
+            lines=[],
+            image_ref="scan.tif",
+        ).image_ref
+        == "scan.tif"
+    )
+
+
+def test_require_page_images_accepts_image_asset_values():
+    pages = [_page("P1", "a.xml"), _page("P2", "a.xml")]
+    require_page_images(
+        _VisionProducer(),
+        pages,
+        {
+            "P1": ImageAsset(page_id="P1", uri="p1.tif"),
+            "P2": "p2.tif",  # mixed str + ImageAsset is fine
+        },
+    )  # no raise
+
+
+def test_require_page_images_rejects_asset_page_id_mismatch():
+    """A scan that names a different page than its mapping key is the silent
+    wrong-image bug the per-page contract exists to catch — before the routing tier
+    the value type was opaque and this slipped through."""
+    pages = [_page("P1", "a.xml")]
+    with pytest.raises(ConfigurationError, match="page_id"):
+        require_page_images(
+            _VisionProducer(),
+            pages,
+            {"P1": ImageAsset(page_id="P2", uri="p2.tif")},
+        )
+
+
+def test_image_asset_field_constraints():
+    """Decoded fields are bounded so a malformed asset fails loudly, not at
+    crop time; every decoded field defaults to None (metadata-poor asset)."""
+    bare = ImageAsset(page_id="P1", uri="x")
+    assert bare.sha256 is None and bare.media_type is None
+    assert bare.pixel_width is None and bare.frame_index == 0
+    assert bare.exif_orientation is None and bare.transform is None
+    for bad in (
+        {"pixel_width": 0},
+        {"pixel_height": -1},
+        {"frame_index": -1},
+        {"exif_orientation": 0},
+        {"exif_orientation": 9},
+    ):
+        with pytest.raises(PydValidationError):
+            ImageAsset(page_id="P1", uri="x", **bad)
+    for bad_t in ({"scale_x": 0.0}, {"scale_y": -1.0}):
+        with pytest.raises(PydValidationError):
+            ImageTransform(**bad_t)
+
+
+# ---------------------------------------------------------------------------
+# LLM adapter: BaseProvider -> EditProducer (replace_line re-expression)
+# ---------------------------------------------------------------------------
+
+
+class _FakeProvider:
+    async def list_models(self, api_key: str):  # pragma: no cover - unused
+        return []
+
+    async def complete_structured(
+        self,
+        api_key: str,
+        model: str,
+        system_prompt: str,
+        user_payload: dict[str, Any],
+        json_schema: dict[str, Any],
+        temperature: float = 0.0,
+    ) -> tuple[dict[str, Any], Usage | None]:
+        self.last_temperature = temperature
+        return (
+            {
+                "lines": [
+                    {"line_id": "l1", "corrected_text": "Hello"},
+                    {"line_id": "l2", "corrected_text": "World"},
+                    {"bad": "entry"},  # skipped
+                ]
+            },
+            Usage(input_tokens=10, output_tokens=5),
+        )
+
+
+def test_llm_adapter_produces_replace_line_script_and_usage():
+    import asyncio
+
+    provider = _FakeProvider()
+    prod = LLMEditProducer(
+        provider, "key", "model", system_prompt="sys", output_schema={}
+    )
+    assert isinstance(prod, EditProducer)  # structural
+    payload = CorrectionRequest(
+        granularity=ChunkGranularity.LINE, document_id="d", page_id="pg", lines=[]
+    )
+    script, usage = asyncio.run(prod.produce(payload, options=ProducerOptions()))
+    ops = script.ops
+    assert all(isinstance(o, ReplaceLine) for o in ops)
+    assert {o.line_id: o.text for o in ops} == {"l1": "Hello", "l2": "World"}
+    assert usage == Usage(input_tokens=10, output_tokens=5)
+    assert provider.last_temperature == 0.0  # attempt-1 temperature
+
+
+def test_llm_producer_declares_text_only_capabilities():
+    """— the text LLM producer declares a no-vision capability."""
+    prod = LLMEditProducer(_FakeProvider(), "key", "model")
+    assert prod.capabilities.text is True
+    assert prod.capabilities.vision is False
+    assert prod.capabilities.structured_output is True
+
+
+# ---------------------------------------------------------------------------
+# I4 — pixel-blindness (restated, the vision/QE programme)
+#
+# "No image lib anywhere in lidenbrock" was a too-broad PROXY for the thing
+# that actually matters: the correction engine on the base install path
+# (core + formats + text producers) is pixel-free and provably so. The
+# opt-in lidenbrock[vision] producer's whole job IS pixels — banning image
+# libs from it too was the proxy over-reaching past its own rationale.
+#
+# So I4 is now two claims, mirroring the lidenbrock[qe] contract:
+#   * STATIC (here): the pixel-blind zone — everything BUT the sanctioned
+#     vision surface — imports no image lib, at module level or nested; and
+#     the vision surface itself imports them only LAZILY (never at module
+#     import, so introspection stays cheap and the base install never pays).
+#   * RUNTIME (test_import_contract.py): importing lidenbrock pulls no image
+#     lib into sys.modules — the honest, transitive proof of pixel-blindness.
+# ---------------------------------------------------------------------------
+
+
+_IMAGE_MODULES = ("PIL", "cv2", "imageio", "skimage", "wand", "pillow", "torchvision")
+
+#: The ONE sanctioned place a heavy image lib may be imported (lazily): the
+#: opt-in lidenbrock[vision] producer, under src/lidenbrock/integrations/.
+#: Everything else is the pixel-blind zone.
+_VISION_SURFACE = {"vision.py"}
+
+
+def _is_vision_surface(py: Path) -> bool:
+    return py.parent.name == "integrations" and py.name in _VISION_SURFACE
+
+
+def _image_imports(py: Path, *, nested: bool) -> list[str]:
+    """Image-lib imports in ``py`` — the whole tree when ``nested``, only the
+    module-body top level otherwise."""
+    tree = ast.parse(py.read_text(encoding="utf-8"), filename=str(py))
+    nodes = ast.walk(tree) if nested else iter(tree.body)
+    hits: list[str] = []
+    for node in nodes:
+        names: list[str] = []
+        if isinstance(node, ast.Import):
+            names = [a.name for a in node.names]
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            names = [node.module]
+        for name in names:
+            if name.split(".")[0] in _IMAGE_MODULES:
+                hits.append(f"{py.name}:{node.lineno} imports {name}")
+    return hits
+
+
+def test_i4_pixel_blind_zone_imports_no_image_library():
+    """The pixel-blind zone (core, formats, text producers, and every
+    integration BUT the opt-in vision one) imports no image library at all —
+    module level OR nested. This is what keeps the correction engine pure."""
+    offenders: list[str] = []
+    for py in _SRC.rglob("*.py"):
+        if _is_vision_surface(py):
+            continue
+        offenders += _image_imports(py, nested=True)
+    assert not offenders, (
+        f"I4 violation — image lib in the pixel-blind zone: {offenders}"
+    )
+
+
+def test_i4_vision_surface_keeps_image_libs_function_local():
+    """The sanctioned vision producer MAY import Pillow — but lazily, never at
+    module level: importing the module (introspection, protocol/isinstance
+    checks) must not pay the heavy image runtime (mirrors the qe scorer's
+    contract). Vacuously green until the lidenbrock[vision] producer lands."""
+    for py in _SRC.rglob("*.py"):
+        if not _is_vision_surface(py):
+            continue
+        module_level = _image_imports(py, nested=False)
+        assert not module_level, (
+            "vision surface must import image libs lazily, not at module "
+            f"level: {module_level}"
+        )

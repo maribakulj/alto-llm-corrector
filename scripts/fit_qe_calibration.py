@@ -9,7 +9,7 @@ degradation, and can PATCH the bundle manifest so it becomes
 self-describing (the scorer then reads the right constants automatically).
 
     python scripts/fit_qe_calibration.py \
-        --model-dir ~/.cache/corrigenda/camembert-onnx \
+        --model-dir ~/.cache/lidenbrock/camembert-onnx \
         --sentences scripts/data/press19_clean.txt --reducer max --write
 
 Provisional by nature: the degradations are scripted (not real OCR) and
@@ -27,10 +27,10 @@ import sys
 from pathlib import Path
 
 _REPO = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(_REPO / "packages" / "corrigenda" / "src"))
+sys.path.insert(0, str(_REPO / "packages" / "lidenbrock" / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from corrigenda.integrations.qe import MaskedLMQEScorer, _sigmoid  # noqa: E402
+from lidenbrock.integrations.qe import MaskedLMQEScorer, _sigmoid  # noqa: E402
 from qe_benchmark import auc, fit_platt  # noqa: E402
 
 # Classic OCR confusions on MODERN print (late-19th c.), clean→OCR. Unlike

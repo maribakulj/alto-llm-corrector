@@ -1,4 +1,4 @@
-# Corrigenda — plan de route unique
+# Lidenbrock — plan de route unique
 
 **C'est le seul document de planification vivant du dépôt.** Il remplace
 `docs/history/PLAN-1.0-2026-07-15.md`, `docs/history/ROADMAP_LIB_V3.md` et la section §13
@@ -158,16 +158,16 @@ et ne contestent aucun constat. Ils déplacent des frontières : ce que ce dép�
 contient, où la mesure s'exécute, et ce qui vaut publication. Comme le bloc du
 2026-08-11, chacun est réversible en modifiant ce paragraphe.
 
-**1. Trois dépôts, un seul livrable.** `corrigenda` est la **bibliothèque, et
+**1. Trois dépôts, un seul livrable.** `lidenbrock` est la **bibliothèque, et
 rien d'autre**. Deux dépôts la servent sans en faire partie : `cinoc` (le banc,
 qui existait déjà et que personne ici n'avait relié au projet) et
-`corrigenda-demo` (la démo web, qui sort d'ici). La règle de dépendance de
+`lidenbrock-demo` (la démo web, qui sort d'ici). La règle de dépendance de
 `CLAUDE.md` est inchangée et s'étend : **les deux importent la bibliothèque,
 jamais l'inverse.**
 
 **2. La démo part maintenant, pas « à la forme finale ».** `backend/`,
 `frontend/`, `tools/e2e/`, `Dockerfile`, `docker-compose.yml`, `docs/API.md`,
-`SECURITY.md` et le workflow HF Spaces s'en vont dans `corrigenda-demo`.
+`SECURITY.md` et le workflow HF Spaces s'en vont dans `lidenbrock-demo`.
 `SECURITY.md` disait déjà « la démo se retire quand la bibliothèque atteint sa
 forme finale » — la date était la seule chose qui manquait. Effet de bord
 gratuit : le workflow `Sync to HF Spaces`, **rouge à chaque push depuis au
@@ -185,11 +185,11 @@ suivent : la GT ALTO+images de `37-GT-BNL` est exactement la couche
 structurelle qui manque au corpus texte que `cinoc` possède déjà sur la même
 source.
 
-**4. `corrigenda` devient une brique du socle de `cinoc`**, derrière un extra
-`cinoc[corrigenda]`, comme les 19 autres moteurs — et non un plugin tiers. Un
+**4. `lidenbrock` devient une brique du socle de `cinoc`**, derrière un extra
+`cinoc[lidenbrock]`, comme les 19 autres moteurs — et non un plugin tiers. Un
 plugin tiers est **refusé en mode public par conception** là-bas, donc il
 n'apparaîtrait jamais dans la vitrine ; or la comparaison « OCR→LLM nu » contre
-« OCR→corrigenda(LLM) » est la démonstration la plus directe de ce que cette
+« OCR→lidenbrock(LLM) » est la démonstration la plus directe de ce que cette
 bibliothèque apporte.
 
 **5. Le module réutilise la couche fournisseur de `cinoc`.** Le module prend un
@@ -205,11 +205,11 @@ marginal). Ce dépôt garde le **protocole** `QEScorer`, qui est le point
 d'injection ; il perd une implémentation qu'aucune CI n'exécute, dont les tests
 se sautent partout, dont la calibration presse-19e est provisoire, et dont le
 bundle de 545 Mo n'a **aucun canal de distribution** — `pip install
-corrigenda[qe]` livre aujourd'hui un extra inutilisable.
+lidenbrock[qe]` livre aujourd'hui un extra inutilisable.
 
 **7. `0.10.0rc1` avant `0.10.0`, et le tag n'est pas une exigence de PyPI.**
 Vérifié : ni PyPI, ni TestPyPI, ni l'OIDC ne demandent de tag. C'est
-`.github/workflows/publish-corrigenda.yml` qui l'exige, dans une étape écrite
+`.github/workflows/publish-lidenbrock.yml` qui l'exige, dans une étape écrite
 exprès pour qu'un `workflow_dispatch` distrait ne publie pas ce que `main`
 pointe. La contrainte est donc **la nôtre**, et négociable. Elle n'est pas
 levée : on tague un `rc` de répétition. Ce qui ne se reprend pas n'est pas le
@@ -283,7 +283,7 @@ Tranché, et plus petit qu'annoncé.
   licence). Un usage comme fixture relève de la première.
 
 **Et la troisième option du plan était déjà vraie** : les corpus vivent à la
-racine du dépôt, hors de `packages/corrigenda/`, et `sdist.include` est un
+racine du dépôt, hors de `packages/lidenbrock/`, et `sdist.include` est un
 allowlist explicite de quatre entrées. **Aucun corpus ne part dans la wheel ni
 dans la sdist** — vérifié, et désormais épinglé par
 `tests/test_packaging_excludes_corpora.py`, qui refuse aussi qu'un README de
@@ -923,14 +923,14 @@ raterait sa cible.
 **Correction (2026-07-28) d'une mesure fausse de ce plan.** La version
 précédente de ce paragraphe affirmait « `build_document_manifest` 18×,
 `parse_alto_file` 5×, `rewrite_alto_file` 2× » depuis le sommet. C'est faux :
-le comptage confondait `from corrigenda import X` avec
-`from corrigenda.formats.loader import X`. La mesure refaite, sur les
+le comptage confondait `from lidenbrock import X` avec
+`from lidenbrock.formats.loader import X`. La mesure refaite, sur les
 instructions d'import du dépôt entier :
 
 | forme | dépôt | backend |
 |---|---|---|
-| `from corrigenda import …` (sommet) | **64** | 7 |
-| `from corrigenda.<module> import …` | **695** | 60 |
+| `from lidenbrock import …` (sommet) | **64** | 7 |
+| `from lidenbrock.<module> import …` | **695** | 60 |
 
 Et les 7 du backend ne touchent que des symboles **gardés** par la répartition
 ci-dessous, plus `sanitize_error` (3 sites). La conclusion tient toujours, mais
@@ -950,10 +950,10 @@ dans des scripts et exemples, et **6 en production** — toutes pour
 | ce que la façade retourne | 25 | `CorrectionResult`, `CorrectionReport`, `DecisionSet`, les manifestes, les étages du rapport, la provenance… |
 | porte avancée | 7 | `CorrectionPipeline`, `EditProducer`, `PipelineObserver`, `BaseProvider`… |
 | policies injectables | 7 | `RetryPolicy`, `GuardConfig`, `ChunkPlannerConfig`, `PairingPolicy`, `LossPolicy`, `ConfidencePolicy`, `RoutingPolicy` |
-| erreurs | 7 | la hiérarchie `CorrigendaError` |
+| erreurs | 7 | la hiérarchie `LidenbrockError` |
 | **ajoutés** | 4 | les 4 trous ci-dessus |
 
-**Rétrogradés (45)** — retirés de `corrigenda.*`, **toujours importables depuis
+**Rétrogradés (45)** — retirés de `lidenbrock.*`, **toujours importables depuis
 leur module** (vérifié : les 45 ont un module d'accueil réel).
 
 | groupe | n |
@@ -977,7 +977,7 @@ surface réelle en recalculant les clôtures. Elle ne tient plus, et pas d'un
 peu : **la surface n'est pas 41 symboles trop grande, elle est 4 trop grande
 et 9 trop petite.**
 
-`corrigenda.__all__` vaut **66** aujourd'hui — `RM-04` avait déjà fait
+`lidenbrock.__all__` vaut **66** aujourd'hui — `RM-04` avait déjà fait
 l'essentiel de la coupe. Et :
 
 | clôture | taille | état |
@@ -1075,7 +1075,7 @@ la décrivaient faussement.
   les deux sens.** La promesse est retirée (et non honorée : le gel suspend
   l'extension de l'API publique, et `S3` réduit).
 - `versioning.md` et `README.md` énoncent désormais le statut provisoire et la
-  règle des **deux portes** — `corrigenda.*` sous SemVer strict *à partir de*
+  règle des **deux portes** — `lidenbrock.*` sous SemVer strict *à partir de*
   `1.0.0`, chemins de modules supportés et documentés. Un symbole rétrogradé
   n'est pas supprimé, il est déplacé.
 
@@ -1141,7 +1141,7 @@ Ce qui reste, et ce n'est pas de la correction :
    `P2`. C'est la seule dépendance circulaire du lot et elle se casse en
    taguant.
 2. **`P2`** — `0.9.0` → `0.10.0` dans `__version__` (le `pyproject` le lit),
-   entrée `CHANGELOG.md`, tag `corrigenda-v0.10.0`, SBOM, publier l'artefact
+   entrée `CHANGELOG.md`, tag `lidenbrock-v0.10.0`, SBOM, publier l'artefact
    **testé**.
 3. **Un garde-fou déjà tenu, à ne pas perdre** : « aucune revendication de
    qualité ne sort du dépôt sans `M2` + `M3` ». Vérifié le 2026-08-11 — les
@@ -1234,9 +1234,9 @@ Quatre dépendances seulement, toutes réelles :
    `S3b` vient de figer à 68 par calcul de clôture. `docs/versioning.md`
    autorise la série `0.9.x` à casser, mais dépenser cette cartouche est un
    arbitrage de produit. **Tranché le 2026-08-06 : option A** — extra
-   `corrigenda[research]`, les modules restent dans l'arbre et sortent de
+   `lidenbrock[research]`, les modules restent dans l'arbre et sortent de
    `__all__` et de la couverture obligatoire. L'option B (paquet
-   `corrigenda-lab` séparé) est réservée au cas où la levée du gel dépasse
+   `lidenbrock-lab` séparé) est réservée au cas où la levée du gel dépasse
    `0.10.0`.
 
 `RM-09` arrive tard bien qu'il soit le moins risqué : avec 44 importateurs il
@@ -1321,7 +1321,7 @@ Branche : `claude/rm-session-10-nettoyages-qb74pu`.
 - **Done** — `RM-02` + `RM-10` (session 2) : `_PARAMETER_TARGET = 8` rejoint
   `_FUNCTION_TARGET`, avec la même sémantique de cliquet et 13 fonctions
   épinglées à leur arité mesurée (`_OVERPARAMETERISED`) ; le scan passe de
-  `core/*.py` à `src/corrigenda/**/*.py`, et 6 fonctions de `formats/`
+  `core/*.py` à `src/lidenbrock/**/*.py`, et 6 fonctions de `formats/`
   rejoignent `_OVERSIZED` à leur taille mesurée. **Épingler n'est pas
   s'engager à couper** : `formats/alto/rewriter.py` reste hors d'atteinte.
   Sensibilité vérifiée dans les deux sens puis annulée (un 10ᵉ argument sur
@@ -1402,8 +1402,8 @@ Branche : `claude/rm-session-10-nettoyages-qb74pu`.
   Écarté : un drapeau d'état sur le manifeste (remettrait de l'état de run
   sur un objet partagé, ce qu'`ADR-011` a retiré) et « un point d'entrée
   unique » (`_finalize_document` l'est déjà et ne refuse rien — les passes
-  restent importables). `RuntimeError` et non `CorrigendaError` : un ordre
-  faux est un bug moteur, et `CorrigendaError` est la famille que la boucle
+  restent importables). `RuntimeError` et non `LidenbrockError` : un ordre
+  faux est un bug moteur, et `LidenbrockError` est la famille que la boucle
   de chunk absorbe (`ADR-008`). Le jeton est **optionnel** — `None` =
   non vérifié — parce que c'est la seule façon pour le test de
   démonstration de tourner l'ordre faux ; l'échappatoire est fermée de
@@ -1413,7 +1413,7 @@ Branche : `claude/rm-session-10-nettoyages-qb74pu`.
 - **Done** — `RM-04` (session 7), **et son périmètre était surestimé de
   moitié** : la mesure a précédé le déplacement, et elle a coupé l'item en
   deux. `integrations/qe.py` et `integrations/vision.py` — **818 des 1600
-  lignes** — étaient **déjà** derrière `corrigenda[qe]` / `corrigenda[vision]`
+  lignes** — étaient **déjà** derrière `lidenbrock[qe]` / `lidenbrock[vision]`
   et **déjà** hors de la barre de couverture, avant la vague. Le mécanisme
   d'option A était en place ; ce qui manquait, c'était **ce qui tient la
   frontière**. Une entrée `pyproject.toml` et un `omit` de couverture
@@ -1458,7 +1458,7 @@ Branche : `claude/rm-session-10-nettoyages-qb74pu`.
   (`_render_outputs`, `for_provider`), qui échoue dans les deux sens — une
   fonction non nommée qui atteint un format, et une fonction nommée qui a
   cessé de le faire. Une seconde règle interdit l'import de niveau module.
-- **Décision tranchée** — la boucle `from corrigenda import __version__`
+- **Décision tranchée** — la boucle `from lidenbrock import __version__`
   (`core/rendering.py`, `core/provenance.py`) **reste ouverte**, et sur le
   fond : elle porte **un** symbole, une chaîne de niveau module ; un import
   paresseux ne peut ni interbloquer ni rendre un objet à moitié initialisé.
@@ -1678,7 +1678,7 @@ Branche : `claude/rm-session-10-nettoyages-qb74pu`.
   de bord de déplacement.
 - **Done** — le regroupement est **tenu par un test**, parce que rassembler
   ne tient pas tout seul : `test_the_net_is_bounded.py` exige que tout
-  module de test important `corrigenda.core.pairing`, `.units` ou
+  module de test important `lidenbrock.core.pairing`, `.units` ou
   `.hyphenation` vive dans ce répertoire, à cinq exceptions **nommées avec
   leur raison**. Deux gardes sur la garde : une entrée d'allowlist qui
   n'atteint plus le code doit *partir*, et le scan doit continuer à voir au
@@ -1922,12 +1922,12 @@ mesurer avant de corriger.
 
 | id | item |
 |---|---|
-| ~~D1~~ | **fait** — vérifié le 2026-07-28 : `SPECS §I4` est titré « Le cœur est aveugle aux pixels » et porte la portée en trois niveaux ; `packages/corrigenda/README.md` dit « **the core** forwards an opaque image reference and touches no pixel ». Remplacement de mots, aucun arbitrage — la conception, elle, était déjà juste et vérifiée mécaniquement |
+| ~~D1~~ | **fait** — vérifié le 2026-07-28 : `SPECS §I4` est titré « Le cœur est aveugle aux pixels » et porte la portée en trois niveaux ; `packages/lidenbrock/README.md` dit « **the core** forwards an opaque image reference and touches no pixel ». Remplacement de mots, aucun arbitrage — la conception, elle, était déjà juste et vérifiée mécaniquement |
 | ~~D2~~ | **fait (2026-07-28)** — et plus large que l'énoncé. L'arbre `§3` décrivait un paquet nommé `lib/` avec **7** modules de cœur, sans `integrations/`, sans `errors.py`, sans `facade.py`, et avec un `producers/llm.py` inexistant ; le vrai cœur en a **21**. Réécrit depuis l'arborescence réelle. `§5.1` montrait `produce(payload: ModelPayload, *, policy: RetryPolicy)` : un type qui n'existe pas, et le `RetryPolicy` complet que **P3.7 a précisément retiré** de cette couture — la spec contredisait sa propre prose sur `ProducerOptions` |
 | ~~D3~~ | **fait (2026-07-28)** — `0.0021` porte désormais sa provenance : un **VLM oracle**, producteur simulé qui rend la vérité terrain. Le chiffre mesure le **routage**, pas un modèle. Lu comme une borne supérieure de ce que le routage peut acheter, jamais comme une revendication de qualité |
 | ~~D4~~ | **fait (2026-07-28) — et le vrai constat est plus dur que l'énoncé.** Le nombre a grossi : **1 221** lignes / **81** entrées sous `[Unreleased]` (827 au 25/07). Mais le défaut n'est pas la taille : le `CHANGELOG` porte **trois en-têtes de version datés** (`[0.9.0]`, `[0.9.0 initial scope]`, `[0.1.0a1]`) alors qu'il existe **0 tag git** et **0 publication** — des jalons de développement présentés comme des versions. Corrigé en tête de fichier, sans mentir : rien n'a jamais été publié, donc rien n'est dû à personne, et la section qui porte tout l'historique des ruptures d'API est bien celle que SemVer déclare non engageante. Plus un **index des ruptures** (13 entrées) pour qu'elles soient une *liste* et non une trouvaille au défilement. Découper une section de release demande un tag : c'est `P1`/`P2`, pas ici |
 | ~~D5~~ | **fait (2026-07-28) — l'asymétrie était juste, son silence ne l'était pas.** On dispatche sur `report.report_version`, le **champ** lu sur l'artefact qu'on tient : la constante dit ce que *cette* installation émet, donc la comparer à un rapport chargé n'apprend rien sur ce rapport. D'où la différence avec `EDIT_PROTOCOL_VERSION`, exporté : la version du protocole d'édition, un producteur la **déclare** ; celle du rapport, un lecteur la **trouve**. Écrit dans `versioning.md`, avec le chemin de module pour l'outil qui a vraiment besoin de la constante. Ajouter la constante à `__all__` aurait fait **grandir** la surface, ce que le cliquet de `S3a` interdit |
-| ~~D6~~ | **fait (2026-07-28)** — `packages/corrigenda/docs/reading-a-report.md` : pour chaque chiffre du rapport, ce qu'il dit **et ce qu'il ne dit pas**. `0 fallback` = « aucune proposition refusée », ce qui est presque l'inverse de « rien n'a changé » ; `format_losses is None` ≠ « rien n'a été perdu » (un caractère aplati est compté sur l'échelle de fidélité) ; `exact` compare le fichier à la **décision**, pas à la vérité. Plus la section qu'aucun chiffre ne couvre : les gardes sont **structurelles** — aucune ne connaît le français, et une lecture plausible, fluide et fausse les passe toutes |
+| ~~D6~~ | **fait (2026-07-28)** — `packages/lidenbrock/docs/reading-a-report.md` : pour chaque chiffre du rapport, ce qu'il dit **et ce qu'il ne dit pas**. `0 fallback` = « aucune proposition refusée », ce qui est presque l'inverse de « rien n'a changé » ; `format_losses is None` ≠ « rien n'a été perdu » (un caractère aplati est compté sur l'échelle de fidélité) ; `exact` compare le fichier à la **décision**, pas à la vérité. Plus la section qu'aucun chiffre ne couvre : les gardes sont **structurelles** — aucune ne connaît le français, et une lecture plausible, fluide et fausse les passe toutes |
 | ~~D7~~ | **fait (2026-07-28) — zéro sur les quatre.** Mesuré avant : `src/`+`app/` **27** `ROADMAP V3` / **69** `Phase N` / **25** `Audit-F`, tests **33 / 56 / 4 / 1**. Après : **0 / 0 / 0 / 0** dans tout `.py` et dans les documents normatifs. La forme dominante était une **étiquette de provenance** devant une phrase qui portait déjà sa raison : l'étiquette part, la phrase reste. Les usages en prose (« la calibration de Phase 2 ») sont remplacés par la **raison** — « la calibration contre un corpus réel » — parce qu'un numéro de jalon d'une feuille de route gelée n'est pas consultable. Quatre fichiers de test dont le **nom** était l'étiquette ont été renommés d'après ce qu'ils testent. **Incident à retenir** : la première passe portait une règle de rangement de parenthèses qui a recollé des fermetures multi-lignes dans **213 fichiers** — syntaxiquement valide, donc les tests seraient passés au vert sur un diff qui reformatait tout le dépôt. Revertée. Un balayage sur du source touche le **texte** des commentaires, jamais la forme du code autour |
 | ~~D8~~ | **fait** — le `README` annonce ALTO **et** PAGE dès le titre, l'accroche et la matrice de versions |
 | ~~D9~~ | **fait** — la carte documentaire nomme `docs/PLAN.md` comme **le** plan unique et `docs/audit/` comme les constats, à côté de l'avertissement sur `docs/history/` |
@@ -1941,7 +1941,7 @@ mesurer avant de corriger.
 
 | id | item |
 |---|---|
-| P1 | Répétition sur TestPyPI (le workflow n'a jamais été exercé, 0 tag git) | **répétée en local (2026-08-01), upload non fait** — il demande l'OIDC de GitHub Actions. Toute la chaîne du workflow rejouée : `python -m build`, `twine check` (PASSED sur les deux artefacts), smoke-install de la wheel (`_smoke_imports.py` : 68 symboles publics), SBOM CycloneDX + l'assertion anti-pollution, cohérence `__version__` ↔ CHANGELOG, forme du tag attendu (`corrigenda-v0.9.0`). **Deux constats, corrigés** : (a) le sdist livré ne correspondait pas à son allowlist — hatchling traite les entrées comme des MOTIFS, donc `README.md` attrapait `tests/corpus_gt/README.md` et `tests/external_corpus/pinned/README.md` ; aucune donnée de corpus n'est jamais partie, mais le test de packaging vérifiait la *déclaration* et non l'artefact. Entrées ancrées (`/README.md`), test réécrit pour lire le sdist et la wheel CONSTRUITS. (b) la CI sautait `twine check` sur une raison périmée (twine < 7 rejetait `License-File` de Metadata 2.4) : twine 7 l'accepte, vérifié sur cette wheel, la porte est rétablie | reste : dispatcher le workflow sur `testpypi` depuis GitHub, ce qui exige le tag donc `P2` |
+| P1 | Répétition sur TestPyPI (le workflow n'a jamais été exercé, 0 tag git) | **répétée en local (2026-08-01), upload non fait** — il demande l'OIDC de GitHub Actions. Toute la chaîne du workflow rejouée : `python -m build`, `twine check` (PASSED sur les deux artefacts), smoke-install de la wheel (`_smoke_imports.py` : 68 symboles publics), SBOM CycloneDX + l'assertion anti-pollution, cohérence `__version__` ↔ CHANGELOG, forme du tag attendu (`lidenbrock-v0.9.0`). **Deux constats, corrigés** : (a) le sdist livré ne correspondait pas à son allowlist — hatchling traite les entrées comme des MOTIFS, donc `README.md` attrapait `tests/corpus_gt/README.md` et `tests/external_corpus/pinned/README.md` ; aucune donnée de corpus n'est jamais partie, mais le test de packaging vérifiait la *déclaration* et non l'artefact. Entrées ancrées (`/README.md`), test réécrit pour lire le sdist et la wheel CONSTRUITS. (b) la CI sautait `twine check` sur une raison périmée (twine < 7 rejetait `License-File` de Metadata 2.4) : twine 7 l'accepte, vérifié sur cette wheel, la porte est rétablie | reste : dispatcher le workflow sur `testpypi` depuis GitHub, ce qui exige le tag donc `P2` |
 | P2 | Premier tag `0.10.0`, SBOM, publier l'artefact testé |
 | P3 | `1.0.0` uniquement : revue humaine externe indépendante de l'API publique, après `V1`-`V9` |
 

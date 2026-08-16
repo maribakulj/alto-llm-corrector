@@ -2,7 +2,7 @@
 """QE scorer bake-off (ROADMAP V3 Phase 3): D'AlemBERT vs the heuristic.
 
 Answers the Phase-3 exit question with numbers a PR can cite: does the
-zero-shot D'AlemBERT masked-LM scorer (``corrigenda[qe]``) beat the
+zero-shot D'AlemBERT masked-LM scorer (``lidenbrock[qe]``) beat the
 zero-dependency :class:`HeuristicQEScorer` at telling a line/token that
 still needs correction from one that is already clean?
 
@@ -25,7 +25,7 @@ so it stays an honest test set.
     python scripts/qe_benchmark.py --fit          # print Platt constants
     python scripts/qe_benchmark.py                # full comparison table
 
-Dev tooling: needs the ``corrigenda[qe]`` deps and the exported ONNX
+Dev tooling: needs the ``lidenbrock[qe]`` deps and the exported ONNX
 bundle (``scripts/export_dalembert_onnx.py``). Never imported by the core.
 """
 
@@ -37,19 +37,19 @@ import sys
 from pathlib import Path
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(_REPO_ROOT / "packages" / "corrigenda" / "src"))
+sys.path.insert(0, str(_REPO_ROOT / "packages" / "lidenbrock" / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import qe_data  # noqa: E402  (sibling script: record generation)
-from corrigenda.core.quality import HeuristicQEScorer  # noqa: E402
-from corrigenda.integrations.qe import (  # noqa: E402
+from lidenbrock.core.quality import HeuristicQEScorer  # noqa: E402
+from lidenbrock.integrations.qe import (  # noqa: E402
     DEFAULT_MODEL_DIR,
     MaskedLMQEScorer,
     _sigmoid,
 )
 
 DEFAULT_CORPUS = (
-    _REPO_ROOT / "packages" / "corrigenda" / "tests" / "corpus_gt" / "manifest.json"
+    _REPO_ROOT / "packages" / "lidenbrock" / "tests" / "corpus_gt" / "manifest.json"
 )
 
 

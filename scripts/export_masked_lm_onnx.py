@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Dev-time export of a masked-LM to an ONNX QE bundle (ROADMAP V3 Phase 3).
 
-Tooling, NOT part of the ``corrigenda[qe]`` extra: it needs the heavy
+Tooling, NOT part of the ``lidenbrock[qe]`` extra: it needs the heavy
 conversion stack (``optimum``, ``transformers``, ``torch``) once, offline,
 to produce a self-contained runtime bundle any ``MaskedLMQEScorer`` can
 load with ``onnxruntime`` + ``tokenizers`` alone:
@@ -20,13 +20,13 @@ own model behind the same seam:
     # 16-18th c. — D'AlemBERT (the module defaults already match it):
     python scripts/export_masked_lm_onnx.py \
         --model-id pjox/dalembert --license Apache-2.0 \
-        --out ~/.cache/corrigenda/dalembert-onnx --validate
+        --out ~/.cache/lidenbrock/dalembert-onnx --validate
 
     # late-19th c. press — CamemBERT, with its own fitted calibration:
     python scripts/export_masked_lm_onnx.py \
         --model-id camembert-base --license MIT \
         --midpoint 8.4 --scale 3.1 --reducer max \
-        --out ~/.cache/corrigenda/camembert-onnx --validate
+        --out ~/.cache/lidenbrock/camembert-onnx --validate
 
 ``--validate`` proves the export is faithful (ONNX logits ≈ torch, model-
 agnostic). Fit ``--midpoint/--scale`` offline with
@@ -130,7 +130,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--out",
         type=Path,
-        default=Path.home() / ".cache" / "corrigenda" / "dalembert-onnx",
+        default=Path.home() / ".cache" / "lidenbrock" / "dalembert-onnx",
     )
     parser.add_argument("--midpoint", type=float, default=None)
     parser.add_argument("--scale", type=float, default=None)

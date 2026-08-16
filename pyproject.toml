@@ -4,15 +4,15 @@
 # in lockstep. Each package keeps its own `pyproject.toml` with its
 # own dependencies and version. Backward-compatible: existing `pip
 # install -r backend/requirements*.txt` flow still works because
-# backend declares its dependency on corrigenda via a relative path.
+# backend declares its dependency on lidenbrock via a relative path.
 
 [project]
-name = "corrigenda-workspace"
+name = "lidenbrock-workspace"
 version = "0.0.0"
 description = "Workspace root — not published"
 requires-python = ">=3.11"
 
 [tool.uv.workspace]
 members = [
-    "packages/corrigenda",
+    "packages/lidenbrock",
 ]

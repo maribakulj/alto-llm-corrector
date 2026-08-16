@@ -7,8 +7,8 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from corrigenda.core.validator import HyphenIntegrityError
-from corrigenda.formats.alto.parser import build_document_manifest, parse_alto_file
+from lidenbrock.core.validator import HyphenIntegrityError
+from lidenbrock.formats.alto.parser import build_document_manifest, parse_alto_file
 from lxml import etree
 
 from app.jobs.runner import JobRunner
@@ -365,7 +365,7 @@ async def test_cross_page_hyphen_reconciled_through_colliding_ids(tmp_path: Path
     and silently picked the local file (causing self-pairing or wrong
     pairing). With the qualified (page_id, line_id) lookup the right
     partner is resolved and the pair survives the pipeline."""
-    from corrigenda.formats.alto.parser import build_document_manifest
+    from lidenbrock.formats.alto.parser import build_document_manifest
 
     body_a = """\
 <TextBlock ID="TB1" HPOS="0" VPOS="0" WIDTH="200" HEIGHT="60">
@@ -495,7 +495,7 @@ async def test_run_job_general_exception_marks_failed(
 ):
     """A non-timeout exception escaping the pipeline must mark the job
     as FAILED with a sanitized error (no api_key leak)."""
-    from corrigenda.core.pipeline import CorrectionPipeline
+    from lidenbrock.core.pipeline import CorrectionPipeline
 
     store, job_id = _make_store_and_job()
 
@@ -562,7 +562,7 @@ async def test_run_job_resolves_provider_from_registry_when_none(
 # ===========================================================================
 #
 # The pipeline classifies exceptions into 3 retry buckets with distinct
-# backoff strategies (corrigenda.core.pipeline). Pre-L4, none of
+# backoff strategies (lidenbrock.core.pipeline). Pre-L4, none of
 # the three branches was individually exercised — a refactor of the
 # classifier could silently break one strategy and tests stayed green.
 # These tests pin the contract per branch.
@@ -602,7 +602,7 @@ class _AlwaysFailProvider:
 # The pipeline now routes on isinstance(exc, ProviderTransientError);
 # providers are responsible for wrapping their httpx errors before
 # re-raising. Tests raise the canonical type directly.
-from corrigenda.core.protocols import ProviderTransientError
+from lidenbrock.core.protocols import ProviderTransientError
 
 
 class _OneHyphenViolationThenOK:
@@ -637,8 +637,8 @@ async def _capture_sleeps(monkeypatch):
     """Replace ``asyncio.sleep`` with a recorder that returns instantly.
 
     Returns the list that will accumulate the durations the pipeline
-    requested. Safe because corrigenda uses ``asyncio.sleep`` at exactly
-    one site (the retry backoff at corrigenda.core.pipeline) and the
+    requested. Safe because lidenbrock uses ``asyncio.sleep`` at exactly
+    one site (the retry backoff at lidenbrock.core.pipeline) and the
     backend has zero call sites in its runtime path.
     """
     sleeps: list[float] = []
@@ -690,7 +690,7 @@ async def test_pipeline_classifies_hyphen_violation_with_zero_backoff(
     await _run(job_id, provider, tmp_path, store)
 
     # backoff=0 means `await asyncio.sleep(backoff)` is skipped entirely
-    # (corrigenda.core.pipeline `if backoff > 0`), so no entry lands
+    # (lidenbrock.core.pipeline `if backoff > 0`), so no entry lands
     # in our recorder.
     assert sleeps == [], (
         f"first hyphen_violation retry should skip sleep (backoff=0), got {sleeps!r}"
@@ -733,7 +733,7 @@ async def test_pipeline_classifies_transient_http_with_exponential_backoff(
     provider = _AlwaysFailProvider(lambda: ProviderTransientError("upstream 503"))
     await _run(job_id, provider, tmp_path, store)
 
-    # 3 attempts → 2 retries → 2 backoffs. corrigenda.core.pipeline
+    # 3 attempts → 2 retries → 2 backoffs. lidenbrock.core.pipeline
     # sets backoff = attempt * 2 → [2, 4] across attempts [1, 2].
     # The pipeline may run multiple chunks; assert the backoff PATTERN
     # rather than the exact count.
@@ -765,7 +765,7 @@ async def test_pipeline_classifies_llm_output_error_with_linear_backoff(
 
     assert sleeps, "llm_output_error branch should have triggered at least one backoff"
     for i, s in enumerate(sleeps):
-        # corrigenda.core.pipeline → backoff = attempt
+        # lidenbrock.core.pipeline → backoff = attempt
         # → 1 (attempt 1) or 2 (attempt 2).
         assert s in (1, 2), (
             f"llm_output_error backoff should be linear (1 or 2), got {s} at index {i}"
@@ -840,9 +840,9 @@ async def test_chunk_error_event_payload_shape(
     `_run_chunk`'s retry/fallback envelope (e.g. a bug in
     `_build_hyphen_pairs` before the try block). Patching `_run_chunk`
     directly is the most targeted way to exercise the catch site, which
-    lives on the chunk driver (corrigenda.core.driver.PageDriver).
+    lives on the chunk driver (lidenbrock.core.driver.PageDriver).
     """
-    from corrigenda.core.driver import PageDriver
+    from lidenbrock.core.driver import PageDriver
 
     async def _explode(self, **kwargs):
         raise OSError("disk on fire")
@@ -867,7 +867,7 @@ async def test_chunk_error_event_payload_shape(
         assert "message" in ce.data
         assert "exception_type" in ce.data
         # Truncation contract: the message field is bounded
-        # (corrigenda.core.pipeline uses [:200]).
+        # (lidenbrock.core.pipeline uses [:200]).
         assert len(ce.data["message"]) <= 200
         # Exception class name is propagated (allows operators to
         # alert on OSError vs ValueError without parsing message).
@@ -890,7 +890,7 @@ async def test_hyphen_partner_missing_event_emitted_with_direction(
     mapping now lives in `pairing.forward_partner_ref`, and `_lookup_ref`
     only turns a ref into a manifest.)
     """
-    import corrigenda.core.reconcile as cp
+    import lidenbrock.core.reconcile as cp
 
     monkeypatch.setattr(cp, "_lookup_ref", lambda *args, **kwargs: None)
 
@@ -950,7 +950,7 @@ async def test_retry_event_payload_shape(
         assert r.data["attempt"] >= 1
         # `error` is either the literal "hyphen_integrity_violation"
         # sentinel or the original message truncated to 120 chars
-        # (corrigenda.core.pipeline).
+        # (lidenbrock.core.pipeline).
         assert isinstance(r.data["error"], str)
         assert len(r.data["error"]) <= 120
 
@@ -1036,7 +1036,7 @@ async def test_runner_marks_job_failed_on_cancellation(tmp_path: Path):
     capacity sweep + TTL eviction both keyed off `_completed_at` so
     the job leaked across redeploys.
     """
-    from corrigenda.formats.alto.parser import build_document_manifest
+    from lidenbrock.formats.alto.parser import build_document_manifest
 
     from app.jobs.runner import JobRunner
     from app.schemas import JobStatus

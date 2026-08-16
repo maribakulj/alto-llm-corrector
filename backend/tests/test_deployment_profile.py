@@ -40,7 +40,7 @@ def test_proxy_protected_profile_refuses_wildcard_cors(monkeypatch):
 
 def test_proxy_protected_profile_starts_with_an_explicit_allowlist(monkeypatch):
     monkeypatch.setenv("DEPLOYMENT_PROFILE", "proxy_protected")
-    monkeypatch.setenv("CORS_ORIGINS", "https://corrigenda.example.org")
+    monkeypatch.setenv("CORS_ORIGINS", "https://lidenbrock.example.org")
     create_app()  # must not raise
 
 
@@ -68,7 +68,7 @@ class TestTheDeprecatedSpelling:
 
     def test_it_still_starts_with_an_explicit_allowlist(self, monkeypatch):
         monkeypatch.setenv("DEPLOYMENT_PROFILE", "institutional")
-        monkeypatch.setenv("CORS_ORIGINS", "https://corrigenda.example.org")
+        monkeypatch.setenv("CORS_ORIGINS", "https://lidenbrock.example.org")
         create_app()  # must not raise
 
     def test_it_warns_and_names_its_replacement(self, monkeypatch, capsys):
@@ -78,7 +78,7 @@ class TestTheDeprecatedSpelling:
         operator sees is the JSON line on stdout, so that is what is
         checked."""
         monkeypatch.setenv("DEPLOYMENT_PROFILE", "institutional")
-        monkeypatch.setenv("CORS_ORIGINS", "https://corrigenda.example.org")
+        monkeypatch.setenv("CORS_ORIGINS", "https://lidenbrock.example.org")
         create_app()
         out = capsys.readouterr().out
         assert "deprecated" in out, out
@@ -86,7 +86,7 @@ class TestTheDeprecatedSpelling:
 
     def test_the_new_spelling_warns_about_nothing(self, monkeypatch, capsys):
         monkeypatch.setenv("DEPLOYMENT_PROFILE", "proxy_protected")
-        monkeypatch.setenv("CORS_ORIGINS", "https://corrigenda.example.org")
+        monkeypatch.setenv("CORS_ORIGINS", "https://lidenbrock.example.org")
         create_app()
         assert "deprecated" not in capsys.readouterr().out
 

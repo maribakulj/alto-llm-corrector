@@ -65,28 +65,28 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(_REPO_ROOT / "packages" / "corrigenda" / "src"))
+sys.path.insert(0, str(_REPO_ROOT / "packages" / "lidenbrock" / "src"))
 sys.path.insert(0, str(_REPO_ROOT))  # scripts.qe_data
 
 from scripts.qe_data import degrade_token  # noqa: E402
 
-from corrigenda import CorrectionPipeline  # noqa: E402
-from corrigenda.core.editing import EditScript, ReplaceLine  # noqa: E402
-from corrigenda.core.protocols import ProducerMetadata  # noqa: E402
-from corrigenda.core.quality import RoutingPolicy  # noqa: E402
-from corrigenda.core.pairing import (  # noqa: E402
+from lidenbrock import CorrectionPipeline  # noqa: E402
+from lidenbrock.core.editing import EditScript, ReplaceLine  # noqa: E402
+from lidenbrock.core.protocols import ProducerMetadata  # noqa: E402
+from lidenbrock.core.quality import RoutingPolicy  # noqa: E402
+from lidenbrock.core.pairing import (  # noqa: E402
     HYPHEN_CHARS,
     link_hyphen_pairs,
     trailing_hyphen_char,
 )
-from corrigenda.core.schemas import (  # noqa: E402
+from lidenbrock.core.schemas import (  # noqa: E402
     DocumentManifest,
     HyphenRole,
     ImageAsset,
     ImageTransform,
 )
-from corrigenda.formats.alto.parser import build_document_manifest  # noqa: E402
-from corrigenda.producers.rules import (  # noqa: E402
+from lidenbrock.formats.alto.parser import build_document_manifest  # noqa: E402
+from lidenbrock.producers.rules import (  # noqa: E402
     RulesProducer,
     default_french_ocr_rules,
 )
@@ -264,7 +264,7 @@ class OracleVisionProducer:
         self.crops = 0
 
     async def produce(self, payload, *, options):
-        from corrigenda.integrations.vision import crop_region
+        from lidenbrock.integrations.vision import crop_region
 
         asset = payload.image_ref
         ops = []
@@ -514,7 +514,7 @@ def benchmark(
     # plumbing numbers stay comparable to their published selves.
     guard_config = None
     if provider is not None:
-        from corrigenda.core.schemas import GuardConfig
+        from lidenbrock.core.schemas import GuardConfig
 
         guard_config = GuardConfig.vision()
 
@@ -534,8 +534,8 @@ def benchmark(
             return OracleVisionProducer(gt)
         import os
 
-        from corrigenda.core.schemas import ModelCapabilities
-        from corrigenda.integrations.vision import VisionEditProducer
+        from lidenbrock.core.schemas import ModelCapabilities
+        from lidenbrock.integrations.vision import VisionEditProducer
 
         from scripts.run_vision import PROVIDERS
 
@@ -583,7 +583,7 @@ def benchmark(
                 escalation_producer=_make_vision(),
                 # Plumbing mode: an oracle QE escalates exactly the degraded
                 # lines. A real benchmark swaps in HeuristicQEScorer or the
-                # corrigenda[qe] MaskedLMQEScorer and tunes the bound.
+                # lidenbrock[qe] MaskedLMQEScorer and tunes the bound.
                 qe_scorer=OracleQEScorer(noisy_texts),
                 routing_policy=RoutingPolicy(escalate_at_or_above=0.5),
                 guard_config=guard_config,

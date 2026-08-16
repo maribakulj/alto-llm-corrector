@@ -11,7 +11,7 @@ This runs a REAL OCR engine (Tesseract) over the ground truth's own line
 images and pairs each reading with its GT line. The trick that makes the
 pairing exact: rather than OCR-ing the page and aligning two different
 segmentations, it OCRs **one crop per GT line**, cut with the library's
-own :func:`~corrigenda.integrations.vision.crop_region` from the GT
+own :func:`~lidenbrock.integrations.vision.crop_region` from the GT
 geometry (``--psm 7``, single-line mode). Every reading therefore belongs
 to a known ``(file, line_id)`` — no alignment, no drift.
 
@@ -46,10 +46,10 @@ import tempfile
 from pathlib import Path
 
 _REPO = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(_REPO / "packages" / "corrigenda" / "src"))
+sys.path.insert(0, str(_REPO / "packages" / "lidenbrock" / "src"))
 
-from corrigenda.core.schemas import ImageAsset, ImageTransform  # noqa: E402
-from corrigenda.formats.alto.parser import build_document_manifest  # noqa: E402
+from lidenbrock.core.schemas import ImageAsset, ImageTransform  # noqa: E402
+from lidenbrock.formats.alto.parser import build_document_manifest  # noqa: E402
 
 #: ALTO ``mm10`` → pixels (see vision_benchmark): ``px = mm10 * dpi / 254``.
 _MM10_PER_INCH = 254.0
@@ -101,7 +101,7 @@ def ocr_corpus(
                 for line in page.lines:
                     if limit is not None and lines_done >= limit:
                         break
-                    from corrigenda.integrations.vision import crop_region
+                    from lidenbrock.integrations.vision import crop_region
 
                     crop = crop_region(asset, line.coords, margin_ratio=margin_ratio)
                     crop_path.write_bytes(crop.data)

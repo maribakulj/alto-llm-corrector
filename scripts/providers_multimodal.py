@@ -1,12 +1,12 @@
 """Multimodal clients — real VLMs behind the vision seam.
 
 Each class implements
-``corrigenda.integrations.vision.MultimodalStructuredClient`` so
+``lidenbrock.integrations.vision.MultimodalStructuredClient`` so
 ``VisionEditProducer`` can drive an actual model instead of the oracle
 stand-in the benchmark uses. This is TOOLING, not library API: vendor
 specifics stay out of the pixel-blind core, and out of the demo backend
 (whose providers are text-only). Promoting provider adapters into
-``corrigenda[anthropic|mistral|…]`` is a Phase-5 roadmap item; this is the
+``lidenbrock[anthropic|mistral|…]`` is a Phase-5 roadmap item; this is the
 runnable path until then.
 
 * :class:`AnthropicMultimodalClient` — Claude, via the official SDK.
@@ -16,7 +16,7 @@ runnable path until then.
 **API keys are read from the environment and never accepted as a CLI
 flag** (a flag lands in shell history and in the process list). They are
 never printed and never written to the corrected artefacts; provider
-errors additionally route through :func:`corrigenda.sanitize_error`, which
+errors additionally route through :func:`lidenbrock.sanitize_error`, which
 redacts the key and common secret-shaped substrings.
 
 Two API details these adapters exist to get right:
@@ -101,10 +101,10 @@ def _raise_for_status(resp: Any, api_key: str) -> None:
     ``"Total number of images exceeds the maximum allowed of 8"`` — into a
     bare ``400 Bad Request``.
     """
-    # Lazy, like every other corrigenda import here: this module is loaded
+    # Lazy, like every other lidenbrock import here: this module is loaded
     # by scripts that put the package on sys.path just before importing it.
-    from corrigenda import sanitize_error
-    from corrigenda.core.protocols import (
+    from lidenbrock import sanitize_error
+    from lidenbrock.core.protocols import (
         ProviderPermanentError,
         ProviderTransientError,
     )
@@ -185,7 +185,7 @@ class AnthropicMultimodalClient:
         json_schema: dict[str, Any],
         temperature: float = 0.0,
     ) -> tuple[dict[str, Any], Any]:
-        from corrigenda.core.schemas import Usage
+        from lidenbrock.core.schemas import Usage
 
         client = self._ensure_client(api_key)
         self.calls += 1
@@ -330,7 +330,7 @@ class MistralMultimodalClient:
     ) -> tuple[dict[str, Any], Any]:
         import httpx
 
-        from corrigenda.core.schemas import Usage
+        from lidenbrock.core.schemas import Usage
 
         self.calls += 1
         body: dict[str, Any] = {

@@ -15,8 +15,8 @@ import re
 from pathlib import Path
 
 import pytest
-from corrigenda.core.schemas import PairingPolicy
-from corrigenda.formats.alto.parser import build_document_manifest
+from lidenbrock.core.schemas import PairingPolicy
+from lidenbrock.formats.alto.parser import build_document_manifest
 from lxml import etree
 
 from app.jobs.runner import JobRunner
@@ -75,7 +75,7 @@ async def test_geometric_pairing_optout_changes_stamped_fingerprint(tmp_path: Pa
 
     # And the opt-out stamp must equal the library's fingerprint for that
     # exact policy (not merely "some other value").
-    from corrigenda import CorrectionPipeline
+    from lidenbrock import CorrectionPipeline
 
     class _NoopObserver:
         def on_event(self, event_type: str, payload: dict) -> None:

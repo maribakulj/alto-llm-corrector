@@ -17,13 +17,13 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from corrigenda.core.hyphenation import (
+from lidenbrock.core.hyphenation import (
     ReconcileMetrics,
     classify_reconcile_outcome,
     reconcile_hyphen_pair,
 )
-from corrigenda.formats.alto.parser import parse_alto_file
-from corrigenda.formats.alto.rewriter import RewriterMetrics, rewrite_alto_file
+from lidenbrock.formats.alto.parser import parse_alto_file
+from lidenbrock.formats.alto.rewriter import RewriterMetrics, rewrite_alto_file
 from lxml import etree
 
 from app.schemas import HyphenRole
