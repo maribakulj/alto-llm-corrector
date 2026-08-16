@@ -111,14 +111,14 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
-      - name: Install corrigenda (editable) + pytest
-        # Ship pytest-asyncio so async tests in corrigenda don't quietly
-        # error-out with "asyncio mode not installed"; pytest-cov gates the
-        # package's own coverage (F11 repatriated the algorithm tests here).
-        # hypothesis powers the property-based invariant suite (Plan V4.2).
-        run: |
-          pip install -e .
-          pip install pytest pytest-asyncio pytest-cov hypothesis
+      - name: Install corrigenda (editable) + the test extra
+        # The test toolchain is declared ONCE, in pyproject's `[test]` extra,
+        # so `pip install -e '.[test]'` means the same thing here and on a
+        # developer's machine. It used to be this hand-written list, which is
+        # how a test that needs PyYAML went green locally and red on all three
+        # Python versions: the workflow file was the real dependency list, and
+        # nothing kept it in step with anyone's venv.
+        run: pip install -e '.[test]'
       - name: pytest + coverage gate (85%)
         run: pytest tests/ --cov=corrigenda --cov-report=term --cov-report=xml
 
@@ -144,10 +144,8 @@ jobs:
           cache: pip
       - name: Fetch external corpus from Gallica
         run: python tests/external_corpus/fetch.py
-      - name: Install corrigenda (editable) + pytest
-        run: |
-          pip install -e .
-          pip install pytest pytest-asyncio
+      - name: Install corrigenda (editable) + the test extra
+        run: pip install -e '.[test]'
       - name: pytest (external corpus invariants)
         run: pytest -m external_corpus tests/test_external_corpus.py -v
 

@@ -52,6 +52,21 @@ vision = [
     "pillow>=10.0,<12.0",
 ]
 
+# Test toolchain. Same reason as `typecheck` below, and it arrived the same
+# way — by being wrong. `test_release_tooling.py` parses the workflow YAML;
+# it passed locally (a dev venv has PyYAML through some other dependency)
+# and failed on all three Python versions in CI, whose install line was the
+# real, undeclared test-dependency list. A test env assembled by hand in a
+# workflow file is not a declaration: it drifts from the local one silently,
+# and the first thing it costs is a red CI on a green local run.
+test = [
+    "pytest",
+    "pytest-asyncio",
+    "pytest-cov",
+    "hypothesis",
+    "pyyaml",
+]
+
 # Type-checking toolchain. Not a runtime extra: it exists so that
 # `mypy --strict src/corrigenda` means the same thing locally and in CI.
 # lxml-stubs is load-bearing — without it `_Element.attrib` degrades to
