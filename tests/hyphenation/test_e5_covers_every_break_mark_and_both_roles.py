@@ -9,8 +9,15 @@ The guard is written against the whole repertoire —
 ``result_text.rstrip().endswith(HYPHEN_CHARS)`` over
 ``("-", "¬", "⸗", "\\u00ad", "‐", "‑")`` — and against both opening roles.
 **The tests were written against one of each**: an ASCII ``-`` on a
-``PART1`` line. Everything the repertoire exists for was unguarded, and
-so was the role that carries a three-line chain.
+``PART1`` line (``tests/test_editing.py``).
+
+`L5` had already swept the repertoire across five guard sites — see
+``test_break_mark_repertoire_in_guards.py``, which counted 32 of 363
+hyphenated lines falling outside ASCII-only checks. **E5 was not one of
+the five.** That sweep covers pairing and reconciliation; this one covers
+the edit protocol, whose ``apply_edit_script`` path those tests never
+enter. The role that carries a three-line chain, ``BOTH``, was unexercised
+on either side.
 
 That mattered on measurement rather than in principle: the two paired
 PAGE/ALTO fixtures in ``examples/page/`` mark every one of their hyphens
