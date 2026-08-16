@@ -16,6 +16,7 @@ from corrigenda.core._parse import parse_int_tolerant
 from corrigenda.formats._xml import (
     detect_namespace as _detect_namespace,
     make_safe_parser as make_safe_parser,
+    read_source_tree as read_source_tree,
     tag as _tag,
 )
 
@@ -43,4 +44,4 @@ def _int_attr(el: etree._Element, name: str, default: int = 0) -> int:
 # ``formats.alto._ns`` importers keep working. Listed in ``__all__`` to mark
 # them as the intentional re-export surface. The canonical import for the
 # hardened parser is now ``from corrigenda.formats._xml import make_safe_parser``.
-__all__ = ["_detect_namespace", "_tag", "make_safe_parser"]
+__all__ = ["_detect_namespace", "_tag", "make_safe_parser", "read_source_tree"]

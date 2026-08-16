@@ -18,7 +18,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from lxml import etree
 
 from corrigenda.core.protocols import FormatAdapter
 from corrigenda.core.schemas import (
@@ -31,7 +30,8 @@ from corrigenda.formats._xml import (
     classified_parse_errors,
     detect_namespace,
     local_name,
-    make_safe_parser,
+    mislabelled_utf8,
+    read_source_tree,
     tag,
 )
 
@@ -67,7 +67,7 @@ def sniff_format(path: Path) -> str:
     survives a full round-trip. This door was the only branded place.
     """
     with classified_parse_errors(path.name):
-        root = etree.parse(str(path), make_safe_parser()).getroot()
+        root = read_source_tree(path).getroot()
     ns = detect_namespace(root)
     if _ALTO_MARKER in ns:
         return "alto"
@@ -118,7 +118,21 @@ def build_document_manifest(
         from corrigenda.formats.alto.parser import (
             build_document_manifest as build,
         )
-    return build(files, pairing_policy=pairing_policy)
+    manifest = build(files, pairing_policy=pairing_policy)
+
+    # A file read as something other than what it declared is an override,
+    # and an override that nobody can see is exactly the undeclared
+    # alteration `V1` forbids. `read_source_tree` already applied it —
+    # here it is *named*, once, where the caller receives the document.
+    # Same rule, one definition (``mislabelled_utf8``), two callers.
+    overrides = {
+        name: declared
+        for path, name in files
+        if (declared := mislabelled_utf8(path.read_bytes())) is not None
+    }
+    if overrides:
+        manifest = manifest.model_copy(update={"source_encodings": overrides})
+    return manifest
 
 
 def adapter_for_format(source_format: str | None) -> FormatAdapter:

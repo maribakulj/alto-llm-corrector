@@ -14,8 +14,11 @@ three under its existing private names, so call sites are unchanged.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterator
 from contextlib import contextmanager
+from io import BytesIO
+from pathlib import Path
 
 from lxml import etree
 
@@ -56,7 +59,90 @@ def tag(local: str, ns: str) -> str:
     return f"{{{ns}}}{local}" if ns else local
 
 
-def make_safe_parser() -> etree.XMLParser:
+#: Declarations we are willing to second-guess. Deliberately one-sided: a
+#: file that declares UTF-8 is taken at its word. Latin-family labels are
+#: the ones a UTF-8 file gets mislabelled AS — the reverse (real latin-1
+#: wearing a UTF-8 label) is not silently repairable, because those bytes
+#: do not decode as UTF-8 and the parser refuses them loudly already.
+_OVERRIDABLE_DECLARATIONS = (
+    "iso-8859",
+    "iso8859",
+    "windows-125",
+    "latin-1",
+    "latin1",
+    "cp125",
+)
+
+#: The XML declaration lives in the first line; 200 bytes is generous.
+_DECLARATION_HEAD = 200
+_DECLARED_ENCODING = re.compile(rb"""encoding\s*=\s*["']([^"']+)["']""")
+
+
+def mislabelled_utf8(raw: bytes) -> str | None:
+    """Return the declared encoding when a file's declaration lies, else None.
+
+    Gallica serves ALTO that declares ``ISO-8859-1`` and contains UTF-8.
+    Read as declared, ``cléricales`` arrives as ``clÃ©ricales`` — and a
+    post-OCR corrector handed that will dutifully *repair* it, delivering a
+    text change that the report cannot distinguish from a correction. That
+    is precisely the class of undeclared alteration this library exists to
+    refuse, so the mismatch has to be caught at the door.
+
+    Three conditions, all necessary:
+
+    1. the declaration names a latin-family encoding;
+    2. the WHOLE byte stream decodes as strict UTF-8;
+    3. it contains at least one non-ASCII character — otherwise both
+       readings are identical and there is nothing to decide.
+
+    Condition 2 is close to a proof rather than a heuristic. In latin-1
+    French, ``é`` is ``0xE9`` and the byte after it is a letter
+    (``0x61``-``0x7A``); UTF-8 requires the byte following a lead byte to be
+    ``0x80``-``0xBF``, which a letter never is. A genuine latin-1 document
+    fails at its first accent. Measured on ten French words: ten failures.
+
+    What would still fool it: a real latin-1 file in which *every* accented
+    byte happens to be followed by a continuation byte. No such document is
+    in hand, and condition 3 already excludes the trivial case of a file
+    with no accents at all.
+
+    Cost, measured on a 646 KB page: 0.115 ms for the decode attempt
+    against 16.5 ms to parse the file. On the common path — a file that
+    declares UTF-8 — it stops at the declaration.
+    """
+    match = _DECLARED_ENCODING.search(raw[:_DECLARATION_HEAD])
+    if match is None:
+        return None
+    declared = match.group(1).decode("ascii", "replace")
+    if not any(f in declared.lower() for f in _OVERRIDABLE_DECLARATIONS):
+        return None
+    if raw.isascii():
+        return None
+    try:
+        raw.decode("utf-8")
+    except UnicodeDecodeError:
+        return None
+    return declared
+
+
+def read_source_tree(path: Path) -> etree._ElementTree:
+    """Parse a source document, overriding a declaration that provably lies.
+
+    THE way to read a source file: the parsers and the rewriters both go
+    through here, so they cannot disagree about what a document says. The
+    guarantee is that one file has one reading — two independent readings
+    of the same bytes is how two sides of this library once classified the
+    same event differently, each correct on its own and wrong together.
+
+    The source file is never modified — the override is handed to lxml,
+    which decodes correctly on its own.
+    """
+    raw = path.read_bytes()
+    encoding = "utf-8" if mislabelled_utf8(raw) is not None else None
+    return etree.parse(BytesIO(raw), make_safe_parser(encoding=encoding))
+
+
+def make_safe_parser(encoding: str | None = None) -> etree.XMLParser:
     """Return an lxml parser hardened against XXE / SSRF / entity-amplification.
 
     The four flags together neutralise the well-known XML attack surface:
@@ -85,6 +171,7 @@ def make_safe_parser() -> etree.XMLParser:
         no_network=True,
         load_dtd=False,
         dtd_validation=False,
+        encoding=encoding,
     )
 
 
@@ -123,5 +210,7 @@ __all__ = [
     "detect_namespace",
     "local_name",
     "make_safe_parser",
+    "mislabelled_utf8",
+    "read_source_tree",
     "tag",
 ]

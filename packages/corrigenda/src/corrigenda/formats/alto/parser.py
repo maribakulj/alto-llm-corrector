@@ -9,7 +9,7 @@ from corrigenda.formats.alto._ns import (
     _detect_namespace,
     _int_attr,
     _tag,
-    make_safe_parser,
+    read_source_tree,
 )
 from corrigenda.formats.alto._text import reconstruct_textline
 from corrigenda.core.identity import (
@@ -324,7 +324,7 @@ def _parse_alto_file(
 ) -> tuple[list[PageManifest], etree._Element]:
     # Hardened parser shared with rewriter.py + extract_output_texts.
     # See corrigenda.formats.alto._ns.make_safe_parser docstring.
-    tree = etree.parse(str(xml_path), make_safe_parser())
+    tree = read_source_tree(xml_path)
     root = tree.getroot()
     ns = _detect_namespace(root)
 
