@@ -11,11 +11,11 @@ from __future__ import annotations
 
 import pytest
 
-from lidenbrock.core.protocols import ProducerMetadata
-from lidenbrock import CorrectionPipeline
-from lidenbrock.core.identity import LineRef, line_ref
-from lidenbrock.formats.alto.parser import build_document_manifest
-from lidenbrock.producers.rules import RulesProducer, SubstitutionRule
+from saknussemm.core.protocols import ProducerMetadata
+from saknussemm import CorrectionPipeline
+from saknussemm.core.identity import LineRef, line_ref
+from saknussemm.formats.alto.parser import build_document_manifest
+from saknussemm.producers.rules import RulesProducer, SubstitutionRule
 
 from tests._paths import EXAMPLES
 

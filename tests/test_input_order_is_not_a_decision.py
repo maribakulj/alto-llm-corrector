@@ -23,10 +23,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from lidenbrock import CorrectionPipeline
-from lidenbrock.core.protocols import ProducerMetadata
-from lidenbrock.formats.alto.parser import build_document_manifest
-from lidenbrock.producers.rules import RulesProducer, SubstitutionRule
+from saknussemm import CorrectionPipeline
+from saknussemm.core.protocols import ProducerMetadata
+from saknussemm.formats.alto.parser import build_document_manifest
+from saknussemm.producers.rules import RulesProducer, SubstitutionRule
 
 from tests._docs import _ALTO_ONE_LINE
 from tests._pipeline_harness import RecordingObserver

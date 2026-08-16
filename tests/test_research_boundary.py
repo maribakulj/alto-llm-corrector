@@ -1,8 +1,8 @@
 """The base install must not reach the research extras (`RM-04`).
 
 Two modules are gated behind optional dependencies — ``integrations/qe.py``
-(``lidenbrock[qe]``: onnxruntime, tokenizers, a 545 MB model) and
-``integrations/vision.py`` (``lidenbrock[vision]``: Pillow). Both predate
+(``saknussemm[qe]``: onnxruntime, tokenizers, a 545 MB model) and
+``integrations/vision.py`` (``saknussemm[vision]``: Pillow). Both predate
 this wave and both are already omitted from the coverage gate.
 
 What did NOT exist is anything holding the boundary. The gate is a
@@ -14,7 +14,7 @@ them to.
 
 Three rules, and the first is the one with teeth:
 
-  1. no module reachable from ``import lidenbrock`` imports a gated
+  1. no module reachable from ``import saknussemm`` imports a gated
      module, statically or at import time (subprocess-verified, same
      technique as ``test_import_contract.py``);
   2. a default correction run never loads one either — the check that
@@ -43,7 +43,7 @@ from tests._paths import EXAMPLES  # noqa: E402  (the arithmetic lives there)
 
 #: Modules gated behind an optional dependency. Nothing on the base install
 #: path may import these.
-_GATED = ("lidenbrock.integrations.qe", "lidenbrock.integrations.vision")
+_GATED = ("saknussemm.integrations.qe", "saknussemm.integrations.vision")
 
 
 def _import_probe(body: str) -> set[str]:
@@ -62,10 +62,10 @@ def _import_probe(body: str) -> set[str]:
 
 
 def test_importing_the_package_loads_no_gated_module() -> None:
-    """``import lidenbrock`` is the base install path."""
-    loaded = _import_probe("import lidenbrock")
+    """``import saknussemm`` is the base install path."""
+    loaded = _import_probe("import saknussemm")
     assert not loaded, (
-        f"importing lidenbrock pulled in {sorted(loaded)} — those are behind "
+        f"importing saknussemm pulled in {sorted(loaded)} — those are behind "
         "optional extras, so a base install would fail at import with a "
         "missing dependency the metadata never asked for."
     )
@@ -82,8 +82,8 @@ def test_a_default_run_loads_no_gated_module() -> None:
         pytest.skip("examples/sample.xml absent")
     loaded = _import_probe(
         "from pathlib import Path\n"
-        "from lidenbrock.core.pipeline import CorrectionPipeline\n"
-        "from lidenbrock.formats.loader import build_document_manifest\n"
+        "from saknussemm.core.pipeline import CorrectionPipeline\n"
+        "from saknussemm.formats.loader import build_document_manifest\n"
         "class _P:\n"
         "    async def complete_structured(self, **kw):\n"
         "        return {'lines': [{'line_id': l['line_id'],"
@@ -107,13 +107,13 @@ def test_a_default_run_loads_no_gated_module() -> None:
     ("module", "symbol"),
     [
         # scripts/qe_benchmark.py, scripts/fit_qe_calibration.py
-        ("lidenbrock.core.quality", "HeuristicQEScorer"),
-        ("lidenbrock.core.quality", "RoutingPolicy"),
-        ("lidenbrock.core.schemas", "ConfidencePolicy"),
+        ("saknussemm.core.quality", "HeuristicQEScorer"),
+        ("saknussemm.core.quality", "RoutingPolicy"),
+        ("saknussemm.core.schemas", "ConfidencePolicy"),
         # scripts/vision_benchmark.py, scripts/ocr_corpus.py
-        ("lidenbrock.core.schemas", "ImageAsset"),
-        ("lidenbrock.core.schemas", "ImageTransform"),
-        ("lidenbrock.core.schemas", "ModelCapabilities"),
+        ("saknussemm.core.schemas", "ImageAsset"),
+        ("saknussemm.core.schemas", "ImageTransform"),
+        ("saknussemm.core.schemas", "ModelCapabilities"),
     ],
 )
 def test_the_calibration_scripts_keep_their_import_paths(

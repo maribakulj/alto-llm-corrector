@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import pytest
-from lidenbrock.core.validator import validate_llm_response
+from saknussemm.core.validator import validate_llm_response
 
-from lidenbrock.core.schemas import ProposalBatch
+from saknussemm.core.schemas import ProposalBatch
 
 # ---------------------------------------------------------------------------
 # test_valid_response

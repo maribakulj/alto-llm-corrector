@@ -19,14 +19,14 @@ version bump / CHANGELOG entry in the same commit.
 
 from __future__ import annotations
 
-from lidenbrock.core.schemas import (
+from saknussemm.core.schemas import (
     ChunkPlannerConfig,
     GuardConfig,
     LossPolicy,
     PairingPolicy,
     RetryPolicy,
 )
-from lidenbrock.core.pipeline import CorrectionPipeline
+from saknussemm.core.pipeline import CorrectionPipeline
 
 
 class _Noop:
@@ -35,7 +35,7 @@ class _Noop:
     requires_full_coverage = True
 
     async def produce(self, payload, *, options):  # pragma: no cover
-        from lidenbrock.core.editing import EditScript
+        from saknussemm.core.editing import EditScript
 
         return EditScript(ops=[]), None
 

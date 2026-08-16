@@ -13,7 +13,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from lidenbrock import CorrectionPipeline
+from saknussemm import CorrectionPipeline
 
 from tests._paths import REPO, TESTS
 
@@ -29,7 +29,7 @@ class _NullObserver:
 
 class _IdentityProducer:
     async def produce(self, payload: Any, *, options: Any) -> Any:
-        from lidenbrock.core.editing import EditScript, ReplaceLine
+        from saknussemm.core.editing import EditScript, ReplaceLine
 
         ops = [
             ReplaceLine(line_id=line.line_id, text=line.ocr_text)
@@ -60,7 +60,7 @@ def test_concurrent_runs_on_the_same_instance_both_succeed() -> None:
     decide every line identically."""
 
     async def scenario() -> None:
-        from lidenbrock.formats.alto.parser import build_document_manifest
+        from saknussemm.formats.alto.parser import build_document_manifest
 
         pipeline = _pipeline(_YieldingIdentityProducer())
         manifest = build_document_manifest([(SAMPLE_XML, "sample.xml")])
@@ -94,7 +94,7 @@ def test_sequential_reuse_survives_a_failed_run() -> None:
             raise ValueError("boom")
 
     async def scenario() -> None:
-        from lidenbrock.formats.alto.parser import build_document_manifest
+        from saknussemm.formats.alto.parser import build_document_manifest
 
         pipeline = _pipeline(_ExplodingProducer())
         manifest = build_document_manifest([(SAMPLE_XML, "sample.xml")])
@@ -127,7 +127,7 @@ def test_sequential_runs_share_no_state() -> None:
     """
 
     async def scenario() -> None:
-        from lidenbrock.formats.alto.parser import build_document_manifest
+        from saknussemm.formats.alto.parser import build_document_manifest
 
         pipeline = _pipeline(_IdentityProducer())
         manifest = build_document_manifest([(SAMPLE_XML, "sample.xml")])

@@ -9,11 +9,11 @@ from typing import Any
 import pytest
 from pydantic import ValidationError as PydValidationError
 
-from lidenbrock.core.protocols import ProducerOptions
-from lidenbrock.core.editing import EditScript, ReplaceLine
-from lidenbrock.core.hyphenation import enrich_chunk_lines
-from lidenbrock.core.protocols import EditProducer, require_page_images
-from lidenbrock.core.schemas import (
+from saknussemm.core.protocols import ProducerOptions
+from saknussemm.core.editing import EditScript, ReplaceLine
+from saknussemm.core.hyphenation import enrich_chunk_lines
+from saknussemm.core.protocols import EditProducer, require_page_images
+from saknussemm.core.schemas import (
     PageManifest,
     ChunkGranularity,
     Coords,
@@ -24,9 +24,9 @@ from lidenbrock.core.schemas import (
     RetryPolicy,
     Usage,
 )
-from lidenbrock.errors import ConfigurationError
-from lidenbrock.producers.llm_edit import LLMEditProducer
-from lidenbrock.producers.rules import RulesProducer, default_french_ocr_rules
+from saknussemm.errors import ConfigurationError
+from saknussemm.producers.llm_edit import LLMEditProducer
+from saknussemm.producers.rules import RulesProducer, default_french_ocr_rules
 
 from tests._paths import SRC
 
@@ -290,18 +290,18 @@ def test_llm_producer_declares_text_only_capabilities():
 # ---------------------------------------------------------------------------
 # I4 — pixel-blindness (restated, the vision/QE programme)
 #
-# "No image lib anywhere in lidenbrock" was a too-broad PROXY for the thing
+# "No image lib anywhere in saknussemm" was a too-broad PROXY for the thing
 # that actually matters: the correction engine on the base install path
 # (core + formats + text producers) is pixel-free and provably so. The
-# opt-in lidenbrock[vision] producer's whole job IS pixels — banning image
+# opt-in saknussemm[vision] producer's whole job IS pixels — banning image
 # libs from it too was the proxy over-reaching past its own rationale.
 #
-# So I4 is now two claims, mirroring the lidenbrock[qe] contract:
+# So I4 is now two claims, mirroring the saknussemm[qe] contract:
 #   * STATIC (here): the pixel-blind zone — everything BUT the sanctioned
 #     vision surface — imports no image lib, at module level or nested; and
 #     the vision surface itself imports them only LAZILY (never at module
 #     import, so introspection stays cheap and the base install never pays).
-#   * RUNTIME (test_import_contract.py): importing lidenbrock pulls no image
+#   * RUNTIME (test_import_contract.py): importing saknussemm pulls no image
 #     lib into sys.modules — the honest, transitive proof of pixel-blindness.
 # ---------------------------------------------------------------------------
 
@@ -309,7 +309,7 @@ def test_llm_producer_declares_text_only_capabilities():
 _IMAGE_MODULES = ("PIL", "cv2", "imageio", "skimage", "wand", "pillow", "torchvision")
 
 #: The ONE sanctioned place a heavy image lib may be imported (lazily): the
-#: opt-in lidenbrock[vision] producer, under src/lidenbrock/integrations/.
+#: opt-in saknussemm[vision] producer, under src/saknussemm/integrations/.
 #: Everything else is the pixel-blind zone.
 _VISION_SURFACE = {"vision.py"}
 
@@ -354,7 +354,7 @@ def test_i4_vision_surface_keeps_image_libs_function_local():
     """The sanctioned vision producer MAY import Pillow — but lazily, never at
     module level: importing the module (introspection, protocol/isinstance
     checks) must not pay the heavy image runtime (mirrors the qe scorer's
-    contract). Vacuously green until the lidenbrock[vision] producer lands."""
+    contract). Vacuously green until the saknussemm[vision] producer lands."""
     for py in _SRC.rglob("*.py"):
         if not _is_vision_surface(py):
             continue

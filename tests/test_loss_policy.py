@@ -12,18 +12,18 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from lidenbrock.core.acceptance import _loss_policy_pass
-from lidenbrock import CorrectionPipeline
-from lidenbrock.core.identity import LineRef, line_ref
-from lidenbrock.core.schemas import (
+from saknussemm.core.acceptance import _loss_policy_pass
+from saknussemm import CorrectionPipeline
+from saknussemm.core.identity import LineRef, line_ref
+from saknussemm.core.schemas import (
     HyphenRole,
     LineManifest,
     LineStatus,
     LineTrace,
     LossPolicy,
 )
-from lidenbrock.formats.page.parser import build_document_manifest
-from lidenbrock.formats.page.rewriter import rewrite_page_file
+from saknussemm.formats.page.parser import build_document_manifest
+from saknussemm.formats.page.rewriter import rewrite_page_file
 
 from tests._pipeline_harness import DictProvider, RecordingObserver
 
@@ -175,7 +175,7 @@ def test_strict_ignores_lines_without_word_markup(tmp_path: Path):
 
 
 def _hyphen_pair_lines() -> list[LineManifest]:
-    from lidenbrock.core.schemas import Coords
+    from saknussemm.core.schemas import Coords
 
     part1 = LineManifest(
         line_id="l1",
@@ -210,7 +210,7 @@ def _hyphen_pair_lines() -> list[LineManifest]:
 
 
 def test_strict_pass_pulls_the_whole_hyphen_unit():
-    from lidenbrock.core.schemas import DocumentManifest, PageManifest
+    from saknussemm.core.schemas import DocumentManifest, PageManifest
 
     lines = _hyphen_pair_lines()
     page = PageManifest(

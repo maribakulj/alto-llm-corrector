@@ -20,14 +20,14 @@ from __future__ import annotations
 
 import pytest
 
-from lidenbrock.core.protocols import ProducerMetadata
-from lidenbrock import CorrectionPipeline
-from lidenbrock.core.protocols import (
+from saknussemm.core.protocols import ProducerMetadata
+from saknussemm import CorrectionPipeline
+from saknussemm.core.protocols import (
     ProviderPermanentError,
     ProviderTransientError,
 )
-from lidenbrock.core.validator import HyphenIntegrityError
-from lidenbrock.errors import (
+from saknussemm.core.validator import HyphenIntegrityError
+from saknussemm.errors import (
     CorrectionAborted,
     CorrectionError,
     DuplicateIdError,
@@ -35,7 +35,7 @@ from lidenbrock.errors import (
     ProviderError,
     ValidationError,
 )
-from lidenbrock.formats.alto.parser import build_document_manifest
+from saknussemm.formats.alto.parser import build_document_manifest
 
 from tests._paths import EXAMPLES
 

@@ -21,13 +21,13 @@ import pytest
 
 from tests._pipeline_harness import apply_decisions
 
-from lidenbrock import CorrectionPipeline
-from lidenbrock.core.editing import EditScript, ReplaceLine
-from lidenbrock.core.protocols import ProducerMetadata
-from lidenbrock.core.quality import RoutingPolicy
-from lidenbrock.core.schemas import HyphenRole
-from lidenbrock.errors import ConfigurationError
-from lidenbrock.formats.alto.parser import build_document_manifest
+from saknussemm import CorrectionPipeline
+from saknussemm.core.editing import EditScript, ReplaceLine
+from saknussemm.core.protocols import ProducerMetadata
+from saknussemm.core.quality import RoutingPolicy
+from saknussemm.core.schemas import HyphenRole
+from saknussemm.errors import ConfigurationError
+from saknussemm.formats.alto.parser import build_document_manifest
 
 from tests._paths import EXAMPLES
 
@@ -168,7 +168,7 @@ async def test_hyphen_unit_escalates_as_a_whole_unit():
 
 
 def test_page_local_units_gathers_members():
-    from lidenbrock.core.reconcile import _page_local_units
+    from saknussemm.core.reconcile import _page_local_units
 
     doc = build_document_manifest([(_SAMPLE, _SAMPLE.name)])
     page = doc.pages[0]
@@ -187,7 +187,7 @@ def test_page_local_units_omits_cross_page_and_dangling():
     """A unit that leaves the page cannot be gathered from one page's plan,
     so it is never escalated — the conservative behaviour. Absence from the
     index is how that is expressed."""
-    from lidenbrock.core.reconcile import _page_local_units
+    from saknussemm.core.reconcile import _page_local_units
 
     doc = build_document_manifest([(_SAMPLE, _SAMPLE.name)])
     page = doc.pages[0]

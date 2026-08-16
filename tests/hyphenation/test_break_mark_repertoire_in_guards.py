@@ -25,8 +25,8 @@ from pathlib import Path
 
 import pytest
 
-from lidenbrock.core.hyphenation import _part1_text_migrated
-from lidenbrock.core.pairing import (
+from saknussemm.core.hyphenation import _part1_text_migrated
+from saknussemm.core.pairing import (
     HYPHEN_CHARS,
     ends_with_break_mark,
     strip_trailing_break_marks,
@@ -57,7 +57,7 @@ class TestThePredicates:
         know the line breaks a word (the role says so, possibly from an
         explicit ``SUBS_TYPE``), and re-checking would silently un-guard an
         explicitly-marked line that happens to end in a digit."""
-        from lidenbrock.core.pairing import trailing_hyphen_char
+        from saknussemm.core.pairing import trailing_hyphen_char
 
         assert trailing_hyphen_char("en 1789-", HYPHEN_CHARS) is None
         assert ends_with_break_mark("en 1789-")
@@ -119,7 +119,7 @@ class TestTheFusionCheck:
 
     @pytest.mark.parametrize("mark", _MARKS)
     def test_a_fusion_is_refused_whatever_the_mark(self, mark: str) -> None:
-        from lidenbrock.core.validator import (
+        from saknussemm.core.validator import (
             HyphenIntegrityError,
             validate_llm_response,
         )
@@ -147,7 +147,7 @@ class TestTheFusionCheck:
 
     @pytest.mark.parametrize("mark", _MARKS)
     def test_an_unfused_correction_passes(self, mark: str) -> None:
-        from lidenbrock.core.validator import validate_llm_response
+        from saknussemm.core.validator import validate_llm_response
 
         # Same pair, a proposal that keeps the fragment a fragment.
         validate_llm_response(
@@ -170,11 +170,11 @@ class TestTheOrphanGuardEndToEnd:
 
     @pytest.mark.parametrize("mark", ["-", "⸗", "¬"])
     def test_a_dropped_break_mark_falls_back(self, tmp_path: Path, mark: str) -> None:
-        from lidenbrock import CorrectionPipeline
-        from lidenbrock.core.editing import EditScript, ReplaceLine
-        from lidenbrock.core.protocols import ProducerMetadata
-        from lidenbrock.core.schemas import LineStatus
-        from lidenbrock.formats.alto.parser import build_document_manifest
+        from saknussemm import CorrectionPipeline
+        from saknussemm.core.editing import EditScript, ReplaceLine
+        from saknussemm.core.protocols import ProducerMetadata
+        from saknussemm.core.schemas import LineStatus
+        from saknussemm.formats.alto.parser import build_document_manifest
 
         ns = "http://www.loc.gov/standards/alto/ns-v3#"
         # One page, ONE line: nothing follows, so the PART1 is an orphan the
@@ -255,7 +255,7 @@ class TestAnEmptyLineIsNotAPartner:
 
     @staticmethod
     def _page(texts: list[str]):
-        from lidenbrock.core.schemas import Coords, LineManifest, PageManifest
+        from saknussemm.core.schemas import Coords, LineManifest, PageManifest
 
         return PageManifest(
             page_id="P1",
@@ -279,9 +279,9 @@ class TestAnEmptyLineIsNotAPartner:
         )
 
     def _linked(self, texts: list[str]):
-        from lidenbrock.core.pairing import link_hyphen_pairs
-        from lidenbrock.core.schemas import HyphenRole, PairingPolicy
-        from lidenbrock.formats.page.parser import _assign_hyphen_roles
+        from saknussemm.core.pairing import link_hyphen_pairs
+        from saknussemm.core.schemas import HyphenRole, PairingPolicy
+        from saknussemm.formats.page.parser import _assign_hyphen_roles
 
         page = self._page(texts)
         _assign_hyphen_roles(page.lines)
@@ -319,14 +319,14 @@ class TestAnEmptyLineIsNotAPartner:
     def test_a_blank_last_line_leaves_the_break_unpaired(self) -> None:
         """No text after the break at all: the PART1 stays an orphan and is
         counted as one, rather than being paired with nothing."""
-        from lidenbrock.core.pairing import unpaired_break_refs
+        from saknussemm.core.pairing import unpaired_break_refs
 
         by_id, _role = self._linked(["une admini-", ""])
         assert by_id["L0"].hyphen_pair_line_id is None
         page = self._page(["une admini-", ""])
-        from lidenbrock.core.pairing import link_hyphen_pairs
-        from lidenbrock.core.schemas import PairingPolicy
-        from lidenbrock.formats.page.parser import _assign_hyphen_roles
+        from saknussemm.core.pairing import link_hyphen_pairs
+        from saknussemm.core.schemas import PairingPolicy
+        from saknussemm.formats.page.parser import _assign_hyphen_roles
 
         _assign_hyphen_roles(page.lines)
         link_hyphen_pairs(page.lines, PairingPolicy(geometric_checks=False))
@@ -340,7 +340,7 @@ class TestAnEmptyLineAtAPageSeam:
 
     @staticmethod
     def _pages(first: list[str], second: list[str]):
-        from lidenbrock.core.schemas import Coords, LineManifest, PageManifest
+        from saknussemm.core.schemas import Coords, LineManifest, PageManifest
 
         def page(pid: str, index: int, texts: list[str]) -> PageManifest:
             return PageManifest(
@@ -367,9 +367,9 @@ class TestAnEmptyLineAtAPageSeam:
         return [page("P1", 0, first), page("P2", 1, second)]
 
     def _link(self, first: list[str], second: list[str]):
-        from lidenbrock.core.pairing import link_cross_page_hyphens
-        from lidenbrock.core.schemas import PairingPolicy
-        from lidenbrock.formats.page.parser import _assign_hyphen_roles
+        from saknussemm.core.pairing import link_cross_page_hyphens
+        from saknussemm.core.schemas import PairingPolicy
+        from saknussemm.formats.page.parser import _assign_hyphen_roles
 
         pages = self._pages(first, second)
         for page in pages:

@@ -20,9 +20,9 @@ from pathlib import Path
 
 from lxml import etree
 
-from lidenbrock.formats.alto._ns import _detect_namespace
-from lidenbrock.formats.alto.parser import build_document_manifest
-from lidenbrock.formats.alto.rewriter import rewrite_alto_file
+from saknussemm.formats.alto._ns import _detect_namespace
+from saknussemm.formats.alto.parser import build_document_manifest
+from saknussemm.formats.alto.rewriter import rewrite_alto_file
 
 _NS = "http://www.loc.gov/standards/alto/ns-v3#"
 
@@ -139,7 +139,7 @@ def test_untouched_line_reports_nothing(tmp_path: Path):
 def test_loss_surfaces_in_correction_report(tmp_path: Path):
     """End-to-end: a slow-path attribute drop reaches the user-facing
     ``CorrectionReport.format_losses`` — the point of reporting it."""
-    from lidenbrock import CorrectionPipeline
+    from saknussemm import CorrectionPipeline
 
     from tests._pipeline_harness import DictProvider, RecordingObserver
 
@@ -267,7 +267,7 @@ def test_a_terminal_hyp_on_a_part2_line_makes_it_BOTH_not_part2(tmp_path: Path):
     the PART1-like branch and RE-EMITS the HYP. Nothing is dropped and there
     is nothing to count.
     """
-    from lidenbrock.core.schemas import HyphenRole
+    from saknussemm.core.schemas import HyphenRole
 
     xml_path = tmp_path / "p.xml"
     xml_path.write_text(_PART2_TERMINAL_HYP, encoding="utf-8")
@@ -297,7 +297,7 @@ def test_a_part2_line_reports_the_break_element_it_loses(tmp_path: Path):
     CONTENT. Both halves are asserted, so nobody "fixes" this by
     re-synthesising a HYP that would then double the mark.
     """
-    from lidenbrock.core.schemas import HyphenRole
+    from saknussemm.core.schemas import HyphenRole
 
     xml_path = tmp_path / "p.xml"
     xml_path.write_text(_PART2_MIDLINE_HYP, encoding="utf-8")
@@ -324,7 +324,7 @@ def test_the_element_vocabulary_is_not_the_attribute_vocabulary() -> None:
     differential invariant reads it as one (source count minus output count).
     An element loss keyed ``hyp_dropped`` would be checked against a
     non-existent ``HYP`` attribute and read as a phantom."""
-    from lidenbrock.formats.alto.losses import ALTO_STRING_ATTRIBUTES
+    from saknussemm.formats.alto.losses import ALTO_STRING_ATTRIBUTES
 
     assert not "hyp_elements_removed".endswith("_dropped")
     assert "HYP" not in ALTO_STRING_ATTRIBUTES

@@ -16,7 +16,7 @@ frontend shipped this exact bug class (V1.1: two files both containing
 `L1` overwrote each other's traces).
 
 ## Decision
-1. One key type: `lidenbrock.core.identity.LineRef` — a frozen,
+1. One key type: `saknussemm.core.identity.LineRef` — a frozen,
    slotted dataclass `(page_id, line_id)`. Every document-wide mutable
    map in the engine (traces, `accepted_snapshot`, `finalized_owner`,
    `producer_ops`, cross-page hyphen indexes, `CorrectionResult.traces`)

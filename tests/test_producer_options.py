@@ -12,10 +12,10 @@ import inspect
 
 import pytest
 
-from lidenbrock.core.protocols import ProducerMetadata
-from lidenbrock import CorrectionPipeline, EditProducer, ProducerOptions
-from lidenbrock.core.editing import EditScript, ReplaceLine
-from lidenbrock.formats.alto.parser import build_document_manifest
+from saknussemm.core.protocols import ProducerMetadata
+from saknussemm import CorrectionPipeline, EditProducer, ProducerOptions
+from saknussemm.core.editing import EditScript, ReplaceLine
+from saknussemm.formats.alto.parser import build_document_manifest
 
 from tests._paths import EXAMPLES
 

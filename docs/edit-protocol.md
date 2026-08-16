@@ -1,6 +1,6 @@
 # The span edit protocol (§4 / §5)
 
-`lidenbrock` corrects a transcription by turning a producer's response into
+`saknussemm` corrects a transcription by turning a producer's response into
 an **`EditScript`** — a list of edit operations against line text — and
 applying it back onto the manifests the rewriter knows how to serialise.
 The seam sits between the compiler (`enrich_chunk_lines` + payload) and the
@@ -22,7 +22,7 @@ Two operations, and **no structural op** — there is no `merge_lines`,
 without its anchor) holds by type, not by a runtime check.
 
 ```python
-from lidenbrock import ReplaceLine, ReplaceSpan, RangeAnchor, MatchAnchor, EditScript
+from saknussemm import ReplaceLine, ReplaceSpan, RangeAnchor, MatchAnchor, EditScript
 
 # Whole line (the historical LLM response, re-expressed as one op).
 ReplaceLine(line_id="tl_4", text="Velque appro¬")
@@ -49,7 +49,7 @@ ReplaceSpan(line_id="tl_2", anchor=MatchAnchor(match="ſ"), text="s")
   the first of several repeats inexpressible).
 
 ```python
-from lidenbrock.core.editing import normalize_anchor
+from saknussemm.core.editing import normalize_anchor
 normalize_anchor(MatchAnchor(match="lo"), "helo world")   # (RangeAnchor(3, 5), None)
 normalize_anchor(MatchAnchor(match="o"), "helo world")    # (None, "anchor_ambiguous")
 ```
@@ -73,7 +73,7 @@ today's response as `replace_line` ops **byte-for-byte identical** (proved
 on the corpus in `tests/test_editing.py`).
 
 ```python
-from lidenbrock.core.editing import apply_edit_script
+from saknussemm.core.editing import apply_edit_script
 result = apply_edit_script(
     EditScript(ops=[ReplaceSpan(line_id="l1", anchor=RangeAnchor(0, 1), text="s")]),
     canonical_by_id={"l1": "ſciences"},
@@ -103,8 +103,8 @@ class EditProducer(Protocol):
   reference-test producer.
 
 ```python
-from lidenbrock.core.editing import apply_edit_script
-from lidenbrock.producers.rules import RulesProducer, default_french_ocr_rules
+from saknussemm.core.editing import apply_edit_script
+from saknussemm.producers.rules import RulesProducer, default_french_ocr_rules
 prod = RulesProducer(default_french_ocr_rules())          # ſ→s, ﬁ/ﬂ ligatures
 script = prod.build_edit_script({"l1": "ſoleil"})
 apply_edit_script(script, {"l1": "ſoleil"}).text_by_id     # {"l1": "soleil"}
@@ -114,7 +114,7 @@ apply_edit_script(script, {"l1": "ſoleil"}).text_by_id     # {"l1": "soleil"}
   per-line `geometry` (coords + page dimensions) and a page `image_ref`
   into the payload *only* when the producer asks. The library
   **never opens a pixel** (invariant **I4**, enforced by
-  `test_edit_producer.py::test_i4_no_image_libraries_in_lidenbrock`);
+  `test_edit_producer.py::test_i4_no_image_libraries_in_saknussemm`);
   loading/cropping/encoding belongs to the out-of-lib producer.
   `run(page_images=…)` forwards the mapping verbatim — keyed by
   **page_id** (document-unique, one image per physical page, never per
@@ -129,7 +129,7 @@ apply_edit_script(script, {"l1": "ſoleil"}).text_by_id     # {"l1": "soleil"}
   `ImageTransform` mapping XML coordinates onto image pixels). Either
   rides the envelope identically and is forwarded verbatim; the core
   still opens neither. The core only *carries* an `ImageAsset` — the
-  builder that decodes a file to populate it is the `lidenbrock[vision]`
+  builder that decodes a file to populate it is the `saknussemm[vision]`
   extra, never the core (I4). An `ImageAsset` whose `page_id` disagrees
   with its mapping key is rejected at start-up.
 

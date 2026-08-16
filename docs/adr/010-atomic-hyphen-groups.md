@@ -15,7 +15,7 @@ across chunks by a pairwise last-write-wins pin) was exactly such a
 disagreement.
 
 ## Decision
-1. `lidenbrock.core.units.HyphenGroup` — a frozen value: the maximal
+1. `saknussemm.core.units.HyphenGroup` — a frozen value: the maximal
    hyphen-linked component, members as `LineRef`s in reading order,
    with `spans_pages` (cross-page joins are reconciled with cross-page
    context, never planned into one chunk) and `explicit` (conservative

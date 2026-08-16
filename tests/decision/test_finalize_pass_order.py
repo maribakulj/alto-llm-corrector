@@ -16,7 +16,7 @@ TEXT of a line, and ships a correction the canonical order rejects.
 :func:`test_wrong_pass_order_is_refused` is the guard. It was written as a
 strict ``xfail`` in session 3, held the requirement while the mechanism was
 undecided, and the marker came off when
-:class:`~lidenbrock.core.acceptance._FinalizeOrder` landed — which is what
+:class:`~saknussemm.core.acceptance._FinalizeOrder` landed — which is what
 ``strict`` was for.
 
 The demonstration and the guard coexist because the token is OPTIONAL:
@@ -31,13 +31,13 @@ from __future__ import annotations
 
 import pytest
 
-from lidenbrock.core.acceptance import (
+from saknussemm.core.acceptance import (
     _FinalizeOrder,
     _global_adjacency_pass,
     _loss_policy_pass,
 )
-from lidenbrock.core.finalize import _preserve_break_chars
-from lidenbrock.core.schemas import GuardConfig, LossPolicy
+from saknussemm.core.finalize import _preserve_break_chars
+from saknussemm.core.schemas import GuardConfig, LossPolicy
 
 from tests.decision._state import document, line, snapshot
 
@@ -167,8 +167,8 @@ def test_wrong_pass_order_is_refused() -> None:
 
     The loss gate declares that adjacency and break-char preservation must
     have run; asked to go first, it refuses. ``RuntimeError`` rather than a
-    ``LidenbrockError`` on purpose — a wrong pass order is an engine bug,
-    and ``LidenbrockError`` is the family the chunk loop is allowed to
+    ``SaknussemmError`` on purpose — a wrong pass order is an engine bug,
+    and ``SaknussemmError`` is the family the chunk loop is allowed to
     absorb (ADR-008).
     """
     with pytest.raises(RuntimeError, match="ran before"):

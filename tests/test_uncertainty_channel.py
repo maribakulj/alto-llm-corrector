@@ -15,17 +15,17 @@ from typing import Any
 
 import pytest
 
-from lidenbrock import CorrectionPipeline, Usage
-from lidenbrock.core.schemas import ConfidencePolicy
-from lidenbrock.core.confidence import score_producer_claims
-from lidenbrock.formats.alto.parser import build_document_manifest
-from lidenbrock.integrations.llm import (
+from saknussemm import CorrectionPipeline, Usage
+from saknussemm.core.schemas import ConfidencePolicy
+from saknussemm.core.confidence import score_producer_claims
+from saknussemm.formats.alto.parser import build_document_manifest
+from saknussemm.integrations.llm import (
     OUTPUT_JSON_SCHEMA,
     SYSTEM_PROMPT,
     UNCERTAINTY_REASONS,
     uncertainty_system_prompt,
 )
-from lidenbrock.producers.llm_edit import LLMEditProducer
+from saknussemm.producers.llm_edit import LLMEditProducer
 
 from tests._pipeline_harness import DictProvider
 

@@ -12,8 +12,8 @@ from typing import Any
 
 import pytest
 
-from lidenbrock import CorrectionAborted, CorrectionError, CorrectionPipeline
-from lidenbrock.formats.alto.parser import build_document_manifest
+from saknussemm import CorrectionAborted, CorrectionError, CorrectionPipeline
+from saknussemm.formats.alto.parser import build_document_manifest
 
 from tests._paths import EXAMPLES
 

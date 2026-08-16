@@ -20,11 +20,11 @@ from __future__ import annotations
 
 import pytest
 
-from lidenbrock import CorrectionPipeline
-from lidenbrock.core.editing import EditScript, ReplaceLine
-from lidenbrock.core.fidelity import ProjectionFidelity
-from lidenbrock.core.protocols import ProducerMetadata
-from lidenbrock.formats.alto.parser import build_document_manifest
+from saknussemm import CorrectionPipeline
+from saknussemm.core.editing import EditScript, ReplaceLine
+from saknussemm.core.fidelity import ProjectionFidelity
+from saknussemm.core.protocols import ProducerMetadata
+from saknussemm.formats.alto.parser import build_document_manifest
 
 from tests._paths import EXAMPLES
 

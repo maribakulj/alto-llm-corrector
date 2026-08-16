@@ -1,6 +1,6 @@
 # Quickstart
 
-`lidenbrock` corrects post-OCR text in heritage transcription XML (ALTO
+`saknussemm` corrects post-OCR text in heritage transcription XML (ALTO
 and PAGE) **without ever touching the document's structure**: lines are
 never merged, moved or resegmented; geometry is never rewritten on PAGE
 and only word boxes are redistributed on ALTO. The producer proposes,
@@ -14,21 +14,21 @@ suite, so it cannot rot).
 ## Install
 
 ```bash
-pip install lidenbrock        # Python ≥ 3.11; pydantic v2 + lxml
+pip install saknussemm        # Python ≥ 3.11; pydantic v2 + lxml
 ```
 
-`import lidenbrock` never loads lxml — the parsers/rewriters materialise
+`import saknussemm` never loads lxml — the parsers/rewriters materialise
 lazily on first use, so core-only consumers (guards, planner, edit
 protocol) can run where lxml isn't installed.
 
 ## The three-line path (§2)
 
 ```python
-import lidenbrock
-from lidenbrock.producers.rules import RulesProducer, default_french_ocr_rules
+import saknussemm
+from saknussemm.producers.rules import RulesProducer, default_french_ocr_rules
 
-document = lidenbrock.load("page.xml")        # ALTO or PAGE, by namespace
-result = lidenbrock.correct_sync(             # `await lidenbrock.correct(...)` in async code
+document = saknussemm.load("page.xml")        # ALTO or PAGE, by namespace
+result = saknussemm.correct_sync(             # `await saknussemm.correct(...)` in async code
     document, producer=RulesProducer(default_french_ocr_rules())
 )
 result.write("out/")                          # corrected XML + report.json
@@ -47,8 +47,8 @@ observer, explicit metadata) lives on `CorrectionPipeline`.
 import asyncio
 from pathlib import Path
 
-from lidenbrock import CorrectionPipeline
-from lidenbrock.formats.alto.parser import build_document_manifest
+from saknussemm import CorrectionPipeline
+from saknussemm.formats.alto.parser import build_document_manifest
 
 
 class MyProvider:
@@ -72,7 +72,7 @@ async def main():
     src = Path("my_page.xml")
     doc = build_document_manifest([(src, src.name)])   # ALTO
     # PAGE XML: import build_document_manifest from
-    # lidenbrock.formats.page.parser instead — nothing else changes:
+    # saknussemm.formats.page.parser instead — nothing else changes:
     # the manifest carries its format and the pipeline derives the
     # matching rewriter from it (no adapter to inject).
 
@@ -103,8 +103,8 @@ it on disk; `should_abort=callable` gives cooperative cancellation.
 ## Deterministic pre-pass (no LLM at all)
 
 ```python
-from lidenbrock import CorrectionPipeline
-from lidenbrock.producers.rules import RulesProducer, default_french_ocr_rules
+from saknussemm import CorrectionPipeline
+from saknussemm.producers.rules import RulesProducer, default_french_ocr_rules
 
 pipeline = CorrectionPipeline(
     producer=RulesProducer(default_french_ocr_rules()),   # ſ→s, ﬁ/ﬂ …

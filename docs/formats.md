@@ -11,7 +11,7 @@ Security is format-independent: every `etree.parse`/`fromstring` call in
 `dtd_validation=False`) — enforced by an AST contract test, not by
 convention.
 
-## ALTO (`lidenbrock.formats.alto`)
+## ALTO (`saknussemm.formats.alto`)
 
 Versions 2/3/4 (namespace auto-detected). Line text is reconstructed from
 `String`/`SP`/`HYP` children; hyphenation uses the explicit
@@ -40,7 +40,7 @@ dropped attribute surfaces on `CorrectionReport.format_losses` as
 losses. The fast/untouched paths edit in place and preserve these
 attributes.
 
-## PAGE (`lidenbrock.formats.page`)
+## PAGE (`saknussemm.formats.page`)
 
 PRImA PAGE — the native format of Transkribus and eScriptorium; dated
 namespaces (2013-07-15 … 2019-07-15+) auto-detected. Normative rules

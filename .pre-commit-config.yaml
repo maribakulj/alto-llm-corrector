@@ -24,7 +24,7 @@ repos:
     rev: v0.15.14
     hooks:
       # The tree is flat since 2026-08-16: the library IS the repository.
-      # surface lidenbrock lint issues before CI does.
+      # surface saknussemm lint issues before CI does.
       - id: ruff-check
         args: [--fix]
         files: ^(src|tests)/

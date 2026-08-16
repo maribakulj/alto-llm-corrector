@@ -1,8 +1,8 @@
-"""Security tests for lidenbrock XML parsing — XXE / SSRF / entity expansion.
+"""Security tests for saknussemm XML parsing — XXE / SSRF / entity expansion.
 
 Roadmap L10 (B1) — these tests pin the contract that EVERY
-lxml parser instantiation in lidenbrock goes through the hardened
-``make_safe_parser()`` helper in ``lidenbrock.formats._xml`` (the
+lxml parser instantiation in saknussemm goes through the hardened
+``make_safe_parser()`` helper in ``saknussemm.formats._xml`` (the
 format-neutral home; each format's ``_ns`` re-exports it).
 
 What the hardened parser actually buys us (and what it does NOT):
@@ -36,8 +36,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from lidenbrock.formats.alto.parser import parse_alto_file
-from lidenbrock.formats.alto.rewriter import extract_output_texts
+from saknussemm.formats.alto.parser import parse_alto_file
+from saknussemm.formats.alto.rewriter import extract_output_texts
 
 from tests._paths import PKG, SRC
 
@@ -175,7 +175,7 @@ def test_extract_output_texts_returns_quickly_on_external_dtd(tmp_path: Path):
 
 
 # ---------------------------------------------------------------------------
-# Source-AST contract pin — every lxml call site under lidenbrock/alto/
+# Source-AST contract pin — every lxml call site under saknussemm/alto/
 # must pass an explicit parser argument. Independent of lxml runtime
 # behaviour, this catches future refactors that reintroduce
 # `etree.parse(p)` with no parser kwarg.
@@ -305,7 +305,7 @@ def test_make_safe_parser_returns_fresh_instance_per_call():
     (lxml parsers are not documented as thread-safe). A future "cache
     the parser" optimisation that breaks this would surface here.
     """
-    from lidenbrock.formats._xml import make_safe_parser
+    from saknussemm.formats._xml import make_safe_parser
 
     p1 = make_safe_parser()
     p2 = make_safe_parser()
@@ -324,7 +324,7 @@ def test_make_safe_parser_enables_all_four_safety_flags():
     """
     import ast
 
-    xml_path = PKG / "src" / "lidenbrock" / "formats" / "_xml.py"
+    xml_path = PKG / "src" / "saknussemm" / "formats" / "_xml.py"
     tree = ast.parse(xml_path.read_text(encoding="utf-8"), filename=str(xml_path))
     flags: dict[str, ast.expr] = {}
     for node in ast.walk(tree):

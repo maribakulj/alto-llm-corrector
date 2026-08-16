@@ -9,10 +9,10 @@ target boundary.
 
 from __future__ import annotations
 
-from lidenbrock.core.planner import plan_page
+from saknussemm.core.planner import plan_page
 from tests._pipeline_harness import apply_decisions
 
-from lidenbrock.core.schemas import (
+from saknussemm.core.schemas import (
     ChunkGranularity,
     ChunkPlannerConfig,
     Coords,
@@ -114,8 +114,8 @@ def test_hyphen_pair_stays_in_one_target_window():
 
 import pytest  # noqa: E402
 
-from lidenbrock import CorrectionPipeline  # noqa: E402
-from lidenbrock.core.schemas import DocumentManifest, LineStatus  # noqa: E402
+from saknussemm import CorrectionPipeline  # noqa: E402
+from saknussemm.core.schemas import DocumentManifest, LineStatus  # noqa: E402
 
 
 class _IdentityProvider:

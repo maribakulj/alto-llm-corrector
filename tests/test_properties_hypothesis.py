@@ -19,10 +19,10 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 from lxml import etree
 
-from lidenbrock.core.planner import plan_page
-from lidenbrock.core.schemas import ChunkGranularity, ChunkPlannerConfig, HyphenRole
-from lidenbrock.formats.alto.parser import build_document_manifest
-from lidenbrock.formats.alto.rewriter import rewrite_alto_file
+from saknussemm.core.planner import plan_page
+from saknussemm.core.schemas import ChunkGranularity, ChunkPlannerConfig, HyphenRole
+from saknussemm.formats.alto.parser import build_document_manifest
+from saknussemm.formats.alto.rewriter import rewrite_alto_file
 
 # ---------------------------------------------------------------------------
 # ALTO document strategy

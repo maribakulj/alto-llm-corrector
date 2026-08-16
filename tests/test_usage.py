@@ -6,8 +6,8 @@ from typing import Any
 
 import pytest
 
-from lidenbrock import CorrectionPipeline, Usage
-from lidenbrock.formats.alto.parser import build_document_manifest
+from saknussemm import CorrectionPipeline, Usage
+from saknussemm.formats.alto.parser import build_document_manifest
 
 from tests._paths import EXAMPLES
 

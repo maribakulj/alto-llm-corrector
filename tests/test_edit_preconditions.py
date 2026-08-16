@@ -14,7 +14,7 @@ import hashlib
 
 import pytest
 
-from lidenbrock.core.editing import (
+from saknussemm.core.editing import (
     EDIT_PROTOCOL_VERSION,
     EditScript,
     LinePrecondition,
@@ -23,8 +23,8 @@ from lidenbrock.core.editing import (
     apply_edit_script,
     line_digest,
 )
-from lidenbrock.errors import ValidationError
-from lidenbrock.formats.alto.parser import build_document_manifest
+from saknussemm.errors import ValidationError
+from saknussemm.formats.alto.parser import build_document_manifest
 
 from tests._pipeline_harness import EXAMPLES, DictProvider, RecordingObserver
 
@@ -115,7 +115,7 @@ def test_current_and_absent_protocol_versions_apply():
 
 
 def _run_result():
-    from lidenbrock.core.pipeline import CorrectionPipeline
+    from saknussemm.core.pipeline import CorrectionPipeline
 
     doc = build_document_manifest([(_SAMPLE, _SAMPLE.name)])
     target = doc.pages[0].lines[0]

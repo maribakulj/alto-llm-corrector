@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from lidenbrock import (
+from saknussemm import (
     CorrectionAborted,
     CorrectionError,
     ParseError,
     ValidationError,
 )
-from lidenbrock.core.validator import HyphenIntegrityError, validate_llm_response
+from saknussemm.core.validator import HyphenIntegrityError, validate_llm_response
 
 
 def test_all_errors_are_correction_errors():

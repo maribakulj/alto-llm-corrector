@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to **lidenbrock** are documented here.
+All notable changes to **saknussemm** are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
@@ -29,8 +29,8 @@ not because a migration is owed.
 
 | change | what it broke |
 |---|---|
-| **The `[qe]` extra is gone** | `pip install lidenbrock[qe]` and `lidenbrock.integrations.qe`. The scorer moved to the bench repository on 2026-08-16: it needed onnxruntime and a 545 MB model no CI could fetch, so its suite skipped everywhere and the module sat outside the coverage gate. The `QEScorer` protocol stays — the injection point is public, the implementation is not |
-| **The library is renamed `corrigenda` → `lidenbrock`** | everything a caller writes: the distribution name, the import name, the extras (`lidenbrock[qe]`, `lidenbrock[vision]`), the error root `LidenbrockError`, the release tag prefix, and the `<softwareName>` the rewriter stamps into corrected files. The largest break in this list, and the cheapest: nothing has ever been published, so it is owed to nobody. Doing it after a release would have cost a major version and every consumer an edit |
+| **The `[qe]` extra is gone** | `pip install saknussemm[qe]` and `saknussemm.integrations.qe`. The scorer moved to the bench repository on 2026-08-16: it needed onnxruntime and a 545 MB model no CI could fetch, so its suite skipped everywhere and the module sat outside the coverage gate. The `QEScorer` protocol stays — the injection point is public, the implementation is not |
+| **The library is renamed `corrigenda` → `saknussemm`** | everything a caller writes: the distribution name, the import name, the extras (`saknussemm[qe]`, `saknussemm[vision]`), the error root `SaknussemmError`, the release tag prefix, and the `<softwareName>` the rewriter stamps into corrected files. The largest break in this list, and the cheapest: nothing has ever been published, so it is owed to nobody. Doing it after a release would have cost a major version and every consumer an edit |
 | OCR-confidence invalidation is counted per line | the PAGE `format_losses` key `conf_dropped` is gone; its replacement counts lines, not attributes |
 | `ProducerMetadata` replaces bare provider/model strings | producer identity |
 | The producer seam takes `ProducerOptions`, not `RetryPolicy` | `EditProducer.produce()`'s signature |
@@ -44,7 +44,7 @@ not because a migration is owed.
 | Recoverability is an allowlist | providers raising raw transport exceptions |
 | Parsers stamp identity | hand-built manifests |
 | Fallback accounting counts LINES, not chunks | `CorrectionResult` counters |
-| The two research knobs left the top-level surface | `from lidenbrock import ConfidencePolicy, RoutingPolicy` |
+| The two research knobs left the top-level surface | `from saknussemm import ConfidencePolicy, RoutingPolicy` |
 
 The **top-level import surface** is provisional until `1.0.0`. It went from
 95 accreted symbols to the computed 68 (`S3b`), then to 66 (`RM-04`). See
@@ -66,8 +66,8 @@ The **top-level import surface** is provisional until `1.0.0`. It went from
   frozen, and executed by no default run".
 
   **Migration is one import line.** Both stay exactly where they are —
-  `from lidenbrock.core.schemas import ConfidencePolicy`,
-  `from lidenbrock.core.quality import RoutingPolicy` — which is the demotion
+  `from saknussemm.core.schemas import ConfidencePolicy`,
+  `from saknussemm.core.quality import RoutingPolicy` — which is the demotion
   door `docs/versioning.md` documents for symbols that leave `__all__`
   without leaving the library. Nothing is deleted, no behaviour changes, and
   the pipeline still accepts both arguments. `tests/test_research_boundary.py`
@@ -82,7 +82,7 @@ The **top-level import surface** is provisional until `1.0.0`. It went from
   and removing them would break the promise `S3b` computed the surface from.
 
 - **The top-level surface is 95 → 68 symbols, and it is now computed
-  (`S3b`).** `lidenbrock.__all__` had reached 95 by accretion: each name was
+  (`S3b`).** `saknussemm.__all__` had reached 95 by accretion: each name was
   added because something needed it that day, and nothing ever took one
   away. It is now the transitive closure of two promises and nothing else —
   what `load`/`correct`/`correct_sync` return, so a caller can type the value
@@ -96,17 +96,17 @@ The **top-level import surface** is provisional until `1.0.0`. It went from
 
   | was | now |
   |---|---|
-  | `from lidenbrock import RulesProducer, SubstitutionRule, default_french_ocr_rules` | `from lidenbrock.producers.rules import …` |
-  | `from lidenbrock import LLMEditProducer` | `from lidenbrock.producers.llm_edit import …` |
-  | `from lidenbrock import build_document_manifest, parse_alto_file, rewrite_alto_file, extract_output_texts` | `from lidenbrock.formats.alto.parser` / `.rewriter import …` |
-  | `from lidenbrock import parse_page_file, rewrite_page_file` | `from lidenbrock.formats.page.parser` / `.rewriter import …` |
-  | `from lidenbrock import AltoFormatAdapter, PageFormatAdapter` | `from lidenbrock.formats.alto.adapter` / `page.adapter import …` |
-  | `from lidenbrock import apply_edit_script, normalize_anchor, line_digest, EditResult, EditRejection` | `from lidenbrock.core.editing import …` |
-  | `from lidenbrock import BaseProvider, ModelCatalog, StructuredCompletionClient, require_capabilities, require_page_images` | `from lidenbrock.core.protocols import …` |
-  | `from lidenbrock import QEScorer, HeuristicQEScorer, RoutingDecision, route_line` | `from lidenbrock.core.quality import …` |
-  | `from lidenbrock import ConfidenceScorer, HeuristicScorer` | `from lidenbrock.core.confidence import …` |
-  | `from lidenbrock import ModelInfo, ModelCapabilities, LineProposal` | `from lidenbrock.core.schemas import …` |
-  | `from lidenbrock import SYSTEM_PROMPT, OUTPUT_JSON_SCHEMA` | `from lidenbrock.integrations.llm import …` |
+  | `from saknussemm import RulesProducer, SubstitutionRule, default_french_ocr_rules` | `from saknussemm.producers.rules import …` |
+  | `from saknussemm import LLMEditProducer` | `from saknussemm.producers.llm_edit import …` |
+  | `from saknussemm import build_document_manifest, parse_alto_file, rewrite_alto_file, extract_output_texts` | `from saknussemm.formats.alto.parser` / `.rewriter import …` |
+  | `from saknussemm import parse_page_file, rewrite_page_file` | `from saknussemm.formats.page.parser` / `.rewriter import …` |
+  | `from saknussemm import AltoFormatAdapter, PageFormatAdapter` | `from saknussemm.formats.alto.adapter` / `page.adapter import …` |
+  | `from saknussemm import apply_edit_script, normalize_anchor, line_digest, EditResult, EditRejection` | `from saknussemm.core.editing import …` |
+  | `from saknussemm import BaseProvider, ModelCatalog, StructuredCompletionClient, require_capabilities, require_page_images` | `from saknussemm.core.protocols import …` |
+  | `from saknussemm import QEScorer, HeuristicQEScorer, RoutingDecision, route_line` | `from saknussemm.core.quality import …` |
+  | `from saknussemm import ConfidenceScorer, HeuristicScorer` | `from saknussemm.core.confidence import …` |
+  | `from saknussemm import ModelInfo, ModelCapabilities, LineProposal` | `from saknussemm.core.schemas import …` |
+  | `from saknussemm import SYSTEM_PROMPT, OUTPUT_JSON_SCHEMA` | `from saknussemm.integrations.llm import …` |
 
   Six names were ADDED, because both closures reach them and a caller could
   not import them: `Coords`, `HyphenSplit`, `ProjectionFidelity`,
@@ -139,7 +139,7 @@ The **top-level import surface** is provisional until `1.0.0`. It went from
   installed by hand in the CI workflow and declared in no manifest, and without
   it mypy types `_Element.attrib` as `Any` — a local strict run checked less
   than the gate it was meant to reproduce, silently. `pip install
-  lidenbrock[typecheck]` now installs the pinned mypy plus the stubs, and the
+  saknussemm[typecheck]` now installs the pinned mypy plus the stubs, and the
   CI job installs the extra instead of carrying its own pin.
 
 - **`CorrectionReport.hyphen_splits` — the engine's one deliberately
@@ -340,7 +340,7 @@ The **top-level import surface** is provisional until `1.0.0`. It went from
 
 - **The top-level import surface is documented as provisional, and pinned
   against growth.** No symbol was added or removed; what changed is that three
-  documents stopped describing `lidenbrock.__all__` as something it is not.
+  documents stopped describing `saknussemm.__all__` as something it is not.
   The list holds 95 names that were never ratified — they accumulated, one
   addition at a time — while `docs/PLAN.md` (`S3`) computes the surface as the
   transitive closure of what the façade returns, 54 symbols, and schedules the
@@ -348,8 +348,8 @@ The **top-level import surface** is provisional until `1.0.0`. It went from
   `PUBLIC_API_1_0` / "the frozen 1.0 surface" (now `CURRENT_TOP_LEVEL_SURFACE`,
   an inventory), and gains a ratchet test — the surface may shrink, never grow.
   `docs/versioning.md` and the README state the provisional status and spell
-  out the two doors: `lidenbrock.*` under strict SemVer *from 1.0.0*, module
-  paths (`lidenbrock.core.*`, `lidenbrock.formats.*`, `lidenbrock.producers.*`)
+  out the two doors: `saknussemm.*` under strict SemVer *from 1.0.0*, module
+  paths (`saknussemm.core.*`, `saknussemm.formats.*`, `saknussemm.producers.*`)
   supported and documented. That distinction is what makes the pending cut a
   move rather than a removal — and it is the door this repository actually uses
   (695 module-path imports against 64 top-level ones).
@@ -377,7 +377,7 @@ The **top-level import surface** is provisional until `1.0.0`. It went from
 
 ### Added
 
-- **`lidenbrock.core.losses` — the loss matrix (`LOSS_MATRIX_VERSION`).** The
+- **`saknussemm.core.losses` — the loss matrix (`LOSS_MATRIX_VERSION`).** The
   loss counters had grown one fix at a time and nothing ever stated what each
   attribute is *supposed* to do, so "every loss is counted" was a claim with
   no referent — and false in both directions at once. One versioned table now
@@ -522,7 +522,7 @@ The **top-level import surface** is provisional until `1.0.0`. It went from
   decided as `M.\xa0Dupont` and written back as `M. Dupont` passed silently:
   no error, no counter, no trace — the one corruption class the invariant
   exists to catch was the one class it could not express.
-  `lidenbrock.core.fidelity` replaces the boolean with an ordered scale.
+  `saknussemm.core.fidelity` replaces the boolean with an ordered scale.
   `exact` (the bytes say the decision character for character),
   `token_equivalent` (only what ALTO cannot represent was lost — a collapsed
   whitespace run, an edge space; `<SP>` carries no content) and `normalized`
@@ -564,7 +564,7 @@ The **top-level import surface** is provisional until `1.0.0`. It went from
   (`stop_reason: "refusal"`) returns no lines so the chunk falls back to OCR
   text instead of crashing. Tooling, not library API: vendor specifics stay
   out of the pixel-blind core (promoting provider adapters into
-  `lidenbrock[anthropic|…]` remains a Phase-5 item). Tests stub the SDK, so
+  `saknussemm[anthropic|…]` remains a Phase-5 item). Tests stub the SDK, so
   the request shape is asserted with no network call and no API key.
 
 ### Fixed
@@ -721,7 +721,7 @@ The **top-level import surface** is provisional until `1.0.0`. It went from
   choosing the profile is a structurally recorded decision, not a hidden
   mode. The library default is unchanged (opt-in), so runs without it stay
   byte-identical.
-- **`VisionEditProducer` — the `lidenbrock[vision]` extra, part 2 (ROADMAP
+- **`VisionEditProducer` — the `saknussemm[vision]` extra, part 2 (ROADMAP
   V3 Phase 4).** ``integrations.vision.VisionEditProducer`` adapts a
   multimodal provider to the ``EditProducer`` contract: for each target
   line it crops the region from the page image (the pure
@@ -744,7 +744,7 @@ The **top-level import surface** is provisional until `1.0.0`. It went from
   configuration-fingerprint helper were extracted to ``integrations.llm``
   (``edit_ops_from_response``, ``prompt_schema_fingerprint``) with the text
   producer's behaviour byte-identical (fingerprint pin unchanged).
-- **Pixel-pure vision cropper — the `lidenbrock[vision]` extra, part 1
+- **Pixel-pure vision cropper — the `saknussemm[vision]` extra, part 1
   (ROADMAP V3 Phase 4).** ``integrations.vision`` is the deterministic
   half of the vision chain: ``build_image_asset(page_id, path)`` decodes a
   file into the populated ``ImageAsset`` the core carries (SHA-256 of the
@@ -763,10 +763,10 @@ The **top-level import surface** is provisional until `1.0.0`. It went from
   image runtime, and the pixel-blind core never pulls it. I4 is restated
   accordingly: the pixel-blind zone (core, formats, text producers) is
   image-lib-free by static scan AND by a runtime import contract
-  (``import lidenbrock`` loads no image lib into ``sys.modules``), while
+  (``import saknussemm`` loads no image lib into ``sys.modules``), while
   the sanctioned ``integrations/vision.py`` may import Pillow function-
   locally — the same pattern as the qe extra. New extra
-  ``lidenbrock[vision] = ["pillow"]``.
+  ``saknussemm[vision] = ["pillow"]``.
 - **Structured `ImageAsset` — the recommended page-image contract
   (ROADMAP V3 Phase 4).** ``run(page_images=…)`` now accepts, per page,
   either the historical opaque ``ImageRef`` (str) or the richer
@@ -784,8 +784,8 @@ The **top-level import surface** is provisional until `1.0.0`. It went from
   per-page contract exists to catch. Fully additive and opt-in: a bare
   ``ImageRef`` behaves exactly as before, and the decoding builder that
   *populates* an ``ImageAsset`` from a file is the forthcoming
-  ``lidenbrock[vision]`` extra (Phase 4), never the core.
-- **Zero-shot D'AlemBERT QE scorer — the `lidenbrock[qe]` extra
+  ``saknussemm[vision]`` extra (Phase 4), never the core.
+- **Zero-shot D'AlemBERT QE scorer — the `saknussemm[qe]` extra
   (ROADMAP V3 Phase 3).** ``integrations.qe.MaskedLMQEScorer`` implements
   the pure-core ``QEScorer`` protocol with the masked pseudo-perplexity
   (Salazar et al. 2020) of D'AlemBERT — a RoBERTa masked LM pre-trained
@@ -845,7 +845,7 @@ The **top-level import surface** is provisional until `1.0.0`. It went from
   is byte-identical (byte-parity corpus unchanged); routing is not in
   the §8.2 composite fingerprint.
 - **QE scoring + routing brain (ROADMAP V3 Phase 3, core).** New
-  ``lidenbrock.core.quality``: the ``QEScorer`` protocol (score a
+  ``saknussemm.core.quality``: the ``QEScorer`` protocol (score a
   SOURCE line's need for correction in [0,1], pre-LLM), a
   zero-dependency ``HeuristicQEScorer`` baseline, and the routing brain
   (``RoutingPolicy`` frozen thresholds, ``RoutingDecision`` enum,
@@ -862,7 +862,7 @@ The **top-level import surface** is provisional until `1.0.0`. It went from
   historical form (``cultiuent``) needs a historical lexicon or model —
   the measured justification for the Phase 3 ONNX/D'AlemBERT scorer,
   which will sit behind the same ``QEScorer`` protocol in
-  ``lidenbrock[qe]``. Additive public API; not yet in the pipeline or
+  ``saknussemm[qe]``. Additive public API; not yet in the pipeline or
   the §8.2 composite fingerprint (wiring is the next Phase 3 step).
 
 - **LLM uncertainty channel (ROADMAP V3 Phase 1).** Opt-in contract
@@ -872,7 +872,7 @@ The **top-level import surface** is provisional until `1.0.0`. It went from
   for doubt instead of silent guessing) and reason-coded per-token
   ``edits`` (``confusion_connue`` / ``mot_du_lexique`` /
   ``infere_du_contexte`` / ``conjecture``). The app VERIFIES every
-  verifiable claim (``lidenbrock.core.confidence.score_producer_claims``
+  verifiable claim (``saknussemm.core.confidence.score_producer_claims``
   — confusion table, lexicon, token existence); a failed check scores
   BELOW an honest conjecture. The verified score rides
   ``ReplaceLine.producer_confidence`` (additive) and feeds the
@@ -892,7 +892,7 @@ The **top-level import surface** is provisional until `1.0.0`. It went from
   ``ConfidenceScorer`` by name; ``producer`` — reserved for the LLM
   uncertainty channel) plus a ``decision`` aggregate under an
   IDENTIFIED formula (``min`` over present components). New
-  ``lidenbrock.core.confidence`` module with the ``ConfidenceScorer``
+  ``saknussemm.core.confidence`` module with the ``ConfidenceScorer``
   protocol and the zero-dependency ``HeuristicScorer`` (character
   evidence + classic OCR confusion table + optional lexicon).
   ``mode="write_wc"`` is declared but LOCKED (raises) until the
@@ -910,7 +910,7 @@ The **top-level import surface** is provisional until `1.0.0`. It went from
   hyphen unit, ADR-010) and the correction is PRESERVED as a
   ``SidecarEntry`` on ``CorrectionReport.sidecar`` (also written as
   ``sidecar.json`` by ``CorrectionResult.write`` when non-empty) for
-  review instead of lost. New core module ``lidenbrock.core.alignment``
+  review instead of lost. New core module ``saknussemm.core.alignment``
   (char-level Levenshtein similarity → monotonic token DP; a match
   requires character evidence; moves are flagged, never applied) also
   drives the ALTO slow path's identity recycling, which is now aligned
@@ -940,7 +940,7 @@ The **top-level import surface** is provisional until `1.0.0`. It went from
   rules improvement with residual, oracle at CER 0, cassette ≡ oracle).
 
 - **The error root gets its final name (P3.11, first slice).**
-  ``LidenbrockError`` — named for the LIBRARY, like
+  ``SaknussemmError`` — named for the LIBRARY, like
   ``requests.RequestException`` — replaces ``CorrectionError`` as the
   §8.4 root, and ``ProposalValidationError`` replaces the bare
   ``ValidationError`` (which collided with pydantic's in every
@@ -953,17 +953,17 @@ The **top-level import surface** is provisional until `1.0.0`. It went from
   top-level exports for now.
 
 - **The three-line happy path (P3.12, §2).**
-  ``lidenbrock.load(*paths)`` sniffs each file's root namespace (ALTO
+  ``saknussemm.load(*paths)`` sniffs each file's root namespace (ALTO
   or PAGE — one format per document, unique basenames) and returns a
   ``LoadedDocument`` (manifest + the name → path map a run needs);
-  ``lidenbrock.correct(document, producer=…)`` /
-  ``lidenbrock.correct_sync(…)`` run a default pipeline around any
+  ``saknussemm.correct(document, producer=…)`` /
+  ``saknussemm.correct_sync(…)`` run a default pipeline around any
   ``EditProducer`` — no observer, no adapter, no manifest plumbing
   required for the simple case (no-op observer, default policies,
   provenance from the producer's declared identity). Purely ADDITIVE:
   ``CorrectionPipeline`` keeps every knob; the P3.11 top-level API
   reduction remains a separate, deliberate decision. All four symbols
-  are lazy top-level exports (``import lidenbrock`` still never loads
+  are lazy top-level exports (``import saknussemm`` still never loads
   lxml); the quickstart now leads with the three-line path.
 
 - **EditScript preconditions — a script only applies to the document
@@ -1071,8 +1071,8 @@ The **top-level import surface** is provisional until `1.0.0`. It went from
   vision producer receives no "LLM payload"; the edit protocol's
   request/proposal shapes are producer-agnostic. The purely-LLM
   contract (``SYSTEM_PROMPT``, ``OUTPUT_JSON_SCHEMA``) moves from
-  ``lidenbrock.producers.llm`` to ``lidenbrock.integrations.llm`` —
-  ``lidenbrock.producers`` keeps only producer implementations. No
+  ``saknussemm.producers.llm`` to ``saknussemm.integrations.llm`` —
+  ``saknussemm.producers`` keeps only producer implementations. No
   wire/JSON shape changes anywhere: these are Python-surface renames.
   Remaining P3.7 work: ``ProducerMetadata`` replacing bare
   ``provider_name``/``model`` (a rules producer has no "model") — the
@@ -1090,7 +1090,7 @@ The **top-level import surface** is provisional until `1.0.0`. It went from
   moved.
 
 - **Typed engine events (P3.6, second slice).**
-  ``lidenbrock.core.events`` defines one frozen ``EngineEvent``
+  ``saknussemm.core.events`` defines one frozen ``EngineEvent``
   dataclass per ``PipelineEventType`` (``DocumentParsed``,
   ``ChunkStarted``, ``ChunkDowngraded``, ``RewriterStats``, …): the
   emit sites construct these instead of ad-hoc dict literals, so every
@@ -1148,7 +1148,7 @@ The **top-level import surface** is provisional until `1.0.0`. It went from
 - **BREAKING — persistence left the engine surface (ADR-011, slice
   D-fin).** `CorrectionPipeline(output_writer=…)` /
   `for_provider(output_writer=…)` and `run(apply=…)` are gone, and the
-  `OutputWriter` protocol is no longer part of `lidenbrock` (the demo
+  `OutputWriter` protocol is no longer part of `saknussemm` (the demo
   backend now owns its own port in `app.protocols`). The engine never
   writes: every run computes `result.corrected_files` + `result.report`
   and the caller persists — `result.write(dir)` for the simple case
@@ -1180,7 +1180,7 @@ The **top-level import surface** is provisional until `1.0.0`. It went from
   trace-only diagnostic, `output_alto_text`) is now verified against the
   final per-line decision before the writer persists anything. A missing
   line or a word-level divergence raises the new
-  `lidenbrock.errors.ProjectionError` and fails the run — a divergent
+  `saknussemm.errors.ProjectionError` and fails the run — a divergent
   artefact is corruption, never a valid output. Whitespace runs are
   compared in normal form: ALTO/PAGE word tokenization cannot represent
   consecutive spaces, a documented format property (exact-space loss
@@ -1216,7 +1216,7 @@ The **top-level import surface** is provisional until `1.0.0`. It went from
 
 ### Added
 
-- **`lidenbrock.core.units` — atomic hyphen groups (ADR-010, slice 1).**
+- **`saknussemm.core.units` — atomic hyphen groups (ADR-010, slice 1).**
   `HyphenGroup` + `derive_hyphen_groups()` are THE single derivation of
   "these lines travel together" (maximal hyphen components, members as
   `LineRef`s in reading order, `spans_pages`/`explicit` flags),
@@ -1242,7 +1242,7 @@ The **top-level import surface** is provisional until `1.0.0`. It went from
 - **The run's decisions materialize as an immutable `DecisionSet`
   (ADR-011, slice C).** After the global consistency pass —
   the point where no later pass may change a decision — the engine
-  derives `lidenbrock.core.decisions.DecisionSet`: every line's
+  derives `saknussemm.core.decisions.DecisionSet`: every line's
   terminal decision (source text, final text, status, fallback reason)
   in document reading order, keyed by qualified identity. The
   terminality backstop is now its construction invariant (a `PENDING`
@@ -1295,7 +1295,7 @@ The **top-level import surface** is provisional until `1.0.0`. It went from
 - **The planner's over-cap chain cut is a recorded unit operation
   (ADR-010).** Severing the forward link of a chain longer than
   `max_lines_per_request` now goes through
-  `lidenbrock.core.units.split_forward_link` — the single writer for
+  `saknussemm.core.units.split_forward_link` — the single writer for
   link removal — and each cut is recorded as a `HyphenSplit` on the
   `ChunkPlan` instead of happening as a silent pointer side effect
   inside the planner. Behaviour is unchanged; the cut is now visible
@@ -1312,7 +1312,7 @@ The **top-level import surface** is provisional until `1.0.0`. It went from
   key matching no page (e.g. a legacy file-name key) is refused
   explicitly instead of silently reproducing the old behaviour.
 - **Document-wide line lookups are keyed by `LineRef` (ADR-009,
-  breaking).** New frozen dataclass `lidenbrock.core.identity.LineRef`
+  breaking).** New frozen dataclass `saknussemm.core.identity.LineRef`
   (`page_id`, `line_id` — fully qualifying under ADR-007's
   document-unique page ids) replaces the engine's three ad-hoc key
   shapes: hand-built composite strings (traces, pre-revert snapshots,
@@ -1355,8 +1355,8 @@ The **top-level import surface** is provisional until `1.0.0`. It went from
   line that silently kept its OCR text.
 - **Provider errors join the single-root hierarchy.**
   `ProviderTransientError` and `ProviderPermanentError` (still importable
-  from `lidenbrock.core.protocols`) now derive from the new
-  `lidenbrock.errors.ProviderError`, itself a `CorrectionError` — the
+  from `saknussemm.core.protocols`) now derive from the new
+  `saknussemm.errors.ProviderError`, itself a `CorrectionError` — the
   documented "catch the root once" contract previously excluded exactly
   the errors a mis-configured run raises first. Behaviour is unchanged:
   permanent rejections stay fatal for the run (explicit re-raise handlers
@@ -1577,7 +1577,7 @@ adversarially with its findings treated before the next.
 
 ### Added (provider error taxonomy — P0-1/P0-2)
 
-- **`ProviderPermanentError`** *(in `lidenbrock.core.protocols`, next to
+- **`ProviderPermanentError`** *(in `saknussemm.core.protocols`, next to
   `ProviderTransientError`)* — the provider definitively rejected the
   request (invalid credentials, unknown model — the 4xx-non-429 family).
   The pipeline treats it as **fatal for the whole run**: never retried,
@@ -1733,7 +1733,7 @@ adversarially with its findings treated before the next.
   `CorrectionPipeline(retry_policy=…)`.
 - **F10** — `CorrectionPipeline.run(should_abort=…)` cooperative cancellation,
   probed between pages and chunks; raises `CorrectionAborted` (new
-  `lidenbrock.errors` module, `CorrectionError` root) before any output is
+  `saknussemm.errors` module, `CorrectionError` root) before any output is
   written. In-flight provider calls are not interrupted.
 - **F1** *(behaviour change on failure paths)* — a chunk whose retry budget is
   exhausted is re-planned one granularity finer (PAGE→BLOCK→WINDOW→LINE) and
@@ -1748,7 +1748,7 @@ adversarially with its findings treated before the next.
 - **F14** *(pre-1.0 break)* — `BaseProvider.complete_structured` returns
   `(dict, Usage | None)`. New `Usage` model; `CorrectionResult.usage`
   aggregates the run; per-chunk tokens on the `chunk_completed` event.
-- **Error hierarchy (§8.4)** — `lidenbrock.errors`: `CorrectionError` root with
+- **Error hierarchy (§8.4)** — `saknussemm.errors`: `CorrectionError` root with
   `ParseError`, `ValidationError` (both also `ValueError`), `CorrectionAborted`;
   `HyphenIntegrityError` is now a `ValidationError`. `validate_llm_response`
   raises `ValidationError`.
@@ -1761,19 +1761,19 @@ adversarially with its findings treated before the next.
   library version and a configuration fingerprint
   (`RetryPolicy`+`GuardConfig`+`ChunkPlannerConfig`) alongside provider/model.
 - **py.typed + `mypy --strict` (F12/§8.3)** — PEP 561 marker shipped in the
-  wheel; the package passes `mypy --strict` (new `lidenbrock-types` CI job).
+  wheel; the package passes `mypy --strict` (new `saknussemm-types` CI job).
 - **F12 (relocation)** — `Provider`, `JobStatus`, `JobManifest` (and its
   `images` map) moved to the backend (`app.schemas.job`); the vestigial
   `status` field was dropped from `PageManifest`/`DocumentManifest`. The core
   keeps only the domain enums (`LineStatus`, `ChunkGranularity`, `HyphenRole`,
   `PipelineEventType`). Top-level public surface is now 34 symbols.
 - **F11** — the algorithm tests were repatriated into
-  `packages/lidenbrock/tests`; the package gates its own coverage (~86%, gate
-  85%) and its CI job runs pytest with `--cov=lidenbrock`.
+  `packages/saknussemm/tests`; the package gates its own coverage (~86%, gate
+  85%) and its CI job runs pytest with `--cov=saknussemm`.
 
 ### Span edit protocol (SPECS_LIB_V2 §4 / §5)
 
-- `lidenbrock.core.editing` — `EditScript` of `ReplaceLine` / `ReplaceSpan`
+- `saknussemm.core.editing` — `EditScript` of `ReplaceLine` / `ReplaceSpan`
   ops (no structural op ⇒ invariant I2 by type). `RangeAnchor` (offsets)
   and `MatchAnchor` (exact substring) normalise to a single `RangeAnchor`
   against the canonical text; unfound / out-of-range / ambiguous anchors
@@ -1781,7 +1781,7 @@ adversarially with its findings treated before the next.
   the downstream three-stage matrix). **E4/E5 gate `replace_span` only** —
   `replace_line` keeps E1/E3/conflict, so re-expressing today's whole-line
   response is byte-identical (proved on sample.xml / X0000002.xml).
-- `lidenbrock.producers.rules` — deterministic `RulesProducer` (§5.3):
+- `saknussemm.producers.rules` — deterministic `RulesProducer` (§5.3):
   literal/regex substitutions with an optional lexicon guard, emitting
   `replace_span` + exact `RangeAnchor`. Zero deps, byte-reproducible; the
   first real span emitter and a free pre-LLM pass. `default_french_ocr_
@@ -1858,15 +1858,15 @@ adversarially with its findings treated before the next.
 
 ### Renamed (§14 — pre-publication, no aliases)
 
-- Distribution **alto-core → lidenbrock**, import package **alto_core →
-  lidenbrock**. *Lidenbrock* — the printed errata leaf bound into books —
+- Distribution **alto-core → saknussemm**, import package **alto_core →
+  saknussemm**. *Saknussemm* — the printed errata leaf bound into books —
   is literally what this library produces, carries the heritage domain,
   and survives the PAGE XML extension (v1.1) where "alto" would become a
   lie. Nothing was ever published under the old name, so there is no
   deprecation layer: final import paths from day one. The repository slug
   (URLs in project metadata) still reads alto-llm-corrector until the
   GitHub repository itself is renamed. The `processingStep` provenance
-  brand written into corrected XML is now `lidenbrock` (no effect on the
+  brand written into corrected XML is now `saknussemm` (no effect on the
   byte-parity corpus: its files carry no `<Processing>` element).
 
 ### Post-audit corrective rounds (same release)
@@ -1927,7 +1927,7 @@ adversarially with its findings treated before the next.
   protocol) retain the previous 3-attempt exponential-backoff
   behavior.
 - Clarified in the `### Added` section of `[0.1.0a1]` which symbols
-  are re-exported at the package root (`from lidenbrock import …`)
+  are re-exported at the package root (`from saknussemm import …`)
   versus the ones that are sub-module-only. The technical contract
   is unchanged — every symbol previously listed remains importable
   from its canonical path. (roadmap L5 / B5)
@@ -1951,10 +1951,10 @@ adversarially with its findings treated before the next.
 
 ### CI / Release
 - Single source of truth for the smoke-import check:
-  `packages/lidenbrock/_smoke_imports.py` iterates `lidenbrock.__all__`
+  `packages/saknussemm/_smoke_imports.py` iterates `saknussemm.__all__`
   and is invoked by `.github/workflows/ci.yml`,
-  `.github/workflows/publish-lidenbrock.yml`, and
-  `scripts/release-lidenbrock.sh`. Drift between the three is now
+  `.github/workflows/publish-saknussemm.yml`, and
+  `scripts/release-saknussemm.sh`. Drift between the three is now
   impossible. (roadmap L5 / B6)
 - Added `Programming Language :: Python :: 3.13` classifier
   (`requires-python = ">=3.11"` already permitted 3.13). (roadmap L5 / P3)
@@ -1971,36 +1971,36 @@ Initial alpha release.
 
 > **Import paths.** Each section below documents the path the listed
 > symbols live at. Most are sub-module imports, e.g.
-> `from lidenbrock.formats.alto.rewriter import RewriterMetrics`. The shorter
+> `from saknussemm.formats.alto.rewriter import RewriterMetrics`. The shorter
 > set of names re-exported at the package root —
-> `from lidenbrock import CorrectionPipeline, BaseProvider, ...` — is
-> defined exclusively by `lidenbrock.__all__`. Symbols listed below
+> `from saknussemm import CorrectionPipeline, BaseProvider, ...` — is
+> defined exclusively by `saknussemm.__all__`. Symbols listed below
 > that are NOT in `__all__` (e.g. `RewriterMetrics`, `ReconcileMetrics`,
 > `plan_page`, `validate_llm_response`, `AcceptanceResult`, …) are
 > sub-module-only: they remain importable from their canonical path,
-> but `from lidenbrock import RewriterMetrics` will raise `ImportError`.
+> but `from saknussemm import RewriterMetrics` will raise `ImportError`.
 
-- `lidenbrock.formats.alto`: ALTO XML parsing and rewriting (v2/v3/v4), with
+- `saknussemm.formats.alto`: ALTO XML parsing and rewriting (v2/v3/v4), with
   the Hyphenation Reconciler.
   - `parse_alto_file`, `build_document_manifest` *(top-level)*
   - `rewrite_alto_file`, `extract_output_texts` *(top-level)*, `RewriterMetrics` *(sub-module only)*
   - `enrich_chunk_lines`, `reconcile_hyphen_pair`, `ReconcileMetrics`,
     `classify_reconcile_outcome`, `should_stay_in_same_chunk` *(all sub-module only)*
-- `lidenbrock.core`: chunk planning, LLM-response validation,
+- `saknussemm.core`: chunk planning, LLM-response validation,
   per-line acceptance policy, and `CorrectionPipeline`.
   - `CorrectionPipeline`, `CorrectionResult`, `sanitize_error` *(top-level)*
   - `plan_page`, `downgrade_granularity` *(sub-module only)*
   - `validate_llm_response` *(sub-module only)*
   - `check_line`, `check_adjacent_duplicates`, `AcceptanceResult` *(all sub-module only)*
-- `lidenbrock.core.protocols`: ports consumers implement.
+- `saknussemm.core.protocols`: ports consumers implement.
   - `BaseProvider`, `PipelineObserver`, `OutputWriter` *(top-level)*
-  - `OUTPUT_JSON_SCHEMA`, `SYSTEM_PROMPT` *(top-level, home: `lidenbrock.producers.llm`)*
-- `lidenbrock.core.schemas`: domain Pydantic models (manifests, enums, LLM
+  - `OUTPUT_JSON_SCHEMA`, `SYSTEM_PROMPT` *(top-level, home: `saknussemm.producers.llm`)*
+- `saknussemm.core.schemas`: domain Pydantic models (manifests, enums, LLM
   payloads, traces, model info). Top-level re-exports cover the
-  models consumers typically reach for — see `lidenbrock.__all__`.
+  models consumers typically reach for — see `saknussemm.__all__`.
 
 ### Public API guarantees (alpha caveat)
-- Importable via the top-level package: `from lidenbrock import
+- Importable via the top-level package: `from saknussemm import
   CorrectionPipeline, BaseProvider, parse_alto_file, …` (full list
   in the package `__all__`).
 - Each sub-module declares its own `__all__`.
@@ -2017,5 +2017,5 @@ Initial alpha release.
   individually (server-side legacy); a future release will likely fold
   them into the injected `BaseProvider`.
 
-[Unreleased]: https://github.com/maribakulj/alto-llm-corrector/compare/lidenbrock-v0.1.0a1...HEAD
-[0.1.0a1]: https://github.com/maribakulj/alto-llm-corrector/releases/tag/lidenbrock-v0.1.0a1
+[Unreleased]: https://github.com/maribakulj/alto-llm-corrector/compare/saknussemm-v0.1.0a1...HEAD
+[0.1.0a1]: https://github.com/maribakulj/alto-llm-corrector/releases/tag/saknussemm-v0.1.0a1

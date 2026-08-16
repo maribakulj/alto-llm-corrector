@@ -12,20 +12,20 @@ import pytest
 
 from tests._pipeline_harness import apply_decisions
 
-from lidenbrock.core.protocols import ProducerMetadata
-from lidenbrock import CorrectionPipeline
-from lidenbrock.errors import ConfigurationError
-from lidenbrock.core.editing import EditScript, ReplaceSpan, apply_edit_script
-from lidenbrock.core.protocols import ProducerOptions
-from lidenbrock.core.schemas import (
+from saknussemm.core.protocols import ProducerMetadata
+from saknussemm import CorrectionPipeline
+from saknussemm.errors import ConfigurationError
+from saknussemm.core.editing import EditScript, ReplaceSpan, apply_edit_script
+from saknussemm.core.protocols import ProducerOptions
+from saknussemm.core.schemas import (
     CorrectionRequest,
     ImageAsset,
     ImageTransform,
     RetryPolicy,
     Usage,
 )
-from lidenbrock.formats.alto.parser import build_document_manifest
-from lidenbrock.producers.rules import RulesProducer, SubstitutionRule
+from saknussemm.formats.alto.parser import build_document_manifest
+from saknussemm.producers.rules import RulesProducer, SubstitutionRule
 
 from tests._paths import EXAMPLES
 
@@ -148,7 +148,7 @@ async def test_misdeclared_capabilities_fail_at_startup():
     """— a producer that wants images but declares vision=False is a
     start-up ConfigurationError, even when images are supplied (the caps
     gate runs after require_page_images)."""
-    from lidenbrock.core.schemas import ImageAsset, ModelCapabilities
+    from saknussemm.core.schemas import ImageAsset, ModelCapabilities
 
     class _Misdeclared(_VisionProducer):
         capabilities = ModelCapabilities(vision=False)  # contradicts wants_image

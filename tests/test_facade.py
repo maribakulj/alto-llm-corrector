@@ -12,11 +12,11 @@ from pathlib import Path
 
 import pytest
 
-import lidenbrock
-from lidenbrock.core.schemas import LineStatus
-from lidenbrock.errors import ParseError
-from lidenbrock.producers.llm_edit import LLMEditProducer
-from lidenbrock.producers.rules import RulesProducer, SubstitutionRule
+import saknussemm
+from saknussemm.core.schemas import LineStatus
+from saknussemm.errors import ParseError
+from saknussemm.producers.llm_edit import LLMEditProducer
+from saknussemm.producers.rules import RulesProducer, SubstitutionRule
 
 from tests._pipeline_harness import EXAMPLES, DictProvider
 
@@ -34,26 +34,26 @@ _PAGE_SAMPLE = (
 
 
 def test_load_detects_alto_by_namespace():
-    document = lidenbrock.load(_ALTO_SAMPLE)
+    document = saknussemm.load(_ALTO_SAMPLE)
     assert document.manifest.source_format == "alto"
     assert document.source_paths == {_ALTO_SAMPLE.name: _ALTO_SAMPLE}
     assert document.manifest.total_lines > 0
 
 
 def test_load_detects_page_by_namespace():
-    document = lidenbrock.load(_PAGE_SAMPLE)
+    document = saknussemm.load(_PAGE_SAMPLE)
     assert document.manifest.source_format == "page"
     assert document.manifest.total_lines > 0
 
 
 def test_load_accepts_string_paths():
-    document = lidenbrock.load(str(_ALTO_SAMPLE))
+    document = saknussemm.load(str(_ALTO_SAMPLE))
     assert document.manifest.source_format == "alto"
 
 
 def test_load_refuses_a_format_mix():
     with pytest.raises(ParseError, match="one document, one format"):
-        lidenbrock.load(_ALTO_SAMPLE, _PAGE_SAMPLE)
+        saknussemm.load(_ALTO_SAMPLE, _PAGE_SAMPLE)
 
 
 def test_load_refuses_duplicate_basenames(tmp_path: Path):
@@ -62,19 +62,19 @@ def test_load_refuses_duplicate_basenames(tmp_path: Path):
     duplicate = other_dir / _ALTO_SAMPLE.name
     duplicate.write_bytes(_ALTO_SAMPLE.read_bytes())
     with pytest.raises(ParseError, match="basename"):
-        lidenbrock.load(_ALTO_SAMPLE, duplicate)
+        saknussemm.load(_ALTO_SAMPLE, duplicate)
 
 
 def test_load_refuses_unknown_namespace(tmp_path: Path):
     p = tmp_path / "other.xml"
     p.write_text('<root xmlns="urn:not-a-transcription"/>', encoding="utf-8")
     with pytest.raises(ParseError, match="neither ALTO nor PAGE"):
-        lidenbrock.load(p)
+        saknussemm.load(p)
 
 
 def test_load_needs_at_least_one_path():
     with pytest.raises(ParseError, match="at least one"):
-        lidenbrock.load()
+        saknussemm.load()
 
 
 # ---------------------------------------------------------------------------
@@ -83,8 +83,8 @@ def test_load_needs_at_least_one_path():
 
 
 def test_three_lines_rules_producer(tmp_path: Path):
-    document = lidenbrock.load(_ALTO_SAMPLE)
-    result = lidenbrock.correct_sync(
+    document = saknussemm.load(_ALTO_SAMPLE)
+    result = saknussemm.correct_sync(
         document,
         producer=RulesProducer([SubstitutionRule("e", "3", name="demo")]),
     )
@@ -107,9 +107,9 @@ def test_three_lines_llm_producer_async():
     import asyncio
 
     async def main():
-        document = lidenbrock.load(_ALTO_SAMPLE)
+        document = saknussemm.load(_ALTO_SAMPLE)
         producer = LLMEditProducer(DictProvider({}), api_key="k", model="m")
-        return await lidenbrock.correct(document, producer=producer)
+        return await saknussemm.correct(document, producer=producer)
 
     result = asyncio.run(main())
     assert result.report.total_lines > 0
@@ -118,8 +118,8 @@ def test_three_lines_llm_producer_async():
 
 
 def test_correct_sync_on_page_document(tmp_path: Path):
-    document = lidenbrock.load(_PAGE_SAMPLE)
-    result = lidenbrock.correct_sync(
+    document = saknussemm.load(_PAGE_SAMPLE)
+    result = saknussemm.correct_sync(
         document,
         producer=RulesProducer([]),  # no rules: pure identity
     )

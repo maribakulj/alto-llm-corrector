@@ -18,9 +18,9 @@ from __future__ import annotations
 import textwrap
 from pathlib import Path
 
-from lidenbrock.core.pipeline import CorrectionPipeline
-from lidenbrock.core.planner import plan_page
-from lidenbrock.core.schemas import (
+from saknussemm.core.pipeline import CorrectionPipeline
+from saknussemm.core.planner import plan_page
+from saknussemm.core.schemas import (
     ChunkGranularity,
     ChunkPlannerConfig,
     Coords,
@@ -30,7 +30,7 @@ from lidenbrock.core.schemas import (
     LineStatus,
     PageManifest,
 )
-from lidenbrock.formats.alto.parser import build_document_manifest
+from saknussemm.formats.alto.parser import build_document_manifest
 
 from tests._pipeline_harness import apply_decisions, DictProvider, RecordingObserver
 

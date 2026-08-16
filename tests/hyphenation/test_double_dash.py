@@ -12,11 +12,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from lidenbrock.formats.alto.parser import parse_alto_file
-from lidenbrock.formats.alto.rewriter import rewrite_alto_file
+from saknussemm.formats.alto.parser import parse_alto_file
+from saknussemm.formats.alto.rewriter import rewrite_alto_file
 from lxml import etree
 
-from lidenbrock.core.schemas import HyphenRole
+from saknussemm.core.schemas import HyphenRole
 
 from tests._pipeline_harness import EXAMPLES
 

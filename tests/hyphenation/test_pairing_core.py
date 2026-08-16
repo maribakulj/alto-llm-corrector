@@ -8,13 +8,13 @@ PAGE (P5) and the pure linker's behaviour on hand-built manifests.
 
 from __future__ import annotations
 
-from lidenbrock.core.pairing import (
+from saknussemm.core.pairing import (
     HYPHEN_CHARS,
     disambiguate_page_ids,
     link_hyphen_pairs,
     trailing_hyphen_char,
 )
-from lidenbrock.core.schemas import Coords, HyphenRole, LineManifest, PageManifest
+from saknussemm.core.schemas import Coords, HyphenRole, LineManifest, PageManifest
 
 
 def _line(line_id: str, text: str, page_id: str = "p1", vpos: int = 0) -> LineManifest:

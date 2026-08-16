@@ -20,14 +20,14 @@ from __future__ import annotations
 
 import pytest
 
-from lidenbrock.core.identity import LineRef
-from lidenbrock.core.pairing import (
+from saknussemm.core.identity import LineRef
+from saknussemm.core.pairing import (
     forward_partner_id,
     forward_partner_ref,
     forward_ref,
     pair_ref,
 )
-from lidenbrock.core.schemas import Coords, HyphenRole, LineManifest
+from saknussemm.core.schemas import Coords, HyphenRole, LineManifest
 
 
 def _line(**kw) -> LineManifest:

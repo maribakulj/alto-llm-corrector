@@ -40,7 +40,7 @@ improved.
 at, so the longest function in the package — ``_rebuild_line``, 203 lines,
 on the path that writes the delivered file — was governed by nothing at
 all, while the module that had already been cleaned up was governed
-twice. The scan now covers ``src/lidenbrock`` entire. The six ``formats/``
+twice. The scan now covers ``src/saknussemm`` entire. The six ``formats/``
 entries below are inscribed at their measured size; **inscribing is not a
 plan to cut them.** ``formats/alto/rewriter.py`` is explicitly off-limits
 until the byte-parity corpus is wider (`docs/PLAN.md`, § `RM`).
@@ -125,7 +125,7 @@ _OVERSIZED: dict[str, int] = {
 #: per-run indices then travelled the whole chain by hand.
 #:
 #: `RM-03` bound three of those indices into
-#: :class:`~lidenbrock.core.workspace.PageWorkspace` and four entries left
+#: :class:`~saknussemm.core.workspace.PageWorkspace` and four entries left
 #: this list outright. What remains is a different debt with a different
 #: answer: the two ``pipeline`` constructors are configuration surface, not
 #: threading, and ``_attempt_chunk``/``_build_correction_report`` assemble

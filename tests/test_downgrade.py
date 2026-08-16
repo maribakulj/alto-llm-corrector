@@ -20,8 +20,8 @@ from unittest.mock import AsyncMock
 import pytest
 
 
-from lidenbrock import CorrectionPipeline
-from lidenbrock.formats.alto.parser import build_document_manifest
+from saknussemm import CorrectionPipeline
+from saknussemm.formats.alto.parser import build_document_manifest
 
 from tests._paths import EXAMPLES
 
@@ -32,7 +32,7 @@ _SAMPLE = EXAMPLES / "sample.xml"
 def _no_backoff_sleep(monkeypatch: pytest.MonkeyPatch):
     """Skip the real retry back-off sleeps so these tests stay fast."""
     monkeypatch.setattr(
-        "lidenbrock.core.pipeline.asyncio.sleep",
+        "saknussemm.core.pipeline.asyncio.sleep",
         AsyncMock(return_value=None),
     )
 
@@ -138,7 +138,7 @@ async def test_persistent_failure_falls_back_after_downgrade():
 # F1 × F8 — the descent must re-plan TARGET lines only, never context lines
 # ---------------------------------------------------------------------------
 
-from lidenbrock.core.schemas import (  # noqa: E402
+from saknussemm.core.schemas import (  # noqa: E402
     ChunkPlannerConfig,
     Coords,
     DocumentManifest,
@@ -267,7 +267,7 @@ async def test_should_abort_fires_inside_descent():
     """Once the descent begins, a should_abort flip must raise
     CorrectionAborted from within it — not wait for the next top-level
     chunk — and must not be swallowed as a chunk_error event."""
-    from lidenbrock import CorrectionAborted
+    from saknussemm import CorrectionAborted
 
     provider = _WindowZeroFailProvider()
     obs = _RecordingObserver()

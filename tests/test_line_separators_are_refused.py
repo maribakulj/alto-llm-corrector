@@ -22,8 +22,8 @@ _SEPARATORS = [" ", " ", "\x0b", "\x0c", "\x85", "\x1c", "\x1d", "\x1e"]
 
 @pytest.mark.parametrize("sep", _SEPARATORS)
 def test_f10_validator_rejects_unicode_line_separators(sep: str):
-    from lidenbrock.core.validator import validate_llm_response
-    from lidenbrock.errors import ValidationError
+    from saknussemm.core.validator import validate_llm_response
+    from saknussemm.errors import ValidationError
 
     raw = {"lines": [{"line_id": "l1", "corrected_text": f"hello{sep}world"}]}
     with pytest.raises(ValidationError):
@@ -32,7 +32,7 @@ def test_f10_validator_rejects_unicode_line_separators(sep: str):
 
 @pytest.mark.parametrize("sep", _SEPARATORS)
 def test_f10_editing_rejects_unicode_line_separators(sep: str):
-    from lidenbrock.core.editing import (
+    from saknussemm.core.editing import (
         EditScript,
         ReplaceLine,
         apply_edit_script,
@@ -46,7 +46,7 @@ def test_f10_editing_rejects_unicode_line_separators(sep: str):
 
 
 def test_f10_plain_text_still_accepted():
-    from lidenbrock.core.validator import validate_llm_response
+    from saknussemm.core.validator import validate_llm_response
 
     raw = {"lines": [{"line_id": "l1", "corrected_text": "héllo wörld"}]}
     resp = validate_llm_response(raw, ["l1"], None, {"l1": "hello world"})

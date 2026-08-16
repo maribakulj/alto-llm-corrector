@@ -10,8 +10,8 @@ carries forward.
 
 from __future__ import annotations
 
-from lidenbrock.core.hyphenation import reconcile_hyphen_pair
-from lidenbrock.core.schemas import HyphenRole
+from saknussemm.core.hyphenation import reconcile_hyphen_pair
+from saknussemm.core.schemas import HyphenRole
 
 from tests.hyphenation._lines import _line
 

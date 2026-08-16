@@ -11,13 +11,13 @@ from pathlib import Path
 
 import pytest
 
-from lidenbrock.core.schemas import HyphenRole
-from lidenbrock.formats.page._ns import (
+from saknussemm.core.schemas import HyphenRole
+from saknussemm.formats.page._ns import (
     _namespace_year,
     polygon_to_bbox,
     supports_metadata_item,
 )
-from lidenbrock.formats.page.parser import build_document_manifest, parse_page_file
+from saknussemm.formats.page.parser import build_document_manifest, parse_page_file
 
 from tests._paths import EXAMPLES
 
@@ -126,7 +126,7 @@ def test_newseye_columnar_press_parses():
 
 
 def test_lafayette_page_alto_text_parity_by_alignment():
-    from lidenbrock.formats.alto.parser import (
+    from saknussemm.formats.alto.parser import (
         build_document_manifest as alto_doc,
     )
 
@@ -235,6 +235,6 @@ def test_polygon_bbox_wellformed_unchanged():
     ],
 )
 def test_f9_polygon_bbox_skips_non_finite_pairs(points: str, expected: tuple):
-    from lidenbrock.formats.page._ns import polygon_to_bbox
+    from saknussemm.formats.page._ns import polygon_to_bbox
 
     assert polygon_to_bbox(points) == expected

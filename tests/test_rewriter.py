@@ -4,18 +4,18 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from lidenbrock.formats.alto.parser import parse_alto_file
+from saknussemm.formats.alto.parser import parse_alto_file
 
-# Private rewriter helpers — pulled from lidenbrock directly since the
+# Private rewriter helpers — pulled from saknussemm directly since the
 # backend re-export shim no longer surfaces privates.
-from lidenbrock.formats.alto.rewriter import (
+from saknussemm.formats.alto.rewriter import (
     _compute_geometry,
     _tokenize,
     rewrite_alto_file,
 )
 from lxml import etree
 
-from lidenbrock.core.schemas import (
+from saknussemm.core.schemas import (
     BlockManifest,
     Coords,
     HyphenRole,

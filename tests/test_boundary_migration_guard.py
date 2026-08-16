@@ -22,7 +22,7 @@ hyphen role, so the guard keys on the boundary tokens, not on detection.
 
 from __future__ import annotations
 
-from lidenbrock.core.guards import check_boundary_migration
+from saknussemm.core.guards import check_boundary_migration
 
 
 def test_forward_absorption_across_mangled_hyphen_reverts_both():

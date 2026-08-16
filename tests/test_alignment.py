@@ -7,7 +7,7 @@ monotonic; moves are FLAGGED, never acted on.
 
 from __future__ import annotations
 
-from lidenbrock.core.alignment import align_tokens, char_similarity
+from saknussemm.core.alignment import align_tokens, char_similarity
 
 
 # ---------------------------------------------------------------------------

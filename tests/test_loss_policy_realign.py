@@ -12,8 +12,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from lidenbrock import CorrectionPipeline, LossPolicy
-from lidenbrock.formats.alto.parser import build_document_manifest
+from saknussemm import CorrectionPipeline, LossPolicy
+from saknussemm.formats.alto.parser import build_document_manifest
 
 from tests._pipeline_harness import DictProvider
 
@@ -107,7 +107,7 @@ def test_low_alignment_correction_goes_to_sidecar(tmp_path: Path):
     assert "token_realign" in entry.reason
 
     # The line's decision is an honest fallback, not a silent no-op.
-    from lidenbrock import LineRef
+    from saknussemm import LineRef
 
     decision = result.decisions.by_ref[LineRef(page_id="P1", line_id="L1")]
     assert decision.status.value == "fallback"

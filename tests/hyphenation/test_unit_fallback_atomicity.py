@@ -23,11 +23,11 @@ import pytest
 
 from tests._pipeline_harness import apply_decisions
 
-from lidenbrock.core.protocols import ProducerMetadata
-from lidenbrock import CorrectionPipeline, ValidationError
-from lidenbrock.core.editing import EditScript, ReplaceLine
-from lidenbrock.core.schemas import HyphenRole, LineStatus, RetryPolicy
-from lidenbrock.formats.alto.parser import build_document_manifest
+from saknussemm.core.protocols import ProducerMetadata
+from saknussemm import CorrectionPipeline, ValidationError
+from saknussemm.core.editing import EditScript, ReplaceLine
+from saknussemm.core.schemas import HyphenRole, LineStatus, RetryPolicy
+from saknussemm.formats.alto.parser import build_document_manifest
 
 _XPAGE_ALTO = """<?xml version="1.0" encoding="UTF-8"?>
 <alto xmlns="http://www.loc.gov/standards/alto/ns-v3#"><Layout>

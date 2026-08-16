@@ -14,7 +14,7 @@ sentence says corrections come "by LLM, rules engine, or **any custom
 EditProducer**", so the producer seam is a promise as much as the result
 is, and both are closed here: a caller typing the value it was handed, and
 an implementer typing the protocol it fills, can import every name they
-need from ``lidenbrock``.
+need from ``saknussemm``.
 
 What is deliberately NOT here is the third seam. ``format_adapter`` is an
 optional injection whose closure drags in ``RewriteResult``,
@@ -48,7 +48,7 @@ closure, which would have left exactly the holes `S3b` exists to close.
 
 Four pins:
 
-  1. ``lidenbrock.__all__`` is EXACTLY the list below. Adding a symbol is a
+  1. ``saknussemm.__all__`` is EXACTLY the list below. Adding a symbol is a
      deliberate act (update the snapshot + CHANGELOG) — and during the
      feature freeze, extending the public API is suspended outright.
   2. The surface does not GROW. Stated separately from (1) because it is
@@ -68,7 +68,7 @@ from __future__ import annotations
 
 import inspect
 
-import lidenbrock
+import saknussemm
 
 # ---------------------------------------------------------------------------
 # 1. The current surface — what `__all__` holds today, not what it should hold
@@ -92,7 +92,7 @@ CURRENT_TOP_LEVEL_SURFACE = sorted(
         "CorrectionReport",
         "CorrectionRequest",
         "CorrectionResult",
-        "LidenbrockError",
+        "SaknussemmError",
         "DecisionReason",
         "DecisionSet",
         "DecisionStage",
@@ -153,8 +153,8 @@ CURRENT_TOP_LEVEL_SURFACE = sorted(
 
 
 def test_public_api_is_exactly_the_snapshot():
-    assert sorted(lidenbrock.__all__) == CURRENT_TOP_LEVEL_SURFACE, (
-        "lidenbrock.__all__ drifted from the pinned surface. If deliberate, "
+    assert sorted(saknussemm.__all__) == CURRENT_TOP_LEVEL_SURFACE, (
+        "saknussemm.__all__ drifted from the pinned surface. If deliberate, "
         "update CURRENT_TOP_LEVEL_SURFACE here AND document the change in "
         "CHANGELOG.md. Before 1.0 a removal is allowed (0.9.x may break); "
         "after 1.0 it is a MAJOR bump."
@@ -166,8 +166,8 @@ def test_the_surface_does_not_grow():
     accretion one convenient symbol at a time, which is exactly how it got
     there the first time; nothing may push it upward now that it has been
     computed. A shrink still passes here — pin (1) catches it."""
-    assert len(lidenbrock.__all__) <= len(CURRENT_TOP_LEVEL_SURFACE), (
-        f"the top-level surface grew to {len(lidenbrock.__all__)} symbols. "
+    assert len(saknussemm.__all__) <= len(CURRENT_TOP_LEVEL_SURFACE), (
+        f"the top-level surface grew to {len(saknussemm.__all__)} symbols. "
         "It reached 95 by accretion once already and S3b cut it back to a "
         "computed closure — a symbol that is in neither closure does not "
         "belong here. Export it from its own module instead."
@@ -175,15 +175,15 @@ def test_the_surface_does_not_grow():
 
 
 def test_every_public_symbol_resolves():
-    for name in lidenbrock.__all__:
-        obj = getattr(lidenbrock, name)  # raises AttributeError on breakage
+    for name in saknussemm.__all__:
+        obj = getattr(saknussemm, name)  # raises AttributeError on breakage
         assert obj is not None, name
 
 
 def test_lazy_map_is_subset_of_public_api():
-    from lidenbrock import _LAZY
+    from saknussemm import _LAZY
 
-    unknown = set(_LAZY) - set(lidenbrock.__all__)
+    unknown = set(_LAZY) - set(saknussemm.__all__)
     assert not unknown, f"lazy symbols not in __all__: {sorted(unknown)}"
 
 
@@ -204,25 +204,25 @@ def test_run_and_run_sync_signatures_are_pinned():
         "should_abort",
         "page_images",
     ]
-    assert _param_names(lidenbrock.CorrectionPipeline.run) == expected
-    assert _param_names(lidenbrock.CorrectionPipeline.run_sync) == expected
+    assert _param_names(saknussemm.CorrectionPipeline.run) == expected
+    assert _param_names(saknussemm.CorrectionPipeline.run_sync) == expected
     # §5.1 resorption — credentials must NEVER reappear on the run surface.
     for banned in ("api_key", "model", "provider_name"):
         assert banned not in expected
 
 
 def test_for_provider_signature_is_pinned():
-    params = _param_names(lidenbrock.CorrectionPipeline.for_provider)
+    params = _param_names(saknussemm.CorrectionPipeline.for_provider)
     assert params[0] == "provider"
     for required in ("api_key", "model", "provider_name", "observer"):
         assert required in params
     # ADR-011 slice D-fin — persistence left the engine surface for good.
     assert "output_writer" not in params
-    assert "output_writer" not in _param_names(lidenbrock.CorrectionPipeline.__init__)
+    assert "output_writer" not in _param_names(saknussemm.CorrectionPipeline.__init__)
 
 
 def test_correction_report_json_keys_are_pinned():
-    report = lidenbrock.CorrectionReport(run_id="r")
+    report = saknussemm.CorrectionReport(run_id="r")
     keys = set(report.model_dump().keys())
     assert keys == {
         "report_version",

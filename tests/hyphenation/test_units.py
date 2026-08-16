@@ -10,13 +10,13 @@ from __future__ import annotations
 
 from hypothesis import given, settings
 
-from lidenbrock.core.identity import LineRef
-from lidenbrock.core.units import (
+from saknussemm.core.identity import LineRef
+from saknussemm.core.units import (
     derive_hyphen_groups,
     hyphen_group_by_line,
     units_containing,
 )
-from lidenbrock.formats.alto.parser import build_document_manifest
+from saknussemm.formats.alto.parser import build_document_manifest
 
 from tests._alto_gen import rich_alto_documents
 from tests.test_properties_hypothesis import _write_tmp
@@ -98,8 +98,8 @@ def test_page_local_derivation_drops_the_severed_seam(doc_and_roles) -> None:
 
 import pytest  # noqa: E402
 
-from lidenbrock.core.schemas import HyphenRole, HyphenSplit  # noqa: E402
-from lidenbrock.core.units import split_forward_link  # noqa: E402
+from saknussemm.core.schemas import HyphenRole, HyphenSplit  # noqa: E402
+from saknussemm.core.units import split_forward_link  # noqa: E402
 
 # PART1 → BOTH → PART2 chain: 'porte' split over L0/L1, 'fondation' over
 # L1/L2 — every role the split has to migrate, with explicit SUBS.

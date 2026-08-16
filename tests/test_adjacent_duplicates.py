@@ -17,8 +17,8 @@ names, docstrings and bodies unchanged.
 
 from __future__ import annotations
 
-from lidenbrock.core.guards import check_adjacent_duplicates
-from lidenbrock.core.schemas import LineStatus
+from saknussemm.core.guards import check_adjacent_duplicates
+from saknussemm.core.schemas import LineStatus
 
 
 def test_duplicate_run_of_three_all_reverted():
@@ -91,9 +91,9 @@ def _seam_doc(tmp_path) -> object:
 
 def test_f3_three_run_duplicate_across_chunk_boundary_reverts_third(tmp_path):
 
-    from lidenbrock.core.pipeline import CorrectionPipeline
-    from lidenbrock.core.schemas import ChunkPlannerConfig, GuardConfig
-    from lidenbrock.formats.alto.parser import build_document_manifest
+    from saknussemm.core.pipeline import CorrectionPipeline
+    from saknussemm.core.schemas import ChunkPlannerConfig, GuardConfig
+    from saknussemm.formats.alto.parser import build_document_manifest
     from tests._pipeline_harness import apply_decisions, DictProvider, RecordingObserver
     from tests.test_planner_budget_and_cross_chunk_guard import _write_doc
 
@@ -133,9 +133,9 @@ def test_f3_twin_three_run_duplicate_across_page_seam_reverts_third(tmp_path):
     corrected_text too. A 3-run whose first two members (last two lines
     of page 1) were already reverted intra-page masked the seam pair
     (L2, L3) the same way."""
-    from lidenbrock.core.pipeline import CorrectionPipeline
-    from lidenbrock.core.schemas import GuardConfig
-    from lidenbrock.formats.alto.parser import build_document_manifest
+    from saknussemm.core.pipeline import CorrectionPipeline
+    from saknussemm.core.schemas import GuardConfig
+    from saknussemm.formats.alto.parser import build_document_manifest
     from tests._pipeline_harness import apply_decisions, DictProvider, RecordingObserver
 
     path = _seam_doc(tmp_path)
@@ -171,14 +171,14 @@ def test_review_w1_duplicate_across_downgrade_subchunk_seam_reverts(
     two different sub-chunks survived the duplicate guard entirely."""
     from unittest.mock import AsyncMock
 
-    from lidenbrock.core.pipeline import CorrectionPipeline
-    from lidenbrock.core.schemas import ChunkPlannerConfig, GuardConfig, RetryPolicy
-    from lidenbrock.formats.alto.parser import build_document_manifest
+    from saknussemm.core.pipeline import CorrectionPipeline
+    from saknussemm.core.schemas import ChunkPlannerConfig, GuardConfig, RetryPolicy
+    from saknussemm.formats.alto.parser import build_document_manifest
     from tests._pipeline_harness import RecordingObserver, apply_decisions
     from tests.test_planner_budget_and_cross_chunk_guard import _write_doc
 
     monkeypatch.setattr(
-        "lidenbrock.core.pipeline.asyncio.sleep", AsyncMock(return_value=None)
+        "saknussemm.core.pipeline.asyncio.sleep", AsyncMock(return_value=None)
     )
 
     path = _write_doc(tmp_path)

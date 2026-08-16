@@ -1,4 +1,4 @@
-"""Robustness tests for lidenbrock parser + validator .
+"""Robustness tests for saknussemm parser + validator .
 
 Pins three input-tolerance contracts that a hostile audit found
 broken in the pre-L10 codebase:
@@ -31,8 +31,8 @@ from pathlib import Path
 
 import pytest
 
-from lidenbrock.formats.alto.parser import parse_alto_file
-from lidenbrock.core.validator import validate_llm_response
+from saknussemm.formats.alto.parser import parse_alto_file
+from saknussemm.core.validator import validate_llm_response
 
 
 # ---------------------------------------------------------------------------
@@ -154,7 +154,7 @@ def test_int_attr_still_rejects_non_numeric(tmp_path: Path):
     non-numeric attribute values; those still raise ``ValueError``."""
     from lxml import etree
 
-    from lidenbrock.formats.alto._ns import _int_attr
+    from saknussemm.formats.alto._ns import _int_attr
 
     el = etree.Element("TextLine", WIDTH="abc")
     with pytest.raises(ValueError):
@@ -200,7 +200,7 @@ def test_parser_tolerates_comment_as_last_textline_child(tmp_path: Path):
     line = pages[0].lines[0]
     assert line.ocr_text == "bonjour"
     # No trailing HYP was mistaken from the comment.
-    from lidenbrock.core.schemas import HyphenRole
+    from saknussemm.core.schemas import HyphenRole
 
     assert line.hyphen_role == HyphenRole.NONE
 
@@ -275,7 +275,7 @@ def test_hyphen_heuristic_does_not_fire_on_non_alpha_trailing_dash(
     phantom HYP element for these false positives. The tightened
     heuristic requires at least one alphabetic char before the
     trailing dash."""
-    from lidenbrock.core.schemas import HyphenRole
+    from saknussemm.core.schemas import HyphenRole
 
     p = _alto_with_two_lines(first_line, "1799", tmp_path)
     pages, _root = parse_alto_file(p, "x.xml")
@@ -291,7 +291,7 @@ def test_hyphen_heuristic_does_not_fire_on_non_alpha_trailing_dash(
 def test_hyphen_heuristic_still_fires_on_genuine_word_break(tmp_path: Path):
     """Negative control — a normal word-break hyphen like "écri-" must
     still be flagged PART1 after the heuristic tightening."""
-    from lidenbrock.core.schemas import HyphenRole
+    from saknussemm.core.schemas import HyphenRole
 
     p = _alto_with_two_lines("écri-", "vain", tmp_path)
     pages, _root = parse_alto_file(p, "x.xml")
@@ -341,7 +341,7 @@ def test_clean_content_strips_invisible_and_control_chars(raw_text: str, expecte
     downstream character-indexed consumers and silently violating the
     "no newline in corrected_text" invariant the validator pinned.
     """
-    from lidenbrock.core._norm import clean_content
+    from saknussemm.core._norm import clean_content
 
     assert clean_content(raw_text) == expected
 
@@ -349,7 +349,7 @@ def test_clean_content_strips_invisible_and_control_chars(raw_text: str, expecte
 def test_clean_content_still_strips_soft_hyphen():
     """Regression guard — the original behaviour (strip U+00AD) must
     still hold after extending the function."""
-    from lidenbrock.core._norm import clean_content
+    from saknussemm.core._norm import clean_content
 
     assert clean_content("ca­fé") == "café"
 
@@ -361,7 +361,7 @@ def test_clean_content_still_strips_soft_hyphen():
 
 def test_clean_content_nfc_normalizes_decomposed_input():
     """L10/R1 — the parser NFC-normalizes every CONTENT it READS
-    (lidenbrock.formats.alto.parser:45). The rewriter's `clean_content` did
+    (saknussemm.formats.alto.parser:45). The rewriter's `clean_content` did
     NOT — so an LLM returning `café` in NFD (`cafe\\u0301`) would
     land NFD bytes in the output CONTENT. A subsequent re-parse via
     `reconstruct_textline` (which applies `nfc(...)` again) would
@@ -372,7 +372,7 @@ def test_clean_content_nfc_normalizes_decomposed_input():
     Fix: `clean_content` now applies `nfc(...)` so the WRITE path is
     symmetric with the READ path.
     """
-    from lidenbrock.core._norm import clean_content
+    from saknussemm.core._norm import clean_content
 
     nfd = "café"  # 'café' in NFD (e + combining acute)
     nfc_expected = "café"  # NFC precomposed
@@ -392,9 +392,9 @@ def test_rewriter_writes_nfc_content_from_nfd_correction():
     byte snapshot tests and downstream byte-indexed consumers."""
     import unicodedata
 
-    from lidenbrock.formats.alto.parser import parse_alto_file
-    from lidenbrock.formats.alto.rewriter import rewrite_alto_file
-    from lidenbrock.core.schemas import LineStatus
+    from saknussemm.formats.alto.parser import parse_alto_file
+    from saknussemm.formats.alto.rewriter import rewrite_alto_file
+    from saknussemm.core.schemas import LineStatus
 
     # Source ALTO with a single line containing precomposed "café".
     src = b"""<?xml version="1.0"?>
@@ -474,14 +474,14 @@ _INF_SHAPED = ["inf", "-inf", "Infinity", "1e999", "-1e400", "nan"]
 
 @pytest.mark.parametrize("raw", _INF_SHAPED)
 def test_f7_parse_int_tolerant_defaults_on_non_finite(raw: str):
-    from lidenbrock.core._parse import parse_int_tolerant
+    from saknussemm.core._parse import parse_int_tolerant
 
     assert parse_int_tolerant(raw, 7) == 7
 
 
 @pytest.mark.parametrize("raw", _INF_SHAPED)
 def test_f7_parse_int_strict_raises_the_promised_class(raw: str):
-    from lidenbrock.core._parse import parse_int_tolerant
+    from saknussemm.core._parse import parse_int_tolerant
 
     with pytest.raises(ValueError):
         parse_int_tolerant(raw, 0, strict=True)
@@ -493,7 +493,7 @@ def test_f8_alto_int_attr_inf_coordinate_surfaces_as_value_error():
     OverflowError escaped instead."""
     from lxml import etree
 
-    from lidenbrock.formats.alto._ns import _int_attr
+    from saknussemm.formats.alto._ns import _int_attr
 
     el = etree.Element("TextLine", WIDTH="1e400")
     with pytest.raises(ValueError):

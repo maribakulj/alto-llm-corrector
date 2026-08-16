@@ -10,9 +10,9 @@ from typing import Any
 import pytest
 from pydantic import ValidationError as PydanticValidationError
 
-from lidenbrock import CorrectionPipeline
-from lidenbrock.formats.alto.parser import build_document_manifest
-from lidenbrock.core.schemas import (
+from saknussemm import CorrectionPipeline
+from saknussemm.formats.alto.parser import build_document_manifest
+from saknussemm.core.schemas import (
     ChunkPlannerConfig,
     GuardConfig,
     PairingPolicy,

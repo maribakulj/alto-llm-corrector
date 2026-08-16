@@ -62,161 +62,161 @@ _RUN_STATE_ARGS = {"traces", "workspace", "order"}
 #: ``module path -> (category, why this one)``.
 _SEAMS: dict[str, tuple[str, str]] = {
     # -- surface: the instruments of the tests that check the surface -------
-    "lidenbrock.__version__": ("surface", "a dunder; the provenance test reads it"),
-    "lidenbrock._LAZY": (
+    "saknussemm.__version__": ("surface", "a dunder; the provenance test reads it"),
+    "saknussemm._LAZY": (
         "surface",
         "the PEP 562 lazy map — the public-API snapshot test checks that every "
         "lazy key is in __all__, which needs the map",
     ),
     # -- alias: public names wearing an underscore --------------------------
-    "lidenbrock.formats.alto._ns._detect_namespace": (
+    "saknussemm.formats.alto._ns._detect_namespace": (
         "alias",
         "formats._xml.detect_namespace, re-exported under an underscore and "
         "listed in this module's own __all__",
     ),
-    "lidenbrock.formats.alto.parser._detect_namespace": (
+    "saknussemm.formats.alto.parser._detect_namespace": (
         "alias",
         "the same name again, imported through the parser that re-exports it",
     ),
-    "lidenbrock.formats.page._ns._detect_namespace": (
+    "saknussemm.formats.page._ns._detect_namespace": (
         "alias",
         "the PAGE half of the same re-export",
     ),
     # -- run-state: passes that write what a run says about itself ----------
-    "lidenbrock.core.acceptance._FinalizeOrder": (
+    "saknussemm.core.acceptance._FinalizeOrder": (
         "run-state",
         "the pass order itself — the object `RM-05a` exists to pin",
     ),
-    "lidenbrock.core.acceptance._apply_line_acceptance": (
+    "saknussemm.core.acceptance._apply_line_acceptance": (
         "run-state",
         "writes a line's decision and its fallback reason",
     ),
-    "lidenbrock.core.acceptance._apply_unit_reverts": (
+    "saknussemm.core.acceptance._apply_unit_reverts": (
         "run-state",
         "reverts a whole hyphen unit; the invariant is what it does to the "
         "MEMBERS the caller did not name",
     ),
-    "lidenbrock.core.acceptance._global_adjacency_pass": (
+    "saknussemm.core.acceptance._global_adjacency_pass": (
         "run-state",
         "one of the ordered finalise passes; running it out of order changes "
         "the delivered text",
     ),
-    "lidenbrock.core.acceptance._loss_policy_pass": (
+    "saknussemm.core.acceptance._loss_policy_pass": (
         "run-state",
         "the pass whose position decides whether a correction it rejects was "
         "already written",
     ),
-    "lidenbrock.core.finalize._preserve_break_chars": (
+    "saknussemm.core.finalize._preserve_break_chars": (
         "run-state",
         "rewrites corrected_text after the decision; the pass order test needs "
         "to run it alone",
     ),
-    "lidenbrock.core.outcome._extend_to_units": (
+    "saknussemm.core.outcome._extend_to_units": (
         "run-state",
         "closes a chunk outcome over cross-page members via the workspace",
     ),
-    "lidenbrock.core.outcome._fall_back_to_source": (
+    "saknussemm.core.outcome._fall_back_to_source": (
         "run-state",
         "one of the seven sites that used to write a fallback reason; the "
         "precedence test pins each",
     ),
-    "lidenbrock.core.reconcile._refresh_pair_traces": (
+    "saknussemm.core.reconcile._refresh_pair_traces": (
         "run-state",
         "three branches, each writing a different reason onto a pair's traces",
     ),
-    "lidenbrock.core.rendering._render_outputs": (
+    "saknussemm.core.rendering._render_outputs": (
         "run-state",
         "the render step reads traces and decisions; the channel test asserts "
         "which of the two it believes",
     ),
     # -- value: functions of their arguments --------------------------------
-    "lidenbrock.core.batching._split_for_image_cap": (
+    "saknussemm.core.batching._split_for_image_cap": (
         "value",
         "returns the chunk/producer pairs; the test asserts no unit is split",
     ),
-    "lidenbrock.core.hyphenation._part1_text_migrated": (
+    "saknussemm.core.hyphenation._part1_text_migrated": (
         "value",
         "a predicate over two strings and a config",
     ),
-    "lidenbrock.core.hyphenation._part2_boundary_word_diverged": (
+    "saknussemm.core.hyphenation._part2_boundary_word_diverged": (
         "value",
         "a predicate over two strings and a config",
     ),
-    "lidenbrock.core.planner._unit_reach": (
+    "saknussemm.core.planner._unit_reach": (
         "value",
         "returns how far a unit reaches from a position — an integer, and the "
         "window walk's whole correctness",
     ),
-    "lidenbrock.core.reconcile._units_visible_on_page": (
+    "saknussemm.core.reconcile._units_visible_on_page": (
         "value",
         "the batcher's projection of the same derivation; `RM-08` proposed "
         "merging it with _page_local_units, and the test that closed the "
         "item needs both to show they disagree",
     ),
-    "lidenbrock.core.reconcile._page_local_units": (
+    "saknussemm.core.reconcile._page_local_units": (
         "value",
         "the router's projection: the units WHOLLY on this page. `RM-08` "
         "asked for a merge with its neighbour; measured, they disagree on a "
         "chain that leaves the page, and the item closed on that",
     ),
-    "lidenbrock.core.retry._RetryDecision": ("value", "the returned decision type"),
-    "lidenbrock.core.retry._classify_retry": (
+    "saknussemm.core.retry._RetryDecision": ("value", "the returned decision type"),
+    "saknussemm.core.retry._classify_retry": (
         "value",
         "exception in, decision out — the retry policy's whole logic",
     ),
-    "lidenbrock.core.validator._validate_hyphen_integrity": (
+    "saknussemm.core.validator._validate_hyphen_integrity": (
         "value",
         "a predicate by exception over dicts the test builds",
     ),
-    "lidenbrock.formats.alto._ns._int_attr": (
+    "saknussemm.formats.alto._ns._int_attr": (
         "value",
         "reads one attribute tolerantly; the robustness tests pin every "
         "unparseable shape",
     ),
-    "lidenbrock.formats.alto._text._DEDUP_MARKS": (
+    "saknussemm.formats.alto._text._DEDUP_MARKS": (
         "value",
         "the mark repertoire the reconstruction de-duplicates, as data",
     ),
-    "lidenbrock.formats.alto.parser._build_ocr_text": (
+    "saknussemm.formats.alto.parser._build_ocr_text": (
         "value",
         "element in, text out — the reconstruction parity test compares it "
         "against the rewriter's",
     ),
-    "lidenbrock.formats.alto.rewriter._apply_subs": (
+    "saknussemm.formats.alto.rewriter._apply_subs": (
         "value",
         "writes onto an lxml element the TEST built; the fixed-point test "
         "needs both halves of the pair",
     ),
-    "lidenbrock.formats.alto.rewriter._compute_geometry": (
+    "saknussemm.formats.alto.rewriter._compute_geometry": (
         "value",
         "tokens in, widths out — asserting the exact sum is only possible here",
     ),
-    "lidenbrock.formats.alto.rewriter._is_space_token": ("value", "a predicate"),
-    "lidenbrock.formats.alto.rewriter._rebuild_line": (
+    "saknussemm.formats.alto.rewriter._is_space_token": ("value", "a predicate"),
+    "saknussemm.formats.alto.rewriter._rebuild_line": (
         "value",
         "rebuilds an element the test built; `RM-10` measures this function "
         "and forbids cutting it, so the tests are its only description",
     ),
-    "lidenbrock.formats.alto.rewriter._subs_need_update": (
+    "saknussemm.formats.alto.rewriter._subs_need_update": (
         "value",
         "the route predicate; its agreement with _apply_subs is a fixed point "
         "no run output exposes",
     ),
-    "lidenbrock.formats.alto.rewriter._tokenize": ("value", "text in, tokens out"),
-    "lidenbrock.formats.page._ns._namespace_year": (
+    "saknussemm.formats.alto.rewriter._tokenize": ("value", "text in, tokens out"),
+    "saknussemm.formats.page._ns._namespace_year": (
         "value",
         "namespace in, schema year out",
     ),
-    "lidenbrock.formats.page.parser._assign_hyphen_roles": (
+    "saknussemm.formats.page.parser._assign_hyphen_roles": (
         "value",
         "assigns roles onto lines the TEST built — no run, no traces",
     ),
-    "lidenbrock.formats.page.parser._regions_in_reading_order": (
+    "saknussemm.formats.page.parser._regions_in_reading_order": (
         "value",
         "returns the ordered regions; the conservative fallback to document "
         "order is invisible from outside",
     ),
-    "lidenbrock.formats.validation._schema_for": (
+    "saknussemm.formats.validation._schema_for": (
         "value",
         "namespace in, compiled schema out",
     ),
@@ -238,7 +238,7 @@ def _private_imports() -> dict[str, set[str]]:
         for node in ast.walk(tree):
             if not isinstance(node, ast.ImportFrom):
                 continue
-            if not node.module or not node.module.startswith("lidenbrock"):
+            if not node.module or not node.module.startswith("saknussemm"):
                 continue
             for alias in node.names:
                 if alias.name.startswith("_"):
@@ -248,7 +248,7 @@ def _private_imports() -> dict[str, set[str]]:
 
 
 def _module_file(dotted: str) -> Path:
-    relative = dotted[len("lidenbrock") :].strip(".").replace(".", "/")
+    relative = dotted[len("saknussemm") :].strip(".").replace(".", "/")
     candidate = SRC / f"{relative}.py" if relative else SRC / "__init__.py"
     return candidate if candidate.exists() else SRC / relative / "__init__.py"
 
@@ -390,7 +390,7 @@ def test_the_aliases_all_come_from_one_place() -> None:
         for name, (category, _reason) in _SEAMS.items()
         if category == "alias"
     }
-    assert origins == {"lidenbrock.formats._xml.detect_namespace"}, (
+    assert origins == {"saknussemm.formats._xml.detect_namespace"}, (
         f"the alias entries no longer share one origin: {sorted(origins)}. "
         "That is fine, but the docstring above says otherwise — update it."
     )

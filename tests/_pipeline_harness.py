@@ -24,10 +24,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from lidenbrock.core.identity import LineRef
-from lidenbrock.core.pipeline import CorrectionPipeline, CorrectionResult
-from lidenbrock.core.schemas import DocumentManifest, LineManifest
-from lidenbrock.formats.alto.parser import build_document_manifest
+from saknussemm.core.identity import LineRef
+from saknussemm.core.pipeline import CorrectionPipeline, CorrectionResult
+from saknussemm.core.schemas import DocumentManifest, LineManifest
+from saknussemm.formats.alto.parser import build_document_manifest
 
 from tests._paths import EXAMPLES
 

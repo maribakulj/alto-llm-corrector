@@ -10,10 +10,10 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from lidenbrock import CorrectionPipeline, LineRef
-from lidenbrock.core.quality import RoutingPolicy
-from lidenbrock.core.quality import HeuristicQEScorer, QEScorer
-from lidenbrock.formats.alto.parser import build_document_manifest
+from saknussemm import CorrectionPipeline, LineRef
+from saknussemm.core.quality import RoutingPolicy
+from saknussemm.core.quality import HeuristicQEScorer, QEScorer
+from saknussemm.formats.alto.parser import build_document_manifest
 
 from tests._pipeline_harness import DictProvider
 

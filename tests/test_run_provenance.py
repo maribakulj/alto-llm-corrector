@@ -12,11 +12,11 @@ import hashlib
 from dataclasses import fields as dataclass_fields
 from pathlib import Path
 
-from lidenbrock import CorrectionPipeline, __version__
-from lidenbrock.core.protocols import ProducerMetadata
-from lidenbrock.core.schemas import ProducerProvenance, RunProvenance
-from lidenbrock.formats.alto.parser import build_document_manifest
-from lidenbrock.producers.rules import RulesProducer, default_french_ocr_rules
+from saknussemm import CorrectionPipeline, __version__
+from saknussemm.core.protocols import ProducerMetadata
+from saknussemm.core.schemas import ProducerProvenance, RunProvenance
+from saknussemm.formats.alto.parser import build_document_manifest
+from saknussemm.producers.rules import RulesProducer, default_french_ocr_rules
 
 from tests._pipeline_harness import EXAMPLES, DictProvider, RecordingObserver
 
@@ -112,7 +112,7 @@ def test_producer_provenance_mirrors_producer_metadata_fields():
 def test_provenance_round_trips_through_report_json():
     result = _run()
     payload = result.report.model_dump_json()
-    from lidenbrock.core.schemas import CorrectionReport
+    from saknussemm.core.schemas import CorrectionReport
 
     restored = CorrectionReport.model_validate_json(payload)
     assert restored.provenance == result.report.provenance

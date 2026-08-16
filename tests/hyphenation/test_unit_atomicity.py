@@ -17,10 +17,10 @@ from __future__ import annotations
 
 import pytest
 
-from lidenbrock.core.acceptance import _apply_unit_reverts
-from lidenbrock.core.identity import line_ref
-from lidenbrock.core.planner import plan_page
-from lidenbrock.core.schemas import (
+from saknussemm.core.acceptance import _apply_unit_reverts
+from saknussemm.core.identity import line_ref
+from saknussemm.core.planner import plan_page
+from saknussemm.core.schemas import (
     ChunkGranularity,
     ChunkPlannerConfig,
     HyphenRole,
@@ -59,7 +59,7 @@ def _reconciled_chain(*ocr_texts: str) -> list[LineManifest]:
 
 
 def _make_pipeline():
-    from lidenbrock.core.pipeline import CorrectionPipeline
+    from saknussemm.core.pipeline import CorrectionPipeline
     from tests._pipeline_harness import DictProvider, RecordingObserver
 
     return CorrectionPipeline.for_provider(
@@ -106,7 +106,7 @@ def test_f2_four_line_chain_reverts_atomically():
 def test_duplicate_revert_extends_to_hyphen_partner():
     """Reverting one member of a reconciled pair used to leave a mixed
     OCR+corrected pair — the exact state reconcile_hyphen_pair forbids."""
-    from lidenbrock.core.pipeline import CorrectionPipeline
+    from saknussemm.core.pipeline import CorrectionPipeline
     from tests._pipeline_harness import DictProvider, RecordingObserver
 
     pipeline = CorrectionPipeline.for_provider(
@@ -123,7 +123,7 @@ def test_duplicate_revert_extends_to_hyphen_partner():
     part2.hyphen_pair_line_id = part1.line_id
     part1.corrected_text = "mot coupé-"
     part2.corrected_text = "suite du mot"
-    from lidenbrock.core.identity import line_ref
+    from saknussemm.core.identity import line_ref
 
     all_lines = {line_ref(lm): lm for lm in (part1, part2)}
 
@@ -144,7 +144,7 @@ def test_duplicate_revert_extends_to_CROSS_PAGE_hyphen_partner():
     ``cross_page_partners`` index is the only way to reach it. Before the
     fix the page-local ``pid in line_by_id`` guard silently skipped it,
     leaving the reconciled cross-page pair half OCR / half corrected."""
-    from lidenbrock.core.pipeline import CorrectionPipeline
+    from saknussemm.core.pipeline import CorrectionPipeline
     from tests._pipeline_harness import DictProvider, RecordingObserver
 
     pipeline = CorrectionPipeline.for_provider(
@@ -169,7 +169,7 @@ def test_duplicate_revert_extends_to_CROSS_PAGE_hyphen_partner():
 
     # The document-wide page-qualified index is the only lookup the
     # global pass holds — the cross-page partner is just another entry.
-    from lidenbrock.core.identity import line_ref
+    from saknussemm.core.identity import line_ref
 
     all_lines = {line_ref(part1): part1, line_ref(part2): part2}
 

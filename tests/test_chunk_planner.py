@@ -4,9 +4,9 @@ from __future__ import annotations
 
 
 import pytest
-from lidenbrock.core.planner import downgrade_granularity, plan_page
+from saknussemm.core.planner import downgrade_granularity, plan_page
 
-from lidenbrock.core.schemas import (
+from saknussemm.core.schemas import (
     BlockManifest,
     ChunkGranularity,
     ChunkPlannerConfig,
@@ -447,7 +447,7 @@ def test_corpus_chains_never_split():
     if not X0000002_PATH.exists():
         pytest.skip("X0000002.xml not available")
 
-    from lidenbrock.formats.alto.parser import parse_alto_file
+    from saknussemm.formats.alto.parser import parse_alto_file
 
     pages, _ = parse_alto_file(X0000002_PATH, "X0000002.xml")
 

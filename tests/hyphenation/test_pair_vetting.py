@@ -9,8 +9,8 @@ says so.
 
 from __future__ import annotations
 
-from lidenbrock.core.pairing import link_hyphen_pairs
-from lidenbrock.core.schemas import Coords, HyphenRole, LineManifest, PairingPolicy
+from saknussemm.core.pairing import link_hyphen_pairs
+from saknussemm.core.schemas import Coords, HyphenRole, LineManifest, PairingPolicy
 
 from tests.hyphenation._lines import _line
 

@@ -29,12 +29,12 @@ from pathlib import Path
 import pytest
 from hypothesis import given, settings
 
-from lidenbrock.core.protocols import ProducerMetadata
-from lidenbrock import CorrectionPipeline, CorrectionResult
-from lidenbrock.core.editing import EditScript
-from lidenbrock.core.schemas import ChunkPlannerConfig, DocumentManifest, LineStatus
-from lidenbrock.formats.alto.parser import build_document_manifest
-from lidenbrock.producers.rules import RulesProducer, SubstitutionRule
+from saknussemm.core.protocols import ProducerMetadata
+from saknussemm import CorrectionPipeline, CorrectionResult
+from saknussemm.core.editing import EditScript
+from saknussemm.core.schemas import ChunkPlannerConfig, DocumentManifest, LineStatus
+from saknussemm.formats.alto.parser import build_document_manifest
+from saknussemm.producers.rules import RulesProducer, SubstitutionRule
 
 from tests.test_properties_hypothesis import (
     _string_contents,
@@ -226,7 +226,7 @@ async def test_two_runs_on_the_same_document_are_identical() -> None:
 # (PART1→BOTH→PART2), multi-page files, explicit cross-page pairs.
 # ---------------------------------------------------------------------------
 
-from lidenbrock.core.schemas import HyphenRole  # noqa: E402
+from saknussemm.core.schemas import HyphenRole  # noqa: E402
 
 from tests._alto_gen import rich_alto_documents  # noqa: E402
 

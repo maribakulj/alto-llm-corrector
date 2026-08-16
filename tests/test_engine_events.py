@@ -12,8 +12,8 @@ import dataclasses
 
 import pytest
 
-from lidenbrock.core import events as ev
-from lidenbrock.core.schemas import PipelineEventType
+from saknussemm.core import events as ev
+from saknussemm.core.schemas import PipelineEventType
 
 from tests._pipeline_harness import run_pipeline
 

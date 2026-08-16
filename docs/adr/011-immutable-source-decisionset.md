@@ -49,7 +49,7 @@ rewriter already knew.
   are computed fields (still serialized); the lying-totals validator is
   retired — a derived count cannot contradict the content, and legacy
   constructor kwargs are ignored rather than trusted.
-- **Slice C (landed)**: `lidenbrock.core.decisions` defines
+- **Slice C (landed)**: `saknussemm.core.decisions` defines
   `LineDecision`/`DecisionSet`, materialized once after the global
   consistency pass; the terminality backstop became the set's
   construction invariant (a PENDING line refuses materialization), and

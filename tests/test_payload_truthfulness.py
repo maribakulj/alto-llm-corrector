@@ -32,9 +32,9 @@ from __future__ import annotations
 
 import pytest
 
-from lidenbrock.core.hyphenation import enrich_chunk_lines
-from lidenbrock.core.pairing import backward_partner_ref, forward_partner_ref
-from lidenbrock.core.schemas import Coords, HyphenRole, LineManifest
+from saknussemm.core.hyphenation import enrich_chunk_lines
+from saknussemm.core.pairing import backward_partner_ref, forward_partner_ref
+from saknussemm.core.schemas import Coords, HyphenRole, LineManifest
 
 from tests._paths import EXAMPLES
 
@@ -174,7 +174,7 @@ def test_an_orphan_is_still_flagged_as_a_hyphen_candidate() -> None:
 
 def test_the_invariant_catches_a_false_promise() -> None:
     """Guard the guard: hand it a context that lies and it must fail."""
-    from lidenbrock.core.schemas import LineContext
+    from saknussemm.core.schemas import LineContext
 
     orphan = _line("L1", "administra-", role=HyphenRole.PART1, pair=None)
     lying = [
@@ -249,7 +249,7 @@ def test_a_both_line_offers_the_forward_slots_authority() -> None:
 def test_the_invariant_holds_on_the_real_fixtures(name: str) -> None:
     """Hand-built manifests can miss a shape the parser really produces."""
 
-    from lidenbrock.formats.alto.parser import parse_alto_file
+    from saknussemm.formats.alto.parser import parse_alto_file
 
     path = EXAMPLES / name
     pages, _ = parse_alto_file(path, path.name)
@@ -275,8 +275,8 @@ def test_the_report_counts_a_break_with_no_partner() -> None:
     to learn any of that happened.
     """
 
-    from lidenbrock.core.pairing import unpaired_break_refs
-    from lidenbrock.formats.alto.parser import build_document_manifest
+    from saknussemm.core.pairing import unpaired_break_refs
+    from saknussemm.formats.alto.parser import build_document_manifest
 
     path = EXAMPLES / "X0000002.xml"
     doc = build_document_manifest([(path, path.name)])
@@ -295,8 +295,8 @@ def test_the_report_counts_a_break_with_no_partner() -> None:
 def test_a_fully_paired_document_reports_nothing() -> None:
     """The counter must stay quiet when there is nothing to admit."""
 
-    from lidenbrock.core.pairing import unpaired_break_refs
-    from lidenbrock.formats.alto.parser import build_document_manifest
+    from saknussemm.core.pairing import unpaired_break_refs
+    from saknussemm.formats.alto.parser import build_document_manifest
 
     path = EXAMPLES / "sample.xml"
     doc = build_document_manifest([(path, path.name)])

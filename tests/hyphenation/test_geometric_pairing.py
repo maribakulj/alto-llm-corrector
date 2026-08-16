@@ -21,8 +21,8 @@ The new default vets heuristic pairs at pairing time:
 
 from __future__ import annotations
 
-from lidenbrock.core.pairing import link_hyphen_pairs
-from lidenbrock.core.schemas import (
+from saknussemm.core.pairing import link_hyphen_pairs
+from saknussemm.core.schemas import (
     Coords,
     HyphenRole,
     LineManifest,

@@ -1,8 +1,8 @@
-# Minimal mkdocs site for lidenbrock (P5).
+# Minimal mkdocs site for saknussemm (P5).
 # Build locally:  pip install mkdocs && mkdocs serve
 # Publishing the site (GitHub Pages / RTD) is a maintainer action; the
 # markdown sources under docs/ are fully readable on GitHub without it.
-site_name: lidenbrock
+site_name: saknussemm
 site_description: Structure-safe post-OCR correction of heritage transcriptions (ALTO, PAGE)
 repo_url: https://github.com/maribakulj/alto-llm-corrector
 docs_dir: docs

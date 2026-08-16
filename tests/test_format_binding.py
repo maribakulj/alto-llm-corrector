@@ -21,13 +21,13 @@ from __future__ import annotations
 import pytest
 from lxml import etree
 
-from lidenbrock.core.protocols import ProducerMetadata
-from lidenbrock import CorrectionPipeline
-from lidenbrock.errors import ConfigurationError
-from lidenbrock.formats.alto.adapter import AltoFormatAdapter
-from lidenbrock.formats.alto.parser import build_document_manifest as build_alto
-from lidenbrock.formats.page.parser import build_document_manifest as build_page
-from lidenbrock.producers.rules import RulesProducer, SubstitutionRule
+from saknussemm.core.protocols import ProducerMetadata
+from saknussemm import CorrectionPipeline
+from saknussemm.errors import ConfigurationError
+from saknussemm.formats.alto.adapter import AltoFormatAdapter
+from saknussemm.formats.alto.parser import build_document_manifest as build_alto
+from saknussemm.formats.page.parser import build_document_manifest as build_page
+from saknussemm.producers.rules import RulesProducer, SubstitutionRule
 
 from tests._paths import EXAMPLES
 

@@ -18,9 +18,9 @@ a stable line, the corresponding assertion fires.
 from __future__ import annotations
 
 
-from lidenbrock.formats.alto._ns import _detect_namespace
-from lidenbrock.formats.alto.parser import build_document_manifest
-from lidenbrock.formats.alto.rewriter import rewrite_alto_file
+from saknussemm.formats.alto._ns import _detect_namespace
+from saknussemm.formats.alto.parser import build_document_manifest
+from saknussemm.formats.alto.rewriter import rewrite_alto_file
 from lxml import etree
 
 from tests._paths import EXAMPLES

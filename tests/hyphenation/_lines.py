@@ -8,7 +8,7 @@ which are now dissolved into the invariants they were about.
 
 from __future__ import annotations
 
-from lidenbrock.core.schemas import Coords, HyphenRole, LineManifest
+from saknussemm.core.schemas import Coords, HyphenRole, LineManifest
 
 
 def _line(

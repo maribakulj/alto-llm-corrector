@@ -5,8 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 from xml.sax.saxutils import escape
 
-from lidenbrock.formats.page.parser import build_document_manifest, parse_page_file
-from lidenbrock.formats.page.rewriter import (
+from saknussemm.formats.page.parser import build_document_manifest, parse_page_file
+from saknussemm.formats.page.rewriter import (
     extract_output_texts,
     rewrite_page_file,
 )
@@ -189,7 +189,7 @@ def test_provenance_metadata_item_on_2019(tmp_path: Path):
     text = xml.decode("utf-8")
     assert "MetadataItem" in text
     assert 'type="processingStep"' in text
-    assert "lidenbrock 0.1.0a1" in text and "deadbeef" in text
+    assert "saknussemm 0.1.0a1" in text and "deadbeef" in text
 
 
 def test_provenance_comments_fallback_on_2013():

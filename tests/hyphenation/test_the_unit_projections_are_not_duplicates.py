@@ -39,8 +39,8 @@ import ast
 import inspect
 import re
 
-from lidenbrock.core.reconcile import _page_local_units, _units_visible_on_page
-from lidenbrock.core.schemas import HyphenRole
+from saknussemm.core.reconcile import _page_local_units, _units_visible_on_page
+from saknussemm.core.schemas import HyphenRole
 
 from tests.hyphenation._lines import _line
 

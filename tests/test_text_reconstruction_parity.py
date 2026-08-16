@@ -2,7 +2,7 @@
 
 Both call sites reconstruct the logical text of a TextLine from its
 String/SP/HYP children. After the audit §6.2 fix they share the same
-helper (``lidenbrock.formats.alto._text.reconstruct_textline``); the parser
+helper (``saknussemm.formats.alto._text.reconstruct_textline``); the parser
 wraps it with ``.replace("\\r", "").strip()`` to get its "logical"
 form, the rewriter calls it raw for byte-faithful UNTOUCHED detection.
 
@@ -19,9 +19,9 @@ from __future__ import annotations
 import unicodedata
 from pathlib import Path
 
-from lidenbrock.formats.alto._ns import _detect_namespace
-from lidenbrock.formats.alto._text import reconstruct_textline
-from lidenbrock.formats.alto.parser import _build_ocr_text
+from saknussemm.formats.alto._ns import _detect_namespace
+from saknussemm.formats.alto._text import reconstruct_textline
+from saknussemm.formats.alto.parser import _build_ocr_text
 from lxml import etree
 
 from tests._paths import EXAMPLES

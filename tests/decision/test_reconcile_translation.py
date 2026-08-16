@@ -31,7 +31,7 @@ from __future__ import annotations
 
 import pytest
 
-from lidenbrock.core.hyphenation import classify_reconcile_outcome
+from saknussemm.core.hyphenation import classify_reconcile_outcome
 
 _P1_OCR = "par-"
 _P2_OCR = "tir"

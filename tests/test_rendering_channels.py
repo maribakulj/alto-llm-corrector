@@ -27,16 +27,16 @@ from typing import Any
 
 import pytest
 
-from lidenbrock.core import events as ev
-from lidenbrock.core.decisions import derive_decision_set
-from lidenbrock.core.fidelity import ProjectionFidelity
-from lidenbrock.core.identity import LineRef
-from lidenbrock.core.protocols import (
+from saknussemm.core import events as ev
+from saknussemm.core.decisions import derive_decision_set
+from saknussemm.core.fidelity import ProjectionFidelity
+from saknussemm.core.identity import LineRef
+from saknussemm.core.protocols import (
     ProducerMetadata,
     RewriteResult,
 )
-from lidenbrock.core.rendering import _render_outputs
-from lidenbrock.core.schemas import (
+from saknussemm.core.rendering import _render_outputs
+from saknussemm.core.schemas import (
     BlockManifest,
     Coords,
     DocumentManifest,
@@ -218,7 +218,7 @@ def test_a_line_the_rewrite_never_mentions_is_a_projection_failure(
 ) -> None:
     """The invariant runs BEFORE the bytes are handed back: a rewrite that
     drops a line is corruption of the deliverable, not a partial success."""
-    from lidenbrock.errors import ProjectionError
+    from saknussemm.errors import ProjectionError
 
     adapter = _FakeAdapter(_result(texts={"l1": "source 1"}))
     with pytest.raises(ProjectionError):

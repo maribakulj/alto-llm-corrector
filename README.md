@@ -1,13 +1,13 @@
-# lidenbrock
+# saknussemm
 
 Structure-safe post-OCR correction of heritage transcriptions — **ALTO**
 and **PAGE XML** — by LLM, rules engine, or any custom `EditProducer`.
 No server, no job store, no vendor wired in: the library computes and
 returns values, and everything about *running* a correction service
-belongs to whoever calls it. *Lidenbrock*: the printed errata leaf bound
+belongs to whoever calls it. *Saknussemm*: the printed errata leaf bound
 into books — literally what this library produces.
 
-It is developed in the [lidenbrock](https://github.com/maribakulj/lidenbrock)
+It is developed in the [saknussemm](https://github.com/maribakulj/saknussemm)
 repository, which also carries a FastAPI + React demonstration of it. That
 demo is **not part of this package** — it is not published, and it will be
 removed once the library reaches its final form. Nothing here imports it;
@@ -18,7 +18,7 @@ the coupling only runs the other way.
 | | |
 |---|---|
 | **this one** | the library. The deliverable, versioned and published |
-| [`lidenbrock-demo`](https://github.com/maribakulj/lidenbrock-demo) | a web demonstration — upload a file, watch it corrected in a browser |
+| [`saknussemm-demo`](https://github.com/maribakulj/saknussemm-demo) | a web demonstration — upload a file, watch it corrected in a browser |
 | [`cinoc`](https://github.com/maribakulj/cinoc) | the benchmark — transcription pipelines compared on ground truth, with 24 metrics and significance tests |
 
 Both of them import this library. **This library imports neither**, and that
@@ -40,25 +40,25 @@ independent external API review first; see
 
 ## What's in the box
 
-- `lidenbrock.formats.alto` — ALTO XML parsing and rewriting (v2/v3/v4),
+- `saknussemm.formats.alto` — ALTO XML parsing and rewriting (v2/v3/v4),
   with the Hyphenation Reconciler.
-- `lidenbrock.formats.page` — PAGE XML (PRImA/Transkribus/eScriptorium):
+- `saknussemm.formats.page` — PAGE XML (PRImA/Transkribus/eScriptorium):
   polygon geometry preserved verbatim (bbox derived for the planner),
   canonical text via `TextEquiv @index` with a `Word`-concat fallback,
   heuristic hyphenation (`- ¬ ⸗ U+00AD`), and a rewriter that never
   touches geometry. Both formats produce the **same `DocumentManifest`**.
-- `lidenbrock.core.editing` + `lidenbrock.producers` — the **span edit
+- `saknussemm.core.editing` + `saknussemm.producers` — the **span edit
   protocol**: `EditScript` / `ReplaceLine` / `ReplaceSpan` with
   `RangeAnchor` and `MatchAnchor`, a deterministic `RulesProducer`, the
   `EditProducer` contract and a vision envelope (**the core** forwards an
   opaque image reference and touches no pixel — decoding and cropping is the
-  producer's job, in the `lidenbrock[vision]` extra; the base install pulls
+  producer's job, in the `saknussemm[vision]` extra; the base install pulls
   no image dependency at all). See
   [`docs/edit-protocol.md`](docs/edit-protocol.md).
-- `lidenbrock.core` — chunk planning, LLM-response validation,
+- `saknussemm.core` — chunk planning, LLM-response validation,
   per-line acceptance policy, and the pure `CorrectionPipeline` that
   ties them together (`run()` async, `run_sync()` façade).
-- `lidenbrock.core.schemas` — Pydantic models for documents, pages, blocks and
+- `saknussemm.core.schemas` — Pydantic models for documents, pages, blocks and
   lines, plus the seven **frozen, injectable policies**: `RetryPolicy`
   (attempt cap / temperature ramp / per-chunk budget — `.default()` is
   byte-compatible with the historical behaviour, `.deterministic()` pins
@@ -69,7 +69,7 @@ independent external API review first; see
   `RoutingPolicy`. Each exposes `policy_fingerprint()`; the pipeline combines them into
   `config_fingerprint()`, stamped into the corrected XML's
   `processingStep` for provenance.
-- `lidenbrock.errors` — one root, `LidenbrockError`, over `ParseError`,
+- `saknussemm.errors` — one root, `SaknussemmError`, over `ParseError`,
   `ValidationError` (both also `ValueError`) and `CorrectionAborted`
   (raised by the cooperative `should_abort` cancellation probe).
   `CorrectionError` is the same class under its older name.
@@ -83,7 +83,7 @@ independent external API review first; see
   same document can be run again or concurrently; `result.write(dir)`
   is the one-call persistence helper, or feed the bytes to your own
   transaction.
-- `lidenbrock.core.protocols` — ports (`BaseProvider`,
+- `saknussemm.core.protocols` — ports (`BaseProvider`,
   `PipelineObserver`, `FormatAdapter`) that consumers implement to plug
   the core into their own infrastructure.
 - PEP 561 `py.typed` marker — the package type-checks under
@@ -109,9 +109,9 @@ vendors or track a server job's lifecycle; they live in the consumer.
 import asyncio
 from pathlib import Path
 
-from lidenbrock import CorrectionPipeline, PipelineObserver
-from lidenbrock.core.protocols import BaseProvider
-from lidenbrock.formats.alto.parser import build_document_manifest
+from saknussemm import CorrectionPipeline, PipelineObserver
+from saknussemm.core.protocols import BaseProvider
+from saknussemm.formats.alto.parser import build_document_manifest
 
 
 class IdentityProvider:
@@ -124,7 +124,7 @@ class IdentityProvider:
         self, api_key, model, system_prompt, user_payload, json_schema, temperature=0.0,
     ):
         # F14 contract: return (parsed_json, usage). Usage is an
-        # lidenbrock.core.schemas.Usage (tokens in/out) or None when the
+        # saknussemm.core.schemas.Usage (tokens in/out) or None when the
         # provider cannot report consumption.
         return {
             "lines": [
@@ -177,16 +177,16 @@ persist).
 
 ## Releasing
 
-The version is read from `src/lidenbrock/__init__.py::__version__` by
+The version is read from `src/saknussemm/__init__.py::__version__` by
 hatchling (single source of truth — `pyproject.toml` is `dynamic`).
 
 To cut a new release:
 
-1. Bump `__version__` in `src/lidenbrock/__init__.py`.
+1. Bump `__version__` in `src/saknussemm/__init__.py`.
 2. Add a `## [X.Y.Z]` entry to [CHANGELOG.md](./CHANGELOG.md).
-3. Commit + tag: `git tag lidenbrock-vX.Y.Z`.
+3. Commit + tag: `git tag saknussemm-vX.Y.Z`.
 4. Push the tag.
-5. From the GitHub UI, run **Actions → Publish lidenbrock → Run
+5. From the GitHub UI, run **Actions → Publish saknussemm → Run
    workflow**. Pick `testpypi` first to validate, then `pypi`. The
    workflow uses Trusted Publishing (PEP 740 / OIDC) — no API token
    stored in GitHub secrets.
@@ -194,8 +194,8 @@ To cut a new release:
 For a local dry-run before pushing:
 
 ```bash
-scripts/release-lidenbrock.sh             # build + smoke-install only
-scripts/release-lidenbrock.sh --testpypi  # build + upload TestPyPI
+scripts/release-saknussemm.sh             # build + smoke-install only
+scripts/release-saknussemm.sh --testpypi  # build + upload TestPyPI
 ```
 
 ## License
