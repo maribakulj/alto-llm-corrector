@@ -56,7 +56,7 @@ test relève de la première ; un rediffuseur commercial en aval doit le savoir.
 C'est écrit ici pour qu'il l'apprenne d'ici et pas d'un courrier.
 
 Ce corpus **ne part pas dans le paquet distribué** : il vit à la racine du
-dépôt, hors de `packages/corrigenda/`, et `pyproject.toml` déclare un allowlist
+dépôt, hors de `packages/lidenbrock/`, et `pyproject.toml` déclare un allowlist
 `sdist.include` explicite de quatre entrées qui ne le contient pas. Épinglé par
 `tests/test_packaging_excludes_corpora.py`.
 

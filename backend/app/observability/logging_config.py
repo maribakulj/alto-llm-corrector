@@ -115,7 +115,7 @@ class RedactionFilter(logging.Filter):
     """
 
     def filter(self, record: logging.LogRecord) -> bool:
-        from corrigenda import sanitize_error
+        from lidenbrock import sanitize_error
 
         try:
             message = record.getMessage()
@@ -187,7 +187,7 @@ class JsonFormatter(logging.Formatter):
                 # RedactionFilter ran, so it must go through the sanitiser
                 # itself or it reintroduces the exact leak P1-6 closed.
                 try:
-                    from corrigenda import sanitize_error
+                    from lidenbrock import sanitize_error
 
                     value = sanitize_error(repr(value))
                 except Exception:

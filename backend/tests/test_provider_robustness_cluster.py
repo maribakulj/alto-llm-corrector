@@ -188,7 +188,7 @@ async def test_f13_call_llm_strip_fallback_composes_with_schema_fallback():
 async def test_f13_call_llm_400_without_cited_param_still_fails_permanently():
     """A 400 that does not cite any strippable param keeps today's
     behaviour: no infinite retries, ProviderPermanentError."""
-    from corrigenda.core.protocols import ProviderPermanentError
+    from lidenbrock.core.protocols import ProviderPermanentError
 
     bad = _make_response(400, {"error": {"message": "unknown model"}})
     with _patched_shared_client() as instance:

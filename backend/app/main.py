@@ -18,7 +18,7 @@ from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 logger = logging.getLogger(__name__)
 
-from corrigenda import __version__ as _corrigenda_version
+from lidenbrock import __version__ as _lidenbrock_version
 
 from app.api.health import router as health_router
 from app.api.jobs import router as jobs_router
@@ -124,18 +124,18 @@ def _rate_limit_handler(_request: Request, exc: Exception) -> JSONResponse:
 
 def create_app() -> FastAPI:
     # Configure root logging first so every subsequent log line (FastAPI's
-    # startup, our endpoints, corrigenda's emitted events via LoggingObserver)
+    # startup, our endpoints, lidenbrock's emitted events via LoggingObserver)
     # goes through the JSON formatter. Idempotent — safe to call on every
     # create_app (tests instantiate the app many times).
     setup_json_logging()
 
     app = FastAPI(
-        title="Corrigenda",
+        title="Lidenbrock",
         description="Post-OCR text correction of ALTO/PAGE XML files using LLM providers.",
-        # Single version source: the backend tracks the corrigenda library
+        # Single version source: the backend tracks the lidenbrock library
         # it embeds (audit: backend version was a hardcoded "1.0.0"
         # drifting from the package version).
-        version=_corrigenda_version,
+        version=_lidenbrock_version,
         lifespan=lifespan,
     )
 

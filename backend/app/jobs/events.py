@@ -1,6 +1,6 @@
 """Server-side job event vocabulary (P3.6).
 
-The engine's :class:`~corrigenda.core.schemas.PipelineEventType` names
+The engine's :class:`~lidenbrock.core.schemas.PipelineEventType` names
 only what the PIPELINE can emit; everything the SERVER says about a job
 — its lifecycle, the frontend's initial state, the SSE transport
 signals — lives here. The string values ride the same SSE wire as the

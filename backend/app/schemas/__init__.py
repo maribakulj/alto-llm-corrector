@@ -1,6 +1,6 @@
 """Backend's schema surface.
 
-Domain models come from the pure ``corrigenda.core.schemas`` package. HTTP
+Domain models come from the pure ``lidenbrock.core.schemas`` package. HTTP
 DTOs (request/response payloads, SSE events) live next door in
 :mod:`app.schemas.http` — they're server-layer concerns, not domain.
 
@@ -8,7 +8,7 @@ This module re-exports both groups so existing
 ``from app.schemas import X`` call sites keep working.
 """
 
-from corrigenda.core.schemas import (
+from lidenbrock.core.schemas import (
     BlockManifest,
     ChunkGranularity,
     ChunkPlan,
@@ -42,7 +42,7 @@ from app.schemas.http import (
     SSEEvent,
 )
 
-# Server-side job enums + record — moved out of corrigenda by spec F12.
+# Server-side job enums + record — moved out of lidenbrock by spec F12.
 from app.schemas.job import (
     TERMINAL_SUCCESS_STATES,
     JobManifest,
@@ -52,7 +52,7 @@ from app.schemas.job import (
 
 __all__ = [
     "TERMINAL_SUCCESS_STATES",
-    # Domain (corrigenda)
+    # Domain (lidenbrock)
     "BlockManifest",
     "ChunkGranularity",
     "ChunkPlan",

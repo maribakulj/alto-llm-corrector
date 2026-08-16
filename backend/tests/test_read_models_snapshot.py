@@ -21,7 +21,7 @@ import asyncio
 from pathlib import Path
 
 import pytest
-from corrigenda.formats.alto.parser import build_document_manifest
+from lidenbrock.formats.alto.parser import build_document_manifest
 
 from app.api.jobs import get_job_diff, get_job_layout
 from app.schemas.job import JobManifest, JobStatus, Provider

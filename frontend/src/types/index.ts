@@ -332,7 +332,7 @@ export interface LineOutcome {
   projection: ProjectionStage | null
 }
 
-// The /trace endpoint returns corrigenda's versioned CorrectionReport
+// The /trace endpoint returns lidenbrock's versioned CorrectionReport
 // (§9, report_version 2.0) verbatim — run_id equals the server job_id.
 export interface TraceData {
   report_version: string

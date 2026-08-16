@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from corrigenda import sanitize_error
-from corrigenda.core.protocols import (
+from fastapi import APIRouter, HTTPException, Request
+from lidenbrock import sanitize_error
+from lidenbrock.core.protocols import (
     ProviderPermanentError,
     ProviderTransientError,
 )
-from fastapi import APIRouter, HTTPException, Request
 
 from app.api.rate_limit import limiter
 from app.providers import get_provider

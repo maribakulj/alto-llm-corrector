@@ -147,7 +147,7 @@ function completePayload(over: Record<string, unknown> = {}) {
 describe('App — initial state', () => {
   it('renders the sections with the play button disabled', () => {
     render(<App />)
-    expect(screen.getByText('Corrigenda')).toBeInTheDocument()
+    expect(screen.getByText('Lidenbrock')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /start correction/i })).toBeDisabled()
     expect(screen.queryByText('Progress')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /new correction/i })).not.toBeInTheDocument()

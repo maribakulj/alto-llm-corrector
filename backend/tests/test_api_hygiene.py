@@ -122,28 +122,28 @@ def _list_models(client: TestClient) -> int:
 
 
 def test_permanent_401_maps_to_401(failing_client_factory):
-    from corrigenda.core.protocols import ProviderPermanentError
+    from lidenbrock.core.protocols import ProviderPermanentError
 
     c = failing_client_factory(ProviderPermanentError("bad key", status_code=401))
     assert _list_models(c) == 401
 
 
 def test_rate_limit_maps_to_429(failing_client_factory):
-    from corrigenda.core.protocols import ProviderTransientError
+    from lidenbrock.core.protocols import ProviderTransientError
 
     c = failing_client_factory(ProviderTransientError("slow down", status_code=429))
     assert _list_models(c) == 429
 
 
 def test_upstream_5xx_maps_to_502(failing_client_factory):
-    from corrigenda.core.protocols import ProviderTransientError
+    from lidenbrock.core.protocols import ProviderTransientError
 
     c = failing_client_factory(ProviderTransientError("boom", status_code=503))
     assert _list_models(c) == 502
 
 
 def test_transport_timeout_maps_to_504(failing_client_factory):
-    from corrigenda.core.protocols import ProviderTransientError
+    from lidenbrock.core.protocols import ProviderTransientError
 
     c = failing_client_factory(ProviderTransientError("read timeout"))
     assert _list_models(c) == 504

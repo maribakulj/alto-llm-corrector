@@ -13,14 +13,14 @@ import zipfile
 from collections.abc import AsyncGenerator
 from pathlib import Path
 
-from corrigenda.core.schemas import PairingPolicy
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
+from fastapi.responses import FileResponse, Response
+from lidenbrock.core.schemas import PairingPolicy
 
 # the generic loader, NOT the ALTO parser: the ALTO
 # parser applied to a valid PAGE file yields an empty manifest (0 pages,
 # 0 lines) instead of an error, silently dropping every PAGE upload.
-from corrigenda.formats.loader import build_document_manifest
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, Response
+from lidenbrock.formats.loader import build_document_manifest
 from sse_starlette.sse import EventSourceResponse
 from starlette.background import BackgroundTask
 

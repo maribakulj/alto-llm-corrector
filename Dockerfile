@@ -14,24 +14,24 @@ FROM python:3.11-slim@sha256:e031123e3d85762b141ad1cbc56452ba69c6e722ebf2f042cc0
 WORKDIR /app
 
 # Two-step Python install:
-#   1. corrigenda (sibling package) — built as a WHEEL and installed
+#   1. lidenbrock (sibling package) — built as a WHEEL and installed
 #      (Plan V4.3): the image ships the same artefact users would get
 #      from PyPI, and packaging regressions (missing files, broken
 #      metadata) fail the build here instead of at release time. An
 #      editable install was a dev convenience, not a distribution.
-#   2. backend requirements.txt — corrigenda no longer lives in there
+#   2. backend requirements.txt — lidenbrock no longer lives in there
 #      since Stage 6 of the audit remediation (decoupled to avoid the
-#      cwd-relative `-e ../packages/corrigenda` failure mode).
+#      cwd-relative `-e ../packages/lidenbrock` failure mode).
 # Plan V4.3 — the FULL environment installs from the hash-locked file
-# (pip refuses anything whose hash doesn't match); the corrigenda wheel
+# (pip refuses anything whose hash doesn't match); the lidenbrock wheel
 # then installs with --no-deps so its dependencies can only come from
 # the verified lock.
 COPY backend/requirements-lock.txt /app/backend/requirements-lock.txt
 RUN pip install --no-cache-dir --require-hashes -r /app/backend/requirements-lock.txt
 
-COPY packages/corrigenda /app/packages/corrigenda
-RUN pip wheel --no-cache-dir --no-deps -w /tmp/wheels /app/packages/corrigenda \
-    && pip install --no-cache-dir --no-deps /tmp/wheels/corrigenda-*.whl \
+COPY packages/lidenbrock /app/packages/lidenbrock
+RUN pip wheel --no-cache-dir --no-deps -w /tmp/wheels /app/packages/lidenbrock \
+    && pip install --no-cache-dir --no-deps /tmp/wheels/lidenbrock-*.whl \
     && rm -rf /tmp/wheels
 
 COPY backend/app/ /app/backend/app/

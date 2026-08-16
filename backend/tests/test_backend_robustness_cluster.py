@@ -91,8 +91,8 @@ _ALTO_CHAIN = """\
 
 
 def test_f23_hyphen_pairs_counts_both_role(tmp_path):
-    from corrigenda.core.schemas import HyphenRole
-    from corrigenda.formats.alto.parser import build_document_manifest
+    from lidenbrock.core.schemas import HyphenRole
+    from lidenbrock.formats.alto.parser import build_document_manifest
 
     from app.api.read_models import build_diff
 

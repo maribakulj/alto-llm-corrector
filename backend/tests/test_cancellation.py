@@ -162,7 +162,7 @@ def test_cancel_after_completion_is_a_noop(slow_client):
 
 
 def test_preset_abort_probe_cancels_without_provider_calls(tmp_path):
-    from corrigenda.formats.alto.parser import build_document_manifest
+    from lidenbrock.formats.alto.parser import build_document_manifest
 
     from app.jobs.runner import JobRunner
     from app.jobs.store import JobStore

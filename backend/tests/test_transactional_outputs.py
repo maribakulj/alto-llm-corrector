@@ -112,8 +112,8 @@ async def test_failed_job_leaves_no_output(tmp_path: Path):
     """A run whose FIRST file rewrote fine but whose overall pipeline
     then fails must expose nothing: staged files are discarded and
     /download's state guard refuses anyway."""
-    from corrigenda.core.protocols import ProviderPermanentError
-    from corrigenda.formats.alto.parser import build_document_manifest
+    from lidenbrock.core.protocols import ProviderPermanentError
+    from lidenbrock.formats.alto.parser import build_document_manifest
 
     from app.jobs.runner import JobRunner
     from app.jobs.store import JobStore

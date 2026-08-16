@@ -4,15 +4,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Corrigenda is a post-OCR text-correction **library** (`packages/corrigenda/`, ALTO and PAGE XML). It does NOT do OCR, resegmentation, line merging/splitting, translation, or text modernization.
+Lidenbrock is a post-OCR text-correction **library** (`packages/lidenbrock/`, ALTO and PAGE XML). It does NOT do OCR, resegmentation, line merging/splitting, translation, or text modernization.
 
 **The library is the deliverable; the web app is a temporary demo of it.** The FastAPI backend + React frontend (using OpenAI, Anthropic, Mistral, Google Gemini) exist to show the library working in a browser, and **will be removed when the library reaches its final form**. Consequences that bind day-to-day work:
 
 - Dependencies flow **one way only** — the demo imports the library, never the reverse. A demo need that seems to require the library to name or special-case it is either a missing injection point (fix it generically in the library) or out of scope (`SPECS_LIB_V2.md` §12, §15).
-- Only `packages/corrigenda/` is packaged, versioned and under SemVer. `backend/` and `frontend/` are neither.
-- `docs/API.md` and `SECURITY.md` describe the DEMO and retire with it; `packages/corrigenda/docs/` is the library's and survives.
+- Only `packages/lidenbrock/` is packaged, versioned and under SemVer. `backend/` and `frontend/` are neither.
+- `docs/API.md` and `SECURITY.md` describe the DEMO and retire with it; `packages/lidenbrock/docs/` is the library's and survives.
 
-Normative docs: `README.md`, `SPECS_LIB_V2.md` (the contract — what the library must be), `docs/PLAN.md` (**the single live plan** — what remains and in what order), `packages/corrigenda/docs/`, `docs/API.md`, `SECURITY.md`, `CONTRIBUTING.md`. Findings live in `docs/audit/` and carry no plan. Everything under `docs/history/` is frozen history — never trust it for current module locations, and never update it to match code.
+Normative docs: `README.md`, `SPECS_LIB_V2.md` (the contract — what the library must be), `docs/PLAN.md` (**the single live plan** — what remains and in what order), `packages/lidenbrock/docs/`, `docs/API.md`, `SECURITY.md`, `CONTRIBUTING.md`. Findings live in `docs/audit/` and carry no plan. Everything under `docs/history/` is frozen history — never trust it for current module locations, and never update it to match code.
 
 There is exactly ONE plan. Three competing, unratified ones were consolidated into `docs/PLAN.md` on 2026-07-25 and the originals moved to `docs/history/`; do not write a second, and do not revive the old ones.
 
@@ -25,7 +25,7 @@ Two standing rules from that plan, in force until it says otherwise:
 
 - **Library:** Python 3.11+, Pydantic v2, lxml, httpx — no FastAPI/server dependency
 - **Backend:** FastAPI, uvicorn, sse-starlette (flat `app` package, not built/packaged)
-- **Frontend:** React + TypeScript + Vite + Tailwind CSS (`corrigenda-frontend`)
+- **Frontend:** React + TypeScript + Vite + Tailwind CSS (`lidenbrock-frontend`)
 - **Deployment:** docker-compose (dev: backend:8000 + frontend:5173) or single Dockerfile for HF Spaces (port 7860, frontend built as static files served by FastAPI). `DEPLOYMENT_PROFILE=demo|proxy_protected` (`institutional` = deprecated alias; see SECURITY.md)
 - **Storage:** `{JOB_STORAGE_DIR:-/tmp/app-jobs}/{job_id}/` on disk, job state in memory, no database. Orphan job dirs are reclaimed at startup
 
@@ -33,15 +33,15 @@ Two standing rules from that plan, in force until it says otherwise:
 
 ```bash
 # Library
-cd packages/corrigenda
+cd packages/lidenbrock
 pip install -e '.[typecheck]'   # mypy pin + lxml-stubs; without the stubs
                                 # mypy checks LESS than CI does
 pytest                          # coverage gate 85%
-mypy --strict src/corrigenda
+mypy --strict src/lidenbrock
 
 # Backend
 cd backend
-pip install -e ../packages/corrigenda && pip install -r requirements.txt -r requirements-dev.txt
+pip install -e ../packages/lidenbrock && pip install -r requirements.txt -r requirements-dev.txt
 uvicorn app.main:app --reload --port 8000
 pytest -m "not e2e"             # coverage gate 80% on `app`
 pytest tests/e2e                # real uvicorn + fake provider
@@ -59,12 +59,12 @@ scripts/generate-frontend-api-types.sh
 
 # Docker
 docker-compose up               # full local dev stack
-docker build -t corrigenda .    # HF Spaces single container
+docker build -t lidenbrock .    # HF Spaces single container
 ```
 
 ## Architecture
 
-### Core Pipeline (in `packages/corrigenda/src/corrigenda/`)
+### Core Pipeline (in `packages/lidenbrock/src/lidenbrock/`)
 
 The correction flow is: **Parse → Chunk → Enrich → LLM Call → Validate → Reconcile → Rewrite**
 

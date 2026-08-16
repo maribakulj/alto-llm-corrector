@@ -64,7 +64,7 @@ between it and a real model is what the oracle measurement could not show.
 - No cross-page hyphenation is exercised: no file ends mid-word, and the
   harness parses each file as its own single-page document. The pipeline's
   cross-page path is **not measured by this run** (see the xfail in
-  `packages/corrigenda/tests/test_cross_page_hyphen_decision.py`).
+  `packages/lidenbrock/tests/test_cross_page_hyphen_decision.py`).
 - One model, one provider, one guard profile, two runs.
 - The input is deliberately bad OCR — a hard case, closer to a lower
   bound than to an average.

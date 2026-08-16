@@ -48,10 +48,10 @@ import sys
 from pathlib import Path
 
 _REPO = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(_REPO / "packages" / "corrigenda" / "src"))
+sys.path.insert(0, str(_REPO / "packages" / "lidenbrock" / "src"))
 
-from corrigenda.core.schemas import HyphenRole  # noqa: E402
-from corrigenda.formats.alto.parser import build_document_manifest  # noqa: E402
+from lidenbrock.core.schemas import HyphenRole  # noqa: E402
+from lidenbrock.formats.alto.parser import build_document_manifest  # noqa: E402
 
 #: Function words that betray the language of a line. Deliberately small
 #: and high-frequency: the goal is a robust per-line vote, not full
