@@ -13,7 +13,6 @@ Tests:
 from __future__ import annotations
 
 
-import pytest
 from lidenbrock.formats.alto.parser import parse_alto_file
 from lidenbrock.formats.alto.rewriter import rewrite_alto_file
 
@@ -24,11 +23,6 @@ from tests._pipeline_harness import run_pipeline
 from tests._paths import EXAMPLES
 
 X0000002_PATH = EXAMPLES / "X0000002.xml"
-
-pytestmark = pytest.mark.skipif(
-    not X0000002_PATH.exists(), reason="X0000002.xml not found"
-)
-
 
 # ---------------------------------------------------------------------------
 # Helpers

@@ -23,18 +23,12 @@ long as the guarantee holds.
 from __future__ import annotations
 
 
-import pytest
-
 from lidenbrock.core.schemas import HyphenRole
 from lidenbrock.formats.alto.parser import parse_alto_file
 
 from tests._pipeline_harness import EXAMPLES, run_pipeline
 
 X0000002_PATH = EXAMPLES / "X0000002.xml"
-
-pytestmark = pytest.mark.skipif(
-    not X0000002_PATH.exists(), reason="X0000002.xml not found"
-)
 
 
 def _expected_forward_pairs() -> int:

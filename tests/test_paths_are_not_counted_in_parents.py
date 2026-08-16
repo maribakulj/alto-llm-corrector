@@ -11,9 +11,11 @@ on the first run.)
   * ``test_line_ref.py`` moved into ``tests/identity/`` and resolved
     ``examples/sample.xml`` one directory too shallow. It failed loudly,
     which was the lucky outcome.
-  * The seven sites fixed one slice earlier were guarded by
-    ``skipif(not PATH.exists())``. Moved, they would have resolved to
-    nothing, skipped, and reported success.
+  * The seven sites fixed one slice earlier were guarded by a skip
+    conditioned on the fixture being present. Moved, they would have
+    resolved to nothing, skipped, and reported success. (Written in words:
+    this module scans for that shape too, and would otherwise report its
+    own prose — the second time it has had to do this.)
 
 A suite that silently stops running is worse than one that breaks, so the
 arithmetic lives in :mod:`tests._paths` and nowhere else.
@@ -47,6 +49,20 @@ _CLIMBS = re.compile(r"Path\(__file__\)(?:\.resolve\(\))?\.(parent\b|parents\[)"
 #: about how deep the tree is.
 _CLIMBS_FROM_A_NAME = re.compile(r"\b\w+\.parent\.parent\b|\b\w+\.parents\[[1-9]")
 
+#: A test that skips when a COMMITTED fixture is missing. The condition can
+#: never be true in a healthy checkout, so the guard protects nothing — but
+#: the day the fixture moves or is deleted, it converts a loud failure into
+#: a silent skip, and a suite that quietly stops running looks exactly like
+#: a suite that passes. Two of these survived until 2026-08-16, on files
+#: this repository commits.
+#:
+#: A fixture that is genuinely optional — fetched, generated, behind an
+#: extra — is a different case and belongs behind `importorskip` or an
+#: explicit marker, which name the reason rather than testing for a file.
+_SKIPS_ON_A_FILE = re.compile(
+    "skip" + r"if\(\s*not\s+\w+(?:_PATH)?\." + "exists" + r"\(\)"
+)
+
 #: Files allowed to know where they are.
 _ANCHORED_ON_PURPOSE = {
     "_paths.py": "the definition — something has to compute it once",
@@ -78,6 +94,29 @@ def test_no_module_walks_up_from_its_own_file() -> None:
         "Import REPO / PKG / SRC / TESTS / EXAMPLES from tests._paths "
         "instead — a test file that knows how deep it sits cannot be moved, "
         "and moving it may make it SKIP rather than fail."
+    )
+
+
+def test_no_test_skips_because_a_committed_fixture_is_missing() -> None:
+    """A missing fixture must break the suite, not quieten it.
+
+    This is the same failure this module was written for, wearing its
+    other costume: instead of resolving a path one level too shallow and
+    skipping, the test asks whether the file is there and skips politely
+    when it is not. Both end with a green run that verified nothing.
+    """
+    offenders = {}
+    for path in _modules():
+        relative = str(path.relative_to(TESTS))
+        hits = _SKIPS_ON_A_FILE.findall(path.read_text(encoding="utf-8"))
+        if hits:
+            offenders[relative] = len(hits)
+    assert not offenders, (
+        f"test(s) skipping on a fixture's existence: {offenders}. The "
+        "fixtures in examples/ are committed — the condition cannot fire "
+        "in a healthy checkout, and the day it can, it turns a loud "
+        "failure into a silent skip. Let the test fail. If the fixture is "
+        "genuinely optional, say WHY with importorskip or a marker."
     )
 
 
