@@ -218,7 +218,11 @@ tag (`git tag -d` suffit) mais le **numéro consommé sur l'index** — d'où le
 (« aucun tag avant une v1 aboutie ») **tient** : un `rc` de répétition
 TestPyPI n'est pas la publication d'une version.
 
-**8. La borne de `T1`/`T3` cesse d'être un compteur.** Le compteur mesurait
+**8. La borne de `T1`/`T3` cesse d'être un compteur.** *(La liste est
+établie : `docs/promises.md`, relevé du 2026-08-16 — 9 promesses sans
+aucune garde, 14 partielles, et deux trous d'IMPLÉMENTATION plutôt que de
+test. Le motif dominant est que PAGE est le format sous-gardé : six
+promesses passent de tenue à partielle pour cette seule raison.)* Le compteur mesurait
 l'effort, pas la couverture, et il butait sur une question qu'il ne pouvait pas
 trancher : deux des cinq propriétés n'avaient trouvé aucun défaut du produit
 mais un **angle mort de la suite entière** — une mutation réaliste que les 1400
