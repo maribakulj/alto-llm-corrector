@@ -62,13 +62,42 @@ serait moulée sur l'existant et n'aurait rien trouvé.
 | — | somme des pertes par ligne = agrégat | **fermée le 2026-08-16** — étendue à PAGE, le format où les deux comptes sont calculés indépendamment. Ils s'accordent : vérifié, plus supposé |
 | — | le rapport dit du fichier ce qui y est | **partielle** — contenus et identités gardés, compteurs non |
 | — | rejouer le script rendu reproduit le fichier | **fermée le 2026-08-16** — étendue à PAGE, le format qui porte des transformations *après* la décision |
-| — | niveaux de fidélité déclarés | **partielle** — ALTO seulement ; PAGE ne peut structurellement jamais annoncer `source_spelling`, et que ce soit correct n'est vérifié nulle part |
+| — | niveaux de fidélité déclarés | **fermée le 2026-08-16, et elle cachait un défaut** — PAGE annonçait `exact` sur un fichier décomposé qu'il orthographie autrement. Voir plus bas |
 | — | `run()` ne mute jamais son entrée | **partielle** — jamais comparé sur l'objet entier ; les champs de césure, que le planificateur modifie réellement sur sa copie, ne sont pas couverts |
 | — | identité de ligne = `(page_id, line_id)` | **gardée**, ALTO et PAGE |
 | — | paires de césure atomiques dans le découpage | **gardée**, sous une forme plus honnête que la promesse : ensemble, **ou** séparées avec un `HyphenSplit` enregistré |
 | — | l'ordre des fichiers d'entrée ne change rien | **partielle** — prouvé sur un corpus jouet de deux fichiers d'une ligne, là où c'est trivial |
 | — | une seconde passe est un point fixe | **partielle** — PAGE absent |
 | — | césure inter-pages | **gardée** |
+
+## Le défaut que le relevé a fait sortir
+
+En vérifiant la dernière « partielle » de la liste — les niveaux de
+fidélité, tenus sur ALTO et jamais sur PAGE — la raison écrite s'est
+révélée fausse, et le défaut derrière elle réel.
+
+`EXACT` promet la chose la plus forte de l'échelle : *l'artefact dit la
+décision, caractère pour caractère*. `L8` avait trouvé cette promesse
+rompue sur ALTO — 115 lignes s'en réclamaient pendant que le fichier
+portait `U+00AD` là où la lecture rendait `-`. Le remède ne fut pas un
+invariant plus strict mais une **seconde lecture**, table de substitution
+désactivée, plus un niveau `source_spelling`.
+
+Ce remède n'a jamais atteint PAGE, sur une raison écrite au plan et jamais
+revérifiée : *PAGE ne substitue rien à la lecture (NFC + strip)*.
+
+**NFC est une substitution.** Un fichier portant `e` + `U+0301` produit une
+décision portant `U+00E9` — un codepoint là où le fichier en a deux. Mesuré
+avant correctif, sur la fixture PAGE normalisée en NFD : le run annonçait
+`{'exact': 32}` alors que **9 de ces 32 lignes** étaient orthographiées
+autrement dans le fichier. Après : `{'exact': 23, 'source_spelling': 9}`,
+et le fichier composé reste à `{'exact': 32}` — pas un faux positif.
+
+Et il y avait un test pour le protéger. Il affirmait que PAGE ne substitue
+rien, sa docstring nommait la faiblesse d'affirmer un dictionnaire vide, et
+elle vérifiait donc la revendication elle-même — **sur une fixture
+composée, où NFC ne fait rien.** La garde contre l'assertion faible était
+faible sur le même axe.
 
 ## Les deux trous d'implémentation
 

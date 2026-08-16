@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import unicodedata
+
 from pathlib import Path
-from xml.sax.saxutils import escape
 
 from saknussemm.formats.page.parser import build_document_manifest, parse_page_file
 from saknussemm.formats.page.rewriter import (
@@ -219,42 +220,55 @@ def test_output_reparses_and_is_deterministic(tmp_path: Path):
     assert pages[0].lines[0].ocr_text == "hello world"
 
 
-def test_page_declares_no_character_substitution_because_it_makes_none() -> None:
-    """L8's other half — the claim, tested rather than assumed.
+def test_page_declares_the_respellings_it_makes_and_only_those() -> None:
+    """The claim this test used to make was false, and its own guard missed it.
 
-    ALTO reads a ``<HYP CONTENT="U+00AD">`` back as ``-``, so its rewrite
-    result carries a second, verbatim reading of every line and the
-    projection invariant grades those lines ``source_spelling`` instead of
-    ``exact``. PAGE's read path applies NFC and strips — canonical
-    equivalence and edge whitespace, nothing a consumer can act on — so it
-    has nothing to declare and ships an empty ``texts_verbatim``.
+    It asserted that PAGE substitutes nothing on read — NFC and strip,
+    "canonical equivalence and edge whitespace, nothing a consumer can act
+    on" — and therefore ships an empty ``texts_verbatim``. Its docstring
+    even named the weakness of asserting an empty dict, and checked the
+    claim itself: a line's logical text must be findable in the delivered
+    bytes character for character.
 
-    An empty dict is a weak assertion on its own (a PAGE substitution added
-    later would also leave it empty), so the claim itself is checked: a
-    line's logical text must be findable in the delivered bytes character
-    for character. That is what "substitutes nothing" means, and it is the
-    assertion that would fail if PAGE ever started normalising a mark. ALTO
-    and PAGE disagreeing silently about the same class of event is exactly
-    what R4 had to be sent back to fix.
+    That stronger check was blind on the same axis as the weak one. It ran
+    on a COMPOSED fixture, where NFC is a no-op. Fed a decomposed document —
+    a legitimate Unicode form, and one some producers emit — the file
+    carries ``e`` + U+0301 where the decision carries U+00E9, the two
+    readings differ, and every line was still reported ``exact``.
+
+    So PAGE now carries the second reading ALTO has had since `L8`, and
+    this test pins both halves: nothing declared when the file is already
+    composed, and the respellings named when it is not.
     """
     doc = build_document_manifest([(_NEWSEYE, _NEWSEYE.name)])
     result = rewrite_page_file(_NEWSEYE, doc.pages, "prov", "mdl")
+    respelled = {
+        line_id: text
+        for line_id, text in result.texts_verbatim.items()
+        if result.texts.get(line_id) != text
+    }
+    assert not respelled, (
+        f"this fixture is composed, so both readings must agree: {respelled}"
+    )
 
-    assert result.texts_verbatim == {}
+    target = _NEWSEYE.parent / "_nfd_rewriter_probe.xml"
+    target.write_text(
+        unicodedata.normalize("NFD", _NEWSEYE.read_text(encoding="utf-8")),
+        encoding="utf-8",
+    )
+    try:
+        nfd_doc = build_document_manifest([(target, target.name)])
+        nfd = rewrite_page_file(target, nfd_doc.pages, "prov", "mdl")
+    finally:
+        target.unlink(missing_ok=True)
 
-    delivered = result.xml_bytes.decode("utf-8")
-    checked = 0
-    for line_id, text in result.texts.items():
-        if not text.strip():
-            continue
-        # XML escaping is not a character substitution — `&` reaches the file
-        # as `&amp;` and comes back as `&`; the character survives, only its
-        # serialisation differs. Escaping the needle keeps the test about
-        # substitution rather than about XML.
-        assert f"<Unicode>{escape(text)}</Unicode>" in delivered, (
-            f"{line_id}: the line's logical text is not in the delivered "
-            "bytes verbatim — PAGE substituted a character somewhere and "
-            "owes the report a verbatim reading (L8)."
-        )
-        checked += 1
-    assert checked > 50, "fixture check: this must exercise real lines"
+    differing = [
+        line_id
+        for line_id, text in nfd.texts_verbatim.items()
+        if nfd.texts.get(line_id) != text
+    ]
+    assert differing, (
+        "the same document decomposed must produce readings that differ; if "
+        "they agree, the verbatim walk applies NFC after all and the scale "
+        "is blind again."
+    )

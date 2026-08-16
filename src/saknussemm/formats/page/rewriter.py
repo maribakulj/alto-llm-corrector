@@ -442,24 +442,34 @@ def rewrite_page_file(
     xml_bytes = etree.tostring(
         root, xml_declaration=True, encoding="UTF-8", pretty_print=False
     )
-    # ADR-011 — output texts read off the very tree the bytes were just
-    # serialized from (no second parse); the PAGE-specific granularity
-    # counters ride along for CorrectionReport.format_losses.
     return RewriteResult(
         xml_bytes=xml_bytes,
         metrics=metrics,
         rewriter_paths=line_paths,
         texts=_extract_texts_from_root(root, ns, set(line_by_id)),
+        texts_verbatim=_extract_texts_from_root(root, ns, set(line_by_id), True),
         losses=metrics.as_losses(),
         losses_by_line=losses_by_line,
     )
 
 
 def _extract_texts_from_root(
-    root: etree._Element, ns: str, line_ids: set[str]
+    root: etree._Element, ns: str, line_ids: set[str], verbatim: bool = False
 ) -> dict[str, str]:
     """Canonical per-line text of a PAGE tree, matching the parser's
-    reconstruction."""
+    reconstruction.
+
+    ``verbatim=True`` is the same walk with the NFC pass OFF: the file's
+    codepoints rather than the logical reading of them. Where the two
+    differ, the file spells a character its own way — decomposed — and the
+    decision spells it composed. Real, invisible to a comparison of two
+    normalised strings, and reported as ``exact`` until 2026-08-16. ALTO
+    grew the same second reading first, for the same reason.
+
+    Called positionally from ``rewrite_page_file`` on purpose: that
+    function is pinned by the size ratchet and may only shrink, so the
+    explanation lives here rather than at the call site.
+    """
     textline_tag = _tag("TextLine", ns)
     result: dict[str, str] = {}
     for tl in root.iter(textline_tag):
@@ -472,7 +482,7 @@ def _extract_texts_from_root(
                     f"duplicate TextLine id {line_id!r} in rewritten PAGE — "
                     "output-text extraction would be ambiguous (ADR-007)."
                 )
-            result[line_id] = canonical_line_text(tl, ns)
+            result[line_id] = canonical_line_text(tl, ns, verbatim=verbatim)
     return result
 
 
