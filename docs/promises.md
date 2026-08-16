@@ -42,13 +42,13 @@ serait moulée sur l'existant et n'aurait rien trouvé.
 | I4c | l'extra `[vision]` importe Pillow paresseusement | **gardée** |
 | E1 | `line_id` dans le chunk visé | **partielle** — le seul test confond « hors chunk » et « inconnue » ; retirer la première clause laisse la suite verte |
 | E2a | spans sans chevauchement | **gardée** |
-| E2b | application **de droite à gauche** | **aucune** — le test éponyme emploie deux spans de **longueur égale** : le résultat est identique dans l'autre sens |
+| E2b | application **de droite à gauche** | **fermée le 2026-08-16** — un span qui change de longueur sépare enfin les deux ordres |
 | E3a/c/d | pas de `\n` et non-vide pour `replace_line` ; suppression permise par span | **gardées** |
-| E3b | pas de `\n` sur la voie `replace_span` | **aucune** — la garde existe, rien ne l'exerce |
-| E3e | rejet quand un span viderait la ligne | **aucune** — branche morte côté tests |
+| E3b | pas de `\n` sur la voie `replace_span` | **fermée le 2026-08-16** |
+| E3e | rejet quand un span viderait la ligne | **fermée le 2026-08-16** |
 | E4a | borne de dérive **par op** | **partielle** — une seule op : rien ne prouve le « par op », ni le contrôle négatif sous la borne |
 | E4b | budget de caractères modifiés, élagage préfixe/suffixe | **gardée** — le mieux tenu du lot |
-| E4c | le budget est **par ligne**, cumulé sur plusieurs ops | **aucune** — les quatre tests E4 sont mono-op |
+| E4c | le budget est **par ligne**, cumulé sur plusieurs ops | **fermée le 2026-08-16** — deux ops de 8 caractères, refusées sous un budget de 12, acceptées sous 20 : c'est le cumul qui décide |
 | E5a | une ligne de césure garde son tiret final | **partielle** — rôle `BOTH` et marques non-ASCII (`⸗`, `¬`) absents, alors que le répertoire est paramétré partout ailleurs |
 | E5b | son **mot-frontière** ne peut pas être supprimé | **aucune, et la garde n'existe pas** — voir plus bas |
 | E6a | les gardes s'appliquent au texte issu d'un span | **partielle** — l'étage sémantique n'est jamais exercé sur une sortie de span |
@@ -96,6 +96,19 @@ Celui qui en avait l'air comparait la provenance à un tuple codé en dur dans
 la source : ajouter `pillow` au `pyproject` laissait tout vert. C'était la
 promesse la plus facile à casser en silence de tout le lot, et sur
 l'invariant que le projet met en avant le plus souvent.
+
+## Ce qui a été fermé depuis le relevé
+
+Quatre entrées « aucune » sur neuf, le 2026-08-16 même, parce qu'elles ne
+demandaient aucun arbitrage : les gardes existaient déjà dans le code et
+rien ne les atteignait. `E3b`, `E3e` et `E4c` étaient des branches mortes
+côté tests. `E2b` était pire — un test portait le nom de la propriété et ne
+la testait pas.
+
+Restent cinq « aucune », dont les deux trous d'implémentation ci-dessus et
+trois qui demandent une décision : figer l'union `EditOp` (`I2b`), faire
+converger les deux voies d'édition sur un même verdict (`E6b`), et comparer
+les rôles de césure entre formats (`§6.3`).
 
 ## Le motif dominant
 
