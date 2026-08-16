@@ -32,17 +32,20 @@ quatre items de vérité documentaire, et écrivait la règle de gel.
 
 ## Objectif : `0.10.0`, puis `1.0.0` — jamais l'inverse
 
-Publier une `0.x` honnête plutôt qu'une `1.0` prématurée. Trois raisons
-inchangées :
+Publier une `0.x` honnête plutôt qu'une `1.0` prématurée. Les raisons ont
+changé, contrairement à ce que ce paragraphe a longtemps annoncé : il
+présentait « trois raisons inchangées » dont la première était close depuis
+le 2026-08-01, et le disait quinze pages plus bas. Relevé par la revue
+externe du 2026-08-16. Ce qui reste :
 
-1. La surface publique doit passer de **95 symboles à sa clôture minimale**
-   (`S3b`). C'est une rupture — publier `1.0` avant la gèlerait sous SemVer.
-   La coupe est différée jusqu'après `S2` ; ce qui est fait dès maintenant
-   (`S3a`), c'est de **dire** qu'elle est provisoire, partout où la doc
-   prétendait le contraire, et d'interdire qu'elle regrandisse.
-2. Les gardes ne sont pas calibrées ; le code le dit lui-même
+1. Les gardes ne sont pas calibrées ; le code le dit lui-même
    (`GuardConfig.vision()`, seuil « safe default, not a calibrated one »).
-3. Un seul modèle, un seul profil de gardes, deux runs mesurés.
+2. Un seul modèle, un seul profil de gardes, deux runs mesurés.
+3. La surface publique **est** close, à 66 symboles (`S3b`, fait le
+   2026-08-01, affiné par `RM-04` le 2026-08-06 — voir `V5`). Elle n'est
+   donc plus un travail à faire, mais elle n'a jamais été relue par
+   quelqu'un d'extérieur à sa construction, ce qu'exige `V10`. Publier
+   `1.0` la gèlerait sous SemVer avant cette relecture.
 
 `docs/versioning.md` autorise déjà explicitement la série `0.9.x` à casser.
 

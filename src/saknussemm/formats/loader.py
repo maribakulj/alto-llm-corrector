@@ -5,10 +5,16 @@ ALTO or PAGE parser — nobody passes a format flag. One format per
 document (a mixed ALTO+PAGE batch has no single rewriter).
 
 Any host ingesting user files should build its manifest through this
-module rather than importing a format-specific parser: the ALTO parser
-applied to a valid PAGE file finds no ALTO pages and yields an EMPTY
-manifest (0 pages, 0 lines) instead of an error — a silent mis-read,
-not a refusal. ``saknussemm.load()`` (the facade) is this module plus
+module rather than importing a format-specific parser, because a parser
+asked for the wrong format finds nothing rather than objecting. Half of
+that trap is now closed and half is not, so the halves are worth
+distinguishing: :func:`alto.parser.build_document_manifest` sniffs each
+file and *refuses* a non-ALTO one, while :func:`alto.parser.parse_alto_file`
+still returns an empty page list for a valid PAGE file — 0 pages, no
+error, a silent mis-read. A host calling the single-file entry point
+directly is still on its own.
+
+``saknussemm.load()`` (the facade) is this module plus
 basename bookkeeping; hosts that carry their own (path, source_name)
 pairs and a :class:`PairingPolicy` call :func:`build_document_manifest`
 directly.
