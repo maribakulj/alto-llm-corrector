@@ -63,7 +63,7 @@ serait moulée sur l'existant et n'aurait rien trouvé.
 | — | le rapport dit du fichier ce qui y est | **partielle** — contenus et identités gardés, compteurs non |
 | — | rejouer le script rendu reproduit le fichier | **fermée le 2026-08-16** — étendue à PAGE, le format qui porte des transformations *après* la décision |
 | — | niveaux de fidélité déclarés | **fermée le 2026-08-16, et elle cachait un défaut** — PAGE annonçait `exact` sur un fichier décomposé qu'il orthographie autrement. Voir plus bas |
-| — | `run()` ne mute jamais son entrée | **partielle** — jamais comparé sur l'objet entier ; les champs de césure, que le planificateur modifie réellement sur sa copie, ne sont pas couverts |
+| — | `run()` ne mute jamais son entrée | **gardée** — `test_the_input_manifest_comes_back_untouched.py` compare les deux `model_dump()` complets, ALTO et PAGE, sous un producteur qui change le compte de mots ; plus le condensat du fichier source, que rien ne vérifiait. Mesuré : une fuite d'un seul pointeur de césure laisse `test_reentrancy_guard.py` vert et fait rougir celui-ci |
 | — | identité de ligne = `(page_id, line_id)` | **gardée**, ALTO et PAGE |
 | — | paires de césure atomiques dans le découpage | **gardée**, sous une forme plus honnête que la promesse : ensemble, **ou** séparées avec un `HyphenSplit` enregistré |
 | — | l'ordre des fichiers d'entrée ne change rien | **partielle** — prouvé sur un corpus jouet de deux fichiers d'une ligne, là où c'est trivial |
