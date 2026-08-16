@@ -310,7 +310,7 @@ def test_hyphen_heuristic_accepts_the_whole_repertoire(tmp_path, break_char, nam
     Stage-B drift guards ever run on it — the line is handed to the model
     with nothing watching its boundary.
 
-    Measured on corpus/37-GT-BNL (19th-c. Luxembourg press, Fraktur, not
+    Measured on the BnL corpus (bench repository) (19th-c. Luxembourg press, Fraktur, not
     one SUBS_TYPE in the whole corpus): 24 of 94 break lines, 25.5%, all
     of them ``⸗``.
 

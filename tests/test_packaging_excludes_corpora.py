@@ -8,29 +8,30 @@ first; a wheel on PyPI is a redistribution channel whose downstream use
 nobody controls.
 
 It used to rest on two facts. The corpora lived at the repository root,
-OUTSIDE ``packages/lidenbrock/`` — so no corpus could be under the
+OUTSIDE the package directory — so no corpus could be under the
 distribution root at all — and the sdist declared an explicit four-entry
 allowlist.
 
-**The first fact is gone.** Flattening the tree on 2026-08-16 made the
-package root the repository root, and ``corpus/`` is now inside it. The
-layout no longer protects anything; the allowlist is alone. That is not a
-regression to fix — it is a defence that was traded for a flat tree, and
-the trade is only safe because the checks below read the BUILT artefacts
-rather than the configuration.
+**Both halves of the first fact are gone, in opposite directions.**
+Flattening the tree made the package root the repository root; then the
+campaign corpora left for the bench, taking 43 MB with them. So there is
+no longer a `corpus/` here to keep out.
 
-**And asserting the declaration was not enough.** This file used to check
-only that ``sdist.include`` still held its four entries, which it did —
-while the built sdist carried ``tests/corpus_gt/README.md`` and
-``tests/external_corpus/pinned/README.md`` as well. Hatchling matches those
-entries as PATTERNS, so an unanchored ``README.md`` matches every README at
-any depth. No corpus DATA ever shipped (the XML matched nothing, and the
-licensing conclusion above never wavered), but "explicit four-entry
-allowlist" described an intention, not an artefact — the exact gap this
-repository keeps finding, in the one test written to close it.
+What remains committed is `tests/external_corpus/pinned/` — 1.89 MB of
+real Gallica ALTO, put there deliberately so that pages produced by a real
+OCR pipeline, on documents never opened during development, gate every
+merge. It is a fixture, not a campaign corpus, and it is INSIDE the
+distribution root like everything else now.
 
-So the entries are anchored (``/README.md``), and the checks below read the
-BUILT distributions. Building is a few seconds; a packaging claim that
+So the allowlist is not redundant: it is the only thing between those
+pages and a published artefact. And asserting the declaration was never
+enough — this file used to check only that `sdist.include` still held its
+four entries, which it did, while the built sdist carried two READMEs from
+under `tests/` as well. Hatchling matches the entries as PATTERNS, so an
+unanchored `README.md` matches every README at any depth.
+
+The entries are anchored now, and the checks below read the BUILT
+distributions. Building takes a few seconds; a packaging claim that
 nothing verifies is worth more than the seconds.
 """
 
@@ -100,37 +101,52 @@ def test_the_wheel_ships_the_package_and_nothing_else() -> None:
     assert wheel["packages"] == ["src/lidenbrock"]
 
 
-def test_the_corpora_are_kept_out_by_the_allowlist_not_by_geography() -> None:
-    """What used to protect the corpora, and what protects them now.
+def test_no_campaign_corpus_lives_here_any_more() -> None:
+    """The 43 MB left on 2026-08-16, and nothing should bring them back.
 
-    Until 2026-08-16 the package sat in ``packages/lidenbrock/`` and the
-    corpora sat above it, so no corpus COULD be under the distribution
-    root and this test asserted exactly that. Flattening the tree removed
-    that guarantee: the package root is the repository root, and
-    ``corpus/`` is now inside it.
+    Campaign corpora — pages with their scans, measured against a model —
+    belong where the measuring happens. Here they were 43 MB of weight in
+    a repository whose only job is to be publishable, and after the tree
+    was flattened they sat inside the distribution root, held out of the
+    artefact by an allowlist and nothing else.
 
-    Nothing was quietly lost, but something was **traded**, and it is
-    worth naming. The remaining defence is not a layout, it is a pair of
-    allowlists — ``sdist.include`` (four anchored entries) and the wheel's
-    ``packages = ["src/lidenbrock"]`` — and the tests either side of this
-    one check them against the artefacts that were actually BUILT, not
-    against what the configuration claims. That distinction is not
-    theoretical: the declaration passed while the built sdist carried two
-    corpus READMEs, because hatchling matched the entries as patterns.
-
-    So this test now pins the premise those other two rest on: the corpora
-    are present, they are inside the distribution root, and therefore the
-    allowlist is the only thing standing between them and a release.
+    This asserts the absence rather than a layout, because absence is the
+    only form of this guarantee that a future refactor cannot quietly
+    invert.
     """
-    corpus_root = _REPO_ROOT / "corpus"
-    assert corpus_root.is_dir(), "fixture check: the corpora are expected here"
-    assert _PACKAGE_ROOT in corpus_root.parents, (
-        "the tree is flat: corpus/ is expected INSIDE the distribution root. "
-        "If this fails, the layout changed again and the comment above is "
-        "now the wrong story — re-read it before adjusting the assertion."
+    assert not (_REPO_ROOT / "corpus").exists(), (
+        "corpus/ is back. Campaign corpora live in the bench repository; "
+        "if a fixture is what you need, it goes in tests/ and it is small."
     )
-    wheel = _pyproject()["tool"]["hatch"]["build"]["targets"]["wheel"]
-    assert not any("corpus" in entry for entry in wheel["packages"])
+    assert not (_REPO_ROOT / "measurements").exists(), (
+        "measurements/ is back. A run's output is a record of a campaign, "
+        "and campaigns are archived where they are run."
+    )
+
+
+def test_the_pinned_pages_are_the_one_committed_corpus_and_stay_out_of_the_artefact() -> (
+    None
+):
+    """What IS committed, why, and what keeps it out of a release.
+
+    ``tests/external_corpus/pinned/`` holds real Gallica ALTO on purpose:
+    it is the only tier that gates a merge offline. It is also the only
+    corpus data left in this repository, so it is the only thing the
+    allowlist still has to hold back — which the built-artefact tests
+    below actually verify, rather than trusting the declaration.
+    """
+    pinned = _REPO_ROOT / "tests" / "external_corpus" / "pinned"
+    pages = sorted(pinned.glob("*.alto.xml"))
+    assert pages, (
+        "the pinned tier is empty again. It is what makes an external page "
+        "block a merge; without it the external corpus gates nothing."
+    )
+    readme = (pinned / "README.md").read_text(encoding="utf-8")
+    for page in pages:
+        assert page.name in readme, (
+            f"{page.name} is pinned but not recorded in the README — "
+            "provenance and sha256 are the point of pinning it."
+        )
 
 
 def test_the_package_tree_carries_no_scan_payload() -> None:
@@ -142,20 +158,6 @@ def test_the_package_tree_carries_no_scan_payload() -> None:
         if p.suffix.lower() in {".png", ".jpg", ".jpeg", ".tif", ".tiff"}
     ]
     assert payload == [], f"image payload inside the package: {payload}"
-
-
-def test_every_corpus_documents_its_licence() -> None:
-    """Gate 0's other half: a corpus with no stated licence is a corpus
-    nobody can redistribute, including us."""
-    for readme in sorted((_REPO_ROOT / "corpus").glob("*/README.md")):
-        text = readme.read_text(encoding="utf-8")
-        assert "À VÉRIFIER" not in text, (
-            f"{readme.parent.name}: licence still marked unverified. Settle it "
-            "and record the statement, or drop the corpus."
-        )
-        assert "licence" in text.lower(), (
-            f"{readme.parent.name}: no licence section at all."
-        )
 
 
 @pytest.fixture(scope="module")

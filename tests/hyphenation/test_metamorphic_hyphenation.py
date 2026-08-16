@@ -208,7 +208,7 @@ def test_any_repertoire_mark_pairs_the_same_way(tmp_path: Path, mark: str) -> No
     """Which mark renders the break is typography, not structure.
 
     A Fraktur ``⸗`` and an ASCII ``-`` say the same thing about the word;
-    24 of the 94 break marks in ``corpus/37-GT-BNL`` are ``⸗``, and one of
+    24 of the 94 break marks in the BnL corpus (in the bench repository since 2026-08-16) are ``⸗``, and one of
     them being invisible to pairing was a real defect (fixed in 542c783).
     """
     files = [

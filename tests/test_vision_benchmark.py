@@ -158,7 +158,7 @@ def test_swapping_the_text_re_derives_the_hyphenation() -> None:
     text that has none. No parser can produce that state: a heuristic
     PART1 is heuristic BECAUSE its text ends on a break mark.
 
-    On ``corpus/37-GT-BNL`` it made 21 of 94 break lines incoherent, and
+    On the BnL corpus (in the bench repository since 2026-08-16) it made 21 of 94 break lines incoherent, and
     the pipeline reverted their pairs — read as a quality regression when
     it was an artefact of the harness.
     """
