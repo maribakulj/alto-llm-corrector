@@ -324,3 +324,31 @@ Une ligne par réveil : date, item, résultat, ou la raison de l'arrêt.
   fermés, PR #79. Le parseur et le réécriveur étaient agnostiques depuis
   toujours — **la porte était le seul endroit marqué du dépôt.** `M1` reste
   ouvert : le corpus n'a pas été trouvé, le défaut si.
+- 2026-08-16 (suite) — **la scission est finie, et onze dettes avec.**
+  `lidenbrock` ne contient plus que la bibliothèque : 347 fichiers suivis,
+  la démo dans son dépôt, les corpus et les campagnes au banc, le scorer QE
+  déposé là-bas aussi. Réglé au passage : la porte marquée sur un namespace
+  d'éditeur, une déclaration d'encodage crue sur parole, l'environnement de
+  test déclaré dans un workflow, la garde de publication égarée dans le
+  backend, deux angles morts de la garde de profondeur, une exclusion de
+  couverture justifiée par une raison devenue fausse, quatre sauts
+  silencieux, le double parsing (−23 % au chargement), le corpus externe qui
+  ne bloquait aucun merge (`V7` tenu), `.cache/` non ignoré, cinq références
+  pourries dans la démo, et une garde de licence restée orpheline.
+
+  **Le motif, énoncé une fois pour qu'on le reconnaisse plus vite** :
+  presque chacune de ces dettes était une garde plus étroite que ce qu'elle
+  prétendait couvrir, ou une raison écrite une fois et jamais revérifiée.
+  Élargir la garde a trouvé, chaque fois, plus que la lecture : deux sauts
+  silencieux lus contre quatre trouvés ; un `Dockerfile` vu contre deux
+  existants ; deux portes lxml surveillées contre quatre réelles.
+
+  **Et trois fois dans la journée, le vert local n'a pas valu le vert de la
+  CI** : PyYAML présent d'un côté seulement, tri d'imports activé d'un seul
+  côté, `.cache/` présent en local et absent là-bas. La vérification se fait
+  désormais dans la condition de la CI, pas dans la sienne.
+
+  Reste ici : retirer l'extra `[qe]` quand le dépôt du banc l'a accepté, et
+  couper une section de release dans un `CHANGELOG` qui porte 1316 lignes
+  sous `[Unreleased]`. Reste au mainteneur, et ça bloque la `0.10.0rc1` :
+  les secrets HF de la démo, et le *trusted publisher* PyPI.

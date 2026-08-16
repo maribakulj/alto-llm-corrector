@@ -30,16 +30,6 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# QE scorer (ROADMAP V3 Phase 3): the zero-shot D'AlemBERT pseudo-perplexity
-# scorer behind core.quality.QEScorer. RUNTIME is onnxruntime + tokenizers
-# only — NO torch, NO transformers (the heavy conversion lives in the
-# dev-time scripts/export_masked_lm_onnx.py, never on the install path).
-qe = [
-    "onnxruntime>=1.17,<2.0",
-    "tokenizers>=0.15,<1.0",
-    "numpy>=1.24,<3.0",
-]
-
 # Vision chain (ROADMAP V3 Phase 4): the lidenbrock[vision] producer decodes,
 # validates and crops page images and calls a multimodal provider. Pillow is
 # the ONLY image dependency and it is imported LAZILY, inside
@@ -140,19 +130,13 @@ markers = [
 [tool.coverage.run]
 source = ["lidenbrock"]
 branch = true
-# integrations/qe.py is the lidenbrock[qe] extra: it only runs with
-# onnxruntime plus a 545 MB exported model, which no CI can reasonably
-# fetch. Its suite self-skips when the extra is absent, so gating on it
-# would read a false 0%. That module is leaving for the bench rather than
-# staying here as a second thing nothing runs.
-#
-# integrations/vision.py used to be omitted for the same stated reason, and
-# the reason was wrong. Measured 2026-08-16: the module is 96% covered by
-# its own 20 tests — it was never untested, it was untested IN CI, because
-# no job installed [vision] and `importorskip("PIL")` turned a whole module
-# into one quiet skip. The exclusion was hiding a well-tested file, and
-# removing it costs 0.01 points of total coverage.
-omit = ["*/__init__.py", "*/integrations/qe.py"]
+# Nothing is omitted any more. `integrations/qe.py` was, because it needed
+# onnxruntime and a 545 MB model no CI could fetch; it left for the bench on
+# 2026-08-16. `integrations/vision.py` was too, on a reason that turned out
+# to be false — it is 96% covered by its own tests and CI simply never ran
+# them. An omission is a claim that a file cannot be measured here; both
+# claims are now spent.
+omit = ["*/__init__.py"]
 
 [tool.coverage.report]
 fail_under = 85
@@ -178,13 +162,6 @@ files = ["src/lidenbrock"]
 # untyped. We install lxml-stubs in CI; this keeps the odd residual
 # module import from failing strict mode.
 module = ["lxml.*"]
-ignore_missing_imports = true
-
-[[tool.mypy.overrides]]
-# The lidenbrock[qe] runtime deps are lazy-imported inside
-# integrations/qe.py and absent from the mypy CI env (it installs only the
-# package + lxml-stubs). Treat them as untyped so --strict still runs.
-module = ["onnxruntime.*", "tokenizers.*", "numpy.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]

@@ -223,13 +223,12 @@ def test_producers_are_pure_and_formats_ignore_producers():
 
 
 # ---------------------------------------------------------------------------
-# lidenbrock[qe] — the D'AlemBERT scorer's heavy deps (onnxruntime/tokenizers/
-# numpy, and never torch/transformers at runtime) must be LAZY: importable
-# module, zero import cost for anyone who does not construct the scorer, and
-# never pulled in by the pixel-light core.
+# An optional extra must be optional in fact, not only in the metadata: the
+# module stays importable, costs nothing to anyone who does not use it, and
+# is never pulled in by the pixel-light core. Written for the QE scorer,
+# which left for the bench on 2026-08-16; the rule outlived it because it
+# was never about that module.
 # ---------------------------------------------------------------------------
-
-QE_HEAVY = ("onnxruntime", "tokenizers", "numpy", "torch", "transformers")
 
 
 def _module_level_imports(path: Path) -> set[str]:
@@ -245,28 +244,29 @@ def _module_level_imports(path: Path) -> set[str]:
     return names
 
 
-def test_qe_scorer_keeps_every_heavy_dep_function_local():
-    qe = SRC / "integrations" / "qe.py"
-    module_level = _module_level_imports(qe)
+def test_vision_keeps_every_heavy_dep_function_local():
+    """An optional dependency imported at module level is not optional.
+
+    This guard was written for the QE scorer, which left for the bench on
+    2026-08-16. The rule was never about that module: an extra earns the
+    name only if the base install can import the package without paying
+    for it, and a module-level ``import PIL`` would make ``[vision]``
+    mandatory in everything but the metadata.
+
+    Its companion below checks the same property by RUNNING an import;
+    this one reads the source, so it also catches a dependency that is
+    installed in the test environment and would therefore import cleanly.
+    """
+    vision = SRC / "integrations" / "vision.py"
+    module_level = _module_level_imports(vision)
     leaked = [
         h
-        for h in QE_HEAVY
+        for h in IMAGE_LIBS
         if any(m == h or m.startswith(h + ".") for m in module_level)
     ]
-    assert not leaked, f"heavy deps must be lazy, not module-level in qe.py: {leaked}"
-
-
-def test_importing_qe_module_never_loads_the_heavy_runtime():
-    """Importing the module (introspection, protocol checks) must not load
-    onnxruntime/torch/transformers — those arrive only when a scorer is
-    constructed and first used."""
-    code = (
-        "import sys; import lidenbrock.integrations.qe as _; "
-        "heavy = ('onnxruntime', 'torch', 'transformers', 'tokenizers'); "
-        "sys.exit(1 if any(m in sys.modules for m in heavy) else 0)"
+    assert not leaked, (
+        f"heavy deps must be lazy, not module-level in vision.py: {leaked}"
     )
-    proc = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
-    assert proc.returncode == 0, f"importing qe.py loaded a heavy dep\n{proc.stderr}"
 
 
 def test_importing_core_quality_stays_pure():

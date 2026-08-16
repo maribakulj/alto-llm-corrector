@@ -29,6 +29,7 @@ not because a migration is owed.
 
 | change | what it broke |
 |---|---|
+| **The `[qe]` extra is gone** | `pip install lidenbrock[qe]` and `lidenbrock.integrations.qe`. The scorer moved to the bench repository on 2026-08-16: it needed onnxruntime and a 545 MB model no CI could fetch, so its suite skipped everywhere and the module sat outside the coverage gate. The `QEScorer` protocol stays — the injection point is public, the implementation is not |
 | **The library is renamed `corrigenda` → `lidenbrock`** | everything a caller writes: the distribution name, the import name, the extras (`lidenbrock[qe]`, `lidenbrock[vision]`), the error root `LidenbrockError`, the release tag prefix, and the `<softwareName>` the rewriter stamps into corrected files. The largest break in this list, and the cheapest: nothing has ever been published, so it is owed to nobody. Doing it after a release would have cost a major version and every consumer an edit |
 | OCR-confidence invalidation is counted per line | the PAGE `format_losses` key `conf_dropped` is gone; its replacement counts lines, not attributes |
 | `ProducerMetadata` replaces bare provider/model strings | producer identity |
