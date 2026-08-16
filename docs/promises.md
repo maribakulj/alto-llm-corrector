@@ -59,7 +59,7 @@ serait moulée sur l'existant et n'aurait rien trouvé.
 | — | parité d'octets PAGE | **partielle, proche d'aucune** — texte seulement, aucun sha256 |
 | §6.3 | texte canonique identique entre formats | **gardée**, sur une page |
 | §6.3 | rôles de césure équivalents entre formats | **aucune** — le test qui porte ce titre compare deux variantes du **même** format |
-| — | somme des pertes par ligne = agrégat | **partielle** — vérifiée sur ALTO, où l'accord est structurel ; pas sur PAGE, le seul format où les deux comptes sont calculés indépendamment |
+| — | somme des pertes par ligne = agrégat | **fermée le 2026-08-16** — étendue à PAGE, le format où les deux comptes sont calculés indépendamment. Ils s'accordent : vérifié, plus supposé |
 | — | le rapport dit du fichier ce qui y est | **partielle** — contenus et identités gardés, compteurs non |
 | — | rejouer le script rendu reproduit le fichier | **partielle** — ALTO seulement, alors que PAGE porte les transformations post-décision que la propriété existe pour attraper |
 | — | niveaux de fidélité déclarés | **partielle** — ALTO seulement ; PAGE ne peut structurellement jamais annoncer `source_spelling`, et que ce soit correct n'est vérifié nulle part |
@@ -96,6 +96,30 @@ Celui qui en avait l'air comparait la provenance à un tuple codé en dur dans
 la source : ajouter `pillow` au `pyproject` laissait tout vert. C'était la
 promesse la plus facile à casser en silence de tout le lot, et sur
 l'invariant que le projet met en avant le plus souvent.
+
+## Le harnais ne pouvait pas lire PAGE
+
+Découvert le 2026-08-16 en essayant d'étendre une propriété au second
+format : `tests/_pipeline_harness.py` importait le parseur **ALTO**
+directement, au lieu du loader générique. Or `formats/loader.py` documente
+ce cas exact dans son propre docstring :
+
+> l'ALTO parser appliqué à un fichier PAGE valide ne trouve aucune page
+> ALTO et rend un manifeste VIDE (0 page, 0 ligne) au lieu d'une erreur —
+> une mauvaise lecture silencieuse, pas un refus.
+
+Un run PAGE via le harnais rendait donc `0 page, 0 ligne` sur un fichier
+qui en porte 32, et **toute propriété qu'on y aurait affirmée serait passée
+au vert sur un run vide.**
+
+Ça éclaire le motif « PAGE est sous-gardé » autrement que par la
+négligence : l'outil principal ne pouvait pas exercer ce format, et il
+échouait en silence plutôt que bruyamment. L'avertissement existait,
+écrit dans le module même qui existe pour empêcher ça.
+
+Le harnais refuse désormais un manifeste sans lignes, quelle qu'en soit la
+cause — mauvais parseur, fixture vide, chemin résolu ailleurs. C'est la
+partie du correctif qui survivra au correctif.
 
 ## Ce qui a été fermé depuis le relevé
 

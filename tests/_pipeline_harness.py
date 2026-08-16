@@ -27,7 +27,7 @@ from typing import Any
 from saknussemm.core.identity import LineRef
 from saknussemm.core.pipeline import CorrectionPipeline, CorrectionResult
 from saknussemm.core.schemas import DocumentManifest, LineManifest
-from saknussemm.formats.alto.parser import build_document_manifest
+from saknussemm.formats.loader import build_document_manifest
 
 from tests._paths import EXAMPLES
 
@@ -139,6 +139,25 @@ def run_pipeline(
     """
     path = EXAMPLES / xml_name
     doc = build_document_manifest([(path, xml_name)])
+    # The manifest comes from the generic loader, which dispatches on the
+    # document rather than on an assumption. This harness used to import
+    # the ALTO parser directly — the exact mistake `formats/loader.py`
+    # warns about in its module docstring: that parser applied to a valid
+    # PAGE file finds no ALTO pages and returns an EMPTY manifest instead
+    # of raising. Every PAGE run through here was therefore a run over
+    # nothing, and any property asserted on it passed by vacuity.
+    #
+    # The assertion below is the part that outlives the fix: a manifest
+    # with no lines can only produce green, so the harness refuses to hand
+    # one to the pipeline whatever the cause — a wrong parser, an empty
+    # fixture, a path that resolved somewhere unexpected.
+    if not doc.total_lines:
+        raise AssertionError(
+            f"{xml_name} parsed to {doc.total_pages} page(s) and no lines. "
+            "A run over an empty manifest asserts nothing and reports "
+            "success; refusing it here rather than letting a caller "
+            "believe the property held."
+        )
     observer = RecordingObserver()
     pipeline = CorrectionPipeline.for_provider(
         DictProvider(corrections),
