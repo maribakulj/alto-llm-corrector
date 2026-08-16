@@ -35,6 +35,22 @@ def detect_namespace(root: object) -> str:
     return ""
 
 
+def local_name(element: object) -> str:
+    """Return an element's tag without its namespace, or '' if it has none.
+
+    The inverse of :func:`detect_namespace`: that one keeps the URI and
+    drops the name, this one keeps the name and drops the URI. Used where
+    a document must be recognised by its *schema shape* rather than by
+    whose namespace URI it was published under.
+    """
+    tag_value = getattr(element, "tag", "")
+    if not isinstance(tag_value, str):
+        return ""
+    if tag_value.startswith("{") and "}" in tag_value:
+        return tag_value[tag_value.index("}") + 1 :]
+    return tag_value
+
+
 def tag(local: str, ns: str) -> str:
     """Qualify a local tag name with a namespace (Clark notation)."""
     return f"{{{ns}}}{local}" if ns else local
@@ -102,4 +118,10 @@ def classified_parse_errors(source_name: str) -> Iterator[None]:
         raise ParseError(f"{source_name}: cannot read source file: {exc}") from exc
 
 
-__all__ = ["detect_namespace", "tag", "make_safe_parser", "classified_parse_errors"]
+__all__ = [
+    "classified_parse_errors",
+    "detect_namespace",
+    "local_name",
+    "make_safe_parser",
+    "tag",
+]

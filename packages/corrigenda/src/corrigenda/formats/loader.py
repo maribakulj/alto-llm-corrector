@@ -30,15 +30,42 @@ from corrigenda.errors import ConfigurationError, ParseError
 from corrigenda.formats._xml import (
     classified_parse_errors,
     detect_namespace,
+    local_name,
     make_safe_parser,
+    tag,
 )
 
 _ALTO_MARKER = "loc.gov/standards/alto"
 _PAGE_MARKER = "primaresearch.org/PAGE"
 
+#: Root local name -> format, for a producer that publishes one of these two
+#: schemas under its OWN namespace URI. This is not hypothetical: Gallica
+#: serves a large family of its ALTO under ``bibnum.bnf.fr/ns/alto_prod``,
+#: with `TextLine`/`String`/`HYP` and explicit `SUBS_TYPE` hyphenation — the
+#: richest input this library accepts — and the standard-namespace check
+#: alone refused every one of them at the door.
+_ROOT_LOCAL_NAME = {"alto": "alto", "PcGts": "page"}
+
+#: The element each schema makes mandatory under the root. Requiring it is
+#: what keeps the fallback a check on the FORMAT and not merely on a name:
+#: a document whose root happens to be called `alto` but that carries no
+#: `Layout` is still refused, and says so.
+_MANDATORY_CHILD = {"alto": "Layout", "page": "Page"}
+
 
 def sniff_format(path: Path) -> str:
-    """``"alto"`` / ``"page"`` from the file's root namespace."""
+    """``"alto"`` / ``"page"`` from the file's root element.
+
+    The two standard namespaces answer first and are authoritative. Anything
+    else falls through to the root's local name plus the schema's mandatory
+    element — because a namespace URI says who *published* a document, not
+    what format it is in.
+
+    Nothing downstream ever needed the change: the ALTO and PAGE parsers and
+    rewriters read the namespace off the document they were handed
+    (``detect_namespace``) and re-emit it unchanged, so a vendor namespace
+    survives a full round-trip. This door was the only branded place.
+    """
     with classified_parse_errors(path.name):
         root = etree.parse(str(path), make_safe_parser()).getroot()
     ns = detect_namespace(root)
@@ -46,10 +73,15 @@ def sniff_format(path: Path) -> str:
         return "alto"
     if _PAGE_MARKER in ns:
         return "page"
+    fmt = _ROOT_LOCAL_NAME.get(local_name(root))
+    if fmt is not None and root.find(tag(_MANDATORY_CHILD[fmt], ns)) is not None:
+        return fmt
     raise ParseError(
-        f"{path.name!r}: root namespace {ns!r} is neither ALTO nor PAGE — "
-        "corrigenda only speaks those two; parse other formats through "
-        "their own adapter."
+        f"{path.name!r}: root {local_name(root)!r} in namespace {ns!r} is "
+        "neither ALTO nor PAGE — corrigenda recognises a standard namespace, "
+        f"or a root named {sorted(_ROOT_LOCAL_NAME)} carrying its schema's "
+        "mandatory element (ALTO: Layout, PAGE: Page). Parse other formats "
+        "through their own adapter."
     )
 
 
