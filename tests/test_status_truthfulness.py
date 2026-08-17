@@ -205,3 +205,51 @@ def test_the_invariant_catches_a_fallback_that_changed_the_text() -> None:
     )
     with pytest.raises(AssertionError, match="reported fallback but the text changed"):
         assert_status_tells_the_truth(bad)
+
+
+# ---------------------------------------------------------------------------
+# The second witness: the report must say what the PRODUCER proposed
+# ---------------------------------------------------------------------------
+
+
+def test_the_report_says_what_the_producer_proposed_not_what_was_decided() -> None:
+    """The invariant above reads the report's own account of the proposal.
+
+    That makes it circular in one specific way, measured on 2026-08-17: a
+    report builder that reported the FINAL text as the proposal — a
+    realistic one-line slip in the projection — makes ``discarded``
+    structurally ``False``, and **the whole suite stays green**. 1485 tests
+    passed under that mutation. The two "guard the guard" cases above
+    survive it because they build their report by hand, so they never
+    traverse the projection where the slip lived.
+
+    This is the second, independent witness: the test knows what it told the
+    producer to say, so it can check the report against that instead of
+    against itself. It needs a proposal the guards REJECT — for an accepted
+    line the proposal and the decision coincide, and the mutation is
+    invisible by construction.
+    """
+    path = _EXAMPLES / "sample.xml"
+    doc = build_document_manifest([(path, path.name)])
+    #: Far enough from any source line that the similarity guard refuses it.
+    proposed = "XXXXXXXXXXXXXXXXXXXXXXXX"
+    report = _report_for(
+        path, {lm.line_id: proposed for page in doc.pages for lm in page.lines}
+    )
+
+    refused = [ln for ln in report.lines if ln.decision.status == "fallback"]
+    assert len(refused) >= 5, (
+        f"only {len(refused)} of {len(report.lines)} lines were refused; this "
+        "case is only evidence where the proposal and the decision DIFFER, "
+        "so a run that accepted them would prove nothing."
+    )
+    for line in refused:
+        assert line.proposal is not None and line.proposal.output_text == proposed, (
+            f"{line.page_id}/{line.line_id}: the report says the producer "
+            f"proposed {line.proposal.output_text if line.proposal else None!r}, "
+            f"and the producer was told to propose {proposed!r}. A report that "
+            "restates its own decision as the proposal makes the L3/L9 "
+            "invariant unfalsifiable — it was, and the whole suite stayed "
+            "green under exactly that slip."
+        )
+    assert_status_tells_the_truth(report)

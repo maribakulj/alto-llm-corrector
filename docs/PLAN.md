@@ -328,8 +328,8 @@ constat le plus important de l'audit.
 
 | # | quoi | mesuré |
 |---|---|---|
-| `A3a` | La famille `L3`/`L9` est **structurellement infalsifiable** : la propriété se lit sur le champ qu'une mutation réaliste peut faire coïncider avec la décision. À reformuler pour qu'elle lise deux sources indépendantes | mutation → **1485 tests verts** |
-| `A3b` | Le corpus Gallica externe compare une expression à elle-même (`total_lines` est un `computed_field` dont le corps est cette expression) | parseur qui perd 147 lignes → **les 18 tests passent** |
+| `A3a` | **Fait le 2026-08-17.** Un second témoin indépendant : le test sait ce qu'il a demandé au producteur de proposer, donc il vérifie le rapport contre cela plutôt que contre lui-même. Il faut une proposition **refusée** — sur une ligne acceptée, proposition et décision coïncident et la mutation est invisible par construction | avant : mutation → **1485 tests verts**. Après : la même mutation fait rougir exactement 1 test, et les 1565 autres confirment qu'aucun autre ne l'attrape |
+| `A3b` | **Fait le 2026-08-17.** Le compte vient désormais de lxml directement, hors du parseur testé, **marges exclues** — parce que le parseur les exclut délibérément. Ma première version comptait tous les `TextLine` et échouait sur les trois pages : elle assertait une propriété que la bibliothèque n'a pas et ne doit pas avoir (en-têtes courants, folios). Plus le sens inverse : aucune ligne inventée | avant : parseur qui perd une ligne par bloc → **les 18 tests passent**. Après : 9 rougissent |
 | `A3c` | Deux recensements aveugles : un scan non récursif de `core/` ; un garde anti-skip qui ne reconnaît que la forme décorateur, avec deux évadés vivants sur des fixtures committées | 3ᵉ écrivain invisible ; fixture déplacée → test skippé **et garde vert** |
 | `A3d` | `test_acceptance_translation.py` se **désarme** quand le garde qu'il surveille tombe (`pytest.skip` conditionné à `result.accepted`) | mutation → skip au lieu d'échec |
 | `A3e` | La « deuxième direction » du comptage de pertes n'exécute jamais sa comparaison (unique site d'appel = réécriture identité) | sentinelle → **20/20 verts** |
