@@ -664,6 +664,12 @@ alias d'import dépréciés pendant une version mineure.
   écriture par un consommateur qui benche.
 - Les événements (`PipelineEventType`) restent la seule interface de
   progression ; `chunk_downgraded` (F1) s'ajoute au contrat SSE.
+- **Un événement ne nomme pas son run.** Mesuré le 2026-08-17 : sur deux
+  `run()` concurrents, 106 événements et aucune des 20 clés de charge utile
+  ne dit de quel run il s'agit, tandis que les `page_id` collisionnent entre
+  documents. Un observateur partagé ne peut donc rien attribuer : un
+  observateur par run, ou un run à la fois. Le `run_id` n'existe que sur le
+  rapport, c'est-à-dire après la fin.
 
 ---
 
@@ -689,6 +695,25 @@ alias d'import dépréciés pendant une version mineure.
   `provider/model` (existant) + **version de la lib** + **empreinte de
   configuration** (§8.2). Un XML corrigé dit par quoi et sous quelle
   politique il a été corrigé.
+- **L'ordre de lecture des pages fait partie du contrat de sortie.** La
+  réconciliation d'une unité de césure inter-pages suppose que la page
+  antérieure a été décidée d'abord — le code l'écrit à découvert : *« the
+  tail always sits on the earlier page and is decided before the head
+  exists »*. Mesuré le 2026-08-17 : exécuter les pages dans un autre ordre
+  laisse textes et statuts identiques mais **change le sha256 du XML**, les
+  attributs `SUBS_*` d'une unité dont les deux moitiés tombent étant
+  préservés en séquentiel et supprimés autrement. Un appelant ne doit donc
+  ni réordonner ni paralléliser les pages. Réordonner les **fichiers** d'un
+  même appel est en revanche garanti sans effet, et testé.
+- **La réentrance est une propriété du moteur, pas de la composition.** Deux
+  `run()` concurrents sur une instance donnent des décisions et des octets
+  identiques aux runs séquentiels (ADR-011 slice E, mesuré). Mais rien dans
+  le protocole `EditProducer` n'exige la sûreté en concurrence : mesuré, un
+  producteur portant un budget par run perd 41 courses sur 42 appels, finit
+  à −2, refuse deux appels qui n'auraient pas dû l'être — et **les deux runs
+  se terminent « avec succès »**. Un producteur, scorer ou observateur
+  partagé doit être sans état par run, ou instancié par run. La bibliothèque
+  ne le vérifie pas et ne le détecte pas.
 
 ---
 

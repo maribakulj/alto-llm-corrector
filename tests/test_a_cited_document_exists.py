@@ -149,3 +149,37 @@ def test_no_document_still_points_inside_the_flattened_tree() -> None:
         "removed when the tree was flattened. An instruction that cannot be "
         "followed is not documentation."
     )
+
+
+def test_the_declared_limits_stay_declared() -> None:
+    """The envelope was measured; a measurement nobody publishes is private.
+
+    Until 2026-08-17 nothing in the README, the contract or the promises said
+    how much a document costs, that pages must be corrected in reading order,
+    or what reentrancy requires of an injected producer. All four were
+    measured facts the library kept to itself, and a consumer discovering any
+    of them the hard way discovers it on their own corpus.
+
+    Checked as prose rather than as a number: the point is that the statement
+    is there for a reader, and a per-line timing assertion in CI would flake
+    on a loaded runner and get deleted.
+    """
+    readme = (PKG / "README.md").read_text(encoding="utf-8")
+    for phrase, why in (
+        ("unit of work is one document", "that the corpus belongs to the caller"),
+        ("lines per PAGE", "which dimension actually scales"),
+        ("reading order", "that page order changes the bytes produced"),
+        ("per-run state", "what reentrancy requires of an injected producer"),
+    ):
+        assert phrase in readme, (
+            f"the README no longer says {why} — the phrase {phrase!r} is gone. "
+            "Each of these was measured on 2026-08-17 and is a limit a "
+            "consumer would otherwise meet on their own corpus."
+        )
+
+    spec = (PKG / "SPECS_LIB_V2.md").read_text(encoding="utf-8")
+    assert "ordre de lecture des pages" in spec, (
+        "the contract no longer states that page order is part of the output "
+        "contract. It is the constraint that forbids parallelising pages, and "
+        "the code assumes it in prose without asking for it."
+    )
