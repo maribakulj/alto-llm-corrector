@@ -76,9 +76,7 @@ def _two_file_document() -> tuple[Path, Path, object]:
     first.write_text(_alto("PA1", _A_TEXT), encoding="utf-8")
     second = directory / "vol_b.xml"
     second.write_text(_alto("PB1", _B_TEXT), encoding="utf-8")
-    manifest = build_document_manifest(
-        [(first, "vol_a.xml"), (second, "vol_b.xml")]
-    )
+    manifest = build_document_manifest([(first, "vol_a.xml"), (second, "vol_b.xml")])
     return first, second, manifest
 
 
@@ -121,7 +119,8 @@ def test_the_honest_binding_still_runs() -> None:
     first, second, manifest = _two_file_document()
     result = _run(manifest, {"vol_a.xml": first, "vol_b.xml": second})
     delivered = {
-        name: xml.decode("utf-8") for name, xml in result.corrected_files.items()  # type: ignore[attr-defined]
+        name: xml.decode("utf-8")
+        for name, xml in result.corrected_files.items()  # type: ignore[attr-defined]
     }
     assert _A_TEXT in delivered["vol_a.xml"] and _B_TEXT not in delivered["vol_a.xml"]
     assert _B_TEXT in delivered["vol_b.xml"] and _A_TEXT not in delivered["vol_b.xml"]
