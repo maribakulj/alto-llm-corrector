@@ -7,7 +7,7 @@ the :class:`CorrectionReport` that carries both.
 from __future__ import annotations
 
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from saknussemm.core.fidelity import ProjectionFidelity
 from saknussemm.core.schemas.policies import HyphenSplit
@@ -29,6 +29,17 @@ class LineTrace(BaseModel):
     :class:`LineOutcome` (report v2). The two surfaces version
     independently (see ``docs/versioning.md``).
     """
+
+    #: ``model_`` is pydantic's protected prefix, and two fields here use
+    #: it because they mean "the model" in the OCR sense, not pydantic's.
+    #: pydantic 2.0 made that a hard ``NameError`` at import time — so
+    #: ``pydantic>=2.0``, which `docs/versioning.md` promises, described a
+    #: version at which ``import saknussemm`` did not work. 2.0.1 downgraded
+    #: it to a warning and recent versions are silent, which is why nothing
+    #: surfaced it locally. Declaring the prefix unprotected fixes the cause
+    #: rather than narrowing the promise, and the min-deps CI job is what
+    #: verifies the promise instead of asserting it.
+    model_config = ConfigDict(protected_namespaces=())
 
     line_id: str
     page_id: str

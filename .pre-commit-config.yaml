@@ -31,13 +31,9 @@ repos:
       - id: ruff-format
         files: ^(src|tests)/
 
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.15.0
-    hooks:
-  - repo: https://github.com/pre-commit/mirrors-prettier
-    rev: v3.1.0
-    hooks:
-      - id: prettier
-        files: ^frontend/src/.*\.(ts|tsx|json|css|md)$
-        additional_dependencies:
-          - prettier@3.8.3
+  # mypy and prettier both lived here and both had to go. The mypy block
+  # had lost its `hooks:` entries, and pre-commit validates the WHOLE file
+  # before running anything — so a `hooks: None` meant not one hook ran,
+  # ruff and the >1MB file guard included. The prettier block targeted
+  # `frontend/src/`, which left with the demo on 2026-08-16.
+  # `mypy --strict` runs in CI, where it is not optional.
