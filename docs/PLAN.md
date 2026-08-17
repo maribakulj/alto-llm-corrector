@@ -169,7 +169,7 @@ qui existait déjà et que personne ici n'avait relié au projet) et
 jamais l'inverse.**
 
 **2. La démo part maintenant, pas « à la forme finale ».** `backend/`,
-`frontend/`, `tools/e2e/`, `Dockerfile`, `docker-compose.yml`, `docs/API.md`,
+`frontend/`, `tools/e2e/`, `Dockerfile`, `docker-compose.yml` (parti avec la démo le 2026-08-16), `docs/API.md` (jamais créé ; voir `CONTRIBUTING.md`),
 `SECURITY.md` et le workflow HF Spaces s'en vont dans `saknussemm-demo`.
 `SECURITY.md` disait déjà « la démo se retire quand la bibliothèque atteint sa
 forme finale » — la date était la seule chose qui manquait. Effet de bord
@@ -389,7 +389,7 @@ Tous petits, tous mesurés, aucun ne touche la correction.
 | `A4d` | Scinder le job de publication : `prepare-release` sans `id-token`, `publish` minimal. **Trois** exécutions de code non verrouillé partagent aujourd'hui l'environnement du jeton OIDC, pas une |
 | `A4e` | **Fait le 2026-08-17.** Le chemin est corrigé, et un test vérifie désormais qu'il **résout** — l'ancien vérifiait ses expressions régulières, pas qu'il puisse démarrer |
 | `A4f` | **Fait le 2026-08-17.** Job `saknussemm-min-deps` : minima des dépendances **d'exécution** seulement — l'extra `[test]` n'a aucune borne basse, la résoudre bas testerait autre chose. Un import séparé de pytest, parce qu'un échec d'import est précisément le défaut visé |
-| `A4g` | `CONTRIBUTING.md` renvoie à `docs/API.md` et `SECURITY.md` comme normatifs : **les deux sont absents**. Pas de politique de divulgation pour un paquet qu'on va publier |
+| `A4g` | **Fait le 2026-08-17.** `SECURITY.md` écrit — où signaler, ce qui est dans le périmètre et ce qui n'y est pas. La liste des documents normatifs ne nomme plus de document d'API séparé, qui n'a jamais existé. Les trois `cd` vers un répertoire disparu à l'aplatissement sont corrigés, et le README dit enfin comment installer. Garde ajoutée sur les citations **en prose** : l'existante ne lisait que les liens markdown, et il y avait zéro lien cassé sur 61 fichiers pour cinq fichiers citant un document absent | mesuré |
 
 ### A5 — Structurel, hors porte `0.10` : la vérité unique du texte décidé
 
