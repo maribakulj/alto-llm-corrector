@@ -10,7 +10,7 @@ from __future__ import annotations
 from pydantic import BaseModel, Field
 
 from saknussemm.core.fidelity import ProjectionFidelity
-from saknussemm.core.schemas.policies import HyphenSplit
+from saknussemm.core.schemas.policies import HyphenSplit, RefusedEdit
 from saknussemm.core.schemas.producer import Usage
 
 
@@ -372,6 +372,24 @@ class CorrectionReport(BaseModel):
     #: common case, since only chains over ``max_lines_per_request`` are.
     #: Additive and optional — no ``report_version`` bump.
     hyphen_splits: list[HyphenSplit] | None = None
+
+    #: Every producer op the edit guards refused (`A2b`), or ``None`` when
+    #: none were. Additive, so ``report_version`` does not move — the same
+    #: argument ``projection_fidelity`` made.
+    #:
+    #: This is the field that makes a ``GuardConfig`` tunable. Before it, a
+    #: line whose only op was refused reported ``corrected`` with no reason
+    #: and nothing counted the refusal, so a consumer could loosen
+    #: ``min_source_similarity`` on a degraded corpus and measure no
+    #: difference whatever the setting did. The reason code is what makes it
+    #: actionable: ``e5_hyphen`` and ``e4_line_budget`` firing on the same
+    #: pages call for opposite changes.
+    #:
+    #: Sorted by ``(page_id, line_id, op, reason)`` rather than accumulated
+    #: in execution order, so two runs over the same document produce the
+    #: same report — which is not true of ``hyphen_splits`` above, and is
+    #: the reason that one is on the list for `A7c`.
+    edit_rejections: list[RefusedEdit] | None = None
     #: §11 — the run's full provenance record. Optional and
     #: additive (no ``report_version`` bump): a v2.0 consumer that
     #: ignores unknown keys keeps working, one that reads it gains the

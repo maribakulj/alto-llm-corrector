@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 from saknussemm.core.editing import EditOp
 from saknussemm.core.hyphenation import ReconcileMetrics
 from saknussemm.core.identity import LineRef
-from saknussemm.core.schemas import HyphenSplit, PageImage, Usage
+from saknussemm.core.schemas import HyphenSplit, PageImage, RefusedEdit, Usage
 
 
 @dataclass
@@ -77,6 +77,13 @@ class RunContext:
     #: deliberately destructive operation in the engine, invisible to the
     #: host.
     hyphen_splits: list[HyphenSplit] = field(default_factory=list)
+    #: Every producer op the edit guards refused this run (`A2b`).
+    #: Accumulated here for the same reason as the splits above: the
+    #: refusal happens inside one attempt of one chunk, and the only place
+    #: it is worth SAYING is the report — a line whose op was refused kept
+    #: its source text and reported ``corrected`` with no reason, so the
+    #: refusal rate of E1-E5 was not unmeasured but unmeasurable.
+    edit_rejections: list[RefusedEdit] = field(default_factory=list)
     #: §4.1 vision envelope — resolved once per run from run(page_images=…).
     image_ref_by_page_id: dict[str, PageImage] = field(default_factory=dict)
     page_dims: dict[str, tuple[int, int]] = field(default_factory=dict)

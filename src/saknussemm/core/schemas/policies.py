@@ -573,6 +573,35 @@ class HyphenSplit(BaseModel):
     head_line_id: str
 
 
+class RefusedEdit(BaseModel):
+    """One producer op the edit guards refused, and why (`A2b`).
+
+    ``EditRejection`` has carried thirteen reason codes since the protocol
+    landed and **no consumer outside the tests**: a line whose only op was
+    refused reported ``corrected`` with no reason, ``fallback_chunks`` at
+    zero, and nothing anywhere said a guard had fired. The report could not
+    distinguish "the producer proposed nothing" from "it proposed something
+    the guards refused", so the refusal rate of `E1`–`E5` was not merely
+    unmeasured, it was **unmeasurable** — and a consumer tuning a
+    ``GuardConfig``, or a bench sweeping one, was steering blind.
+
+    That is the reason this exists rather than a counter: a rate needs the
+    reason to be actionable. ``e5_hyphen`` and ``e4_line_budget`` firing on
+    the same corpus mean opposite things about what to change.
+
+    Line ids are bare and ``page_id`` qualifies them, as for
+    :class:`HyphenSplit` (ADR-009).
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    page_id: str
+    line_id: str
+    op: str
+    reason: str
+    detail: str = ""
+
+
 class ChunkPlan(BaseModel):
     page_id: str
     chunks: list[ChunkRequest]

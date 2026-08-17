@@ -316,10 +316,63 @@ jour ; elle n'est pas le chemin le plus court vers un artefact honnête.
 | # | quoi | note |
 |---|---|---|
 | `A2a` | `E4`/`E5` ne s'appliquent pas à `replace_line`, donc **pas au producteur par défaut**. Décider : soit étendre `E5` seul à cette voie, soit émettre un rejet consultatif et le dire. Ce qui n'est pas tenable, c'est la formulation actuelle du contrat | le code l'avoue en commentaire ; le contrat promet l'inverse |
-| `A2b` | `EditRejection` obtient un consommateur : un événement `edit_op_rejected` et un compteur au rapport. **Additif, ne refuse rien** | sans lui, le taux de refus des gardes est non mesurable, et `cinoc` pilote à l'aveugle |
+| `A2b` | **Fait le 2026-08-17.** `CorrectionReport.edit_rejections` — page, ligne, op, raison — trié pour ne pas dépendre de l'ordre d'exécution. Additif, ne refuse rien, mais **étend la surface publique de 66 à 67** : `RefusedEdit` devient atteignable depuis un type retourné, donc membre de la clôture, exactement comme `HyphenSplit`. Croissance par clôture, pas par accrétion | sans lui le taux de refus n'était pas non mesuré mais **non mesurable**, et un consommateur qui desserre un seuil sur un corpus dégradé ne pouvait mesurer aucune différence |
 | `A2c` | **Fait le 2026-08-17.** `_script_to_raw` rend un couple indissociable — le lot à valider et les lignes refusées — plutôt que de jeter les secondes. Le budget de paramètres a refusé un neuvième argument, et il avait raison : les deux valeurs viennent du même calcul et ne sont justes qu'ensemble | ferme la promesse de rejeu, **marquée fermée à tort le 2026-08-16** |
 | `A2d` | `SUBS_TYPE="Abbreviation"` compté comme perte quand le rôle est `NONE` | `R*` viole son propre sens : le compte dit zéro là où le fichier a perdu |
 | `A2e` | `hyphen_subs_content` entre dans le périmètre vérifié, ou reçoit son propre invariant | 4ᵉ décision par ligne, livrée, non couverte |
+
+Dette laissée ouverte par `A2b`, nommée pour ne pas être oubliée : une ligne
+dont la seule op a été refusée rapporte toujours `corrected` alors qu'elle
+porte son texte source. C'est la forme `L3`/`L9`, et l'invariant que le dépôt
+énonce lui-même dans `test_status_truthfulness.py` dit qu'elle devrait dire
+`fallback`. La corriger passe par l'écrivain unique de décision (`RM-01`) et
+par les cliquets de statut, donc ce n'est pas un correctif d'une ligne — mais
+c'est maintenant **visible**, ce qui était le préalable.
+
+### A2bis — La garde de dérive doit juger un document contre lui-même
+
+Ouvert le 2026-08-17 en réponse à une objection juste : **il n'y aura pas de
+relecture humaine.** Le pipeline traite des milliers de documents, donc
+« signaler pour relecture » n'est pas une issue, c'est un renvoi. Cette piste
+est retirée.
+
+Ce qui la remplace part d'une mesure. Tout ALTO réel du corpus porte une
+confiance par mot, et la bibliothèque la parse déjà en
+`LineManifest.ocr_confidence` — 100 % des lignes sur chaque fixture ALTO.
+**Mais l'échelle n'est pas comparable d'un exportateur à l'autre :**
+
+| document | médiane | minimum | 5ᵉ centile |
+|---|---|---|---|
+| Gallica, `bpt6k2324031`, 1144 lignes | 0,990 | 0,010 | 0,850 |
+| BnL, `X0000002`, 566 lignes | 0,582 | 0,127 | 0,379 |
+| BnF prod, `bpt6k5406037v` | 0,985 | 0,500 | 0,542 |
+
+Une constante absolue — « méfie-toi sous 0,6 » — signalerait **tout** le
+document BnL et **rien** de Gallica, alors que le BnL n'est pas un mauvais OCR
+mais une autre échelle. Gallica sature (957 lignes sur 1144 exactement à 0,99)
+avec une queue réelle jusqu'à 0,01 : le signal existe, il est **relatif à son
+propre document**.
+
+D'où la direction : la garde cesse de demander « cette ligne a-t-elle changé de
+plus de K ? » et demande « **cette ligne a-t-elle changé plus que les lignes de
+ce document ne changent ?** ». Là où l'OCR publie une confiance, elle sert à
+*attendre* plus de changement sur les lignes que le moteur situe bas dans sa
+propre distribution. Aucun seuil absolu ne survit, et le mécanisme s'auto-
+calibre sur les deux distributions ci-dessus.
+
+Deux réserves, à ne pas perdre :
+
+- **PAGE ne porte aucune confiance** dans le corpus (0 ligne sur 78). Le repli
+  est la distribution des changements elle-même, qui ne demande aucune
+  métadonnée et vaut pour les deux formats.
+- **Un document uniformément mauvais n'a pas de contraste interne**, donc pas de
+  signal. La garde ne peut alors pas discriminer, et la conduite honnête est
+  d'accepter — l'alternative étant de livrer sciemment de l'illisible — **et de
+  l'écrire au rapport**, ce que `A2b` rend possible.
+
+À mesurer sur `cinoc` contre vérité terrain avant d'être codé, et sous gel de
+fonctionnalités d'ici là. `A2b` était le préalable : sans lui, aucun balayage de
+seuil n'était observable.
 
 ### A3 — Bloquant pour la correction : la suite ne peut pas voir ce qu'elle affirme voir
 

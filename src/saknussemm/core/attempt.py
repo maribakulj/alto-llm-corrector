@@ -37,6 +37,7 @@ from typing import Any
 from saknussemm.core import events as ev
 from saknussemm.core.context import RunContext
 from saknussemm.core.editing import (
+    EditRejection,
     EditOp,
     EditScript,
     ReplaceLine,
@@ -62,6 +63,7 @@ from saknussemm.core.schemas import (
     LineManifest,
     LineTrace,
     ProposalBatch,
+    RefusedEdit,
     RetryPolicy,
     Usage,
 )
@@ -100,7 +102,14 @@ class _Proposed:
     """
 
     raw: dict[str, Any]
-    refused_lines: frozenset[str]
+    #: The refusals themselves, not just which lines they hit: the reason
+    #: is what makes a refusal rate actionable, and `A2b` puts it on the
+    #: report for exactly that.
+    refusals: tuple[EditRejection, ...]
+
+    @property
+    def refused_lines(self) -> frozenset[str]:
+        return frozenset(r.line_id for r in self.refusals)
 
 
 def _script_to_raw(
@@ -126,7 +135,7 @@ def _script_to_raw(
     """
     canonical = {lm.line_id: lm.ocr_text for lm in chunk_lines}
     entries: list[dict[str, str]] = []
-    refused: set[str] = set()
+    refusals: tuple[EditRejection, ...] = ()
 
     span_ops = [op for op in script.ops if isinstance(op, ReplaceSpan)]
     for op in script.ops:
@@ -149,7 +158,7 @@ def _script_to_raw(
         # guard — and PUBLISHED it. Measured 2026-08-17: delivered
         # 'Le peuple att-', published the refused span, and a consumer
         # replaying the script got 'Le peuple -'.
-        refused = {r.line_id for r in span_result.rejected}
+        refusals = tuple(span_result.rejected)
 
     if not getattr(producer, "requires_full_coverage", True):
         covered = {e["line_id"] for e in entries}
@@ -157,7 +166,7 @@ def _script_to_raw(
             if lid not in covered:
                 entries.append({"line_id": lid, "corrected_text": txt})
 
-    return _Proposed(raw={"lines": entries}, refused_lines=frozenset(refused))
+    return _Proposed(raw={"lines": entries}, refusals=refusals)
 
 
 def _build_correction_request(
@@ -309,6 +318,16 @@ def _validate_and_capture(
         # The 1:1 count is enforced on targets; a missing context
         # line's output is not an error (it belongs to an adjacent chunk).
         target_line_ids=chunk.target_line_ids,
+    )
+    ctx.edit_rejections.extend(
+        RefusedEdit(
+            page_id=chunk.page_id,
+            line_id=refusal.line_id,
+            op=refusal.op,
+            reason=refusal.reason,
+            detail=refusal.detail,
+        )
+        for refusal in proposed.refusals
     )
     _capture_producer_ops(
         ctx=ctx,

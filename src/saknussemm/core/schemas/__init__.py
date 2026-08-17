@@ -47,6 +47,7 @@ from saknussemm.core.schemas.policies import (
     FrozenPolicy as FrozenPolicy,
     GuardConfig as GuardConfig,
     HyphenSplit as HyphenSplit,
+    RefusedEdit as RefusedEdit,
     LossPolicy as LossPolicy,
     PairingPolicy as PairingPolicy,
     RetryPolicy as RetryPolicy,

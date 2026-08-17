@@ -54,6 +54,20 @@ The **top-level import surface** is provisional until `1.0.0`. It went from
 
 ### Changed — BREAKING
 
+- **A refused edit is visible in the report (`A2b`) — surface 66 → 67.**
+  `CorrectionReport.edit_rejections` names each refused op by page, line, op and
+  reason code; `RefusedEdit` joins the top-level surface because it is now
+  reachable from a returned type, the same reason `HyphenSplit` is there. The
+  field is optional and additive, so `CORRECTION_REPORT_VERSION` does not move.
+  Nothing is refused that was not refused before. What changes is that it can
+  be counted: `EditRejection` had thirteen reason codes and no consumer outside
+  the tests, so a line whose only op was refused reported `corrected` with no
+  reason and nothing counted the refusal. The refusal rate of `E1`–`E5` was not
+  unmeasured but **unmeasurable** — and a consumer loosening
+  `min_source_similarity` on a degraded corpus could measure no difference
+  whatever the change did. Sorted rather than accumulated in execution order,
+  so two runs over one document produce the same report.
+
 - **The published edit script no longer carries ops the guards refused
   (`A2c`).** `core/report.py` documents that script as the one the run
   *actually applied*, never carrying an op for a line reverted to OCR — because
