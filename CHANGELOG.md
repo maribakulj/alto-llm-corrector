@@ -54,6 +54,19 @@ The **top-level import surface** is provisional until `1.0.0`. It went from
 
 ### Changed — BREAKING
 
+- **A crop is refused when its scan is no longer the one attested (`A1g`).**
+  `build_image_asset` hashes what it read; `crop_region` reopened the path and
+  never checked. `RunProvenance.image_digests` promises that the digest plus
+  the coordinates make every crop reproducible, and measured before the change
+  the report attested `e8b42963fb4dbae2` while the file actually opened hashed
+  to `ec6297512ddb3c8d` — two different crops, nothing in the artefact able to
+  tell them apart. An asset without a digest is still read as-is: the field is
+  optional and a caller may legitimately have built one without hashing.
+  Also non-breaking, and the reason the check is affordable: the producer
+  crops every line of a chunk, so the file was being read once **per line**.
+  It is now read and verified once per chunk, and `crop_region` takes an
+  optional `source_bytes` for callers that already hold them.
+
 - **A manifest carries its sources' digests, and a run refuses a file that
   changed (`A1f`).** `DocumentManifest.source_digests` is additive; the refusal
   is what is new, and it fires at preflight — before a producer call is spent.
