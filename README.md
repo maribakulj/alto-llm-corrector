@@ -128,8 +128,26 @@ measured, and on the list to fix rather than to live with.
 
 **Pages are corrected in reading order, and that is semantic.** Cross-page
 hyphen reconciliation assumes the earlier page was decided first, so
-reordering or parallelising pages changes the bytes produced. Reordering the
-*files* of one call is safe and tested.
+reordering or parallelising pages changes the bytes produced.
+
+**Consecutive files are consecutive pages, so the order of the files matters
+too.** One file per page is how a digital library exports a volume, and the
+library treats the list you pass as that volume: a word broken at the foot of
+one file continues onto the head of the next, explicitly or from a trailing
+dash. Reorder the list and you change which pages are adjacent, which changes
+which words are joined, which changes the bytes.
+
+The corollary is the trap: **handing unrelated documents to one call makes
+them one document.** Nothing refuses it. Measured over five unrelated real
+ALTO files, four hyphen links formed across file boundaries — one joining a
+BnF page to a Gallica page — and two good corrections were discarded as
+`hyphen_pair_fallback` because the pair could not be reconciled. Pass one
+document per call, where a document is the set of files that belong to the
+same scan, in reading order.
+
+An earlier version of this section said reordering the files was "safe and
+tested". It was tested, on two one-line documents with no break mark, which is
+the only shape where it holds.
 
 **One `run()` at a time per producer.** The engine keeps no per-run state and
 two concurrent runs on one instance produce identical results — but that is a
