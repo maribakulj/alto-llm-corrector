@@ -333,7 +333,7 @@ constat le plus important de l'audit.
 | `A3c` | **Fait le 2026-08-17.** Le recensement scanne récursivement — vérifié : il trouve les **mêmes** deux sites, donc le trou était latent, et un troisième écrivain planté dans `core/schemas/` est désormais vu. Le garde anti-skip connaît les trois formes ; les deux évadés, sur fixtures committées, sont supprimés. Ma première version du garde s'attrapait **elle-même** — son commentaire citait la forme cherchée | fixture déplacée : avant → test skippé et garde vert ; après → le test **échoue bruyamment** |
 | `A3d` | **Fait le 2026-08-17.** Le rejet est **asserté**, plus supposé : une paire devenue acceptable doit être remplacée, pas contournée. Un test qui s'écarte quand sa prémisse tombe rapporte un succès pour la seule raison qui justifie son existence | mutation : avant → 3 cas skippés, fichier vert ; après → 3 cas rouges |
 | `A3e` | **Fait le 2026-08-17, et il a révélé plus que prévu.** La direction s'exécute désormais — mais **une seule fois**, sur un seul attribut, sur un des quatre cas. Presque toute disparition réelle est soit un attribut **invalidé** (`WC`/`CC`, comptés par ligne sous leur propre clé, dont la vérification matricielle a la charge) soit accompagnée d'un changement du nombre de `String`, que cette comparaison ne peut pas lire. La deuxième direction est donc **structurellement quasi vide telle qu'écrite**, et c'est la matrice qui porte le poids. Constat de forme, pas de site d'appel — et il fallait la faire s'exécuter pour le voir | sentinelle : avant → **20/20 verts** ; après → atteinte |
-| `A3f` | **Répertoire de marques et alphabet faits le 2026-08-17.** Les deux générateurs tirent la marque depuis `HYPHEN_CHARS` (avant : 0 marque autre que `-` sur 200 tirages ; après : chacune des six apparaît). Et l'alphabet est **pondéré** comme le texte réellement corrigé au lieu d'être uniforme sur 442 codepoints : documents recevant au moins une correction, **56 % → 70 %**. Correction d'une de mes affirmations : élargir les RÈGLES ne vaut que 2 points (68 → 70), c'est l'ALPHABET le levier (56 → 70). Les règles étendues restent pour le réalisme — `n`/`u`, `i`/`l`, le `s` long — pas pour la couverture. **Reste ouvert** : `hostile_alto` à 1 % d'exemples utiles, les deux tests `st.binary` sans assertion, et les impossibilités structurelles du générateur (3 pages, page vide, chaîne de 4) | mesuré, base d'exemples désactivée |
+| `A3f` | **Répertoire de marques et alphabet faits le 2026-08-17.** Les deux générateurs tirent la marque depuis `HYPHEN_CHARS` (avant : 0 marque autre que `-` sur 200 tirages ; après : chacune des six apparaît). Et l'alphabet est **pondéré** comme le texte réellement corrigé au lieu d'être uniforme sur 442 codepoints : documents recevant au moins une correction, **56 % → 70 %**. Correction d'une de mes affirmations : élargir les RÈGLES ne vaut que 2 points (68 → 70), c'est l'ALPHABET le levier (56 → 70). Les règles étendues restent pour le réalisme — `n`/`u`, `i`/`l`, le `s` long — pas pour la couverture. ~~**Reste ouvert**~~ **Reste fermé le 2026-08-17**, avec deux de mes affirmations corrigées par la mesure — voir sous le tableau | mesuré, base d'exemples désactivée |
 
 Seconde leçon d'exécution sur `A3f`, du même genre que la première et plus
 gênante : j'ai mesuré la couverture **trois fois de trois manières** et obtenu
@@ -348,6 +348,72 @@ dans la chaîne XML brute, qui contient `CONTENT`, `HPOS`, `SUBS_TYPE` — donc 
 condition était vraie de tout document. Elle n'attrapait aucune des deux
 régressions. Reformulée sur les textes de lignes analysés, puis calibrée sur ce
 qu'elle peut réellement discriminer, elle en attrape une et le dit.
+
+**Fermeture du reste de `A3f`, le 2026-08-17, et deux de mes affirmations que la
+mesure a corrigées.**
+
+*Les tests `st.binary`.* Ils ne sont pas « sans assertion » : une exception non
+classifiée les ferait échouer. Le vrai trou était ailleurs, et il en a révélé un
+second. Mesuré sur douze graines, ce que chaque générateur atteint réellement
+comme analyse réussie — c'est-à-dire le code derrière la porte d'entrée, la
+politique de coordonnées, la cohérence `SUBS_*`, les polygones dégénérés :
+
+| générateur | min | médiane | max |
+|---|---|---|---|
+| `st.binary` → ALTO | 0 % | 0 % | 0 % |
+| `st.binary` → PAGE | 0 % | 0 % | 0 % |
+| troncatures | 0,33 % | 0,33 % | 0,33 % |
+| mutation d'un octet | 9,33 % | 14,17 % | 18,33 % |
+| `hostile_alto` | **2,67 %** | **4,83 %** | **9,33 %** |
+| `hostile_page` | 40,7 % | 51,8 % | 60,7 % |
+
+Les deux `st.binary` n'atteignent **rien**, par nature : des octets au hasard ne
+sont jamais du XML valide. Ils établissent une seule chose — des octets
+arbitraires sont refusés — et ça vaut d'être affirmé, mais pas d'être pris pour
+de la couverture sémantique. Épinglés à zéro **exprès**, plutôt que supprimés :
+si un futur parseur les faisait passer, ce serait un vrai résultat, et c'est là
+qu'il apparaîtrait.
+
+*Correction à l'audit, et à ma propre correction.* L'audit annonçait
+`hostile_alto` à 1 % utile. Une mesure unique m'a donné 9,5 % et j'allais
+l'écrire — c'était près du **haut de son propre étalement**. La médiane est
+4,8 %, le minimum 2,67 %. L'audit sous-estimait d'environ 5×, pas de 10×. Et le
+plancher calibré sur cette mesure unique **a échoué dans la suite complète**, où
+`pytest-randomly` réamorce l'entropie : c'est la même leçon que ci-dessus, une
+troisième fois. Les planchers sont désormais la moitié du **minimum** sur douze
+graines, vérifiés sur trente, et ils attrapent l'effondrement d'un générateur —
+pas sa dégradation graduelle, ce qui est dit sur place.
+
+*Second trou révélé par le même passage.* Les helpers attrapaient
+`CorrectionError`, qui est un **alias de la classe de base** — donc un
+`ConfigurationError` échappé du parseur comptait comme le contrat tenu, alors
+que la promesse en tête du fichier nomme la famille `ParseError`. Mesuré sur
+2 400 tirages : c'est toujours un `ParseError`, donc le nommer ne coûte rien et
+rend la promesse vérifiable. Prouvé par mutation.
+
+*Les impossibilités structurelles du générateur.* Sonde sur toute la suite,
+1 604 tests, chaque appel à `derive_hyphen_groups` enregistré :
+
+| structure | atteinte |
+|---|---|
+| chaîne ≥ 4 membres | **476 fois**, jusqu'à 12 membres |
+| page vide | **jamais** |
+| document ≥ 3 pages | **jamais** — `max pages = 2` |
+
+**La chaîne de 4 n'était pas un trou de couverture.** C'en est un du
+générateur, mais la suite atteint des chaînes de douze par des cas construits à
+la main et par les corpora réels ; l'apprendre au générateur n'aurait rien
+ajouté. *Un trou dans un générateur n'est pas un trou dans la couverture, et la
+différence tient à une mesure.* Les deux autres étaient réels et sont désormais
+couverts. Rien n'était cassé — une chaîne de césure traverse correctement trois
+pages en un seul groupe, une page vide survit au run et ne décale pas ses
+voisines — donc ce sont des gardes de régression, pas des correctifs, et le
+fichier le dit pour ne pas enseigner l'inverse au prochain lecteur.
+
+Ce que les deux pages n'atteignaient pas, et qui explique pourquoi ça valait le
+coup : un document de deux pages a **une** couture, donc une chaîne ne peut pas
+en traverser trois, et il n'a **pas de page du milieu**, donc « la correction est
+tombée sur la bonne page » et « sur la dernière page » sont la même phrase.
 
 Leçon d'exécution sur `A3f`, qui vaut pour tout ce bloc : ma première garde
 anti-régression scannait le code source à la recherche du littéral codé en dur.
