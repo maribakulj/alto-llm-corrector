@@ -54,6 +54,26 @@ The **top-level import surface** is provisional until `1.0.0`. It went from
 
 ### Changed — BREAKING
 
+- **A manifest carries its sources' digests, and a run refuses a file that
+  changed (`A1f`).** `DocumentManifest.source_digests` is additive; the refusal
+  is what is new, and it fires at preflight — before a producer call is spent.
+  Measured before the change, with the name→path bindings of a two-file
+  document swapped: the run **succeeded** and delivered, under the first name,
+  **the second file's tree, geometry and page ids** carrying the first file's
+  decided text — the second file's own text destroyed. `ADR-007` makes
+  `line_id` unique only within a file, so both files normally carry `TL1…TLn`
+  and every lookup matched. Separately, a file replaced under a run projected
+  one version's decisions into another version's markup, line by line.
+  The projection invariant cannot see either, structurally: it compares the
+  delivered artefact to the decisions, and the artefact was *made* by writing
+  those decisions into whatever tree was there.
+  Corollary — `RunProvenance.source_digests` now attests the bytes actually
+  parsed. It used to hash a **third** read taken after the render, so a
+  document that changed mid-run was attested by a digest of bytes nothing had
+  ever parsed, and its edit script carried preconditions from one version
+  beside a digest of another: replayed against the file it names, it failed
+  its own preconditions.
+
 - **Three silent acceptances became refusals (`A1d`, `A1e`).** Each was a case
   where the library could not do what it was asked and reported success
   anyway; a call that used to return now raises. Measured before the change:

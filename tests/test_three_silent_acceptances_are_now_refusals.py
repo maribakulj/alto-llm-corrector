@@ -120,16 +120,33 @@ def test_the_decide_only_run_stays_legal() -> None:
 
 
 @pytest.mark.parametrize(
-    "perturbation",
-    ["removed", "truncated"],
+    ("perturbation", "expected"),
+    [("removed", ParseError), ("truncated", ConfigurationError)],
     ids=["source removed after parse", "source truncated after parse"],
 )
 def test_a_source_that_changes_under_the_run_fails_classified(
-    perturbation: str,
+    perturbation: str, expected: type[SaknussemmError]
 ) -> None:
+    """Both are classified, and the two say different true things.
+
+    A file that cannot be read at all is a §8.4 read event —
+    ``ParseError``. A file that reads fine but no longer holds the bytes
+    its pages were parsed from is not a read problem at all: it is the
+    caller pointing at a document the decisions were not made on, so
+    ``ConfigurationError``, raised at preflight before a single producer
+    call is spent.
+
+    The second is where this test moved. It first asserted ``ParseError``
+    for both, because the only guard then was the render-time read; the
+    parse-time digest catches the truncation earlier and names it better.
+    """
     directory = Path(tempfile.mkdtemp())
     path = _write(directory, "x.xml", "P1", "TL1", "TEXTE")
     manifest = build_document_manifest([(path, "x.xml")])
+    assert manifest.source_digests, (
+        "the manifest carries no digest, so the check under test is skipped "
+        "by design and this case would pass for the wrong reason."
+    )
 
     if perturbation == "removed":
         path.unlink()
@@ -138,12 +155,33 @@ def test_a_source_that_changes_under_the_run_fails_classified(
 
     with pytest.raises(SaknussemmError) as caught:
         _pipeline().run_sync(document_manifest=manifest, source_files={"x.xml": path})
-    assert isinstance(caught.value, ParseError), (
-        f"the render path raised {type(caught.value).__name__}. §8.4 asks "
-        "that a source read fail as a classified error; the two rewriter "
-        "reads were the only ones outside that contract, so a file "
-        "perturbed between parse and render escaped raw to the host."
+    assert isinstance(caught.value, expected), (
+        f"expected {expected.__name__}, got {type(caught.value).__name__}. "
+        "Every failure on this path must be a classified SaknussemmError — "
+        "the two rewriter reads were once the only ones outside that "
+        "contract, and a perturbed file escaped raw to the host."
     )
+
+
+def test_a_hand_built_manifest_is_not_held_to_a_digest_it_never_had() -> None:
+    """The scope of the byte check, and it is deliberate rather than a gap.
+
+    The digest is a claim about a file *this library read*. A caller who
+    assembled a manifest by other means — a supported shape — has nothing
+    to compare against, so the check does not fire. Without this test the
+    check could be tightened into refusing every hand-built manifest, and
+    that would read as a stricter guard rather than a broken contract.
+    """
+    directory = Path(tempfile.mkdtemp())
+    path = _write(directory, "x.xml", "P1", "TL1", "TEXTE")
+    manifest = build_document_manifest([(path, "x.xml")])
+    hand_built = manifest.model_copy(update={"source_digests": {}})
+
+    path.write_text(_alto("P1", "TL1", "AUTRE"), encoding="utf-8")
+    result = _pipeline().run_sync(
+        document_manifest=hand_built, source_files={"x.xml": path}
+    )
+    assert result.corrected_files, "a manifest without digests must still run"
 
 
 # ---------------------------------------------------------------------------

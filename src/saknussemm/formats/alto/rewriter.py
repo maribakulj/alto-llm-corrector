@@ -218,17 +218,23 @@ def _get_hyp_children(el: etree._Element, ns: str) -> list[etree._Element]:
 # ---------------------------------------------------------------------------
 
 
+def _canonical_line_text(el: etree._Element, ns: str) -> str:
+    """The parser's logical line text, derived here rather than assumed.
+
+    ``parser._build_ocr_text`` is ``reconstruct_textline(...)`` plus a
+    carriage-return strip plus a strip, and two places in this module need
+    to compare against exactly that. Spelling it once is the point: the
+    comparison below once used the raw, un-stripped reconstruction, so a
+    line reconstructing with a trailing space — a trailing ``<SP/>`` — never
+    matched its own ``ocr_text``, was needlessly rewritten, and made the
+    UNTOUCHED metric under-count.
+    """
+    return reconstruct_textline(el, ns).replace("\r", "").strip()
+
+
 def _line_text_unchanged(el: etree._Element, corrected: str, ns: str) -> bool:
-    # Spec F4 — compare STRIPPED forms on both sides. The parser derives
-    # ``ocr_text`` as ``reconstruct_textline(...).replace("\r", "").strip()``
-    # (parser._build_ocr_text) while this comparison used the raw, un-stripped
-    # reconstruction. A line whose XML reconstructs with a trailing space
-    # (e.g. a trailing ``<SP/>``) but whose corrected text equals the stripped
-    # ``ocr_text`` therefore never matched — it was needlessly rewritten and
-    # the UNTOUCHED metric under-counted. Stripping both sides restores the
-    # UNTOUCHED path for such lines.
-    source = reconstruct_textline(el, ns).replace("\r", "").strip()
-    return source == nfc(corrected).replace("\r", "").strip()
+    """Spec F4 — compare canonical forms on both sides."""
+    return _canonical_line_text(el, ns) == nfc(corrected).replace("\r", "").strip()
 
 
 # ---------------------------------------------------------------------------

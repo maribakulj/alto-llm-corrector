@@ -21,6 +21,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from saknussemm.core.context import RunContext
+from saknussemm.core.provenance import source_digest
 from saknussemm.core.identity import (
     ensure_unique_identities,
     ensure_unique_page_ids_across_files,
@@ -32,7 +33,7 @@ from saknussemm.core.protocols import (
     require_page_images,
 )
 from saknussemm.core.schemas import DocumentManifest, PageImage, PageManifest
-from saknussemm.errors import ConfigurationError
+from saknussemm.errors import ConfigurationError, ParseError
 
 
 def _require_every_source(
@@ -74,6 +75,56 @@ def _require_every_source(
     )
 
 
+def _require_the_same_bytes(
+    document_manifest: DocumentManifest,
+    source_files: dict[str, Path],
+) -> None:
+    """Each path must still hold the bytes its pages were parsed from.
+
+    The parser stamps a digest per file; this compares it to what is on
+    disk now. Refusing here rather than at render is the whole gain: no
+    producer call is spent on a document that cannot be written back
+    honestly.
+
+    What it catches, both measured 2026-08-17 — see
+    `DocumentManifest.source_digests` for why neither was visible before:
+    a mapping that names the wrong path for a name (one file's decided text
+    delivered inside another file's tree, run reporting success), and a
+    file replaced between the parse and the write.
+
+    A manifest with no digests is not checked: it was not built by a parser
+    of this library, so there is nothing to compare against and nothing is
+    claimed. Hand-built manifests are a supported shape.
+    """
+    stamped = document_manifest.source_digests
+    if not stamped:
+        return
+    changed: list[str] = []
+    for name, path in sorted(source_files.items()):
+        if name not in stamped:
+            continue
+        # A source that has become unreadable is a §8.4 event, not a
+        # configuration one, and reading it here must not be the one place
+        # that lets an OSError out raw — which is exactly what the first
+        # version of this check did.
+        try:
+            raw = path.read_bytes()
+        except OSError as exc:
+            raise ParseError(f"{name!r}: cannot read source file: {exc}") from exc
+        if source_digest(raw) != stamped[name]:
+            changed.append(name)
+    if changed:
+        raise ConfigurationError(
+            f"{changed} no longer hold the bytes they were parsed from. Either "
+            "`source_files` names a different file for one of these, or the "
+            "file changed since it was parsed. Writing anyway would deliver "
+            "decisions made on one document inside another one's markup — and "
+            "the projection check could not tell, because it compares the "
+            "artefact to the decisions the artefact was built from. Re-parse "
+            "the current bytes, or point at the files that were parsed."
+        )
+
+
 def _preflight(
     *,
     producer: EditProducer,
@@ -99,6 +150,7 @@ def _preflight(
     # An empty mapping stays legal and means "decide, render nothing": the
     # dry run is a documented mode, and five test files rely on it.
     _require_every_source(document_manifest, source_files)
+    _require_the_same_bytes(document_manifest, source_files)
     # §5.1 — a vision producer without its images is a start-up error,
     # never a silent image-less call.
     require_page_images(producer, document_manifest.pages, page_images)
