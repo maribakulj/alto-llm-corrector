@@ -74,12 +74,69 @@ def _corpus_params() -> list:
 
 @pytest.mark.parametrize("xml_path", _corpus_params(), ids=None)
 def test_parses_or_fails_classified(xml_path: Path) -> None:
-    """§8.4 at the front door, on real-world OCR output."""
+    """§8.4 at the front door, on real-world OCR output.
+
+    The assertion counts ``TextLine`` elements in the FILE and compares that
+    to the manifest, which is the only form of this check that says
+    anything. It used to read::
+
+        assert doc.total_lines == sum(len(p.lines) for p in doc.pages)
+
+    and ``DocumentManifest.total_lines`` is a ``computed_field`` whose body
+    is literally that expression — the same computation on both sides, true
+    of an empty manifest too. Measured 2026-08-17: a parser dropping the
+    last ``TextLine`` of every ``TextBlock`` took the pinned page from 1144
+    lines to 997, and **all 18 tests in this file passed** while the rest of
+    the suite fell to 142 failures. This tier exists to be the antidote to
+    "the same person wrote the code and the generators", and it was
+    contributing nothing to detection.
+
+    Counted with lxml directly rather than through this library's parser:
+    lxml is not the code under test, and the whole value of the check is that
+    the two counts come from different places.
+
+    Margins are excluded because the parser excludes them, deliberately and
+    by documented design — running heads and folio numbers are not body
+    text. Measured on the pinned pages, that is exactly what the difference
+    was: ``'NATURELLE. 9'`` under ``TopMargin``, ``'2'`` under
+    ``BottomMargin``, ``'LE TEMPS. 1" Janvier 1890.'`` under ``TopMargin``.
+    A first version of this assertion counted every ``TextLine`` and failed
+    on all three pages — asserting a property the library does not have, and
+    should not.
+    """
+    from lxml import etree as _etree
+
+    tree = _etree.parse(str(xml_path))
+    in_file = sum(
+        1
+        for element in tree.iter()
+        if element.tag.rsplit("}", 1)[-1] == "TextLine"
+        and not any(
+            ancestor.tag.rsplit("}", 1)[-1].endswith("Margin")
+            for ancestor in element.iterancestors()
+        )
+    )
     try:
         doc = build_document_manifest([(xml_path, xml_path.name)])
     except CorrectionError:
         return  # classified — acceptable for a hostile real-world file
-    assert doc.total_lines == sum(len(p.lines) for p in doc.pages)
+    assert doc.total_lines == in_file, (
+        f"{xml_path.name} carries {in_file} non-margin TextLine element(s) "
+        f"and the manifest reports {doc.total_lines}. A page that parses must "
+        "parse WHOLLY: a line the parser silently drops is text this library "
+        "would never correct and never mention."
+    )
+    in_file_ids = {
+        element.get("ID")
+        for element in tree.iter()
+        if element.tag.rsplit("}", 1)[-1] == "TextLine"
+    }
+    invented = {line.line_id for page in doc.pages for line in page.lines} - in_file_ids
+    assert not invented, (
+        f"{xml_path.name}: the manifest names {sorted(invented)[:5]}, which no "
+        "TextLine in the file carries. The other direction of the same check: "
+        "a parse must not add lines either."
+    )
 
 
 @pytest.mark.parametrize("xml_path", _corpus_params(), ids=None)
