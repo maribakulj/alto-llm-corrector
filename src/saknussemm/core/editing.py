@@ -297,11 +297,37 @@ def _changed_chars(original: str, replacement: str) -> int:
 
 
 def _e5_hyphen_ok(role: HyphenRole, result_text: str) -> bool:
-    """E5 — a hyphenated line edited by span must keep its trailing hyphen
-    (forward side) and a non-empty boundary word (guaranteed by the
-    non-empty result check). The full pair reconciliation runs later (E6)."""
+    """E5 — a span-edited hyphen line keeps its break mark AND a word to
+    continue.
+
+    The mark alone was checked until 2026-08-17, and the docstring claimed
+    the boundary word was "guaranteed by the non-empty result check". It
+    was not: a span may erase the word and leave the mark. Measured —
+    ``Le peuple att-`` with a span erasing ``att`` was accepted as
+    ``Le peuple -``, and the ALTO carried ``<String CONTENT="-"/>``, a
+    ``String`` holding a bare hyphen. ``_part1_text_migrated`` bounds only
+    how much a PART1 line may GROW; nothing bounded how much it may shrink.
+
+    So the forward side now requires a non-space character immediately
+    before the mark. That is exact rather than heuristic: if the parser
+    called this line PART1, a word ended here, and a break mark with
+    nothing before it is not a continuation — it is a dash. **No
+    legitimate correction is refused**, because none of them leaves a mark
+    dangling.
+
+    The backward side (``PART2``) is NOT closed here. Its boundary word can
+    still be erased when the following word survives — the etage-B guard
+    catches the plain case by comparing first words, and is bypassed when
+    the next word shares two leading characters. Closing it needs a
+    threshold, which is a contract decision (`E5b`) and not a defect fix.
+    """
     if role in (HyphenRole.PART1, HyphenRole.BOTH):
-        return result_text.rstrip().endswith(HYPHEN_CHARS)
+        stripped = result_text.rstrip()
+        if not stripped.endswith(HYPHEN_CHARS):
+            return False
+        before_mark = stripped.rstrip("".join(HYPHEN_CHARS))
+        if not before_mark or before_mark[-1].isspace():
+            return False
     return True
 
 
