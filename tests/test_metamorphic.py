@@ -27,7 +27,7 @@ import asyncio
 from pathlib import Path
 
 import pytest
-from hypothesis import given, settings
+from hypothesis import HealthCheck, given, settings
 
 from saknussemm.core.protocols import ProducerMetadata
 from saknussemm import CorrectionPipeline, CorrectionResult
@@ -66,12 +66,29 @@ _PARTITIONS: dict[str, ChunkPlannerConfig | None] = {
     ),
 }
 
-# Substitutions over common letters so most generated documents get at
-# least one real correction; determinism, not coverage, is the point.
+# Deterministic substitutions over letters the generator actually produces,
+# and over the confusions heritage print actually suffers: `n`/`u`, `i`/`l`,
+# and the long-s read as `f`. Determinism is still the point — the coverage
+# is what had to be fixed.
+#
+# The three original rules were `e`, `a`, `o` alone, against a generator
+# drawing uniformly from 442 codepoints. Measured 2026-08-17: **65 % of
+# generated documents received no correction at all**, so
+# `test_final_text_is_invariant_under_chunk_partition` spent most of its 20
+# examples comparing an identity run to an identity run across three
+# partitions. It held because nothing was produced.
+#
+# With the weighted alphabet plus these six letters: 22 % of documents get no
+# correction, down from 65 %. Extending further (`t`, `r`) reaches 20 % — the
+# returns stop, and more rules would only make the producer less like a
+# corrector and more like a shredder.
 _RULES = [
     SubstitutionRule("e", "3"),
     SubstitutionRule("a", "4"),
     SubstitutionRule("o", "0"),
+    SubstitutionRule("n", "u"),
+    SubstitutionRule("i", "l"),
+    SubstitutionRule("s", "f"),
 ]
 
 
@@ -410,3 +427,76 @@ async def test_degenerate_chain_identity_survives_every_partition(
             )
         outcomes[name] = _outcomes(result)
     assert all(o == outcomes["default"] for o in outcomes.values())
+
+
+def test_the_producer_actually_corrects_most_generated_documents() -> None:
+    """A metamorphic property over an identity run proves nothing.
+
+    ``test_final_text_is_invariant_under_chunk_partition`` compares the same
+    document corrected under three partitions. If the producer changed
+    nothing, all three agree trivially and the property holds for the wrong
+    reason — and that was the state until 2026-08-17: uniform draws over 442
+    codepoints against three rules on ``e``/``a``/``o`` left **65 % of
+    documents with no correction at all.**
+
+    This measures the outcome rather than reading the alphabet. An earlier
+    guard in this effort scanned source for a hard-coded literal and missed
+    the obvious regression, because a shape check cannot see behaviour.
+
+    The floor is 63 %, chosen from four combinations measured with one
+    method and a disabled example database — because measuring them three
+    different ways gave three different answers, and only the consistent
+    run is worth quoting:
+
+    ==========================  ====================
+    alphabet × rules            documents corrected
+    ==========================  ====================
+    weighted × 6 (current)      **70 %**
+    weighted × 3                68 %
+    uniform × 6                 56 %
+    uniform × 3                 46 %
+    ==========================  ====================
+
+    So **the alphabet is the lever and the rule set is not**: widening the
+    rules from three letters to six moves this by two points, while weighting
+    the alphabet moves it by fourteen. The extra rules stay because ``n``/``u``,
+    ``i``/``l`` and the long-s read as ``f`` are the confusions heritage print
+    actually suffers — a realism argument, not a coverage one, and it should
+    not be dressed up as the latter.
+
+    This guard therefore makes **one** claim: the alphabet must stay weighted.
+    At 400 draws it sits three standard deviations below the current rate and
+    three above the uniform one. It does **not** discriminate the rule set, and
+    saying so is better than a floor that pretends to.
+    """
+    corrected = total = 0
+
+    @settings(max_examples=200, deadline=None, suppress_health_check=list(HealthCheck))
+    @given(doc_and_roles=rich_alto_documents())
+    def collect(doc_and_roles: tuple[str, dict[str, str]]) -> None:
+        nonlocal corrected, total
+        total += 1
+        # The PARSED line texts, not the XML string. The first version of
+        # this guard searched the raw document — which contains `CONTENT`,
+        # `HPOS`, `SUBS_TYPE`, so every rule letter appeared in every
+        # document and the condition was trivially true. It caught neither
+        # regression below. Third time in this effort that reaching for the
+        # cheap surface instead of the parsed result produced a guard that
+        # could not fail.
+        path = _write_tmp(doc_and_roles[0])
+        try:
+            manifest = build_document_manifest([(path, path.name)])
+            texts = [line.ocr_text for page in manifest.pages for line in page.lines]
+        finally:
+            path.unlink(missing_ok=True)
+        if any(rule.pattern in text for text in texts for rule in _RULES):
+            corrected += 1
+
+    collect()
+    assert corrected / total >= 0.63, (
+        f"only {corrected}/{total} ({100 * corrected / total:.0f} %) generated "
+        "documents contain a character the "
+        "producer would change. Every metamorphic property here then compares "
+        "identity runs to each other: they hold because nothing was produced, "
+        "not because the seam handling is right."
+    )
