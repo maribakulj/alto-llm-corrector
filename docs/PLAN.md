@@ -463,10 +463,82 @@ oubliés, pas pour être faits maintenant — et `A7c` reste sous la règle de g
 
 | # | quoi | mesuré |
 |---|---|---|
-| `A7a` | Le comparateur de similarité est reconstruit à neuf à chaque appel : ~6 fois par couture, jusqu'à 5 par ligne. Le réutiliser ne change aucun comportement | **43 % du temps** d'un run profilé |
-| `A7b` | `units_containing` redérive les groupes de **toute la page** à chaque chunk qui tombe. La seule vraie quadratique. Dériver une fois par page | **52 % du run** ; exposant 1,04 → 1,77 ; 20 000 lignes ne terminent pas en 3 min 29 contre 33 s sans échec |
+| ~~`A7a`~~ | Le comparateur de similarité est reconstruit à neuf à chaque appel : ~6 fois par couture, jusqu'à 5 par ligne. Le réutiliser ne change aucun comportement | **43 % du temps** d'un run profilé — **prémisse fausse, mais le site cachait un défaut de justesse. Fait le 2026-08-17, voir ci-dessous** |
+| `A7b` | `units_containing` redérive les groupes de **toute la page** à chaque chunk qui tombe. La seule vraie quadratique. ~~Dériver une fois par page~~ — **le correctif proposé est faux, voir ci-dessous** | **exposant 2,05 mesuré isolément le 2026-08-17** (l'audit disait 1,77) ; 4,8 s à 3 200 lignes dégradées, ~190 s extrapolé à 20 000 |
 | `A7c` | `max_in_flight` intra-page, chunks de premier niveau seulement, la descente restant séquentielle car ses sous-chunks partagent une bourse | prototype **octet pour octet identique** dans 20 configurations, **×12 à ×15**. Prérequis : trier `report.hyphen_splits`, aujourd'hui ordonné par l'exécution |
 | `A7d` | `align_tokens` payé jusqu'à 3× par ligne ; `source_for_target` en balayage linéaire par token | correctif de cinq lignes |
+
+**`A7a` : la mesure a réfuté le correctif et trouvé autre chose.** Réutiliser
+le comparateur ne rend que **6 %** d'une étape qui pèse 37 % — soit ~2 % du
+run, pas assez pour justifier le risque : le coût de `difflib` est dans la
+recherche de blocs, pas dans la construction de l'index. En mesurant, l'ordre
+d'arguments incohérent que l'audit signalait a mené ailleurs : `ratio()` n'est
+asymétrique qu'à cause de l'heuristique **`autojunk`**, active par défaut, qui
+au-delà de **200 éléments** traite comme du bruit tout élément présent dans
+plus de 1 % du second opérande. C'est une heuristique pour comparer des
+*fichiers*, où un élément est une ligne entière ; ici un élément est un
+caractère, donc dans 200 caractères de prose l'espace et les lettres courantes
+sont tous « populaires ».
+
+Mesuré sur une ligne en forme de colonne de cours — du contenu ALTO ordinaire :
+
+| longueur | caractères corrigés | borne arithmétique du ratio | renvoyé | verdict |
+|---|---|---|---|---|
+| 107 | 4 | 0,9626 | 0,9626 | accepté |
+| **215** | **8** | **0,9628** | **0,0837** | **`too_different_from_source`** |
+| 323 | 12 | 0,9628 | 0,0557 | `too_different_from_source` |
+
+La même correction, sur le même texte répété, acceptée sous 200 caractères et
+refusée au-dessus. La borne est de l'arithmétique, pas un seuil réglé :
+`ratio() == 2M/T`, donc substituer `k` caractères sur `n` sans changer la
+longueur laisse au moins `1 - k/n`. `autojunk` la viole de 0,88.
+
+Deux coûts, et le second dure plus longtemps : le refus jette une bonne
+correction, mais `source_similarity` est **publié sur chaque ligne** et c'est
+le signal naturel pour calibrer la sévérité d'un run — donc un appelant qui
+calibre dessus calibre sur un nombre qui s'effondre à un seuil de longueur dont
+personne ne l'a averti. Corrigé par `autojunk=False`, et **prouvé neutre** :
+sur **27 108 paires** formées de chaque ligne de chaque corpus réel ici, sous
+trois producteurs de violences différentes, zéro ratio change et le coût est de
++0,7 %. Il ne pouvait pas en être autrement — la plus longue ligne des corpora
+fait 85 caractères, donc l'heuristique ne s'était jamais déclenchée sur quoi
+que ce soit de mesuré. **C'est exactement pourquoi rien ne l'attrapait.**
+L'incohérence d'ordre d'arguments cesse du même coup d'être latente, plutôt que
+d'être rangée : sans `autojunk`, `ratio()` est symétrique.
+
+**`A7b` : la quadratique est confirmée, le correctif proposé ne l'est pas.**
+Mesuré isolément le 2026-08-17 sur des pages synthétiques au taux de couples du
+corpus, un `units_containing` par chunk qui tombe :
+
+| P | `derive_hyphen_groups` seul | P appels | par appel | exposant |
+|---|---|---|---|---|
+| 100 | 0,34 ms | 4,5 ms | 0,35 ms | |
+| 400 | 1,17 ms | 70,7 ms | 1,41 ms | 2,04 |
+| 1 600 | 4,87 ms | 1 166,7 ms | 5,83 ms | 1,99 |
+| 3 200 | 9,57 ms | 4 821,4 ms | 12,05 ms | **2,05** |
+
+La dérivation seule est **linéaire** (32× la taille pour 28× le temps) : toute
+la quadratique vient du nombre d'appels, pas de leur coût unitaire. Exposant
+**2,05**, soit exactement quadratique — l'audit disait 1,77, ce qui sous-estime.
+
+**Mais « dériver une fois par page » est faux.** La dérivation du pool n'est pas
+invariante sur la durée de vie d'une page : `split_forward_link` mute les champs
+de pointeurs, il est appelé depuis `plan_page` (`planner.py:469`) dans la
+branche de grain LINE, et `_descend_granularity` (`driver.py:423`) rappelle
+justement `plan_page` en forçant ce grain. Donc l'ordre réel est atteignable :
+un chunk tombe et construit le cache, un autre descend et sévère un lien, un
+troisième tombe et lit un cache périmé — **il ferait tomber une ligne qui n'est
+plus dans l'unité**, silencieusement, et l'invariant de projection ne le verrait
+pas puisqu'il compare l'artefact aux décisions dont l'artefact est issu.
+
+Le remède qui tient utilise un canal que la conception a déjà construit pour
+ça : `split_forward_link` renvoie un `HyphenSplit` que le `ChunkPlan` porte
+précisément pour qu'« un consommateur apprenne que la coupe a eu lieu ». La clé
+de cache est donc l'ensemble des splits vus par le workspace, pas la page. Ce
+n'est plus cinq lignes, et c'est à faire quand `S1` aura rendu les groupes
+autoritaires — d'ici là les champs de pointeurs restent le stockage de
+référence, et mettre un cache devant un stockage mutable est le défaut qu'on
+vient d'éviter.
 
 Nuance mesurée qui borne `A7c` : les pages du corpus épinglé font 29, 42 et
 1 144 lignes, et au grain par défaut une page de 29 lignes est **un seul

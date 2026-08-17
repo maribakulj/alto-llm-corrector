@@ -94,12 +94,27 @@ class AcceptanceResult:
 
 
 def _similarity(a: str, b: str) -> float:
-    """Return SequenceMatcher ratio between two strings (0.0–1.0)."""
+    """Return SequenceMatcher ratio between two strings (0.0–1.0).
+
+    ``autojunk=False`` because the default is a heuristic for comparing
+    *files*, where an element is a whole line and a line repeated throughout
+    really is noise. Here an element is a character, so past difflib's
+    200-element threshold the space and the common letters are all "popular"
+    enough to be junked and can no longer anchor a match — on a repetitive
+    line, a correction of 8 characters in 215 scored 0.08 where the ratio
+    cannot arithmetically be below 0.96, and was refused as
+    ``too_different_from_source``. Measured over 27108 pairs from every real
+    corpus here: turning it off changes no ratio and costs 0.7%.
+
+    With it off, ``ratio()`` is symmetric, so the operand order — guard 3
+    passes the correction first, guards 1 and 2 pass it second — can no
+    longer make the two measure different things.
+    """
     if not a and not b:
         return 1.0
     if not a or not b:
         return 0.0
-    return SequenceMatcher(None, a, b).ratio()
+    return SequenceMatcher(None, a, b, autojunk=False).ratio()
 
 
 # ---------------------------------------------------------------------------
