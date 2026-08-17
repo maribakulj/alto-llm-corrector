@@ -333,7 +333,21 @@ constat le plus important de l'audit.
 | `A3c` | **Fait le 2026-08-17.** Le recensement scanne récursivement — vérifié : il trouve les **mêmes** deux sites, donc le trou était latent, et un troisième écrivain planté dans `core/schemas/` est désormais vu. Le garde anti-skip connaît les trois formes ; les deux évadés, sur fixtures committées, sont supprimés. Ma première version du garde s'attrapait **elle-même** — son commentaire citait la forme cherchée | fixture déplacée : avant → test skippé et garde vert ; après → le test **échoue bruyamment** |
 | `A3d` | **Fait le 2026-08-17.** Le rejet est **asserté**, plus supposé : une paire devenue acceptable doit être remplacée, pas contournée. Un test qui s'écarte quand sa prémisse tombe rapporte un succès pour la seule raison qui justifie son existence | mutation : avant → 3 cas skippés, fichier vert ; après → 3 cas rouges |
 | `A3e` | **Fait le 2026-08-17, et il a révélé plus que prévu.** La direction s'exécute désormais — mais **une seule fois**, sur un seul attribut, sur un des quatre cas. Presque toute disparition réelle est soit un attribut **invalidé** (`WC`/`CC`, comptés par ligne sous leur propre clé, dont la vérification matricielle a la charge) soit accompagnée d'un changement du nombre de `String`, que cette comparaison ne peut pas lire. La deuxième direction est donc **structurellement quasi vide telle qu'écrite**, et c'est la matrice qui porte le poids. Constat de forme, pas de site d'appel — et il fallait la faire s'exécuter pour le voir | sentinelle : avant → **20/20 verts** ; après → atteinte |
-| `A3f` | **Répertoire de marques fait le 2026-08-17** : les deux générateurs tirent la marque de coupure depuis `HYPHEN_CHARS`, une par document — un moteur d'OCR a une convention. Mesuré avant : 0 marque autre que `-` sur 200 tirages. Après : chacune des six apparaît dans 7 à 35 documents sur 200, et 460 propriétés passent sur le répertoire complet. **Reste ouvert** : les règles métamorphiques qui ne mordent que sur 1,6 % des caractères engendrés, `hostile_alto` à 1 % d'exemples utiles, les deux tests `st.binary` sans assertion, et les impossibilités structurelles du générateur (3 pages, page vide, chaîne de 4) | mesuré |
+| `A3f` | **Répertoire de marques et alphabet faits le 2026-08-17.** Les deux générateurs tirent la marque depuis `HYPHEN_CHARS` (avant : 0 marque autre que `-` sur 200 tirages ; après : chacune des six apparaît). Et l'alphabet est **pondéré** comme le texte réellement corrigé au lieu d'être uniforme sur 442 codepoints : documents recevant au moins une correction, **56 % → 70 %**. Correction d'une de mes affirmations : élargir les RÈGLES ne vaut que 2 points (68 → 70), c'est l'ALPHABET le levier (56 → 70). Les règles étendues restent pour le réalisme — `n`/`u`, `i`/`l`, le `s` long — pas pour la couverture. **Reste ouvert** : `hostile_alto` à 1 % d'exemples utiles, les deux tests `st.binary` sans assertion, et les impossibilités structurelles du générateur (3 pages, page vide, chaîne de 4) | mesuré, base d'exemples désactivée |
+
+Seconde leçon d'exécution sur `A3f`, du même genre que la première et plus
+gênante : j'ai mesuré la couverture **trois fois de trois manières** et obtenu
+trois réponses. Deux venaient d'un contournement du générateur qui ne prenait
+pas effet, et d'une base d'exemples Hypothesis qui rejouait des cas biaisés. Le
+chiffre que j'avais annoncé — les règles font passer de 42 % à 22 % — était
+faux ; elles valent deux points. **Une mesure vaut la méthode qui l'a produite,
+et deux bras comparés doivent l'être avec la même.**
+
+Troisième, sur la garde elle-même : sa première version cherchait les lettres
+dans la chaîne XML brute, qui contient `CONTENT`, `HPOS`, `SUBS_TYPE` — donc la
+condition était vraie de tout document. Elle n'attrapait aucune des deux
+régressions. Reformulée sur les textes de lignes analysés, puis calibrée sur ce
+qu'elle peut réellement discriminer, elle en attrape une et le dit.
 
 Leçon d'exécution sur `A3f`, qui vaut pour tout ce bloc : ma première garde
 anti-régression scannait le code source à la recherche du littéral codé en dur.

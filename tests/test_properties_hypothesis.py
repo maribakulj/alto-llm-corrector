@@ -29,13 +29,30 @@ from saknussemm.formats.alto.rewriter import rewrite_alto_file
 # ALTO document strategy
 # ---------------------------------------------------------------------------
 
-# Letters only (incl. Latin-1/Latin-A accents): no '-' so the trailing-dash
-# heuristic never fires by accident — explicit SUBS_* marks the pairs.
-_WORD = st.text(
-    alphabet=st.characters(whitelist_categories=("Ll", "Lu"), max_codepoint=0x024F),
-    min_size=1,
-    max_size=8,
+#: The same weighted alphabet as ``_alto_gen`` — see its comment for what
+#: measuring the uniform version showed. Duplicated rather than imported
+#: because this module predates the shared generator; an alphabet weighted like the text this library actually corrects, rather
+#: than uniform over 442 codepoints. Measured 2026-08-17 on the uniform
+#: version: **1,7 % of generated characters were ``e``, ``a`` or ``o``** and
+#: only 18,6 % were ASCII at all — so ``test_metamorphic``'s producer, whose
+#: rules are exactly those three letters, corrected nothing in **65 % of
+#: generated documents**. The invariance property it carries then compared an
+#: identity run to an identity run across three partitions: it held because
+#: nothing was produced, not because the seam handling was right.
+#:
+#: French letter frequency, with the frequent half repeated so it dominates;
+#: the accents a heritage corpus carries; and a few exotics so the fuzz value
+#: of a wide alphabet survives. Still no ``-``: the trailing-mark heuristic
+#: must not fire by accident, explicit ``SUBS_*`` marks every pair.
+_ALPHABET = (
+    "esaitnrulodcpmvqfbghjxyzwk"
+    "esaitnrulodcpm"
+    "ESAITNRULODCPMVQFBGHJXYZWK"
+    "\u00e9\u00e8\u00ea\u00e0\u00e7\u00f9\u00f4\u00ee\u00e2\u00fb\u00eb\u00ef"
+    "\u00fc\u00f6\u00e4\u00f1\u00e3\u00f5\u00e5\u00f8\u00e6\u0153\u00df\u00ff"
+    "\u0183\u0140\u017f\u0111\u0133"
 )
+_WORD = st.text(alphabet=st.sampled_from(_ALPHABET), min_size=1, max_size=8)
 
 
 @st.composite
