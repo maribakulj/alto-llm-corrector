@@ -87,13 +87,29 @@ _RECOVERABLE_ERROR_TYPES: tuple[type[BaseException], ...] = (
 )
 
 
+@dataclass(frozen=True)
+class _Proposed:
+    """What a producer's script became: the batch to validate, and the lines
+    whose ops the guards refused.
+
+    One value rather than two parameters because they come from the same
+    computation and are only correct together. The refused set used to be
+    dropped where it was computed, and the parameter budget refuses to let
+    it travel as a ninth argument — "handing a function's state to the
+    halves is not a split".
+    """
+
+    raw: dict[str, Any]
+    refused_lines: frozenset[str]
+
+
 def _script_to_raw(
     script: EditScript,
     chunk_lines: list[LineManifest],
     *,
     producer: EditProducer,
     guard_config: GuardConfig,
-) -> dict[str, Any]:
+) -> _Proposed:
     """Normalise a producer's EditScript into the validator's raw shape.
 
     - ``replace_line`` ops pass through as-is (duplicates and empty
@@ -110,6 +126,7 @@ def _script_to_raw(
     """
     canonical = {lm.line_id: lm.ocr_text for lm in chunk_lines}
     entries: list[dict[str, str]] = []
+    refused: set[str] = set()
 
     span_ops = [op for op in script.ops if isinstance(op, ReplaceSpan)]
     for op in script.ops:
@@ -125,6 +142,14 @@ def _script_to_raw(
         )
         for lid, txt in span_result.text_by_id.items():
             entries.append({"line_id": lid, "corrected_text": txt})
+        # The refused lines, which this function used to drop on the floor.
+        # With ``requires_full_coverage = False`` the next block then fills
+        # them with their canonical text, so the report saw
+        # ``produced == final`` and concluded the op had survived every
+        # guard — and PUBLISHED it. Measured 2026-08-17: delivered
+        # 'Le peuple att-', published the refused span, and a consumer
+        # replaying the script got 'Le peuple -'.
+        refused = {r.line_id for r in span_result.rejected}
 
     if not getattr(producer, "requires_full_coverage", True):
         covered = {e["line_id"] for e in entries}
@@ -132,7 +157,7 @@ def _script_to_raw(
             if lid not in covered:
                 entries.append({"line_id": lid, "corrected_text": txt})
 
-    return {"lines": entries}
+    return _Proposed(raw={"lines": entries}, refused_lines=frozenset(refused))
 
 
 def _build_correction_request(
@@ -223,6 +248,7 @@ def _capture_producer_ops(
     chunk: ChunkRequest,
     script: EditScript,
     response: ProposalBatch,
+    refused_lines: frozenset[str],
 ) -> None:
     """§4 — remember each TARGET line's ops and the text they produced.
 
@@ -239,6 +265,8 @@ def _capture_producer_ops(
     produced_by_line = {o.line_id: o.corrected_text for o in response.lines}
     ops_by_line: dict[str, list[EditOp]] = {}
     for op in script.ops:
+        if op.line_id in refused_lines:
+            continue  # an op the guards refused produced nothing to publish
         if op.line_id in target_ids and op.line_id in produced_by_line:
             ops_by_line.setdefault(op.line_id, []).append(op)
     for line_id, line_ops in ops_by_line.items():
@@ -256,7 +284,7 @@ def _validate_and_capture(
     chunk: ChunkRequest,
     chunk_lines: list[LineManifest],
     hyphen_pairs: dict[str, str],
-    raw: dict[str, Any],
+    proposed: _Proposed,
     script: EditScript,
     guard_config: GuardConfig,
     traces: dict[LineRef, LineTrace] | None,
@@ -268,11 +296,11 @@ def _validate_and_capture(
     its retry branch — and why the caller counts this call's tokens
     BEFORE getting here: they were spent either way.
     """
-    _record_proposal_traces(raw, chunk_lines, traces)
+    _record_proposal_traces(proposed.raw, chunk_lines, traces)
 
     declared_subs = _declared_subs_content(chunk_lines)
     response = validate_llm_response(
-        raw,
+        proposed.raw,
         [lm.line_id for lm in chunk_lines],
         hyphen_pairs if hyphen_pairs else None,
         {lm.line_id: lm.ocr_text for lm in chunk_lines},
@@ -282,7 +310,13 @@ def _validate_and_capture(
         # line's output is not an error (it belongs to an adjacent chunk).
         target_line_ids=chunk.target_line_ids,
     )
-    _capture_producer_ops(ctx=ctx, chunk=chunk, script=script, response=response)
+    _capture_producer_ops(
+        ctx=ctx,
+        chunk=chunk,
+        script=script,
+        response=response,
+        refused_lines=proposed.refused_lines,
+    )
     return response
 
 
@@ -446,7 +480,7 @@ async def _attempt_chunk(
                 attempt=attempt,
                 temperature=temperature,
             )
-            raw = _script_to_raw(
+            proposed = _script_to_raw(
                 script, chunk_lines, producer=producer, guard_config=guard_config
             )
             # Charged before validation: a response the validator goes
@@ -460,7 +494,7 @@ async def _attempt_chunk(
                 chunk=chunk,
                 chunk_lines=chunk_lines,
                 hyphen_pairs=hyphen_pairs,
-                raw=raw,
+                proposed=proposed,
                 script=script,
                 guard_config=guard_config,
                 traces=traces,

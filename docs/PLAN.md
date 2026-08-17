@@ -317,7 +317,7 @@ jour ; elle n'est pas le chemin le plus court vers un artefact honnête.
 |---|---|---|
 | `A2a` | `E4`/`E5` ne s'appliquent pas à `replace_line`, donc **pas au producteur par défaut**. Décider : soit étendre `E5` seul à cette voie, soit émettre un rejet consultatif et le dire. Ce qui n'est pas tenable, c'est la formulation actuelle du contrat | le code l'avoue en commentaire ; le contrat promet l'inverse |
 | `A2b` | `EditRejection` obtient un consommateur : un événement `edit_op_rejected` et un compteur au rapport. **Additif, ne refuse rien** | sans lui, le taux de refus des gardes est non mesurable, et `cinoc` pilote à l'aveugle |
-| `A2c` | `_script_to_raw` propage `rejected` ; ne capturer que les ops dont la ligne a réellement produit du texte | ferme la promesse de rejeu, **marquée fermée à tort le 2026-08-16** |
+| `A2c` | **Fait le 2026-08-17.** `_script_to_raw` rend un couple indissociable — le lot à valider et les lignes refusées — plutôt que de jeter les secondes. Le budget de paramètres a refusé un neuvième argument, et il avait raison : les deux valeurs viennent du même calcul et ne sont justes qu'ensemble | ferme la promesse de rejeu, **marquée fermée à tort le 2026-08-16** |
 | `A2d` | `SUBS_TYPE="Abbreviation"` compté comme perte quand le rôle est `NONE` | `R*` viole son propre sens : le compte dit zéro là où le fichier a perdu |
 | `A2e` | `hyphen_subs_content` entre dans le périmètre vérifié, ou reçoit son propre invariant | 4ᵉ décision par ligne, livrée, non couverte |
 

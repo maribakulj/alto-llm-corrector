@@ -54,6 +54,17 @@ The **top-level import surface** is provisional until `1.0.0`. It went from
 
 ### Changed — BREAKING
 
+- **The published edit script no longer carries ops the guards refused
+  (`A2c`).** `core/report.py` documents that script as the one the run
+  *actually applied*, never carrying an op for a line reverted to OCR — because
+  a consumer replaying it would otherwise diverge from the pipeline's own
+  corrected XML. Measured: delivered `'Le peuple att-'`, published the refused
+  `replace_span`, replayed to `'Le peuple -'`. `_script_to_raw` applied the
+  span ops and discarded the refusals; the uncovered line was then filled with
+  its canonical text, so the report saw `produced == final` and concluded the
+  op had survived every guard. A consumer that replays a published script gets
+  fewer ops than before, and the same document as the run delivered.
+
 - **A crop is refused when its scan is no longer the one attested (`A1g`).**
   `build_image_asset` hashes what it read; `crop_region` reopened the path and
   never checked. `RunProvenance.image_digests` promises that the digest plus
