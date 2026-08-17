@@ -253,6 +253,179 @@ un critère technique.
 
 ---
 
+## A — Audit du 2026-08-17 : le tri
+
+Huit axes mesurés en parallèle, en réponse à la revue externe du 2026-08-16. Les
+constats et leurs preuves sont dans `docs/audit/AUDIT-2026-08-17-huit-axes.md` ;
+ce qui suit est **le tri**, et rien d'autre.
+
+Le principe du tri : **un artefact silencieusement faux passe devant tout le
+reste.** Ce qui échoue bruyamment, perd des données de façon repérable, ou ne
+coûte que du temps, attend. Et le tri distingue trois portes différentes que la
+revue externe confondait en une seule liste de douze points : ce qui bloque la
+**correction**, ce qui bloque la **publication**, et ce qui n'est qu'une limite
+à **déclarer**.
+
+### A0 — Le motif commun, à garder en tête pendant tout ce qui suit
+
+Les invariants sont écrits pour un producteur qui rend des **lignes entières**,
+et contrôlés par des prédicats **positionnels** — premier mot contre premier
+mot, i-ème `String` contre i-ème mot. Le protocole d'édition par spans permet de
+**déplacer une frontière** sans changer ni le compte ni la position : c'est
+l'angle mort commun de presque tous les défauts ci-dessous. Corriger un par un
+sans voir le motif reviendrait à jouer à la taupe.
+
+Deuxième moitié du motif : quand ces gardes refusent, ils refusent **en
+silence** — `EditRejection` n'a aucun consommateur hors des tests. Le trou est
+donc invisible au rapport comme au banc.
+
+### A1 — Bloquant pour la correction : l'artefact peut être faux sans le dire
+
+Dans cet ordre, parce que chacun est indépendant et que les premiers sont les
+moins chers.
+
+| # | quoi | coût | mesuré |
+|---|---|---|---|
+| `A1a` | Chemin rapide ALTO : exiger qu'un mot corrigé partage au moins un caractère avec le `CONTENT` à la même position, sinon router vers le chemin lent. **Aucune correction refusée, seulement re-routée** | petit | géométrie et `STYLEREFS` attachés aux mauvais mots, `losses` vide, `fidelity = EXACT` |
+| `A1b` | `E5` côté PART1 : aucune borne de rétrécissement n'existe. Interdire qu'une op de span à `text` vide couvre le dernier caractère non-tiret (avant) ou le premier non-blanc (arrière). **Ne refuse aucune correction légitime** | petit | `<String CONTENT="-">`, un `String` de tiret nu, livré |
+| `A1c` | Migration de mot entier entre lignes : étendre `check_boundary_migration` au cas « le dernier token corrigé de A égale le premier token source de B ». Coût nul en calcul | petit | un mot change de ligne, aucun compteur ne bronche |
+| `A1d` | `write()` refuse les collisions de nom de base **avant** d'écrire quoi que ce soit ; les deux `read_source_tree` des réécriveurs passent dans `classified_parse_errors` | 2 + 5 lignes | 3 chemins retournés, 2 fichiers sur disque ; `FileNotFoundError` nu qui s'échappe |
+| `A1e` | Contrôle de couverture au préflight : si `source_files` est non vide, exiger l'égalité des ensembles. Ferme aussi la clé fantôme dans la provenance | ~8 lignes | **injecté et mesuré : 1485 tests, aucun échec** |
+| `A1f` | Condensats des sources estampillés **au parsing**, portés par le manifeste ; au rendu, lire une fois, comparer, refuser en cas d'écart. Ferme la contamination croisée et le TOCTOU | moyen | artefact chimère ; `EditScript` qui échoue sur ses propres préconditions |
+| `A1g` | Même traitement pour la chaîne vision : vérifier les octets contre `asset.sha256` à l'ouverture du crop | petit | condensat gravé ≠ fichier ouvert |
+
+`A1e` et `A1f` sont la **contre-proposition mesurée** à l'« objet source
+immuable » que la revue réclamait : elle fermerait deux des quatre problèmes
+annoncés pour ~527 lignes d'appel sur ~110 fichiers ; ces deux lignes-ci ferment
+les quatre pour environ un dixième du coût. La refonte reste souhaitable un
+jour ; elle n'est pas le chemin le plus court vers un artefact honnête.
+
+### A2 — Bloquant pour la correction : des gardes qui ne gardent pas ce qu'ils annoncent
+
+| # | quoi | note |
+|---|---|---|
+| `A2a` | `E4`/`E5` ne s'appliquent pas à `replace_line`, donc **pas au producteur par défaut**. Décider : soit étendre `E5` seul à cette voie, soit émettre un rejet consultatif et le dire. Ce qui n'est pas tenable, c'est la formulation actuelle du contrat | le code l'avoue en commentaire ; le contrat promet l'inverse |
+| `A2b` | `EditRejection` obtient un consommateur : un événement `edit_op_rejected` et un compteur au rapport. **Additif, ne refuse rien** | sans lui, le taux de refus des gardes est non mesurable, et `cinoc` pilote à l'aveugle |
+| `A2c` | `_script_to_raw` propage `rejected` ; ne capturer que les ops dont la ligne a réellement produit du texte | ferme la promesse de rejeu, **marquée fermée à tort le 2026-08-16** |
+| `A2d` | `SUBS_TYPE="Abbreviation"` compté comme perte quand le rôle est `NONE` | `R*` viole son propre sens : le compte dit zéro là où le fichier a perdu |
+| `A2e` | `hyphen_subs_content` entre dans le périmètre vérifié, ou reçoit son propre invariant | 4ᵉ décision par ligne, livrée, non couverte |
+
+### A3 — Bloquant pour la correction : la suite ne peut pas voir ce qu'elle affirme voir
+
+Sans cette section, rien de ce qui précède n'est vérifiable — et c'est le
+constat le plus important de l'audit.
+
+| # | quoi | mesuré |
+|---|---|---|
+| `A3a` | La famille `L3`/`L9` est **structurellement infalsifiable** : la propriété se lit sur le champ qu'une mutation réaliste peut faire coïncider avec la décision. À reformuler pour qu'elle lise deux sources indépendantes | mutation → **1485 tests verts** |
+| `A3b` | Le corpus Gallica externe compare une expression à elle-même (`total_lines` est un `computed_field` dont le corps est cette expression) | parseur qui perd 147 lignes → **les 18 tests passent** |
+| `A3c` | Deux recensements aveugles : un scan non récursif de `core/` ; un garde anti-skip qui ne reconnaît que la forme décorateur, avec deux évadés vivants sur des fixtures committées | 3ᵉ écrivain invisible ; fixture déplacée → test skippé **et garde vert** |
+| `A3d` | `test_acceptance_translation.py` se **désarme** quand le garde qu'il surveille tombe (`pytest.skip` conditionné à `result.accepted`) | mutation → skip au lieu d'échec |
+| `A3e` | La « deuxième direction » du comptage de pertes n'exécute jamais sa comparaison (unique site d'appel = réécriture identité) | sentinelle → **20/20 verts** |
+| `A3f` | Les générateurs de propriétés n'atteignent pas les phénomènes annoncés : aucune marque de césure autre que `-` ASCII sur 400 tirages, alors que le corpus marque tout avec `¬` ; producteur métamorphique qui mord sur 1,6 % des caractères ; `hostile_alto` à 1 % d'exemples utiles ; deux tests `st.binary` sans assertion | mesuré |
+
+Signal à retenir : sous une mutation comportementale du parseur ALTO, le **seul**
+test devenu rouge fut le cliquet de nombre de lignes. *La suite détecte plus
+fiablement la taille du code que son sens.*
+
+### A4 — Bloquant pour la publication seulement
+
+Tous petits, tous mesurés, aucun ne touche la correction.
+
+| # | quoi |
+|---|---|
+| `A4a` | `pydantic>=2.0` → `>=2.0.1` : à `2.0` exactement, `import saknussemm` lève `NameError` sur le namespace protégé `model_`. Un consommateur qui a épinglé `2.0` installe un paquet inimportable |
+| `A4b` | `build` dans l'extra `[test]` : deux gardes d'empaquetage sont sautées en silence et n'ont **jamais** tourné en CI |
+| `A4c` | `.pre-commit-config.yaml` est structurellement invalide (`hooks:` vide) → **aucun** hook ne tourne, y compris le blocage des fichiers > 1 Mo |
+| `A4d` | Scinder le job de publication : `prepare-release` sans `id-token`, `publish` minimal. **Trois** exécutions de code non verrouillé partagent aujourd'hui l'environnement du jeton OIDC, pas une |
+| `A4e` | `scripts/release-saknussemm.sh` pointe vers `packages/saknussemm`, disparu à l'aplatissement — et un test certifie qu'il va bien |
+| `A4f` | Un job « bornes basses » : c'est lui qui aurait trouvé `A4a`. Plus utile qu'une quatrième version de Python |
+| `A4g` | `CONTRIBUTING.md` renvoie à `docs/API.md` et `SECURITY.md` comme normatifs : **les deux sont absents**. Pas de politique de divulgation pour un paquet qu'on va publier |
+
+### A5 — Structurel, hors porte `0.10` : la vérité unique du texte décidé
+
+Le manifeste mutable **écrit** l'artefact ; le registre de décisions ne fait que
+l'**auditer**. C'est la cause structurelle de deux des défauts d'`A1`, et le
+prix en est déjà payé : **18 % des lignes de la suite de tests** existent pour
+prouver en permanence que ces représentations racontent la même histoire — un
+scanner de code, un test du scanner, et un test attestant que le test qui
+atteste tient encore.
+
+Coût compté de la fin de migration : **26 sites dans `src/`** sur 10 modules, un
+seul changement de signature (`FormatAdapter.rewrite_file` prend les décisions),
+et **le véhicule existe déjà** — un `LineTrace` par ligne est construit
+inconditionnellement et porte déjà les deux champs. Prérequis unique : rendre
+`traces` non-optionnel, ce qui est une fiction (20 annotations, aucun réglage
+public de traçage n'existe). Le vrai coût est dans les tests : 69 écritures de
+`corrected_text` sur 43 fichiers.
+
+Bénéfice en **soustraction**, pas en addition. Et ce changement rend
+`_verify_projection` tautologique sur le texte, ce qui est le signe qu'il
+n'aurait jamais dû être une preuve.
+
+À faire d'ici là, parce que la migration ne peut pas être un préalable à la
+correction : un refus au préflight d'un manifeste dont `corrected_text` ou
+`status` est déjà rempli. Une ligne de garde contre un contournement de tous les
+gardes.
+
+### A6 — Limites à déclarer, pas à corriger
+
+La revue notait le passage à l'échelle 4,5/10. **Mesuré : exposant temps
+1,00 ± 0,02 et mémoire 1,00 de 100 à 20 000 lignes.** Rien n'est quadratique
+dans la taille du document. Il n'y a pas de refonte à faire, il y a une
+enveloppe à publier — et aucune de ces lignes n'existe aujourd'hui :
+
+- unité de traitement = **un document**, empreinte ≈ 10× le XML source,
+  ≈ 11 ko et ≈ 1,65 ms de CPU par ligne ; 100 000 lignes ⇒ ≈ 1,1 Go ;
+- le paramètre d'échelle est le nombre de lignes **par page**, pas par document ;
+- **l'ordre de lecture des pages est sémantique** : la réconciliation des
+  césures inter-pages en dépend, et un autre ordre change les attributs `SUBS_*`
+  du XML produit. À écrire comme une contrainte avant que quelqu'un ne tente de
+  paralléliser les pages ;
+- la réentrance est une propriété **du moteur**, conditionnée à la sûreté des
+  composants injectés — mesuré : un producteur à état perd 41 courses sur 42
+  appels et les deux runs se terminent « avec succès » ;
+- les événements ne portent pas de `run_id`, donc un observateur partagé ne peut
+  rien attribuer ;
+- les temporisations de reprise sont du temps mural sérialisé.
+
+### A7 — Après la correction : ce qui ne coûte que du temps
+
+Aucun de ces points ne touche la justesse. Ils sont ici pour ne pas être
+oubliés, pas pour être faits maintenant — et `A7c` reste sous la règle de gel.
+
+| # | quoi | mesuré |
+|---|---|---|
+| `A7a` | Le comparateur de similarité est reconstruit à neuf à chaque appel : ~6 fois par couture, jusqu'à 5 par ligne. Le réutiliser ne change aucun comportement | **43 % du temps** d'un run profilé |
+| `A7b` | `units_containing` redérive les groupes de **toute la page** à chaque chunk qui tombe. La seule vraie quadratique. Dériver une fois par page | **52 % du run** ; exposant 1,04 → 1,77 ; 20 000 lignes ne terminent pas en 3 min 29 contre 33 s sans échec |
+| `A7c` | `max_in_flight` intra-page, chunks de premier niveau seulement, la descente restant séquentielle car ses sous-chunks partagent une bourse | prototype **octet pour octet identique** dans 20 configurations, **×12 à ×15**. Prérequis : trier `report.hyphen_splits`, aujourd'hui ordonné par l'exécution |
+| `A7d` | `align_tokens` payé jusqu'à 3× par ligne ; `source_for_target` en balayage linéaire par token | correctif de cinq lignes |
+
+Nuance mesurée qui borne `A7c` : les pages du corpus épinglé font 29, 42 et
+1 144 lignes, et au grain par défaut une page de 29 lignes est **un seul
+chunk** — gain nul. Tout le ×12 vient de la grande page. Sur un corpus de pages
+ordinaires, le parallélisme utile est au niveau document, donc chez l'appelant.
+**La conclusion de la revue était juste, pour une raison qu'elle n'avait pas
+identifiée.**
+
+### A8 — Ce que l'audit a corrigé de la revue externe
+
+Noté parce qu'une revue crue sur parole aurait fait travailler dans la mauvaise
+direction, et parce que c'est le meilleur argument pour continuer à mesurer.
+
+- « `LineManifest` largement mutable, des centaines de sites » : **trois**
+  écritures dans `src/`, toutes dans le même fichier. Le chiffre de 246 venait
+  d'un commentaire du dépôt, et ce commentaire était faux. La conclusion tenait,
+  la raison non.
+- « L'objet source immuable ferme quatre problèmes » : il en ferme deux.
+- « Les relectures disque sont un problème de performance » : 4 % du temps sur
+  un fichier réel. Le problème est la fenêtre de corruption, pas la vitesse.
+- « `corrected_files` garde tout le document » : 9 % du pic mémoire.
+- Et un point où la revue avait raison contre mon premier réflexe : le passage
+  périmé de `formats/loader.py` l'était bien.
+
+---
+
 ## Règle de gel — applicable immédiatement
 
 > **Levée le 2026-08-11** — condition atteinte, remplacée par une contrainte
