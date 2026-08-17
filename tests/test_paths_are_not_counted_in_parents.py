@@ -59,8 +59,34 @@ _CLIMBS_FROM_A_NAME = re.compile(r"\b\w+\.parent\.parent\b|\b\w+\.parents\[[1-9]
 #: A fixture that is genuinely optional — fetched, generated, behind an
 #: extra — is a different case and belongs behind `importorskip` or an
 #: explicit marker, which name the reason rather than testing for a file.
+#: Three forms, because it only knew one and two escaped through the others.
+#: Measured 2026-08-17: ``tests/test_chunk_planner.py`` and
+#: ``tests/test_research_boundary.py`` both tested a COMMITTED fixture's
+#: existence and skipped imperatively, and this guard reported nothing.
+#: Moving ``examples/X0000002.xml`` aside then made
+#: ``test_corpus_chains_never_split`` SKIP while all four tests here PASSED —
+#: word for word the failure this file exists to prevent.
+#:
+#: Every pattern is assembled from fragments, and this comment describes the
+#: forms rather than quoting them, because the first version of it matched
+#: ITSELF: the guard read its own documentation and reported the file as an
+#: offender.
+_EXISTS = "exists" + r"\(\)"
 _SKIPS_ON_A_FILE = re.compile(
-    "skip" + r"if\(\s*not\s+\w+(?:_PATH)?\." + "exists" + r"\(\)"
+    "|".join(
+        (
+            # a skipif marker whose condition negates an existence check,
+            # however the path is spelled — bare name or an expression in
+            # parentheses
+            "skip" + r"if\(\s*not\s+[^\n]*?\." + _EXISTS,
+            # a negated existence check whose body calls the skip helper on
+            # the next line, with or without a trailing comment
+            r"if\s+not\s+[^:\n]*?\."
+            + _EXISTS
+            + r"[^:\n]*:\s*(?:#[^\n]*)?\n\s*pytest\."
+            + "skip",
+        )
+    )
 )
 
 #: Files allowed to know where they are.
