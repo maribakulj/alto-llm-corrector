@@ -190,6 +190,37 @@ def read_source_tree(path: Path) -> etree._ElementTree:
     return etree.parse(BytesIO(raw), make_safe_parser(encoding=encoding))
 
 
+def read_source_tree_classified(path: Path) -> etree._ElementTree:
+    """:func:`read_source_tree`, with §8.4 classification around it.
+
+    The rewriters read the source a second time, at render, and theirs were
+    **the only two ``read_source_tree`` callers outside**
+    :func:`classified_parse_errors` — both parsers are wrapped,
+    ``sniff_format`` is wrapped, output validation is wrapped.
+
+    Measured 2026-08-17, perturbing the file between parse and render:
+
+    ========================  ==============================
+    what happened             what reached the host
+    ========================  ==============================
+    file removed              ``FileNotFoundError``
+    file truncated            ``lxml.etree.XMLSyntaxError``
+    permission removed        ``PermissionError``
+    ========================  ==============================
+
+    Each of them travelled through ``asyncio.to_thread`` and out of
+    ``run()`` unclassified, while the *same* perturbation at parse time
+    gave a proper ``ParseError``. ADR-008 asks for a single error root; the
+    render path was the hole.
+
+    A separate function rather than two ``with`` blocks because the
+    rewriters' entry points are size-ratcheted (`RM-10`): the explanation
+    belongs somewhere it can be written once and read once.
+    """
+    with classified_parse_errors(str(path)):
+        return read_source_tree(path)
+
+
 def make_safe_parser(encoding: str | None = None) -> etree.XMLParser:
     """Return an lxml parser hardened against XXE / SSRF / entity-amplification.
 

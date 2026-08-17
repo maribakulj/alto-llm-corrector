@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from saknussemm.core.context import RunContext
+from saknussemm.errors import ConfigurationError
 from saknussemm.core.decisions import DecisionSet
 from saknussemm.core.identity import LineRef
 from saknussemm.core.editing import EditScript
@@ -85,6 +86,43 @@ class CorrectionResult:
     #: routing-on vs routing-off on one document is the cheaper-hybrid proof.
     producer_calls: int = 0
 
+    def _refuse_colliding_names(self) -> None:
+        """Two keys that flatten to one filename would silently lose one.
+
+        ``Path(source_name).name`` below is a deliberate path-traversal
+        guard, not an oversight: a key must never steer the write outside
+        ``directory``. But it also flattens ``volume1/page.xml`` and
+        ``volume2/page.xml`` onto one name. Measured 2026-08-17: ``write``
+        **returned three paths and left two files on disk**, reporting
+        that it had written ``page.xml`` twice while the second overwrote
+        the first.
+
+        The facade refuses duplicate basenames when it loads
+        (`facade.load`), so the collision is only reachable through the
+        low-level API — which is the one the sibling repositories use.
+        This method is therefore about `write` defending its own contract
+        rather than inheriting a guarantee from whichever door the object
+        came through.
+
+        Refusing before anything is written keeps the failure clean: no
+        half-populated directory to reason about afterwards.
+        """
+        seen: dict[str, str] = {}
+        for source_name in self.corrected_files:
+            flattened = Path(source_name).name
+            if flattened in seen:
+                raise ConfigurationError(
+                    f"{source_name!r} and {seen[flattened]!r} would both be "
+                    f"written as {flattened!r}, so one would overwrite the "
+                    "other. `write` flattens directory parts on purpose — a "
+                    "source name must not steer the write outside the target "
+                    "directory — so distinct sources need distinct file "
+                    "names. Write them to separate directories, or persist "
+                    "`corrected_files` yourself: the engine has no writer and "
+                    "this method is a convenience."
+                )
+            seen[flattened] = source_name
+
     def write(self, directory: str | Path) -> list[Path]:
         """Persist the run's artefacts into ``directory`` (created if
         needed): each corrected XML under its source file's name, plus
@@ -95,6 +133,7 @@ class CorrectionResult:
         (commit/discard staging) keep their injected writer instead.
         """
         target = Path(directory)
+        self._refuse_colliding_names()
         target.mkdir(parents=True, exist_ok=True)
         written: list[Path] = []
         for source_name, xml_bytes in self.corrected_files.items():

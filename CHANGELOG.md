@@ -54,6 +54,24 @@ The **top-level import surface** is provisional until `1.0.0`. It went from
 
 ### Changed — BREAKING
 
+- **Three silent acceptances became refusals (`A1d`, `A1e`).** Each was a case
+  where the library could not do what it was asked and reported success
+  anyway; a call that used to return now raises. Measured before the change:
+  - `run()` with a `source_files` mapping that does not describe the same
+    document as the manifest **succeeded**. A manifest parsed from `a.xml` +
+    `b.xml` run with only `a.xml` supplied counted both files' lines in
+    `report.total_lines` and one file's in `projection_fidelity`; half the
+    decided lines existed in no artefact. Now `ConfigurationError` at
+    preflight. An empty mapping stays legal — that is the decide-only run.
+  - A source removed, truncated or made unreadable between parse and render
+    escaped as `FileNotFoundError` / `XMLSyntaxError` / `PermissionError`. The
+    two rewriter reads were the only `read_source_tree` callers outside the
+    §8.4 classification. Now `ParseError`, like every other read.
+  - `result.write()` on two keys that flatten to one filename **returned three
+    paths and left two files**, the second overwriting the first. Now
+    `ConfigurationError`, raised before anything is written. `Path(name).name`
+    is unchanged: flattening remains a deliberate path-traversal guard.
+
 - **`ConfidencePolicy` and `RoutingPolicy` leave the top-level surface: 68 →
   66 (`RM-04`).** Both are constructor knobs of `CorrectionPipeline` whose
   defaults do nothing. `ConfidencePolicy()` is `mode="drop"` — no confidence
