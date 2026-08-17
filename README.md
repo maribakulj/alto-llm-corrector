@@ -103,6 +103,45 @@ vendors or track a server job's lifecycle; they live in the consumer.
   repository's demo backend implements them for itself, and a future
   extraction of them would be its own distribution, not this one.
 
+## What it costs, and what it does not scale to
+
+Measured on the three pinned Gallica pages — 1215 lines, 1.99 MB of ALTO,
+2026-08-17, this machine, no network:
+
+| | identity run | with corrections |
+|---|---|---|
+| CPU per line | 0.21 ms | 0.38 ms |
+| peak memory | ×7.3 the source XML | ×11.9 |
+| per line | 11.6 kB | 19.1 kB |
+
+**The unit of work is one document, and the corpus belongs to you.** The
+whole run lives in memory until it returns: the manifest, every line's
+trace, the decisions and the corrected bytes. So 100 000 lines is roughly
+40 s of CPU and 1.9 GB — nothing streams, and nothing is bounded on your
+behalf. Run documents one at a time and keep the batching upstream.
+
+**The scale parameter is lines per PAGE, not per document.** Time is linear
+in lines while pages stay ordinary (30–1200 lines, which is what real OCR
+produces). On a single page of several thousand lines *combined with a
+producer that fails often*, the fallback path degrades quadratically —
+measured, and on the list to fix rather than to live with.
+
+**Pages are corrected in reading order, and that is semantic.** Cross-page
+hyphen reconciliation assumes the earlier page was decided first, so
+reordering or parallelising pages changes the bytes produced. Reordering the
+*files* of one call is safe and tested.
+
+**One `run()` at a time per producer.** The engine keeps no per-run state and
+two concurrent runs on one instance produce identical results — but that is a
+property of the engine, not of what you inject. A producer, scorer or
+observer holding per-run state will be corrupted silently, and nothing
+detects it. Events carry no run id either, so a shared observer cannot tell
+two runs apart: use one observer per run, or one run at a time.
+
+**Retry backoff is serialised wall-clock.** The default ramp sleeps up to a
+few seconds per failing chunk, and those sleeps add up across a document. A
+host that manages its own retry should set the backoff bases to zero.
+
 ## Installing
 
 ```bash

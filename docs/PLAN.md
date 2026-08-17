@@ -417,26 +417,44 @@ correction : un refus au préflight d'un manifeste dont `corrected_text` ou
 `status` est déjà rempli. Une ligne de garde contre un contournement de tous les
 gardes.
 
-### A6 — Limites à déclarer, pas à corriger
+### A6 — Limites à déclarer, pas à corriger — **fait le 2026-08-17**
 
 La revue notait le passage à l'échelle 4,5/10. **Mesuré : exposant temps
 1,00 ± 0,02 et mémoire 1,00 de 100 à 20 000 lignes.** Rien n'est quadratique
-dans la taille du document. Il n'y a pas de refonte à faire, il y a une
-enveloppe à publier — et aucune de ces lignes n'existe aujourd'hui :
+dans la taille du document. Il n'y avait pas de refonte à faire, il y avait une
+enveloppe à publier — et rien, ni le README, ni le contrat, ni le registre des
+promesses, n'en disait un mot.
 
-- unité de traitement = **un document**, empreinte ≈ 10× le XML source,
-  ≈ 11 ko et ≈ 1,65 ms de CPU par ligne ; 100 000 lignes ⇒ ≈ 1,1 Go ;
-- le paramètre d'échelle est le nombre de lignes **par page**, pas par document ;
-- **l'ordre de lecture des pages est sémantique** : la réconciliation des
-  césures inter-pages en dépend, et un autre ordre change les attributs `SUBS_*`
-  du XML produit. À écrire comme une contrainte avant que quelqu'un ne tente de
-  paralléliser les pages ;
-- la réentrance est une propriété **du moteur**, conditionnée à la sûreté des
-  composants injectés — mesuré : un producteur à état perd 41 courses sur 42
-  appels et les deux runs se terminent « avec succès » ;
-- les événements ne portent pas de `run_id`, donc un observateur partagé ne peut
-  rien attribuer ;
-- les temporisations de reprise sont du temps mural sérialisé.
+Remesuré par moi plutôt que recopié, sur les trois pages Gallica épinglées
+(1215 lignes, 1,99 Mo, sans réseau) :
+
+| | passage identité | avec corrections |
+|---|---|---|
+| CPU par ligne | 0,21 ms | **0,38 ms** |
+| pic mémoire | ×7,3 la source | **×11,9** |
+| par ligne | 11,6 ko | **19,1 ko** |
+
+Les chiffres mémoire concordent avec ceux de l'audit (×8,3 ; 11 ko) ; le temps
+diffère parce que sa mesure portait sur des documents synthétiques avec un
+producteur correcteur. C'est le cas corrigé qui est publié, comme borne haute.
+
+Déclaré au README : l'unité de travail est **un document** et le corpus
+appartient à l'appelant (rien ne ruisselle, rien n'est borné pour lui) ; le
+paramètre d'échelle est le nombre de lignes **par page**, pas par document ;
+la dégradation quadratique du chemin de repli sur une très grande page est
+nommée comme à corriger, pas comme à subir ; et le budget de reprise est du
+temps mural sérialisé.
+
+Déclaré au contrat : **l'ordre de lecture des pages fait partie du contrat de
+sortie** — le code le suppose en prose sans le demander, et un autre ordre
+change le sha256 ; **la réentrance est une propriété du moteur, pas de la
+composition** — un producteur à état perd 41 courses sur 42 et les deux runs
+se terminent « avec succès » ; et **un événement ne nomme pas son run**, donc
+un observateur partagé ne peut rien attribuer.
+
+Une garde vérifie que ces énoncés restent présents. En prose et non en
+chiffres : une assertion de temps par ligne en CI vacillerait sur une machine
+chargée et finirait supprimée.
 
 ### A7 — Après la correction : ce qui ne coûte que du temps
 
