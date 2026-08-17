@@ -464,7 +464,7 @@ oubliés, pas pour être faits maintenant — et `A7c` reste sous la règle de g
 | # | quoi | mesuré |
 |---|---|---|
 | ~~`A7a`~~ | Le comparateur de similarité est reconstruit à neuf à chaque appel : ~6 fois par couture, jusqu'à 5 par ligne. Le réutiliser ne change aucun comportement | **43 % du temps** d'un run profilé — **prémisse fausse, mais le site cachait un défaut de justesse. Fait le 2026-08-17, voir ci-dessous** |
-| `A7b` | `units_containing` redérive les groupes de **toute la page** à chaque chunk qui tombe. La seule vraie quadratique. Dériver une fois par page | **52 % du run** ; exposant 1,04 → 1,77 ; 20 000 lignes ne terminent pas en 3 min 29 contre 33 s sans échec |
+| `A7b` | `units_containing` redérive les groupes de **toute la page** à chaque chunk qui tombe. La seule vraie quadratique. ~~Dériver une fois par page~~ — **le correctif proposé est faux, voir ci-dessous** | **exposant 2,05 mesuré isolément le 2026-08-17** (l'audit disait 1,77) ; 4,8 s à 3 200 lignes dégradées, ~190 s extrapolé à 20 000 |
 | `A7c` | `max_in_flight` intra-page, chunks de premier niveau seulement, la descente restant séquentielle car ses sous-chunks partagent une bourse | prototype **octet pour octet identique** dans 20 configurations, **×12 à ×15**. Prérequis : trier `report.hyphen_splits`, aujourd'hui ordonné par l'exécution |
 | `A7d` | `align_tokens` payé jusqu'à 3× par ligne ; `source_for_target` en balayage linéaire par token | correctif de cinq lignes |
 
@@ -505,6 +505,40 @@ fait 85 caractères, donc l'heuristique ne s'était jamais déclenchée sur quoi
 que ce soit de mesuré. **C'est exactement pourquoi rien ne l'attrapait.**
 L'incohérence d'ordre d'arguments cesse du même coup d'être latente, plutôt que
 d'être rangée : sans `autojunk`, `ratio()` est symétrique.
+
+**`A7b` : la quadratique est confirmée, le correctif proposé ne l'est pas.**
+Mesuré isolément le 2026-08-17 sur des pages synthétiques au taux de couples du
+corpus, un `units_containing` par chunk qui tombe :
+
+| P | `derive_hyphen_groups` seul | P appels | par appel | exposant |
+|---|---|---|---|---|
+| 100 | 0,34 ms | 4,5 ms | 0,35 ms | |
+| 400 | 1,17 ms | 70,7 ms | 1,41 ms | 2,04 |
+| 1 600 | 4,87 ms | 1 166,7 ms | 5,83 ms | 1,99 |
+| 3 200 | 9,57 ms | 4 821,4 ms | 12,05 ms | **2,05** |
+
+La dérivation seule est **linéaire** (32× la taille pour 28× le temps) : toute
+la quadratique vient du nombre d'appels, pas de leur coût unitaire. Exposant
+**2,05**, soit exactement quadratique — l'audit disait 1,77, ce qui sous-estime.
+
+**Mais « dériver une fois par page » est faux.** La dérivation du pool n'est pas
+invariante sur la durée de vie d'une page : `split_forward_link` mute les champs
+de pointeurs, il est appelé depuis `plan_page` (`planner.py:469`) dans la
+branche de grain LINE, et `_descend_granularity` (`driver.py:423`) rappelle
+justement `plan_page` en forçant ce grain. Donc l'ordre réel est atteignable :
+un chunk tombe et construit le cache, un autre descend et sévère un lien, un
+troisième tombe et lit un cache périmé — **il ferait tomber une ligne qui n'est
+plus dans l'unité**, silencieusement, et l'invariant de projection ne le verrait
+pas puisqu'il compare l'artefact aux décisions dont l'artefact est issu.
+
+Le remède qui tient utilise un canal que la conception a déjà construit pour
+ça : `split_forward_link` renvoie un `HyphenSplit` que le `ChunkPlan` porte
+précisément pour qu'« un consommateur apprenne que la coupe a eu lieu ». La clé
+de cache est donc l'ensemble des splits vus par le workspace, pas la page. Ce
+n'est plus cinq lignes, et c'est à faire quand `S1` aura rendu les groupes
+autoritaires — d'ici là les champs de pointeurs restent le stockage de
+référence, et mettre un cache devant un stockage mutable est le défaut qu'on
+vient d'éviter.
 
 Nuance mesurée qui borne `A7c` : les pages du corpus épinglé font 29, 42 et
 1 144 lignes, et au grain par défaut une page de 29 lignes est **un seul
