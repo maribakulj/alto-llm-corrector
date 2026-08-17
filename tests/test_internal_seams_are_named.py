@@ -203,6 +203,12 @@ _SEAMS: dict[str, tuple[str, str]] = {
         "no run output exposes",
     ),
     "saknussemm.formats.alto.rewriter._tokenize": ("value", "text in, tokens out"),
+    "saknussemm.formats.alto.rewriter._word_boundary_moved": (
+        "value",
+        "two word lists in, a verdict out. The run only exposes which path was "
+        "taken, so the boundary cases — and the counter-example proving the "
+        "obvious guard would have passed — are only statable here",
+    ),
     "saknussemm.formats.page._ns._namespace_year": (
         "value",
         "namespace in, schema year out",

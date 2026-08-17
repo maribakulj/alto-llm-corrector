@@ -504,6 +504,51 @@ def _drop_structural_break_hyphen(text: str) -> str:
     return text
 
 
+def _word_boundary_moved(originals: list[str], words: list[str]) -> bool:
+    """Whether pairing word *i* with String *i* would attach the wrong box.
+
+    An equal word count is what makes the fast path *possible*; it is not
+    what makes it *correct*. A correction can keep the count and move the
+    boundary — ``au`` + ``jourdhui`` becomes ``aujourd`` + ``hui`` — and
+    then the positional ``zip`` writes seven characters into the box drawn
+    for two. Measured on that line before this guard existed: 8.6 units
+    per character against 273, and the report said ``EXACT``, because the
+    reconstructed text does equal the decision. The fidelity check reads
+    text; it is blind to which box a word landed in.
+
+    Two signals, both cheap, because the fast path exists to be cheap:
+
+    - **The letters are the same and the split is not.** Then the boundary
+      definitively moved: there is no other way to reach the same
+      concatenation with different words. Exact, no threshold, and no
+      false positive by construction.
+    - **A word changed length beyond what a correction plausibly does.**
+      The tolerance is half the original word, floor 1, so ``0`` → ``o``,
+      ``|||`` → ``Ill`` and ``Frauce`` → ``France`` all stay on the fast
+      path while a two-character word becoming seven does not.
+
+    A word-repertoire note on the first signal: it is deliberately the
+    weaker-looking one, and it is the one that carries the case above.
+    ``au``/``jourdhui`` shares ``a`` and ``u`` with ``aujourd``, so a
+    "share at least one character" rule — the obvious first idea, and the
+    one this guard was first written as — **passes** the very line it was
+    meant to catch. Verified before this code was written.
+
+    Returning ``True`` refuses no correction: the caller falls back to the
+    slow path, which aligns tokens instead of assuming positions. The cost
+    is recomputed geometry on that line, which is what the slow path is
+    for.
+    """
+    if originals == words:
+        return False
+    if "".join(originals) == "".join(words):
+        return True
+    return any(
+        abs(len(word) - len(original)) > max(1, len(original) // 2)
+        for original, word in zip(originals, words)
+    )
+
+
 def _update_content_in_place(
     el: etree._Element,
     corrected: str,
@@ -514,10 +559,19 @@ def _update_content_in_place(
 
     Returns True on success. ALL other attributes (ID, HPOS, VPOS, WIDTH,
     HEIGHT, WC, CC, STYLEREFS, etc.) and SP/HYP elements stay untouched.
+
+    An equal word count is necessary and **not sufficient**: see
+    :func:`_word_boundary_moved`. The check runs before anything is
+    mutated, so a refusal leaves the element exactly as it was found —
+    this function is called for its side effects and the caller retries on
+    the slow path.
     """
     orig_strings = _get_string_children(el, ns)
     words = [t for t in _tokenize(corrected) if not _is_space_token(t)]
     if len(words) != len(orig_strings):
+        return False
+    cleaned = [clean_content(word) for word in words]
+    if _word_boundary_moved([s.get("CONTENT", "") for s in orig_strings], cleaned):
         return False
     for string_el, word in zip(orig_strings, words):
         new_content = clean_content(word)

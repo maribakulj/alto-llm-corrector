@@ -286,13 +286,24 @@ moins chers.
 
 | # | quoi | coût | mesuré |
 |---|---|---|---|
-| `A1a` | Chemin rapide ALTO : exiger qu'un mot corrigé partage au moins un caractère avec le `CONTENT` à la même position, sinon router vers le chemin lent. **Aucune correction refusée, seulement re-routée** | petit | géométrie et `STYLEREFS` attachés aux mauvais mots, `losses` vide, `fidelity = EXACT` |
+| `A1a` | **Fait le 2026-08-17.** Chemin rapide ALTO : détecter le déplacement de frontière avant toute mutation, sinon router vers le chemin lent. **Aucune correction refusée, seulement re-routée** — et aucune ligne du corpus réel ne l'est | petit | avant : 8,6 contre 273 unités par caractère, `losses` vide, `fidelity = EXACT`. Après : 84,9 et 85,0 |
 | `A1b` | `E5` côté PART1 : aucune borne de rétrécissement n'existe. Interdire qu'une op de span à `text` vide couvre le dernier caractère non-tiret (avant) ou le premier non-blanc (arrière). **Ne refuse aucune correction légitime** | petit | `<String CONTENT="-">`, un `String` de tiret nu, livré |
 | `A1c` | Migration de mot entier entre lignes : étendre `check_boundary_migration` au cas « le dernier token corrigé de A égale le premier token source de B ». Coût nul en calcul | petit | un mot change de ligne, aucun compteur ne bronche |
 | `A1d` | `write()` refuse les collisions de nom de base **avant** d'écrire quoi que ce soit ; les deux `read_source_tree` des réécriveurs passent dans `classified_parse_errors` | 2 + 5 lignes | 3 chemins retournés, 2 fichiers sur disque ; `FileNotFoundError` nu qui s'échappe |
 | `A1e` | Contrôle de couverture au préflight : si `source_files` est non vide, exiger l'égalité des ensembles. Ferme aussi la clé fantôme dans la provenance | ~8 lignes | **injecté et mesuré : 1485 tests, aucun échec** |
 | `A1f` | Condensats des sources estampillés **au parsing**, portés par le manifeste ; au rendu, lire une fois, comparer, refuser en cas d'écart. Ferme la contamination croisée et le TOCTOU | moyen | artefact chimère ; `EditScript` qui échoue sur ses propres préconditions |
 | `A1g` | Même traitement pour la chaîne vision : vérifier les octets contre `asset.sha256` à l'ouverture du crop | petit | condensat gravé ≠ fichier ouvert |
+
+Note d'exécution sur `A1a`, qui vaut pour toute cette section : la garde que
+l'audit proposait — *un mot corrigé partage au moins un caractère avec l'original
+à la même position* — **passe sur le contre-exemple même qu'elle cite**.
+`aujourd` partage `a` et `u` avec `au`, `hui` partage trois caractères avec
+`jourdhui`. Vérifié avant d'écrire une ligne de code, et le constat est gardé
+exécutable par un test. Le signal qui mord est autre : *les lettres sont les
+mêmes et le découpage ne l'est pas* — exact, sans seuil, sans faux positif par
+construction — doublé d'une tolérance de longueur pour les déplacements
+accompagnés d'une correction. **Ne pas prendre une proposition d'audit pour un
+correctif validé.**
 
 `A1e` et `A1f` sont la **contre-proposition mesurée** à l'« objet source
 immuable » que la revue réclamait : elle fermerait deux des quatre problèmes
