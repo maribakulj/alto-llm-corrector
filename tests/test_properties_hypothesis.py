@@ -19,6 +19,7 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 from lxml import etree
 
+from saknussemm.core.pairing import HYPHEN_CHARS
 from saknussemm.core.planner import plan_page
 from saknussemm.core.schemas import ChunkGranularity, ChunkPlannerConfig, HyphenRole
 from saknussemm.formats.alto.parser import build_document_manifest
@@ -40,7 +41,12 @@ _WORD = st.text(
 @st.composite
 def alto_documents(draw: st.DrawFn) -> str:
     """A syntactically valid single-page ALTO v3 document with random
-    blocks, lines, words and non-overlapping explicit hyphen pairs."""
+    blocks, lines, words and non-overlapping explicit hyphen pairs.
+
+    The break mark is drawn from the whole repertoire — see
+    ``_alto_gen.rich_alto_documents`` for what measuring it showed.
+    """
+    break_mark = draw(st.sampled_from(HYPHEN_CHARS))
     n_blocks = draw(st.integers(1, 3))
     line_no = 0
     blocks_xml: list[str] = []
@@ -73,7 +79,7 @@ def alto_documents(draw: st.DrawFn) -> str:
                 if wi == len(words) - 1 and pair_start.get(li):
                     part2_first = words_per_line[li + 1][0]
                     attrs += f' SUBS_TYPE="HypPart1" SUBS_CONTENT="{w}{part2_first}"'
-                    hyp = '<HYP CONTENT="-"/>'
+                    hyp = f'<HYP CONTENT="{break_mark}"/>'
                 if wi == 0 and pair_start.get(li - 1):
                     part1_last = words_per_line[li - 1][-1]
                     attrs += f' SUBS_TYPE="HypPart2" SUBS_CONTENT="{part1_last}{w}"'

@@ -57,6 +57,14 @@ _ELSEWHERE: dict[str, str] = {
         "reads the partner refs to check what the PAYLOAD tells a producer "
         "— the subject is the request, not the pair"
     ),
+    "test_properties_hypothesis.py": (
+        "draws its break mark from HYPHEN_CHARS rather than hard-coding the "
+        "ASCII hyphen. Its subject is the whole parse/rewrite round-trip, not "
+        "the hyphen unit — but the mark had to come from the repertoire: "
+        "measured over 200 draws, both generators emitted `-` and none of the "
+        "other five, so ten hyphenation properties ran on one sixth of it "
+        "while the corpus marks every break with `¬`"
+    ),
     "test_smoke.py": ("imports every public module by name to prove the package loads"),
 }
 

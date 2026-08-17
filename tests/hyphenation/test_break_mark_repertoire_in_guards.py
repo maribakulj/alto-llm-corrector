@@ -23,6 +23,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+
 import pytest
 
 from saknussemm.core.hyphenation import _part1_text_migrated
@@ -393,3 +394,63 @@ class TestAnEmptyLineAtAPageSeam:
     def test_the_ordinary_seam_is_unchanged(self) -> None:
         by_id = self._link(["une admini-"], ["stration suite"])
         assert by_id["P1_L0"].hyphen_pair_line_id == "P2_L0"
+
+
+# ---------------------------------------------------------------------------
+# The generators must reach the repertoire too — L5's blind spot
+# ---------------------------------------------------------------------------
+
+
+def test_the_generators_draw_their_break_mark_from_the_repertoire() -> None:
+    """`L5` swept five guard sites and left the GENERATORS on ASCII.
+
+    Measured 2026-08-17 over 200 draws of each: both emitted ``-`` and none
+    of the other five, ever. So the ten Hypothesis properties that touch
+    hyphenation ran on one sixth of the repertoire — while this repository's
+    own corpus marks **every** break with ``¬`` and the bench's Fraktur
+    ground truth uses ``⸗``. The mark the properties exercised was the one
+    the corpus does not use.
+
+    This draws documents and looks at what came out. The first version of it
+    scanned the source for a hard-coded ``CONTENT="-"`` and for a mention of
+    ``HYPHEN_CHARS`` — and **did not catch** the obvious regression, because
+    pinning ``break_mark = "-"`` removes neither the literal nor the import.
+    A shape check for a behavioural property, which is the mistake this whole
+    effort exists to find.
+
+    Sampling is reliable here rather than approximate: the mark is drawn
+    uniformly from six values, so 60 documents seeing fewer than three
+    distinct marks has a probability of about one in a billion.
+    """
+    from hypothesis import HealthCheck, given, settings
+
+    from tests._alto_gen import rich_alto_documents
+
+    for label, strategy in (
+        ("rich_alto_documents", rich_alto_documents()),
+        ("alto_documents", _alto_documents_strategy()),
+    ):
+        seen: set[str] = set()
+
+        @settings(
+            max_examples=60, deadline=None, suppress_health_check=list(HealthCheck)
+        )
+        @given(document=strategy)
+        def collect(document: object) -> None:
+            xml = document[0] if isinstance(document, tuple) else document
+            seen.update(mark for mark in HYPHEN_CHARS if f'CONTENT="{mark}"' in xml)  # type: ignore[operator]
+
+        collect()
+        assert len(seen) >= 3, (
+            f"{label} produced only {sorted(seen)!r} over 60 documents. The "
+            "break mark must be drawn from HYPHEN_CHARS: a generator that "
+            "emits one of six marks makes every hyphenation property a test "
+            "of that one mark, and the corpus uses a different one."
+        )
+
+
+def _alto_documents_strategy() -> object:
+    """Imported lazily — ``test_properties_hypothesis`` imports this package."""
+    from tests.test_properties_hypothesis import alto_documents
+
+    return alto_documents()
