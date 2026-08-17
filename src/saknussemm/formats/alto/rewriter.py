@@ -27,8 +27,8 @@ from saknussemm.formats.alto._ns import (
     _int_attr,
     _tag,
     make_safe_parser,
-    read_source_tree,
 )
+from saknussemm.formats._xml import read_source_tree_classified
 from saknussemm.formats.alto._text import reconstruct_textline
 from saknussemm.core.protocols import RewriteResult
 from saknussemm.core.schemas import HyphenRole, LineManifest, PageManifest
@@ -967,7 +967,7 @@ def rewrite_alto_file(
     # Hardened parser — see saknussemm.formats.alto._ns.make_safe_parser docstring
     # for the rationale. Using lxml's default here would expose every
     # rewrite to entity-amplification DoS via crafted ALTO uploads.
-    tree = read_source_tree(xml_path)
+    tree = read_source_tree_classified(xml_path)
     root = tree.getroot()
     ns = _detect_namespace(root)
     metrics = RewriterMetrics()

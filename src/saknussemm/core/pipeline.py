@@ -409,6 +409,7 @@ class CorrectionPipeline:
             escalation_producer=self.escalation_producer,
             format_adapter=self.format_adapter,
             document_manifest=document_manifest,
+            source_files=source_files,
             page_images=page_images,
             ctx=ctx,
         )

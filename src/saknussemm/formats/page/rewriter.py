@@ -44,9 +44,9 @@ from saknussemm.formats.page._ns import (
     _detect_namespace,
     _tag,
     make_safe_parser,
-    read_source_tree,
     supports_metadata_item,
 )
+from saknussemm.formats._xml import read_source_tree_classified
 from saknussemm.formats.page._text import (
     canonical_line_text,
     canonical_textequiv,
@@ -349,7 +349,7 @@ def rewrite_page_file(
     of ``untouched`` / ``fast_path`` / ``slow_path`` (never
     ``subs_only``).
     """
-    tree = read_source_tree(xml_path)
+    tree = read_source_tree_classified(xml_path)
     root = tree.getroot()
     ns = _detect_namespace(root)
     metrics = PageRewriterMetrics()

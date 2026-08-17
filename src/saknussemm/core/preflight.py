@@ -1,12 +1,15 @@
 """Everything a run refuses BEFORE spending any correction work.
 
-Five checks, and the reason they are one function rather than five scattered
+Six checks, and the reason they are one function rather than six scattered
 guards is that they share a property: each turns a mid-run surprise into a
-start-up error. A vision producer with no images, a producer whose declared
-capabilities contradict its wiring, an injected adapter that disagrees with
-the format the manifest was parsed as, a duplicate identity, an image key
-matching no page — every one of them would otherwise fail late, confusingly,
-with correction work already spent.
+start-up error. A `source_files` mapping that does not describe the same
+document as the manifest, a vision producer with no images, a producer whose
+declared capabilities contradict its wiring, an injected adapter that
+disagrees with the format the manifest was parsed as, a duplicate identity,
+an image key matching no page — every one of them would otherwise fail late,
+confusingly, with correction work already spent. The first of them would not
+fail at all: it would report success over a document half of which reached
+no artefact.
 
 Lifted out of ``_run_impl``: the 311-line orchestrator opened with 60
 lines that decide nothing about how the run proceeds, only whether it may
@@ -14,6 +17,8 @@ start at all.
 """
 
 from __future__ import annotations
+
+from pathlib import Path
 
 from saknussemm.core.context import RunContext
 from saknussemm.core.identity import (
@@ -30,17 +35,70 @@ from saknussemm.core.schemas import DocumentManifest, PageImage, PageManifest
 from saknussemm.errors import ConfigurationError
 
 
+def _require_every_source(
+    document_manifest: DocumentManifest,
+    source_files: dict[str, Path],
+) -> None:
+    """Every file the manifest was parsed from must be renderable, or none.
+
+    Refusing at start-up rather than reporting a partial render is the
+    whole point: a run that half-renders has already spent the producer
+    calls, and its report is indistinguishable from a complete one except
+    by summing two counters that nothing says should agree.
+    """
+    if not source_files:
+        return
+    declared = set(document_manifest.source_files)
+    supplied = set(source_files)
+    missing = sorted(declared - supplied)
+    unknown = sorted(supplied - declared)
+    if not missing and not unknown:
+        return
+    detail = []
+    if missing:
+        detail.append(
+            f"{missing} were parsed into the manifest but have no source file, "
+            "so their decided lines would reach no artefact"
+        )
+    if unknown:
+        detail.append(
+            f"{unknown} were supplied but name no page in the manifest, so "
+            "they would be read, hashed into the provenance, and contribute "
+            "nothing"
+        )
+    raise ConfigurationError(
+        "`source_files` does not describe the same document as the manifest: "
+        + "; ".join(detail)
+        + ". Pass every source the manifest was built from, or pass none at "
+        "all for a decide-only run."
+    )
+
+
 def _preflight(
     *,
     producer: EditProducer,
     escalation_producer: EditProducer | None,
     format_adapter: FormatAdapter | None,
     document_manifest: DocumentManifest,
+    source_files: dict[str, Path],
     page_images: dict[str, PageImage] | None,
     ctx: RunContext,
 ) -> None:
     """Refuse a run that cannot honestly proceed. Mutates ``ctx`` with the
     per-page image envelope it validated."""
+    # The manifest says which files it was parsed from; `source_files`
+    # says which ones will be rewritten. Nothing compared the two, and
+    # this function could not: it did not receive `source_files` at all.
+    #
+    # Measured 2026-08-17 — a manifest parsed from `a.xml` + `b.xml` run
+    # with only `a.xml` supplied: the run SUCCEEDED, `report.total_lines`
+    # counted both files' lines, and `projection_fidelity` counted one
+    # file's. Half the decided lines existed in no artefact, and the only
+    # trace was that arithmetic.
+    #
+    # An empty mapping stays legal and means "decide, render nothing": the
+    # dry run is a documented mode, and five test files rely on it.
+    _require_every_source(document_manifest, source_files)
     # §5.1 — a vision producer without its images is a start-up error,
     # never a silent image-less call.
     require_page_images(producer, document_manifest.pages, page_images)
