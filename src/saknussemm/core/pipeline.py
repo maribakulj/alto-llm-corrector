@@ -49,7 +49,7 @@ from saknussemm.core.report import _build_correction_report
 from saknussemm.core.result import CorrectionResult, _build_correction_result
 from saknussemm.core.provenance import (
     _build_run_provenance,
-    _digest_sources,
+    digests_of_the_bytes_decided_on,
 )
 from saknussemm.core.protocols import (
     EditProducer,
@@ -449,9 +449,9 @@ class CorrectionPipeline:
             decisions=decisions,
         )
 
-        # One digest computation feeds BOTH the provenance
-        # record and the final edit script's preconditions.
-        source_digests = _digest_sources(source_files)
+        source_digests = digests_of_the_bytes_decided_on(
+            document_manifest, source_files
+        )
 
         report = _build_correction_report(
             run_id=run_id,

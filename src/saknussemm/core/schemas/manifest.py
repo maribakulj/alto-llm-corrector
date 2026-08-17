@@ -268,6 +268,31 @@ class DocumentManifest(BaseModel):
     #: Empty in the overwhelmingly common case.
     source_encodings: dict[str, str] = Field(default_factory=dict)
 
+    #: ``{source_file: "sha256:<hex>"}`` of the bytes each page was parsed
+    #: FROM, stamped by the parser that read them. The engine reopens these
+    #: paths at render — a second read of a file it decided on minutes
+    #: earlier — and until 2026-08-17 nothing checked that the second read
+    #: found the first document.
+    #:
+    #: Two measured consequences. A ``source_files`` mapping that names the
+    #: wrong path for a name delivered one file's decided text inside
+    #: another file's tree, geometry and page ids, destroying the other
+    #: file's text, and the run SUCCEEDED — ``ADR-007`` makes ``line_id``
+    #: unique only within a file, so two files of one document normally
+    #: both carry ``TL1…TLn`` and every lookup matched. And a file replaced
+    #: under a run projected one version's decisions into another version's
+    #: markup, line by line, silently.
+    #:
+    #: Neither was visible to the projection invariant, which is the part
+    #: worth keeping in mind: it compares the delivered artefact to the
+    #: decisions, and the artefact was *made* by writing those decisions. It
+    #: cannot see that the tree underneath was the wrong one. A digest can.
+    #:
+    #: Empty on a hand-built manifest, and that is deliberate rather than a
+    #: gap: the check is a claim about a file this library read, so a caller
+    #: who assembled a manifest by other means is not held to it.
+    source_digests: dict[str, str] = Field(default_factory=dict)
+
     # ADR-011 — the counters are DERIVED from the pages. A stored copy
     # could contradict the content (the old validator existed to catch
     # exactly that lie); a computed one cannot. ``computed_field`` keeps

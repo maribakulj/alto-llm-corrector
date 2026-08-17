@@ -42,6 +42,17 @@ def _dependency_versions() -> dict[str, str]:
     return versions
 
 
+def source_digest(raw: bytes) -> str:
+    """``sha256:<hex>`` of a source document's bytes.
+
+    One definition, because a digest computed two ways is a digest that can
+    disagree with itself: the parse-time stamp on the manifest, the
+    provenance record and the edit script's preconditions all come from
+    here.
+    """
+    return "sha256:" + hashlib.sha256(raw).hexdigest()
+
+
 def _digest_sources(source_files: dict[str, Path]) -> dict[str, str]:
     """``sha256:<hex>`` of every input file's bytes, as GIVEN.
 
@@ -50,9 +61,36 @@ def _digest_sources(source_files: dict[str, Path]) -> dict[str, str]:
     construction, not by coincidence.
     """
     return {
-        name: "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
-        for name, path in source_files.items()
+        name: source_digest(path.read_bytes()) for name, path in source_files.items()
     }
+
+
+def digests_of_the_bytes_decided_on(
+    document_manifest: DocumentManifest,
+    source_files: dict[str, Path],
+) -> dict[str, str]:
+    """Digests for the given files, taken from the parse rather than re-read.
+
+    ``RunProvenance.source_digests`` means "the input bytes, as GIVEN", so
+    the keys follow ``source_files`` — a decide-only run gives none and
+    attests none.
+
+    The *values* come from the parser's stamp, and that is the correction.
+    :func:`_digest_sources` used to run **after** the render, hashing a
+    third read of each file, so a document that changed mid-run was
+    attested by a digest of bytes nothing had ever parsed — and the same
+    edit script carried preconditions computed on one version beside a
+    digest of another. Replayed against the file it names, it failed its own
+    preconditions. The preflight now refuses a path whose bytes moved, so
+    the stamp is both truthful and verified.
+
+    Falls back to hashing when the manifest carries no stamp, which means it
+    was not built by a parser of this library.
+    """
+    stamped = document_manifest.source_digests
+    if not stamped:
+        return _digest_sources(source_files)
+    return {name: stamped[name] for name in source_files if name in stamped}
 
 
 def _build_run_provenance(

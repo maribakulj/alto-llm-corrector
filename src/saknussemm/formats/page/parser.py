@@ -22,6 +22,7 @@ from saknussemm.core.identity import (
     ensure_unique_element_ids,
     ensure_unique_identities,
 )
+from saknussemm.core.provenance import source_digest
 from saknussemm.core.pairing import (
     HYPHEN_CHARS,
     disambiguate_page_ids,
@@ -343,6 +344,9 @@ def build_document_manifest(
 
     return DocumentManifest(
         source_files=source_files,
+        # Stamped by the parser that read these bytes — see
+        # `DocumentManifest.source_digests`.
+        source_digests={name: source_digest(path.read_bytes()) for path, name in files},
         pages=all_pages,
         source_format="page",
     )
