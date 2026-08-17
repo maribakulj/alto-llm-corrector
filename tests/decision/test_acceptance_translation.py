@@ -92,9 +92,28 @@ def test_a_rejected_proposal_yields_the_source_at_runtime(
     source: str, proposal: str
 ) -> None:
     """The static scan says what the branches return; this says the object
-    actually built agrees with it."""
+    actually built agrees with it.
+
+    The rejection is **asserted**, not assumed. It used to be
+    ``if result.accepted: pytest.skip(...)``, which conditioned the whole
+    verdict on the guard still rejecting — so the test disarmed itself
+    exactly when it mattered. Measured 2026-08-17: with guard 1 made to
+    accept, all three parameters **SKIPPED** instead of failing, and the
+    file's two static scans stayed green; only one test elsewhere in the
+    suite noticed.
+
+    If a guard change makes one of these pairs acceptable, this must go red
+    and the pair must be replaced by one the guards still refuse — the
+    file's subject is what a REJECTION returns, and a fixture that stopped
+    being rejected has stopped being a fixture.
+    """
     result = check_line(source, proposal, None, None, config=GuardConfig())
-    if result.accepted:
-        pytest.skip("this pair is accepted — it says nothing about rejection")
+    assert not result.accepted, (
+        f"{proposal!r} against {source!r} is now ACCEPTED, so this pair says "
+        "nothing about what a rejection returns. Replace it with a pair the "
+        "guards still refuse rather than letting the case skip: a test that "
+        "steps aside when its premise fails is a test that reports success "
+        "for the one reason it exists to catch."
+    )
     assert result.text == source
     assert result.reason

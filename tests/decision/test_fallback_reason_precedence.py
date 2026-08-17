@@ -35,6 +35,7 @@ these tests are how it proves the consumer-visible reason did not move.
 from __future__ import annotations
 
 import ast
+import pathlib
 import random
 from pathlib import Path
 from typing import Any
@@ -472,6 +473,22 @@ _TRACE_FUNNELS = frozenset({"_set_trace", "put"})
 _REASON = "fallback_reason"
 
 
+def _scanned_paths() -> list[pathlib.Path]:
+    """Every module the census reads — recursively.
+
+    It was ``(SRC / "core").glob("*.py")``: one directory, not its
+    subdirectories. ``core/schemas/``, ``formats/``, ``producers/`` and
+    ``integrations/`` were all invisible, so an eighth writer placed in any
+    of them would have left the pin at its expected value and this file
+    green — which is the one thing the census exists to prevent.
+
+    Verified on 2026-08-17: recursing finds the **same two** sites, so no
+    writer is hiding today. The hole was latent, and a latent hole in a
+    census is exactly a census that will be wrong once and say nothing.
+    """
+    return sorted(SRC.rglob("*.py"))
+
+
 def _reason_writes() -> tuple[int, int]:
     """``(deferring, assigning)`` writes of ``fallback_reason`` in ``core``.
 
@@ -488,7 +505,7 @@ def _reason_writes() -> tuple[int, int]:
     left the pin at ``(2, 0)`` and this test green.
     """
     deferring = assigning = 0
-    for path in sorted((SRC / "core").glob("*.py")):
+    for path in _scanned_paths():
         d, a = _classify(ast.parse(path.read_text(encoding="utf-8")))
         deferring += d
         assigning += a
@@ -593,4 +610,25 @@ def test_the_precedence_rule_is_split_four_ways_against_three() -> None:
         "assigning writes. If that was deliberate, update the behavioural "
         "pins above in the same commit — they are what says which reason a "
         "consumer actually sees."
+    )
+
+
+def test_the_census_looks_beyond_the_core_directory() -> None:
+    """The scope, pinned separately from the count.
+
+    A census is two claims — *what counts as a write* and *where to look* —
+    and only the first had a test. ``_classify`` is exercised against
+    fabricated source above; this is the other half.
+    """
+    scanned = {path.relative_to(SRC).as_posix() for path in _scanned_paths()}
+    nested = {path for path in scanned if "/" in path.removeprefix("core/")}
+    assert nested, (
+        f"the census reads only {sorted(scanned)[:6]}… — no subdirectory. A "
+        "writer in core/schemas/, formats/, producers/ or integrations/ "
+        "would be invisible to it, and the pin would stay green."
+    )
+    assert "core/schemas/report.py" in scanned, (
+        "core/schemas/report.py is not scanned. That is the module the audit "
+        "planted a third writer in to show the hole; keeping it named here "
+        "means the demonstration stays executable."
     )

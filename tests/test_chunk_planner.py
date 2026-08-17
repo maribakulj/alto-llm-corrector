@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 
-import pytest
 from saknussemm.core.planner import downgrade_granularity, plan_page
 
 from saknussemm.core.schemas import (
@@ -444,9 +443,6 @@ def test_cross_block_chain_merged():
 
 def test_corpus_chains_never_split():
     """On X0000002.xml, no BOTH line's forward partner is in a different chunk."""
-    if not X0000002_PATH.exists():
-        pytest.skip("X0000002.xml not available")
-
     from saknussemm.formats.alto.parser import parse_alto_file
 
     pages, _ = parse_alto_file(X0000002_PATH, "X0000002.xml")

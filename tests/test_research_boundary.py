@@ -78,8 +78,6 @@ def test_a_default_run_loads_no_gated_module() -> None:
     ``sys.modules`` afterwards.
     """
     sample = EXAMPLES / "sample.xml"
-    if not sample.exists():  # pragma: no cover - corpus always present in-repo
-        pytest.skip("examples/sample.xml absent")
     loaded = _import_probe(
         "from pathlib import Path\n"
         "from saknussemm.core.pipeline import CorrectionPipeline\n"
