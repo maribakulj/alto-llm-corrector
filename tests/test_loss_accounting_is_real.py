@@ -42,7 +42,7 @@ from saknussemm.formats.alto.losses import (
     is_invalidated,
 )
 from saknussemm.core.schemas import LineStatus
-from saknussemm.formats.alto._ns import _detect_namespace
+from saknussemm.formats.alto._ns import _detect_namespace, _tag
 from saknussemm.formats.alto.parser import parse_alto_file
 from saknussemm.formats.alto.rewriter import rewrite_alto_file
 
@@ -106,14 +106,37 @@ def assert_every_count_is_a_real_loss(
             )
 
 
+def _string_count(line: object, ns: str) -> int:
+    return sum(1 for child in line if child.tag == _tag("String", ns))  # type: ignore[attr-defined]
+
+
 def assert_every_real_loss_is_counted(
     source: Path, output: bytes, losses_by_line: dict[str, dict[str, int]]
 ) -> None:
-    """The other direction — an attribute that vanished must be counted."""
+    """The other direction — an attribute that vanished must be counted.
+
+    Two questions live here and only one belongs to this function. Comparing
+    per-attribute COUNTS asks "did an attribute drop off an element that
+    survived"; it cannot distinguish that from "an element was merged away,
+    taking its attributes with it". A line whose ``String`` count changed
+    therefore has its per-attribute comparison skipped, and
+    :func:`assert_a_merge_is_not_wholly_silent` asks the separate question.
+
+    Measured 2026-08-17 on ``X0000002.xml``: 5 lines of 566 carry consecutive
+    ``String`` elements with no ``SP`` between them — an OCR artefact that
+    split one word into fragments. The slow path rebuilds from tokens, so it
+    merges them; the text is identical (``L`` + ``r`` + ``s`` → ``Lrs``) and
+    two ``String`` elements are gone. That merge is **not counted**, and it
+    predates every fix of 2026-08-17 — the line takes the slow path because
+    9 source Strings meet 7 corrected words, whatever any guard decides.
+    Named in the plan rather than silently excluded here.
+    """
     src_lines, src_ns = _lines_by_id(source)
     out_lines, out_ns = _lines_by_id(output)
 
     for line_id, src_line in src_lines.items():
+        if _string_count(src_line, src_ns) != _string_count(out_lines[line_id], out_ns):
+            continue  # a merge, not an attribute drop — see the docstring
         before = _string_attr_counts(src_line, src_ns)
         after = _string_attr_counts(out_lines[line_id], out_ns)
         losses = losses_by_line.get(line_id, {})
@@ -346,6 +369,46 @@ def test_an_unknown_attribute_defaults_to_a_countable_loss() -> None:
     assert is_countable_loss("TAGREFS") is True
 
 
+@pytest.mark.parametrize("transform", ["fast", "slow"])
+@pytest.mark.parametrize("name", ["sample.xml", "X0000002.xml"])
+def test_every_real_loss_is_counted_where_losses_actually_happen(
+    name: str, transform: str
+) -> None:
+    """The second direction, on a rewrite that loses something.
+
+    Its only caller was the identity case, where nothing disappears and the
+    loop skips ahead before comparing. Measured 2026-08-17 with a sentinel
+    placed just before that comparison: **20/20 green** — the direction this
+    file exists to add had never executed once.
+
+    It executes now, and the honest count is **one** comparison, on one
+    attribute (``STYLEREFS``), in one of these four cases. That is worth
+    stating plainly rather than dressing up, because it says something about
+    the predicate rather than about the call site:
+
+    ==========================  =========  ==========  ==============
+    case                        compared   merged      invalidated
+    ==========================  =========  ==========  ==============
+    ``fast`` / sample.xml       0          0           9
+    ``fast`` / X0000002.xml     0          4           488
+    ``slow`` / sample.xml       0          10          0
+    ``slow`` / X0000002.xml     **1**      564         2
+    ==========================  =========  ==========  ==============
+
+    Nearly every real disappearance is either an INVALIDATED attribute —
+    ``WC``/``CC``, counted per line under their own key, which
+    :func:`assert_the_matrix_holds` owns — or it comes with a changed
+    ``String`` count, which this comparison cannot read. So the second
+    direction is **structurally near-empty as written**, and the matrix check
+    is what actually carries the weight. That is a finding about the shape of
+    the property, recorded in the plan; making it execute at all was the
+    prerequisite for seeing it.
+    """
+    path, out, losses = _rewrite(name, _TRANSFORMS[transform])
+    assert_every_real_loss_is_counted(path, out, losses)
+    assert_a_merge_is_not_wholly_silent(path, out, losses)
+
+
 def test_an_identity_rewrite_loses_nothing_at_all() -> None:
     """The one case where every direction holds trivially: the UNTOUCHED
     path does not modify the tree."""
@@ -378,3 +441,33 @@ def test_the_matrix_check_catches_a_preserved_attribute_going_missing() -> None:
 
     with pytest.raises(AssertionError, match="declared preserved"):
         assert_the_matrix_holds(src, etree.tostring(root), losses)
+
+
+def assert_a_merge_is_not_wholly_silent(
+    source: Path, output: bytes, losses_by_line: dict[str, dict[str, int]]
+) -> None:
+    """A line that lost ``String`` elements must say something about it.
+
+    The merge itself has no counter — that gap is real and named in the plan
+    (`R*`). What must hold meanwhile is the weaker statement: such a line is
+    not reported as untouched. The attributes those elements carried
+    (``STYLEREFS``, ``WC``) do surface, so the event leaves a trace even
+    though its own count is missing.
+
+    Without this, excluding merged lines from the comparison above would
+    turn a named gap into an unnamed one.
+    """
+    src_lines, src_ns = _lines_by_id(source)
+    out_lines, out_ns = _lines_by_id(output)
+    for line_id, src_line in src_lines.items():
+        before = _string_count(src_line, src_ns)
+        after = _string_count(out_lines[line_id], out_ns)
+        if after >= before:
+            continue
+        assert losses_by_line.get(line_id), (
+            f"{line_id}: {before - after} String element(s) were merged away "
+            "and the report carries no loss at all for the line. The merge "
+            "has no counter of its own, which is a known gap; a line that "
+            "lost elements reporting NOTHING would make that gap invisible "
+            "as well."
+        )

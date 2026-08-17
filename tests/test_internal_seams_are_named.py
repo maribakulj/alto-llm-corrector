@@ -182,6 +182,13 @@ _SEAMS: dict[str, tuple[str, str]] = {
         "element in, text out — the reconstruction parity test compares it "
         "against the rewriter's",
     ),
+    "saknussemm.formats.alto._ns._tag": (
+        "value",
+        "namespace-qualifies an element name. Counting String children of a "
+        "line needs it, and the loss-accounting file counts them to tell an "
+        "attribute that dropped off a surviving element from an element that "
+        "was merged away — two questions one attribute count conflates",
+    ),
     "saknussemm.formats.alto.rewriter._apply_subs": (
         "value",
         "writes onto an lxml element the TEST built; the fixed-point test "

@@ -332,12 +332,27 @@ constat le plus important de l'audit.
 | `A3b` | **Fait le 2026-08-17.** Le compte vient désormais de lxml directement, hors du parseur testé, **marges exclues** — parce que le parseur les exclut délibérément. Ma première version comptait tous les `TextLine` et échouait sur les trois pages : elle assertait une propriété que la bibliothèque n'a pas et ne doit pas avoir (en-têtes courants, folios). Plus le sens inverse : aucune ligne inventée | avant : parseur qui perd une ligne par bloc → **les 18 tests passent**. Après : 9 rougissent |
 | `A3c` | **Fait le 2026-08-17.** Le recensement scanne récursivement — vérifié : il trouve les **mêmes** deux sites, donc le trou était latent, et un troisième écrivain planté dans `core/schemas/` est désormais vu. Le garde anti-skip connaît les trois formes ; les deux évadés, sur fixtures committées, sont supprimés. Ma première version du garde s'attrapait **elle-même** — son commentaire citait la forme cherchée | fixture déplacée : avant → test skippé et garde vert ; après → le test **échoue bruyamment** |
 | `A3d` | **Fait le 2026-08-17.** Le rejet est **asserté**, plus supposé : une paire devenue acceptable doit être remplacée, pas contournée. Un test qui s'écarte quand sa prémisse tombe rapporte un succès pour la seule raison qui justifie son existence | mutation : avant → 3 cas skippés, fichier vert ; après → 3 cas rouges |
-| `A3e` | La « deuxième direction » du comptage de pertes n'exécute jamais sa comparaison (unique site d'appel = réécriture identité) | sentinelle → **20/20 verts** |
+| `A3e` | **Fait le 2026-08-17, et il a révélé plus que prévu.** La direction s'exécute désormais — mais **une seule fois**, sur un seul attribut, sur un des quatre cas. Presque toute disparition réelle est soit un attribut **invalidé** (`WC`/`CC`, comptés par ligne sous leur propre clé, dont la vérification matricielle a la charge) soit accompagnée d'un changement du nombre de `String`, que cette comparaison ne peut pas lire. La deuxième direction est donc **structurellement quasi vide telle qu'écrite**, et c'est la matrice qui porte le poids. Constat de forme, pas de site d'appel — et il fallait la faire s'exécuter pour le voir | sentinelle : avant → **20/20 verts** ; après → atteinte |
 | `A3f` | Les générateurs de propriétés n'atteignent pas les phénomènes annoncés : aucune marque de césure autre que `-` ASCII sur 400 tirages, alors que le corpus marque tout avec `¬` ; producteur métamorphique qui mord sur 1,6 % des caractères ; `hostile_alto` à 1 % d'exemples utiles ; deux tests `st.binary` sans assertion | mesuré |
 
 Signal à retenir : sous une mutation comportementale du parseur ALTO, le **seul**
 test devenu rouge fut le cliquet de nombre de lignes. *La suite détecte plus
 fiablement la taille du code que son sens.*
+
+Trou nommé par `A3e`, à ne pas perdre : **la fusion de `String` n'a aucun
+compteur.** Mesuré sur `X0000002.xml` — 5 lignes sur 566 portent des `String`
+consécutifs sans `SP`, artefact d'OCR ayant scindé un mot en fragments. Le
+chemin lent reconstruit depuis les tokens, donc il les fusionne : le texte est
+identique (`L` + `r` + `s` → `Lrs`) et deux éléments `String` disparaissent avec
+leur géométrie, leur identité et leurs confiances. Antérieur à tous les
+correctifs du 2026-08-17 — la ligne prend le chemin lent parce que 9 `String`
+source rencontrent 7 mots corrigés, quelle que soit la décision d'une garde.
+
+Ce que `R*` exige est que toute altération soit déclarée et comptée. La perte
+laisse une trace (`style_dropped`, `confidence_invalidated`, le chemin
+rapporté) et un test garde ce minimum, mais elle n'a pas de compteur propre.
+Lui en donner un étend le rapport, donc c'est un arbitrage de surface publique
+au même titre que `A2b`.
 
 ### A4 — Bloquant pour la publication seulement
 
