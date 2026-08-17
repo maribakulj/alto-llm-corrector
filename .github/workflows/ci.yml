@@ -124,6 +124,41 @@ jobs:
       - name: pytest + coverage gate (85%)
         run: pytest tests/ --cov=saknussemm --cov-report=term --cov-report=xml
 
+  saknussemm-min-deps:
+    # The lower bounds in pyproject are a promise, and nothing tested it: CI
+    # installs whatever pip resolves TODAY, which is always the newest
+    # version in range. So `pydantic>=2.0` went unchallenged while pydantic
+    # 2.0 raised a hard NameError on this package's `model_`-prefixed
+    # fields — `import saknussemm` did not work at the exact version
+    # `docs/versioning.md` promised to support. The cause is fixed
+    # (`protected_namespaces`); this job is what keeps the promise honest
+    # instead of asserting it.
+    #
+    # Runtime dependencies only, at their declared minima. The `[test]`
+    # extra has no lower bounds at all, so resolving IT low would pin
+    # absurd tool versions and test the wrong thing.
+    name: minimum supported dependencies
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install the declared MINIMA of the runtime dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e '.[test,vision]'
+          pip install 'pydantic==2.0' 'lxml==6.1.0' 'pillow==10.0.0'
+      - name: The package must at least import
+        # Separate from pytest on purpose: an import failure here is the
+        # exact defect this job exists for, and a collection error inside
+        # pytest reads as a test problem rather than a packaging one.
+        run: python -c 'import saknussemm; print(saknussemm.__version__)'
+      - name: pytest
+        run: pytest tests/ -q
+
   saknussemm-external-corpus:
     # Plan V4.2 phase 3 — invariants over REAL Gallica ALTO never seen
     # during development (tests/external_corpus/manifest.json). NON-

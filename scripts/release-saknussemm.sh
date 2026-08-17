@@ -21,7 +21,10 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-PKG_DIR="${REPO_ROOT}/packages/saknussemm"
+# The tree was flattened on 2026-08-16: the library IS the repository.
+# This line still said packages/saknussemm, so the script died on its
+# third useful statement — while a test verified its version regexes.
+PKG_DIR="${REPO_ROOT}"
 TARGET=""
 
 if [[ "${1:-}" == "--testpypi" ]]; then

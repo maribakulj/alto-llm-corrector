@@ -345,12 +345,12 @@ Tous petits, tous mesurés, aucun ne touche la correction.
 
 | # | quoi |
 |---|---|
-| `A4a` | `pydantic>=2.0` → `>=2.0.1` : à `2.0` exactement, `import saknussemm` lève `NameError` sur le namespace protégé `model_`. Un consommateur qui a épinglé `2.0` installe un paquet inimportable |
-| `A4b` | `build` dans l'extra `[test]` : deux gardes d'empaquetage sont sautées en silence et n'ont **jamais** tourné en CI |
-| `A4c` | `.pre-commit-config.yaml` est structurellement invalide (`hooks:` vide) → **aucun** hook ne tourne, y compris le blocage des fichiers > 1 Mo |
+| `A4a` | **Fait le 2026-08-17, autrement que prévu.** Plutôt que rétrécir la borne, corriger la cause : `protected_namespaces=()` sur `LineTrace`, dont deux champs disent « le modèle » au sens OCR et non au sens pydantic. La promesse de `docs/versioning.md` reste vraie au lieu d'être réduite, et `A4f` la vérifie |
+| `A4b` | **Fait le 2026-08-17.** `build` dans `[test]`. Mesuré après : la suite passe de « 2 ignorés » à **zéro ignoré** — les deux gardes tournent et passent |
+| `A4c` | **Fait le 2026-08-17.** Le bloc mypy sans hooks est retiré (mypy tourne en CI, où il n'est pas optionnel), et le hook prettier qui visait `frontend/` — parti avec la démo — avec lui |
 | `A4d` | Scinder le job de publication : `prepare-release` sans `id-token`, `publish` minimal. **Trois** exécutions de code non verrouillé partagent aujourd'hui l'environnement du jeton OIDC, pas une |
-| `A4e` | `scripts/release-saknussemm.sh` pointe vers `packages/saknussemm`, disparu à l'aplatissement — et un test certifie qu'il va bien |
-| `A4f` | Un job « bornes basses » : c'est lui qui aurait trouvé `A4a`. Plus utile qu'une quatrième version de Python |
+| `A4e` | **Fait le 2026-08-17.** Le chemin est corrigé, et un test vérifie désormais qu'il **résout** — l'ancien vérifiait ses expressions régulières, pas qu'il puisse démarrer |
+| `A4f` | **Fait le 2026-08-17.** Job `saknussemm-min-deps` : minima des dépendances **d'exécution** seulement — l'extra `[test]` n'a aucune borne basse, la résoudre bas testerait autre chose. Un import séparé de pytest, parce qu'un échec d'import est précisément le défaut visé |
 | `A4g` | `CONTRIBUTING.md` renvoie à `docs/API.md` et `SECURITY.md` comme normatifs : **les deux sont absents**. Pas de politique de divulgation pour un paquet qu'on va publier |
 
 ### A5 — Structurel, hors porte `0.10` : la vérité unique du texte décidé

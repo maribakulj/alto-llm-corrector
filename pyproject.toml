@@ -50,6 +50,11 @@ vision = [
 # workflow file is not a declaration: it drifts from the local one silently,
 # and the first thing it costs is a red CI on a green local run.
 test = [
+    # `build` is here because two packaging guards import it, and an
+    # `importorskip` that never resolves is a test that never runs: both
+    # were SKIPPED in every CI run, including the one that keeps a corpus
+    # out of the sdist.
+    "build",
     "pytest",
     "pytest-asyncio",
     "pytest-cov",
