@@ -103,6 +103,25 @@ vendors or track a server job's lifecycle; they live in the consumer.
   repository's demo backend implements them for itself, and a future
   extraction of them would be its own distribution, not this one.
 
+## Installing
+
+```bash
+pip install saknussemm            # Pydantic and lxml, nothing else
+pip install 'saknussemm[vision]'  # adds Pillow, for the crop-and-ask producer
+```
+
+Python 3.11 or later. The base install deliberately carries no image library:
+the core is blind to pixels, and a test reads `[project].dependencies` to keep
+it that way.
+
+**Nothing has been published yet.** There are no git tags and the package is
+not on any index, so the commands above will not work today — see *Status*
+below. Until the first release:
+
+```bash
+pip install git+https://github.com/maribakulj/saknussemm
+```
+
 ## Minimal working example
 
 ```python

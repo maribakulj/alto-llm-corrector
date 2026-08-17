@@ -2,10 +2,13 @@
 
 ## Repo layout
 
-**One deliverable.** `packages/saknussemm/` is the correction library: the
-only packaged Python distribution (hatchling), and the reason this
-repository exists. Everything beside it serves it — the plan, the ADRs, the
-audits, the fixtures.
+**One deliverable.** This repository *is* the correction library: the only
+packaged Python distribution (hatchling), and the reason it exists.
+Everything beside `src/` serves it — the plan, the ADRs, the audits, the
+fixtures. The tree was flattened on 2026-08-16, when the demonstration and
+the benchmark left. Until 2026-08-17 the instructions below still told a
+newcomer to change into a packages subdirectory that no longer existed, so
+nobody had run them since.
 
 The web demonstration and the benchmark left on 2026-08-16 and live in
 [`saknussemm-demo`](https://github.com/maribakulj/saknussemm-demo) and
@@ -16,7 +19,6 @@ of scope rather than clever.
 ## Local dev setup
 
 ```bash
-cd packages/saknussemm
 pip install -e '.[test,typecheck]'
 ```
 
@@ -31,7 +33,6 @@ CI does — `_Element.attrib` degrades to `Any` and strict mode goes quiet.
 ## Running things
 
 ```bash
-cd packages/saknussemm
 pytest                                   # coverage gate 85%
 pytest tests/test_x0000002.py::test_name -v
 mypy --strict src/saknussemm
@@ -54,8 +55,11 @@ machine" is the condition for merging.
 ## Documentation rules
 
 Normative docs are the ones listed in the README's documentation map
-(README, `SPECS_LIB_V2.md`, `packages/saknussemm/docs/`, `docs/API.md`,
-`SECURITY.md`, this file). Everything under `docs/history/` is frozen
+(README, `SPECS_LIB_V2.md`, `docs/`, `SECURITY.md`, this file). There is no
+separate API document, and until 2026-08-17 this list named one: the public
+surface is described by `docs/quickstart.md` for the three-call path,
+`docs/reading-a-report.md` for what a run hands back, `docs/edit-protocol.md`
+for the producer seam, and `SPECS_LIB_V2.md` for the contract. Everything under `docs/history/` is frozen
 design/audit history — never update it to match the code; write the
 current truth in a normative doc instead. Audit-trail references
 (`Audit-Fxx`, wave numbers) belong in PRs and issues, not in new code
