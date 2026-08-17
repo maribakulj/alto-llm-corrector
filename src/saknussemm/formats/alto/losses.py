@@ -51,6 +51,19 @@ ALTO_STRING_ATTRIBUTES: dict[str, tuple[AttributeClass, AttributeFate]] = {
     # --- semantic, re-established from the manifest ---
     # ``_apply_subs`` runs on all three write paths and writes both from the
     # line's own hyphen state. Measured: 234 in, 234 out, on every path.
+    #
+    # That measurement was true and the conclusion did not follow. It was
+    # taken on a corpus whose every SUBS_TYPE is `HypPart1` or `HypPart2` —
+    # 115 of each in X0000002.xml — and ALTO has a THIRD value,
+    # `Abbreviation`, which no hyphen state can express. Measured 2026-08-17:
+    # the slow path destroys one and reported nothing, because REWRITTEN means
+    # no counter looks. Same for a hyphenation value the line's own role does
+    # not reproduce.
+    #
+    # REWRITTEN stays, because it is right for the values this rewriter
+    # writes; what was missing is a counter for the ones it does not.
+    # `_semantic_attr_losses` owns that, keyed on the source value against
+    # what the line wants — see `A2d`.
     "SUBS_TYPE": (AttributeClass.SEMANTIC, AttributeFate.REWRITTEN),
     "SUBS_CONTENT": (AttributeClass.SEMANTIC, AttributeFate.REWRITTEN),
     # --- semantic, carried through ---

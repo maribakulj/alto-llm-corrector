@@ -408,8 +408,31 @@ def _apply_subs(
 # vendor attributes) is NOT invalidated by a spelling fix — the rebuild still
 # cannot re-attach it to a re-segmented word without guessing, so it is
 # dropped, but it must be REPORTED, not lost silently ("lossless" was a lie).
-def _semantic_attr_losses(orig_string_attribs: list[dict[str, str]]) -> dict[str, int]:
+#: The two attributes the rewriter re-establishes from the line's HYPHEN
+#: state, and only from that. ALTO's ``SUBS_TYPE`` has three values, and the
+#: third — ``Abbreviation`` — has nothing to do with hyphenation, so nothing
+#: re-establishes it.
+_SUBS_ATTRIBUTES = ("SUBS_TYPE", "SUBS_CONTENT")
+
+
+def _semantic_attr_losses(
+    orig_string_attribs: list[dict[str, str]], manifest: LineManifest
+) -> dict[str, int]:
     """Count the attributes a slow-path rebuild really loses.
+
+    ``SUBS_*`` is counted here rather than trusted to the matrix, because the
+    matrix classifies it REWRITTEN on the strength of ``_apply_subs`` running
+    on every write path — and ``_apply_subs`` writes **at most one String's
+    worth**, from the line's hyphen state. Measured 2026-08-17 with a
+    ``<String CONTENT="Dr" SUBS_TYPE="Abbreviation" SUBS_CONTENT="Docteur"/>``:
+    the identity and fast paths keep it, the slow path **destroys it**, and
+    ``losses`` was ``None`` — an attribute gone and the report saying nothing,
+    which is the `R*` promise inverted.
+
+    So the count is *occurrences in the source minus the one the rebuild will
+    write back*, rather than a per-line role test: a PART1 line can carry an
+    abbreviation on a different String, and re-establishing the hyphen SUBS
+    does nothing for it.
 
     "Really" is defined by :mod:`saknussemm.formats.alto.losses`, the versioned
     matrix, and not by a second list kept here — a second list is how this
@@ -422,9 +445,31 @@ def _semantic_attr_losses(orig_string_attribs: list[dict[str, str]]) -> dict[str
     PAGE rewriter's loss vocabulary, e.g. ``TAGREFS`` → ``tagrefs_dropped``.
     """
     losses: dict[str, int] = {}
+    wanted = {
+        subs_type
+        for subs_type, _content in (
+            _desired_subs(manifest),
+            _desired_forward_subs(manifest),
+        )
+        if subs_type
+    }
     for attribs in orig_string_attribs:
+        by_local = {
+            key.rsplit("}", 1)[-1].upper(): value for key, value in attribs.items()
+        }
+        # A SUBS this line will not write back. `_apply_subs` re-establishes
+        # SUBS from the hyphen state alone, so the honest test is whether the
+        # SOURCE value is one this line actually wants — which the manifest
+        # knows, and which needs no guess about the rebuilt shape.
+        if by_local.get("SUBS_TYPE") not in (None, *wanted):
+            for local in _SUBS_ATTRIBUTES:
+                if local in by_local:
+                    key = f"{local.lower()}_dropped"
+                    losses[key] = losses.get(key, 0) + 1
         for key in attribs:
             local = key.rsplit("}", 1)[-1]
+            if local.upper() in _SUBS_ATTRIBUTES:
+                continue
             if not is_unconditional_loss(local):
                 continue
             loss_key = f"{local.lower()}_dropped"
@@ -791,7 +836,7 @@ def _rebuild_line(
     # Semantic attributes (TAGREFS, language, vendor) the rebuild will drop:
     # reported, never silently lost. Computed from the source Strings before
     # they are cleared; the emitted Strings only carry the §6.1 whitelist.
-    losses = _semantic_attr_losses(orig_string_attribs)
+    losses = _semantic_attr_losses(orig_string_attribs, manifest)
 
     # identity follows the token ALIGNMENT, not the
     # position: an inserted word must not shift every following word onto
