@@ -463,10 +463,48 @@ oubliés, pas pour être faits maintenant — et `A7c` reste sous la règle de g
 
 | # | quoi | mesuré |
 |---|---|---|
-| `A7a` | Le comparateur de similarité est reconstruit à neuf à chaque appel : ~6 fois par couture, jusqu'à 5 par ligne. Le réutiliser ne change aucun comportement | **43 % du temps** d'un run profilé |
+| ~~`A7a`~~ | Le comparateur de similarité est reconstruit à neuf à chaque appel : ~6 fois par couture, jusqu'à 5 par ligne. Le réutiliser ne change aucun comportement | **43 % du temps** d'un run profilé — **prémisse fausse, mais le site cachait un défaut de justesse. Fait le 2026-08-17, voir ci-dessous** |
 | `A7b` | `units_containing` redérive les groupes de **toute la page** à chaque chunk qui tombe. La seule vraie quadratique. Dériver une fois par page | **52 % du run** ; exposant 1,04 → 1,77 ; 20 000 lignes ne terminent pas en 3 min 29 contre 33 s sans échec |
 | `A7c` | `max_in_flight` intra-page, chunks de premier niveau seulement, la descente restant séquentielle car ses sous-chunks partagent une bourse | prototype **octet pour octet identique** dans 20 configurations, **×12 à ×15**. Prérequis : trier `report.hyphen_splits`, aujourd'hui ordonné par l'exécution |
 | `A7d` | `align_tokens` payé jusqu'à 3× par ligne ; `source_for_target` en balayage linéaire par token | correctif de cinq lignes |
+
+**`A7a` : la mesure a réfuté le correctif et trouvé autre chose.** Réutiliser
+le comparateur ne rend que **6 %** d'une étape qui pèse 37 % — soit ~2 % du
+run, pas assez pour justifier le risque : le coût de `difflib` est dans la
+recherche de blocs, pas dans la construction de l'index. En mesurant, l'ordre
+d'arguments incohérent que l'audit signalait a mené ailleurs : `ratio()` n'est
+asymétrique qu'à cause de l'heuristique **`autojunk`**, active par défaut, qui
+au-delà de **200 éléments** traite comme du bruit tout élément présent dans
+plus de 1 % du second opérande. C'est une heuristique pour comparer des
+*fichiers*, où un élément est une ligne entière ; ici un élément est un
+caractère, donc dans 200 caractères de prose l'espace et les lettres courantes
+sont tous « populaires ».
+
+Mesuré sur une ligne en forme de colonne de cours — du contenu ALTO ordinaire :
+
+| longueur | caractères corrigés | borne arithmétique du ratio | renvoyé | verdict |
+|---|---|---|---|---|
+| 107 | 4 | 0,9626 | 0,9626 | accepté |
+| **215** | **8** | **0,9628** | **0,0837** | **`too_different_from_source`** |
+| 323 | 12 | 0,9628 | 0,0557 | `too_different_from_source` |
+
+La même correction, sur le même texte répété, acceptée sous 200 caractères et
+refusée au-dessus. La borne est de l'arithmétique, pas un seuil réglé :
+`ratio() == 2M/T`, donc substituer `k` caractères sur `n` sans changer la
+longueur laisse au moins `1 - k/n`. `autojunk` la viole de 0,88.
+
+Deux coûts, et le second dure plus longtemps : le refus jette une bonne
+correction, mais `source_similarity` est **publié sur chaque ligne** et c'est
+le signal naturel pour calibrer la sévérité d'un run — donc un appelant qui
+calibre dessus calibre sur un nombre qui s'effondre à un seuil de longueur dont
+personne ne l'a averti. Corrigé par `autojunk=False`, et **prouvé neutre** :
+sur **27 108 paires** formées de chaque ligne de chaque corpus réel ici, sous
+trois producteurs de violences différentes, zéro ratio change et le coût est de
++0,7 %. Il ne pouvait pas en être autrement — la plus longue ligne des corpora
+fait 85 caractères, donc l'heuristique ne s'était jamais déclenchée sur quoi
+que ce soit de mesuré. **C'est exactement pourquoi rien ne l'attrapait.**
+L'incohérence d'ordre d'arguments cesse du même coup d'être latente, plutôt que
+d'être rangée : sans `autojunk`, `ratio()` est symétrique.
 
 Nuance mesurée qui borne `A7c` : les pages du corpus épinglé font 29, 42 et
 1 144 lignes, et au grain par défaut une page de 29 lignes est **un seul
