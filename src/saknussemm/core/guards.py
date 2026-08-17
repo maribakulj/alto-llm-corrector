@@ -58,6 +58,7 @@ from dataclasses import dataclass
 from difflib import SequenceMatcher
 from typing import TypeVar
 
+from saknussemm.core._norm import ncfold
 from saknussemm.core.schemas import (
     DEFAULT_GUARD_CONFIG,
     GuardConfig,
@@ -288,6 +289,52 @@ def _word_migrated_across_seam(
     return sim_joined > _similarity(cor_word, own_src) + config.neighbour_margin
 
 
+def _whole_word_crossed_the_seam(
+    wa_src: list[str],
+    wa_cor: list[str],
+    wb_src: list[str],
+    wb_cor: list[str],
+) -> bool:
+    """A whole word appeared on one side of the seam and left the other.
+
+    :func:`_word_migrated_across_seam` models a word being **completed**
+    across the seam — fragment plus fragment, judged by similarity to the
+    concatenation. It cannot see a word being **moved** intact, because a
+    moved word does not resemble ``own_src + neighbour``. Measured
+    2026-08-17: with ``attendre`` gaining ``longtemps`` and line B losing
+    it, ``sim("longtemps", "attendrelongtemps")`` is 0.69, below the 0.8
+    threshold, so the guard returns False. Both lines were reported
+    ``corrected``, ``fallback_lines`` was 0, and the invariant this
+    repository states most often — *no text migrates between physical
+    lines* — was violated in silence.
+
+    The rule here requires **both halves of the move**: the word appears
+    where it was not, *and* it is gone from where it was. Requiring only
+    the appearance would flag a real typographic repetition — line A's last
+    word legitimately corrected into the same word line B starts with,
+    which happens with short function words — as a migration. Requiring the
+    disappearance too costs nothing and removes that class: if B still
+    starts with its own word, nothing moved.
+    """
+    if not (wa_cor and wb_cor):
+        return False
+    a_last_src, a_last_cor = ncfold(wa_src[-1]), ncfold(wa_cor[-1])
+    b_first_src, b_first_cor = ncfold(wb_src[0]), ncfold(wb_cor[0])
+    # Forward: A now ends with B's word, and B no longer begins with it.
+    if (
+        a_last_cor == b_first_src
+        and a_last_cor != a_last_src
+        and b_first_cor != b_first_src
+    ):
+        return True
+    # Backward: B now begins with A's word, and A no longer ends with it.
+    return (
+        b_first_cor == a_last_src
+        and b_first_cor != b_first_src
+        and a_last_cor != a_last_src
+    )
+
+
 def check_boundary_migration(
     lines: list[tuple[K, str, str]],
     *,
@@ -337,10 +384,17 @@ def check_boundary_migration(
             wb_cor[0], wb_src[0], wa_src[-1], neighbour_first=True, config=config
         )
 
-        if forward or backward:
+        # A word moved intact, which the concatenation model above cannot
+        # see: it resembles neither fragment-plus-fragment nor its own
+        # source. Reported as a forward migration — the direction is not
+        # observable once the word has landed, and both sides revert either
+        # way.
+        moved = _whole_word_crossed_the_seam(wa_src, wa_cor, wb_src, wb_cor)
+
+        if forward or backward or moved:
             reason = (
                 "boundary_migration_forward"
-                if forward
+                if (forward or moved)
                 else "boundary_migration_backward"
             )
             revert[id_a] = reason
