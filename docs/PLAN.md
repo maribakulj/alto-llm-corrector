@@ -333,7 +333,16 @@ constat le plus important de l'audit.
 | `A3c` | **Fait le 2026-08-17.** Le recensement scanne récursivement — vérifié : il trouve les **mêmes** deux sites, donc le trou était latent, et un troisième écrivain planté dans `core/schemas/` est désormais vu. Le garde anti-skip connaît les trois formes ; les deux évadés, sur fixtures committées, sont supprimés. Ma première version du garde s'attrapait **elle-même** — son commentaire citait la forme cherchée | fixture déplacée : avant → test skippé et garde vert ; après → le test **échoue bruyamment** |
 | `A3d` | **Fait le 2026-08-17.** Le rejet est **asserté**, plus supposé : une paire devenue acceptable doit être remplacée, pas contournée. Un test qui s'écarte quand sa prémisse tombe rapporte un succès pour la seule raison qui justifie son existence | mutation : avant → 3 cas skippés, fichier vert ; après → 3 cas rouges |
 | `A3e` | **Fait le 2026-08-17, et il a révélé plus que prévu.** La direction s'exécute désormais — mais **une seule fois**, sur un seul attribut, sur un des quatre cas. Presque toute disparition réelle est soit un attribut **invalidé** (`WC`/`CC`, comptés par ligne sous leur propre clé, dont la vérification matricielle a la charge) soit accompagnée d'un changement du nombre de `String`, que cette comparaison ne peut pas lire. La deuxième direction est donc **structurellement quasi vide telle qu'écrite**, et c'est la matrice qui porte le poids. Constat de forme, pas de site d'appel — et il fallait la faire s'exécuter pour le voir | sentinelle : avant → **20/20 verts** ; après → atteinte |
-| `A3f` | Les générateurs de propriétés n'atteignent pas les phénomènes annoncés : aucune marque de césure autre que `-` ASCII sur 400 tirages, alors que le corpus marque tout avec `¬` ; producteur métamorphique qui mord sur 1,6 % des caractères ; `hostile_alto` à 1 % d'exemples utiles ; deux tests `st.binary` sans assertion | mesuré |
+| `A3f` | **Répertoire de marques fait le 2026-08-17** : les deux générateurs tirent la marque de coupure depuis `HYPHEN_CHARS`, une par document — un moteur d'OCR a une convention. Mesuré avant : 0 marque autre que `-` sur 200 tirages. Après : chacune des six apparaît dans 7 à 35 documents sur 200, et 460 propriétés passent sur le répertoire complet. **Reste ouvert** : les règles métamorphiques qui ne mordent que sur 1,6 % des caractères engendrés, `hostile_alto` à 1 % d'exemples utiles, les deux tests `st.binary` sans assertion, et les impossibilités structurelles du générateur (3 pages, page vide, chaîne de 4) | mesuré |
+
+Leçon d'exécution sur `A3f`, qui vaut pour tout ce bloc : ma première garde
+anti-régression scannait le code source à la recherche du littéral codé en dur.
+Elle **n'attrapait pas** la régression évidente — figer `break_mark = "-"` ne
+retire ni le littéral ni l'import. Un contrôle de *forme* pour une propriété de
+*comportement*, c'est-à-dire exactement l'erreur que ce bloc existe pour
+trouver. Réécrite en tirant des documents et en regardant ce qui sort, elle
+attrape les deux générateurs. **Se méfier d'une garde qui lit du code plutôt
+que des résultats.**
 
 Signal à retenir : sous une mutation comportementale du parseur ALTO, le **seul**
 test devenu rouge fut le cliquet de nombre de lignes. *La suite détecte plus

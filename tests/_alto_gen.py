@@ -22,6 +22,8 @@ from __future__ import annotations
 
 from hypothesis import strategies as st
 
+from saknussemm.core.pairing import HYPHEN_CHARS
+
 # Letters only (incl. Latin-1/Latin-A accents): no '-' so the trailing-dash
 # heuristic never fires by accident — explicit SUBS_* marks every pair.
 _WORD = st.text(
@@ -65,6 +67,14 @@ def rich_alto_documents(draw: st.DrawFn) -> tuple[str, dict[str, str]]:
     verify the parser recognises exactly what the generator encoded —
     a silent encoding drift would otherwise turn every downstream
     property vacuous."""
+    # One mark per document, because one OCR engine has one convention —
+    # and because the generators emitted the ASCII hyphen and nothing else.
+    # Measured 2026-08-17 over 200 draws: 166 documents carried `-`, zero
+    # carried any of the other five. Every property that touches
+    # hyphenation therefore ran on one sixth of the repertoire, while the
+    # repository's own corpus marks EVERY break with `¬` and the bench's
+    # Fraktur ground truth uses `⸗`.
+    break_mark = draw(st.sampled_from(HYPHEN_CHARS))
     n_pages = draw(st.integers(1, 2))
     seam_pair = n_pages == 2 and draw(st.booleans())
 
@@ -121,7 +131,7 @@ def rich_alto_documents(draw: st.DrawFn) -> tuple[str, dict[str, str]]:
                         seam_subs if role == "seam1" else w + words_per_line[li + 1][0]
                     )
                     attrs += f' SUBS_TYPE="HypPart1" SUBS_CONTENT="{joined}"'
-                    hyp = '<HYP CONTENT="-"/>'
+                    hyp = f'<HYP CONTENT="{break_mark}"/>'
                 if is_first and role in (PART2, BOTH, "seam2"):
                     joined = (
                         seam_subs if role == "seam2" else words_per_line[li - 1][-1] + w
