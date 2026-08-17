@@ -62,6 +62,7 @@ __all__ = [
     "VisionEditProducer",
     "build_image_asset",
     "crop_region",
+    "verified_image_bytes",
 ]
 
 #: EXIF Orientation tag id (0x0112).
@@ -212,6 +213,33 @@ def _polygon_pixels(
     return points
 
 
+def verified_image_bytes(asset: ImageAsset) -> bytes:
+    """Read ``asset.uri`` and refuse bytes that are not the ones it recorded.
+
+    :func:`build_image_asset` hashes what it read and puts the digest on the
+    asset; nothing ever compared it again. That digest is the anchor
+    ``RunProvenance.image_digests`` rests on, so a file replaced after the
+    asset was built made the report attest a scan the model never saw.
+
+    An asset without a digest is read as-is: the field is optional, a caller
+    may legitimately have built the asset without hashing, and inventing a
+    failure there would refuse a documented shape.
+    """
+    raw = Path(asset.uri).read_bytes()
+    if asset.sha256 and hashlib.sha256(raw).hexdigest() != asset.sha256:
+        raise ConfigurationError(
+            f"{asset.uri!r} no longer holds the bytes recorded for page "
+            f"{asset.page_id!r}: the asset carries sha256 {asset.sha256!r} "
+            f"and the file now hashes to "
+            f"{hashlib.sha256(raw).hexdigest()!r}. Cropping it would send the "
+            "model one scan while the report attested another, and "
+            "image_digests promises that the digest plus the coordinates make "
+            "every crop reproducible. Rebuild the asset from the current "
+            "file, or point at the file that was hashed."
+        )
+    return raw
+
+
 def crop_region(
     asset: ImageAsset,
     coords: Coords,
@@ -219,6 +247,7 @@ def crop_region(
     margin_ratio: float = 0.0,
     mask_polygon: bool = False,
     encode_format: str = "PNG",
+    source_bytes: bytes | None = None,
 ) -> Crop:
     """Crop ``coords`` from ``asset``'s image and return an encoded :class:`Crop`.
 
@@ -233,12 +262,31 @@ def crop_region(
     a slanted or multi-column line does not leak its neighbours into the
     crop. A no-op when there is no polygon.
 
-    Pure and deterministic: identical inputs yield an identical
-    ``sha256`` — the crop hash the run records for provenance.
+    Deterministic in its inputs — and until 2026-08-17 one of those inputs
+    was a **path**, not bytes, so the sentence above was not true of the
+    file: this function reopened ``asset.uri`` and never checked it against
+    the digest :func:`build_image_asset` recorded. Measured, swapping the
+    file between the two calls:
+
+        asset.sha256 (recorded in the report) : e8b42963fb4dbae2
+        file actually opened here            : ec6297512ddb3c8d
+        crop before / after the swap         : 4e32a320… / dc9c1fc8…
+
+    The report attested one scan while the model saw another, and
+    ``RunProvenance.image_digests`` promises exactly the opposite — that the
+    source digest plus the coordinates make every crop reproducible.
+
+    ``source_bytes`` is how a caller cropping many lines from one page pays
+    the read and the verification once: the producer does that per chunk.
+    Passing them makes the caller responsible for what they hold, which is
+    a different claim from the one this function makes about a file.
     """
     from PIL import Image, ImageDraw, ImageOps  # lazy — I4
 
-    with Image.open(asset.uri) as raw:
+    raw_bytes = (
+        source_bytes if source_bytes is not None else verified_image_bytes(asset)
+    )
+    with Image.open(io.BytesIO(raw_bytes)) as raw:
         raw.seek(asset.frame_index)
         transposed = ImageOps.exif_transpose(raw)
         use_polygon = mask_polygon and bool(coords.polygon)
@@ -441,6 +489,10 @@ class VisionEditProducer:
                 "image (build it with build_image_asset), not a bare "
                 f"ImageRef; got {type(asset).__name__}"
             )
+        # Read and verify ONCE per chunk. This loop cropped per line and
+        # each crop reopened the file, so a 40-line chunk read the same scan
+        # 40 times and verified it none.
+        page_bytes = verified_image_bytes(asset)
         images: list[ImagePart] = []
         for line in payload.lines:
             if line.geometry is None:
@@ -450,6 +502,7 @@ class VisionEditProducer:
                 line.geometry.coords,
                 margin_ratio=self._margin_ratio,
                 mask_polygon=self._mask_polygon,
+                source_bytes=page_bytes,
             )
             images.append(
                 ImagePart(
