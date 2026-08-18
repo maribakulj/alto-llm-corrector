@@ -129,10 +129,22 @@ def clean_content(s: str) -> str:
 
 
 # --- public surface ---
+def strip_invisibles(s: str) -> str:
+    """Only the invisible-character removal :func:`clean_content` performs.
+
+    Exposed so the projection classifier can ask "is this difference exactly
+    what the writer declares it removes?" without either re-listing the set
+    or running the rest of ``clean_content`` (NFC, control stripping), which
+    would let a genuine text change hide behind a normalisation.
+    """
+    return s.translate(_INVISIBLE_TRANSLATION)
+
+
 __all__ = [
     "nfc",
     "ncfold",
     "clean_content",
+    "strip_invisibles",
     "LINE_SEPARATORS",
     "has_line_separator",
 ]
