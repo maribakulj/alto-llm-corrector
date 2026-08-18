@@ -20,9 +20,22 @@ on:
 # long-lived PyPI token is stored as a GitHub secret — the workflow
 # exchanges its OIDC token for a short-lived PyPI credential at
 # upload time.
+#
+# `id-token: write` is NOT granted here. It used to be, at workflow level,
+# which put ACTIONS_ID_TOKEN_REQUEST_URL and its token in the environment of
+# every step of the single job — including three that execute code resolved
+# from PyPI at publish time: `pip install cyclonedx-bom`, and the wheel
+# smoke-install which resolves and then IMPORTS pydantic and lxml. Any of
+# them could mint an OIDC token of audience `pypi` and exfiltrate it; the
+# resulting upload would carry a valid PEP 740 attestation, because the
+# attestation says "this workflow signed it" and that would be true.
+#
+# The two jobs below split that: `prepare-release` may run whatever it needs
+# and can mint nothing, `publish` can mint and runs nothing but pinned
+# actions and `gh`. Trusted Publishing keys on the workflow FILENAME, not on
+# a job name, so the pending-publisher configuration is unaffected.
 permissions:
   contents: read
-  id-token: write
   # Plan V4.3 — the publish gate queries the Actions API to verify the
   # tagged commit has a fully green CI run before anything is built.
   actions: read
@@ -38,14 +51,16 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build-and-publish:
+  # Everything that decides WHETHER to publish, and nothing that can
+  # publish. No `id-token`, so no step here can mint a PyPI credential —
+  # which is what lets this job install and run tooling freely.
+  prepare-release:
     runs-on: ubuntu-latest
-    # Map the dispatch input to an Environment so PyPI/TestPyPI rules
-    # (required reviewers, branch protection) can be configured per
-    # target without touching this file.
-    environment:
-      name: ${{ inputs.target }}
-      url: ${{ inputs.target == 'pypi' && 'https://pypi.org/project/saknussemm/' || 'https://test.pypi.org/project/saknussemm/' }}
+    outputs:
+      # The verified CI run. `publish` re-downloads from it directly rather
+      # than receiving bytes from this job: nothing that happens here after
+      # the gate can influence what reaches the index.
+      ci_run_id: ${{ steps.ci_gate.outputs.run_id }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
         with:
@@ -183,6 +198,57 @@ jobs:
           print(f"SBOM components: {sorted(components)}")
           EOF
 
+      - name: Upload the SBOM and the gate's evidence
+        # The operator-facing record of what was checked. Deliberately NOT
+        # the channel by which the distributions reach `publish`: that job
+        # fetches them from the CI run itself.
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        with:
+          name: saknussemm-release-evidence
+          path: sbom/
+          if-no-files-found: error
+
+  # Everything that CAN publish, and nothing else. Two pinned actions and
+  # `gh`, which is preinstalled on the runner — no `pip install`, and no
+  # checkout, so the job never has a git credential on disk either.
+  publish:
+    needs: prepare-release
+    runs-on: ubuntu-latest
+    permissions:
+      # The only job in this workflow that may mint an OIDC token.
+      id-token: write
+      # To re-download the distributions from the verified CI run.
+      actions: read
+    # Map the dispatch input to an Environment so PyPI/TestPyPI rules
+    # (required reviewers, branch protection) can be configured per
+    # target without touching this file. It belongs to THIS job: the
+    # deployment happens here.
+    environment:
+      name: ${{ inputs.target }}
+      url: ${{ inputs.target == 'pypi' && 'https://pypi.org/project/saknussemm/' || 'https://test.pypi.org/project/saknussemm/' }}
+    steps:
+      - name: Fetch the distributions from the CI run the gate verified
+        # From the run itself, not from `prepare-release`. If the tooling
+        # that job installs were compromised, it could have rewritten the
+        # wheel before handing it over — and its checksums with it, being
+        # the same job. Fetching here removes that path entirely: the only
+        # thing `prepare-release` gives this job is a run id, and the
+        # checksums CI wrote are verified against the bytes CI built.
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run download "${{ needs.prepare-release.outputs.ci_run_id }}" \
+            --repo "${{ github.repository }}" \
+            --name saknussemm-dist \
+            --dir dist
+          cd dist
+          sha256sum -c SHA256SUMS
+          # twine (inside the publish action) uploads every file in
+          # packages-dir and rejects non-distribution formats.
+          rm SHA256SUMS
+          ls -l
+
       - name: Publish to TestPyPI (Trusted Publishing OIDC + PEP 740)
         if: inputs.target == 'testpypi'
         uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b  # release/v1
@@ -205,12 +271,10 @@ jobs:
           attestations: true
           verbose: true
 
-      - name: Upload distribution artifacts (+ SBOM)
+      - name: Upload the distributions exactly as published
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         with:
           name: saknussemm-dist-${{ inputs.target }}
-          path: |
-            dist/
-            sbom/
+          path: dist/
           if-no-files-found: error
