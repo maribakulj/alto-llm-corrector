@@ -253,6 +253,120 @@ un critère technique.
 
 ---
 
+## B — Le premier vrai run, 2026-08-18
+
+**24 592 lignes de presse Gallica passées par `mistral-small`, un job à la
+fois.** C'est la première fois que la bibliothèque est mesurée contre un
+modèle réel à cette échelle, et ça a corrigé plus d'affirmations que tout
+l'audit précédent — y compris plusieurs des miennes.
+
+### Ce que le corpus est
+
+28 pages, six fascicules de quatre titres, **24 592 lignes, 8 433 couples de
+césure, 6 000 blocs**, domaine public. Fourni, pas cherché. Il porte deux
+formes de dégradation qui ne se règlent pas pareil : uniforme (médiane de
+confiance 0,55) et localisée (médiane 0,99 avec 94 mots à 0,00).
+
+**Il n'a AUCUNE vérité terrain.** Son `text.txt` est la même couche OCR que
+l'ALTO, et il est en plus mal encodé là où l'ALTO est correct. Il mesure donc
+le *comportement* et le *coût* avec précision, jamais la *justesse*.
+
+### Le résultat, `mistral-small`, texte
+
+| | |
+|---|---|
+| corrigées | **13 928 / 21 125 = 66 %** |
+| texte réellement changé | 4 978 lignes |
+| tokens | 5,71 M in / 1,50 M out |
+| coût | **1,02 $** |
+| **pages perdues** | **4** — aucun fichier produit |
+
+Les refus, par cause :
+
+| cause | lignes |
+|---|---|
+| `all_attempts_exhausted` | 2 728 |
+| `hyphen_pair_fallback` | **2 271** |
+| `too_different_from_source` | 1 491 |
+| voisinage + absorption | 634 |
+| migration de frontière | 63 |
+
+### Ce que la qualité déclarée prédit
+
+| pages | médiane WC | corrigées | perdues par la césure |
+|---|---|---|---|
+| dégradées (n=5) | 0,50 – 0,94 | **46 %** | **12 – 28 %** |
+| propres (n=19) | 0,99 – 1,00 | **68 %** | 7 – 11 % |
+
+**Le coût de la césure triple sur les pages dégradées** — mécaniquement :
+plus l'OCR est mauvais, plus la correction est ample, donc plus elle touche
+le mot de la couture et contredit le `SUBS_CONTENT` déclaré. C'est là que le
+réglage a de la valeur, pas sur le seuil de similarité.
+
+### Quatre erreurs de méthode, consignées parce qu'elles se reproduiront
+
+1. **Un producteur à règles ne peut pas exercer la garde qu'il déclare
+   inerte.** Il ne fait que des substitutions locales, donc sa sortie reste
+   par construction proche de la source. Il ne peut pas *halluciner* — et
+   c'est ce que la garde arrête. Le document d'audit qui en tirait ses
+   conclusions a été retiré (#124).
+2. **Trois jobs en parallèle sur un compte à quota mesurent le quota.** Les
+   429 devenaient des replis de chunk puis des `all_attempts_exhausted` : sur
+   la même page, 37 % de corrections à trois jobs contre **67 % seul**. Les
+   deux tiers de mes échecs venaient de là.
+3. **Réimplémenter au lieu de lire les dépôts consommateurs.** Le mauvais
+   prompt, la page entière au lieu des découpages, les gardes texte sur un
+   run vision, le plafond de 8 images — les quatre étaient déjà documentés
+   dans `cinoc/campaigns/tooling/providers_multimodal.py`, dont un commentaire
+   cite mot pour mot l'erreur 3051 que je me suis prise.
+4. **Comparer un bras texte à un bras vision.** La campagne BNL du 14 août,
+   que je prenais pour référence, dit elle-même que son mode texte fait *0
+   improved, 0 degraded*. Ses bons chiffres viennent entièrement du VLM.
+
+### Ce que le run a trouvé et que rien d'autre n'aurait trouvé
+
+- **Deux pages tuées par un invisible retiré exprès** (#125) : `clean_content`
+  supprime U+00AD à l'écriture, comme prévu, et l'échelle de fidélité n'avait
+  aucun niveau pour ça — donc `ProjectionError` et page perdue.
+- **Une page tuée par un mot soudé à sa marque de coupure** (#126), reproduite
+  et laissée ouverte : le correctif touche la mise en page géométrique, et s'y
+  tromper est pire que le défaut.
+- **`all_attempts_exhausted` ne distingue pas l'étranglement de l'incapacité.**
+  Un 429 soutenu épuise les tentatives et sort le même code de raison qu'un
+  modèle qui n'y arrive pas. Un exploitant conclut que son modèle est mauvais
+  alors que son quota est saturé. Reste ouvert.
+- **`mistral-small` est instable**, pas seulement moins bon : la même page,
+  même config, a donné 72/72 puis 3/72. `mistral-medium` fait 72/72 sans un
+  refus.
+
+### Le mode « une page, un appel »
+
+Mesuré, pas estimé. L'enveloppe JSON par ligne pèse **7,9 fois** le texte
+qu'elle transporte, parce que chaque `LineContext` porte `prev_text`,
+`ocr_text` **et** `next_text` — le texte de chaque ligne est donc transmis
+trois fois.
+
+| mode | appels | entrée | coût |
+|---|---|---|---|
+| par chunk (actuel) | ~2 000 | 5,49 M | 1,11 $ |
+| par ligne + découpages | ~3 100 | ~7,1 M | 1,28 $ |
+| **par page** | **28** | **0,39 M** | **0,14 $** |
+
+Et le découpage par ligne coûte **15,8× plus** en tokens d'image que la page
+entière (36 610 contre 2 310 sur une page de 555 lignes), parce que le
+tokeniseur facture un plancher par image.
+
+Le mode page supprimerait aussi `all_attempts_exhausted` par construction :
+plus de contrat JSON par ligne, donc plus de réponse invalide qui fait
+retomber un chunk. Ce qu'il déplace : le risque passe de « le modèle a
+halluciné » — que les gardes voient — à « l'aligneur a posé le bon texte sur
+la mauvaise ligne ». Guardable, et par une garde qui existe déjà : un
+décalage d'une ligne effondre `min_source_similarity` sur toutes les
+suivantes.
+
+C'est un **producteur**, donc aucun changement du cœur. Le travail neuf est
+l'aligneur et son test de désalignement.
+
 ## A — Audit du 2026-08-17 : le tri
 
 Huit axes mesurés en parallèle, en réponse à la revue externe du 2026-08-16. Les
