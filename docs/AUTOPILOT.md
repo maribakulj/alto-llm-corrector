@@ -352,3 +352,56 @@ Une ligne par réveil : date, item, résultat, ou la raison de l'arrêt.
   **La règle que j'en tire, pour les prochains tours** : quand une famille
   entière de propriétés est faible sur un axe, chercher l'outil avant de
   chercher la négligence. Personne n'a de raison de soupçonner un test vert.
+
+- 2026-08-18 — **le premier vrai run**, et il a corrigé plus d'affirmations
+  que tout l'audit qui l'a précédé. 24 592 lignes de presse Gallica par
+  `mistral-small`, un job à la fois : 66 % corrigées, 1,02 $, **quatre pages
+  perdues**. Le relevé complet est en section `B` de `docs/PLAN.md`.
+
+  **Deux défauts que rien d'autre n'aurait trouvés, corrigés** : un invisible
+  retiré exprès par l'écrivain tuait deux pages sur quinze, parce que
+  l'échelle de fidélité n'avait aucun niveau pour un retrait déclaré (#125) ;
+  et un étranglement était rapporté comme une incapacité du modèle, la
+  distinction existant déjà dans la classification mais cessant de voyager
+  jusqu'au message (#128).
+
+  **Un troisième reproduit et laissé OUVERT** (#126) : le chemin lent soude
+  la marque de coupure au mot qui la précède. Le correctif touche la
+  reconstruction géométrique, et écrire de la mauvaise géométrie dans un
+  fichier livré est pire que l'espace perdue. Son test d'acceptation est
+  écrit — il n'y a qu'à inverser son assertion.
+
+  **La démo est devenue un poste de revue humaine** (`saknussemm-demo` #4),
+  mergée et déployée. Elle porte le verdict par ligne, la coloration par
+  famille, le filtre qui estompe, et surtout **de quoi trancher et annoter** :
+  le verdict `transcribed` enregistre ce qu'un lecteur lit sur le scan, et
+  s'accumule en vérité terrain. Vérifié de bout en bout sur un vrai run, pas
+  seulement par ses tests.
+
+  Elle ne pouvait pas exécuter la moitié vision de la bibliothèque : aucun
+  fournisseur n'implémentait `complete_structured_multimodal`, et l'extra
+  `[vision]` n'était installé nulle part. Ce n'était pas une régression —
+  cette méthode n'a jamais existé dans son historique. La capacité avait vécu
+  23 jours comme outil à la racine du dépôt de la bibliothèque et est partie
+  avec l'archive du banc, emportée par un défaut prouvé chez sa voisine.
+
+  **Quatre erreurs de méthode, consignées parce qu'elles se reproduiront.**
+  Mesurer une garde anti-hallucination avec un producteur qui ne peut pas
+  halluciner. Saturer son propre quota et l'attribuer au modèle — 67 % de
+  corrections seul contre 37 % à trois jobs, sur la même page. Réimplémenter
+  au lieu de lire les dépôts consommateurs, dont un commentaire citait déjà
+  l'erreur que j'ai redécouverte. Et comparer un bras texte à un bras vision,
+  alors que la campagne de référence dit elle-même que son mode texte ne
+  corrige rien.
+
+  **Le mode « une page, un appel » est chiffré** : 28 appels au lieu de 2 000,
+  0,39 M de tokens au lieu de 5,49 M. L'enveloppe JSON par ligne pèse 7,9 fois
+  le texte qu'elle transporte, chaque ligne étant transmise trois fois via
+  `prev_text` / `ocr_text` / `next_text`. C'est un producteur, donc aucun
+  changement du cœur ; le travail neuf est l'aligneur, et la garde qui attrape
+  son mode de défaillance existe déjà.
+
+  **Arrêt** : ce qui reste demande le mainteneur. Le *trusted publisher* sur
+  pypi.org et test.pypi.org plus les environnements GitHub — le workflow est
+  scindé et stable depuis #119, donc c'est le bon moment. Et l'arbitrage sur
+  l'aligneur.
