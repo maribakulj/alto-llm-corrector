@@ -52,7 +52,7 @@ serait moulée sur l'existant et n'aurait rien trouvé.
 | E5a | une ligne de césure garde son tiret final | **fermée le 2026-08-16** — `test_e5_covers_every_break_mark_and_both_roles.py` balaie les six marques du répertoire × les deux rôles ouvrants, dans les deux sens (sectionner est refusé, préserver passe) plus un contrôle sur `NONE`. La marque que la suite exerçait, `-`, est la seule que le corpus n'emploie pas : les fixtures appariées marquent tout avec `¬` |
 | E5b | son **mot-frontière** ne peut pas être supprimé | **aucune, et la garde n'existe pas** — voir plus bas |
 | E6a | les gardes s'appliquent au texte issu d'un span | **partielle** — l'étage sémantique n'est jamais exercé sur une sortie de span |
-| E6b | span et `replace_line` obtiennent le même verdict sur le même résultat | **aucune** |
+| E6b | span et `replace_line` obtiennent le même verdict sur le même résultat | **aucune** — et ce n'est pas seulement une non-parité : `editing.py:329` dit en clair que la voie ligne entière ne passe ni par `E4` ni par `E5`, donc les deux gardes ne s'appliquent pas au producteur par défaut. Arbitrage en cours ; depuis le 2026-08-17 les refus qui ONT lieu sont au moins visibles (`A2b`) |
 | F2a | liste blanche d'attributs en slow path | **partielle** — un seul attribut hors liste est relu dans la sortie |
 | F2b | `WC`/`CC`/`SUBS_*` jamais recyclés | **gardée** |
 | — | parité d'octets ALTO quand rien ne change | **partielle** — sha256 golden + sous-ensemble verbatim, pas la sérialisation entière |

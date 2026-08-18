@@ -3,7 +3,12 @@
 The list below is no longer an inventory of what accreted. It is what `S3b`
 cut the surface down to (2026-08-01): **68 symbols, computed rather than
 chosen**, and `RM-04` took it to **66** (2026-08-06) by demoting the two
-knobs no default run uses. The computation is reproducible — start from
+knobs no default run uses. It is **67** since 2026-08-17: `A2b` gave
+``CorrectionReport`` an ``edit_rejections`` field, so ``RefusedEdit`` became
+reachable from a returned type and the closure grew by exactly that. Growth
+by closure is not the accretion this file guards against — the test that
+caps the count says so in its own message, and ``HyphenSplit`` is here for
+the same reason. The computation is reproducible — start from
 what
 ``load``/``correct``/``correct_sync`` return and from what
 :class:`EditProducer` and :class:`PipelineObserver` name in their
@@ -136,6 +141,7 @@ CURRENT_TOP_LEVEL_SURFACE = sorted(
         "ProposalValidationError",
         "RangeAnchor",
         "ReconcileMetrics",
+        "RefusedEdit",
         "ReplaceLine",
         "ReplaceSpan",
         "RetryPolicy",
@@ -239,6 +245,7 @@ def test_correction_report_json_keys_are_pinned():
         "unpaired_breaks",
         # R6 — the units the planner CUT. Same contract again: optional,
         # absent when no chain was severed, no version bump.
+        "edit_rejections",
         "hyphen_splits",
         "provenance",  # P3.9 — optional, additive (no version bump)
         "usage",  # optional, additive (no version bump)

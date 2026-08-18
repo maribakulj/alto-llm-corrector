@@ -203,6 +203,11 @@ def _build_correction_report(
         # engine severed one on purpose, and the split resets the tail's
         # role to NONE so it cannot show up in that count either.
         hyphen_splits=ctx.hyphen_splits or None,
+        edit_rejections=sorted(
+            ctx.edit_rejections,
+            key=lambda r: (r.page_id, r.line_id, r.op, r.reason),
+        )
+        or None,
         # §11 — the run's full provenance record.
         provenance=provenance,
         # §11 — the aggregated usage is part of the persisted
