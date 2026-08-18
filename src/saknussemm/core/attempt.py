@@ -380,6 +380,29 @@ async def _produce(
     )
 
 
+def _failure_family(exc: BaseException) -> str:
+    """Which of the two recoverable families this failure belongs to.
+
+    Both end the same way — attempts run out, the chunk falls back, and the
+    report says ``all_attempts_exhausted`` — but they mean opposite things to
+    whoever reads it. **Transport** means the run was throttled or the network
+    faltered: the model was never asked, and asking again later would work.
+    **Malformed output** means the producer answered and could not hold the
+    contract: asking again changes nothing until the producer does.
+
+    Conflating them is not academic. Measured on 2026-08-18: running three
+    jobs against one rate-limited account turned sustained 429s into chunk
+    fallbacks, and the same page went from 67 % of lines corrected to 37 %.
+    Every one of those failures was reported as the model failing. An operator
+    reading that concludes their model is bad and changes it, when what they
+    needed was to stop hammering their own quota.
+
+    The distinction already exists — ``_RECOVERABLE_ERROR_TYPES`` is built on
+    it — it simply stopped travelling at the point the message was built.
+    """
+    return "transport" if isinstance(exc, ProviderTransientError) else "producer_output"
+
+
 async def _handle_failed_attempt(
     *,
     exc: Exception,
@@ -411,7 +434,7 @@ async def _handle_failed_attempt(
     # redaction still masks secret-shaped substrings a producer may leak
     # into the message, and the consumer layer (which DOES hold the key)
     # sanitises again on its own error paths.
-    msg = sanitize_error(str(exc))
+    msg = f"{_failure_family(exc)}: {sanitize_error(str(exc))}"
     decision = _classify_retry(
         exc=exc,
         sanitised_msg=msg,

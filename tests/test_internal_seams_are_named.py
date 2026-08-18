@@ -83,6 +83,16 @@ _SEAMS: dict[str, tuple[str, str]] = {
         "the PAGE half of the same re-export",
     ),
     # -- run-state: passes that write what a run says about itself ----------
+    "saknussemm.core.attempt._failure_family": (
+        "classifier",
+        "the one line where a failure's FAMILY survives into the message a "
+        "report carries. Transport and malformed output both end as "
+        "`all_attempts_exhausted`, and they mean opposite things: measured "
+        "2026-08-18, sustained 429s took a page from 67% corrected to 37% and "
+        "every one was reported as the model failing. Tested directly because "
+        "the public seam can only show the two labels once each, and the "
+        "mapping itself is what must not drift",
+    ),
     "saknussemm.core.acceptance._FinalizeOrder": (
         "run-state",
         "the pass order itself — the object `RM-05a` exists to pin",
