@@ -63,6 +63,8 @@ from __future__ import annotations
 
 import re
 from collections.abc import Iterable
+
+from saknussemm.core._norm import strip_invisibles
 from enum import Enum
 
 #: Splits a string on its word runs, yielding the whitespace between them.
@@ -141,6 +143,20 @@ def classify_projection_fidelity(
     if decided == extracted:
         return floor
     if decided.split() != extracted.split():
+        # Before calling it corrupted: is the whole difference the invisible
+        # characters `clean_content` DECLARES it removes on write? A soft
+        # hyphen inside a word is the case that surfaced this — a real
+        # Mistral run returned `authen\xadticité`, the writer stripped the
+        # U+00AD as designed, and `split()` then saw two different words and
+        # failed the page. Two of fifteen real newspaper pages died that way.
+        #
+        # A declared, bounded removal is what this scale exists to grade. It
+        # lands at NORMALIZED — the floor — because a character is gone from
+        # the file, which is exactly what that level means. What it is NOT is
+        # `None`: the deliverable is not corrupted, it is normalised, and the
+        # difference between those two words is a page delivered or lost.
+        if strip_invisibles(decided) == extracted:
+            return ProjectionFidelity.NORMALIZED
         return None
     # Same words, so the difference is whitespace alone. Separate what the
     # format merely collapsed from what it swapped: a gap is degraded when
