@@ -41,6 +41,25 @@ a markup mutation (an ``SP`` the rewriter fails to emit), but the projection
 invariant catches that one inside a single pass too. Its own contribution is
 the byte level — geometry, attributes, child order — which no text-level
 invariant can see.
+
+**On PAGE, sensitivity was measured the same way, and the limit found is
+worth stating.** Four mutations of ``formats/page/rewriter.py``:
+
+- provenance OVERWRITTEN instead of appended → caught (the pass count);
+- the correction written to a non-canonical ``TextEquiv``, so the parser
+  reads the old text back → caught by all three assertions;
+- a trailing space added to the provenance TEXT → not caught, and rightly:
+  the record is stripped before the comparison, because what it *says* is
+  not what this property is about;
+- a trailing space added to every written line → **not caught, and this one
+  is structural.** A deterministic transformation applied identically on
+  both passes is a fixed point by construction: pass two reads what pass one
+  wrote, decides the same thing, and writes the same bytes.
+
+So this property sees a write/read ASYMMETRY — the rewriter emitting markup
+the parser reads back as something else — and cannot see a rewriter that is
+merely wrong in a stable way. That is the job of the projection invariant and
+the byte-parity goldens, which is why all three exist.
 """
 
 from __future__ import annotations
@@ -50,17 +69,42 @@ from pathlib import Path
 from lxml import etree
 
 from saknussemm.core.pipeline import CorrectionPipeline
-from saknussemm.formats.alto.parser import build_document_manifest
+from saknussemm.formats.loader import build_document_manifest
 
 from tests._paths import EXAMPLES
 from tests._pipeline_harness import DictProvider, RecordingObserver
 
-#: Both shipped fixtures: the small hand-made one and the real BnF page,
-#: which carries explicit hyphenation and the confidence attributes the
-#: rewriter has to redistribute.
-_CORPORA = ("sample.xml", "X0000002.xml")
+#: Both formats, and within ALTO both shipped fixtures: the small
+#: hand-made one and the real BnF page, which carries explicit hyphenation
+#: and the confidence attributes the rewriter has to redistribute.
+#:
+#: **PAGE was missing here until 2026-08-19**, and `docs/promises.md` said so
+#: — the promise was "partial: PAGE absent". Its rewriter has four write
+#: paths of its own, preserves polygon geometry verbatim, and reads its
+#: canonical text through ``TextEquiv @index`` with a ``Word``-concat
+#: fallback: three places where what it emits and what the parser reads back
+#: could disagree, none of them shared with ALTO. A fixed-point property
+#: proved on one format says nothing about the other.
+#:
+#: Reached through ``formats.loader``, which sniffs the format per file, so
+#: the two formats are the same test rather than two copies of it.
+_CORPORA = (
+    "sample.xml",
+    "X0000002.xml",
+    "page/LaFayette1678_Cleves_btv1b8610820b_corrected_0011_page_raw.xml",
+)
 
-_PROVENANCE_TAG = "postProcessingStep"
+#: ALTO records a run as one element per pass. PAGE does not, and the
+#: difference is not cosmetic: on a 2019+ schema it writes a
+#: ``MetadataItem`` (countable the same way), but on the 2013 schema every
+#: shipped fixture uses, it APPENDS A LINE to a single ``Metadata/Comments``
+#: element. Two passes therefore leave one element carrying two lines.
+#:
+#: A helper that only knew about elements read that as "zero run records",
+#: which is how the first version of this test managed to fail for two
+#: reasons at once — the unstripped comment made the bytes differ, and the
+#: count said the file had never been corrected.
+_PROVENANCE_TAGS = ("postProcessingStep", "MetadataItem", "Comments")
 
 
 def _corrections(path: Path, name: str) -> dict[str, str]:
@@ -93,18 +137,34 @@ def _pass(path: Path, name: str, corrections: dict[str, str]) -> bytes:
 
 
 def _without_provenance(xml: bytes) -> tuple[bytes, int]:
-    """The document minus its run records, and how many it carried."""
+    """The document minus its run records, and how many passes it carried.
+
+    Counts PASSES, not elements, which is the only definition that means the
+    same thing in both formats: ALTO's ``postProcessingStep`` and PAGE's
+    ``MetadataItem`` are one element per pass, while PAGE's 2013 ``Comments``
+    is one element holding one LINE per pass.
+    """
     root = etree.fromstring(xml)
-    removed = 0
+    passes = 0
     for element in list(root.iter()):
         if not isinstance(element.tag, str):  # comments, PIs
             continue
-        if etree.QName(element).localname == _PROVENANCE_TAG:
-            parent = element.getparent()
-            assert parent is not None
-            parent.remove(element)
-            removed += 1
-    return etree.tostring(root), removed
+        local = etree.QName(element).localname
+        if local not in _PROVENANCE_TAGS:
+            continue
+        if local == "Comments":
+            lines = [line for line in (element.text or "").splitlines() if line.strip()]
+            # A `Comments` the source already had is not a run record. Only
+            # the lines this library writes are counted, and the whole
+            # element is stripped either way: keeping a partially-cleared
+            # one would leave the byte comparison arguing about whitespace.
+            passes += sum(1 for line in lines if "saknussemm" in line)
+        else:
+            passes += 1
+        parent = element.getparent()
+        assert parent is not None
+        parent.remove(element)
+    return etree.tostring(root), passes
 
 
 def _two_passes(tmp_path: Path, corpus: str) -> tuple[bytes, bytes]:
