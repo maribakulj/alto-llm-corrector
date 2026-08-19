@@ -187,6 +187,14 @@ class EditRejection(BaseModel):
 
 # Rejection reason codes.
 R_UNKNOWN_LINE = "e1_unknown_line"
+#: `E1` — the line exists in the payload but was shown for CONTEXT, not as a
+#: target. A distinct code from ``e1_unknown_line`` because the two mean
+#: opposite things to whoever reads the report: an unknown id is a producer
+#: inventing a line, a context line is a producer answering a question it was
+#: not asked. Reporting both as "unknown" made the second unreadable, and the
+#: second is the common one — a payload does not mark which of its lines are
+#: targets, so a model shown a window corrects all of it.
+R_CONTEXT_LINE = "e1_context_line"
 R_CONFLICT = "conflict"  # >1 replace_line, or replace_line mixed with spans
 R_EMPTY = "e3_empty"
 R_NEWLINE = "e3_newline"
@@ -455,6 +463,35 @@ def _apply_line_ops(
     return result
 
 
+def _e1_refusal(
+    line_id: str,
+    canonical_by_id: dict[str, str],
+    chunk_line_ids: set[str] | None,
+) -> str | None:
+    """`E1` — why this line may not be edited, or ``None`` if it may.
+
+    Two failures, reported apart because they are opposite accusations. An id
+    nobody knows is a producer **inventing** a line. A known id outside the
+    target set is a producer answering about a line it was only **shown for
+    context** — and that one is the common case, because a payload does not
+    mark which of its lines are targets, so a model handed a window corrects
+    the whole window.
+
+    Until 2026-08-19 the second was unreachable: the caller passed every
+    chunk line as ``chunk_line_ids``, so "outside the set" could only be true
+    where "unknown" already was, and a context edit was instead dropped
+    silently by target filtering much further downstream. Same corrected
+    text either way — the difference is that one of them tells the operator
+    it happened, now that ``CorrectionReport.edit_rejections`` exists to
+    carry it.
+    """
+    if line_id not in canonical_by_id:
+        return R_UNKNOWN_LINE
+    if chunk_line_ids is not None and line_id not in chunk_line_ids:
+        return R_CONTEXT_LINE
+    return None
+
+
 def apply_edit_script(
     script: EditScript,
     canonical_by_id: dict[str, str],
@@ -516,13 +553,11 @@ def apply_edit_script(
         ops_by_line.setdefault(op.line_id, []).append(op)
 
     for line_id, ops in ops_by_line.items():
-        # E1 — line must be in the targeted chunk and have canonical text.
-        if (chunk_line_ids is not None and line_id not in chunk_line_ids) or (
-            line_id not in canonical_by_id
-        ):
+        reason = _e1_refusal(line_id, canonical_by_id, chunk_line_ids)
+        if reason is not None:
             for op in ops:
                 result.rejected.append(
-                    EditRejection(line_id=line_id, op=op.op, reason=R_UNKNOWN_LINE)
+                    EditRejection(line_id=line_id, op=op.op, reason=reason)
                 )
             continue
 

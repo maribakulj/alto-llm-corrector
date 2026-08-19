@@ -118,6 +118,7 @@ def _script_to_raw(
     *,
     producer: EditProducer,
     guard_config: GuardConfig,
+    target_line_ids: set[str],
 ) -> _Proposed:
     """Normalise a producer's EditScript into the validator's raw shape.
 
@@ -145,7 +146,13 @@ def _script_to_raw(
         span_result = apply_edit_script(
             EditScript(ops=list(span_ops)),
             canonical,
-            chunk_line_ids=set(canonical),
+            # The TARGETS, not every line in the chunk. Passing every line
+            # made `E1`'s first clause unreachable — it could only be true
+            # where the second already was — so an edit landing on a context
+            # line was silently dropped downstream instead of refused here.
+            # The drop and the refusal produce the same corrected text; only
+            # one of them tells the operator it happened.
+            chunk_line_ids=target_line_ids,
             guard_config=guard_config,
             line_by_id={lm.line_id: lm for lm in chunk_lines},
         )
@@ -523,7 +530,11 @@ async def _attempt_chunk(
                 temperature=temperature,
             )
             proposed = _script_to_raw(
-                script, chunk_lines, producer=producer, guard_config=guard_config
+                script,
+                chunk_lines,
+                producer=producer,
+                guard_config=guard_config,
+                target_line_ids=set(chunk.targets()),
             )
             # Charged before validation: a response the validator goes
             # on to refuse still cost its tokens, and both the run's total
