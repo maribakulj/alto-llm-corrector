@@ -470,3 +470,61 @@ Une ligne par réveil : date, item, résultat, ou la raison de l'arrêt.
   **Ce que le mode page n'a pas** : un run réel. Tout est mesuré sur des
   lignes réelles avec des corrections **simulées**, et une simulation ne dira
   jamais ce qu'un modèle fait quand on lui demande mille lignes d'un coup.
+
+- 2026-08-19 (suite) — **item 2 de la file : `docs/promises.md` vidé de tout
+  ce qui ne demande pas d'arbitrage.** Sept promesses fermées, sept PR.
+  Zéro correctif de production sauf un ; le reste est du test, et le motif
+  qui revient est que **le test écrit d'abord ne prouvait pas ce qu'il
+  annonçait**.
+
+  **Le point fixe étendu à PAGE.** Le dépouillement de provenance a dû
+  devenir format-conscient : ALTO écrit un élément par passe, PAGE 2013 —
+  le schéma de toutes les fixtures livrées — **ajoute une ligne** à un
+  unique `Metadata/Comments`. Un compteur d'éléments lisait ça « zéro
+  passe », d'où deux échecs pour une cause. Limite écrite dans le test : une
+  transformation **déterministe** appliquée aux deux passes est un point
+  fixe par construction, donc cette propriété voit une asymétrie
+  écriture/lecture, jamais un rewriter stablement faux.
+
+  **`E4a`, la borne par op.** Le test à deux ops évident ne prouve rien : si
+  chaque op respecte `len ≤ r × span`, leur somme aussi, donc une borne
+  cumulative accepte exactement les mêmes scripts. Écrit ainsi d'abord, et la
+  mutation cumulative l'a laissé vert. Le cas discriminant va dans l'autre
+  sens — une op qui rétrécit un long span paie pour une op gloutonne.
+
+  **`E1`, et la clause était inatteignable.** `attempt.py` passait toutes les
+  lignes du chunk comme cibles, donc « hors ensemble » n'était vrai que là où
+  « inconnue » l'était déjà. Elle passe les vraies cibles maintenant, et une
+  édition de contexte est **refusée** (`e1_context_line`) au lieu d'être
+  jetée en aval. Le texte livré ne bouge pas — toute la suite est restée
+  verte — seule la trace apparaît, ce que `edit_rejections` permet enfin de
+  porter. Seul changement de production du lot.
+
+  **`E6a`, `F2a`.** Un span irréprochable structurellement dont le résultat
+  ne ressemble plus à sa ligne : seul l'étage sémantique le voit, et rien ne
+  l'exerçait. Et un seul attribut hors liste prouve qu'*il* est jeté, pas que
+  la règle est une liste **blanche** — le test asserte la clôture, plus que
+  la perte est comptée et que le style suit l'**appariement**, jamais la
+  position.
+
+  **La parité d'octets ne portait pas sur les octets.** Le test retirait la
+  provenance de l'ARBRE puis re-sérialisait les deux côtés, ce qui normalise
+  exactement ce que la promesse vise : `pretty_print=True` le laissait vert.
+  Découpé dans les octets, il tombe. Et sa prémisse était trop lâche — « ni
+  fast ni slow » laissait `subs_only` revendiquer les lignes.
+
+  **Les compteurs du rapport**, dérivés des octets livrés et non des objets
+  qui les ont produits. Trois mutations, chacune tombant sur sa propre
+  assertion. Limite énoncée : `fallback_lines` n'est pas vérifiable ainsi.
+
+  **`I2b`, l'union des opérations.** Le test ne décide pas qu'elle ne
+  grandira jamais, mais qu'elle ne grandira pas par accident. Deux
+  corrections par la mesure : « aucun champ pluriel » gardait une
+  orthographe et laissait passer `with_line_id`, et paramétrer les
+  propriétés sur la liste figée faisait qu'un nouveau membre ne rencontrait
+  jamais les propriétés censées le juger.
+
+  **Arrêt.** Ce qui reste dans `promises.md` demande le mainteneur : `E5b`
+  (la garde du mot-frontière n'existe pas, et sa forme est une décision de
+  conception) et `E6b` (la voie ligne entière ne passe ni par `E4` ni par
+  `E5`, donc les deux gardes ne s'appliquent pas au producteur par défaut).
