@@ -55,6 +55,36 @@ The **top-level import surface** is provisional until `1.0.0`. It went from
 
 ### Changed — BREAKING
 
+- **Les deux voies d'édition affrontent les mêmes gardes de dérive, et le
+  mot-frontière d'une `PART2` ne peut plus être effacé** (`E5b`, `E6b`).
+
+  `E4`/`E5` étaient réservées aux spans, donc la voie ligne entière — celle du
+  producteur par défaut — n'en voyait aucune : le même texte obtenait un verdict
+  différent selon le vocabulaire qui l'avait proposé. Et le mot qui continue un
+  mot coupé n'était protégé par rien : effacé, la ligne survit donc le contrôle
+  de non-vacuité est satisfait, et la paire se relit `plu-` + `et le reste`.
+
+  Les deux règles ont été choisies **après mesure sur un vrai run**
+  `mistral-small-latest` (3 135 lignes, 1 796 propositions), pas avant.
+
+  Pour `E5b`, la règle est « effacer sans remplacement », pas « trop changer » :
+  sur 1 433 lignes `PART2`/`BOTH`, le mot-frontière est remplacé par du
+  méconnaissable **25 %** du temps, et ce sont de bonnes corrections — c'est
+  l'endroit le plus dégradé de la ligne, souvent réduit à un caractère isolé.
+  Un seuil de similarité refuserait **23–31 %** des corrections réelles ;
+  refuser le seul effacement en coûte **0**.
+
+  Pour `E6b`, `E4` refuse **0** proposition (médiane 20 caractères changés,
+  budget 200) et `E5` en refuse **205** dont **204 déjà refusées** en aval —
+  elle refuse plus tôt et nomme pourquoi, elle ne refuse pas plus. La 205ᵉ a
+  fait **affiner `E5`** : une espace avant la marque n'est refusée que si la
+  correction l'a *introduite*, parce que sur ces 205 elle est héritée de la
+  source 1 fois et introduite 0 fois. Rejoué sur les données du run :
+  **204 refusées, 0 verdict changé.**
+
+  Deux nouveaux codes d'`EditRejection` (`e5_boundary_word`, plus `e4_line_budget`
+  et `e5_hyphen` désormais atteignables sur la voie ligne entière), additifs.
+
 - **Une édition sur une ligne de contexte est refusée, plus jetée en silence.**
   `E1` avait deux clauses et la première était **inatteignable** : `attempt.py`
   passait toutes les lignes du chunk comme cibles, donc « hors ensemble » n'était
