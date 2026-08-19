@@ -29,6 +29,18 @@ from __future__ import annotations
 
 from typing import Any
 
+#: Which lines end on the first half of a broken word, by index.
+#:
+#: The cheapest signal that closes the mode's dominant failure. Measured on a
+#: real run before it existed: the retry cause is ``hyphen_integrity_violation``
+#: — shown a page as flowing text, a model completes ``plu-`` into
+#: ``plusieurs-`` on the first line — and ``hyphen_pair_fallback`` was the
+#: leading cause of refusal, 189 lines. The keyed contract prevents this with
+#: five per-line hyphen fields; sending those back would restore the envelope
+#: this mode exists to avoid, so only the indices travel. On a 518-line page
+#: with 80 breaks that is roughly 200 tokens.
+PAGE_BREAKS_KEY = "coupes"
+
 #: The page's answer: one string per source line, in the same order.
 #:
 #: No ``line_id``, and that absence IS the mode: carrying the identities back
@@ -56,8 +68,9 @@ PAGE_OUTPUT_JSON_SCHEMA: dict[str, Any] = {
 PAGE_SYSTEM_PROMPT = """\
 Tu es un moteur de correction post-OCR spécialisé dans les documents patrimoniaux.
 
-On te donne les lignes d'UNE page, dans l'ordre de lecture. Tu renvoies le même
-nombre de lignes, dans le même ordre, corrigées.
+On te donne les lignes d'UNE page, dans l'ordre de lecture, et la liste
+`coupes` des indices de lignes qui se terminent par un MOT COUPÉ. Tu renvoies
+le même nombre de lignes, dans le même ordre, corrigées.
 
 Règles absolues :
 1. Corrige uniquement les erreurs manifestes d'OCR.
@@ -73,9 +86,9 @@ La position est la seule chose qui relie une ligne rendue à sa ligne d'origine.
 10. Chaque ligne rendue est une seule ligne, sans caractère de saut de ligne.
 11. Retourne uniquement un JSON valide conforme au schéma fourni.
 12. En cas d'incertitude, fais la correction minimale.
-13. Une ligne qui se termine par un tiret de césure garde son tiret : le mot \
-coupé se poursuit sur la ligne suivante, et les deux moitiés restent sur \
-leurs lignes respectives.
+13. Les lignes dont l'indice figure dans `coupes` finissent sur la première \
+moitié d'un mot : corrige ce fragment comme le reste, garde son tiret, et ne \
+le complète pas.
 14. Une ligne que tu ne sais pas corriger, tu la renvoies telle quelle. \
 Ne la supprime pas, ne l'omets pas : une ligne manquante décale toutes les \
 suivantes.\
@@ -102,6 +115,7 @@ def page_lines_from_response(raw: object) -> list[str] | None:
 
 
 __all__ = [
+    "PAGE_BREAKS_KEY",
     "PAGE_OUTPUT_JSON_SCHEMA",
     "PAGE_SYSTEM_PROMPT",
     "page_lines_from_response",

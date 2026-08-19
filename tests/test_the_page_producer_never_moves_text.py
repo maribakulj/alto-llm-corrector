@@ -68,11 +68,45 @@ async def test_the_envelope_carries_the_text_once() -> None:
 
     A payload that grew back into the per-line contract — ids, neighbours —
     would keep the alignment risk and give up the saving that justifies it.
+
+    ``coupes`` is the one addition, and it is indices rather than fields: on a
+    518-line page it costs roughly 200 tokens and closes the mode's leading
+    failure. See :data:`PAGE_BREAKS_KEY`.
     """
     _, provider = await _run(
         ["le chat dort", "sur le tapis"], "le chat dort", "sur le tapis"
     )
-    assert provider.payloads == [{"lines": ["le chat dort", "sur le tapis"]}]
+    assert provider.payloads == [
+        {"lines": ["le chat dort", "sur le tapis"], "coupes": []}
+    ]
+
+
+@pytest.mark.asyncio
+async def test_the_broken_lines_are_named_by_index() -> None:
+    """The signal that stops the model completing a broken word.
+
+    Measured before it existed: the retry cause was
+    ``hyphen_integrity_violation`` — a model shown a page as flowing text
+    writes ``plusieurs-`` where the line reads ``plu-`` — and
+    ``hyphen_pair_fallback`` was the leading refusal at 189 lines.
+    """
+    request = CorrectionRequest(
+        document_id="D1",
+        page_id="P1",
+        granularity="page",
+        lines=[
+            LineContext(
+                line_id="L0", ocr_text="il a pris plu-", hyphenation_role="HypPart1"
+            ),
+            LineContext(
+                line_id="L1", ocr_text="sieurs mesures", hyphenation_role="HypPart2"
+            ),
+            LineContext(line_id="L2", ocr_text="et voila"),
+        ],
+    )
+    producer, provider = _producer(["il a pris plu-", "sieurs mesures", "et voila"])
+    await producer.produce(request, options=ProducerOptions(temperature=0.0))
+    assert provider.payloads[0]["coupes"] == [0], provider.payloads[0]
 
 
 @pytest.mark.asyncio

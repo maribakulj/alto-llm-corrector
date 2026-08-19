@@ -589,13 +589,38 @@ instabilité déjà notée le 18 août (*« la même page, même config, a donn�
 | coût | **0,0051 $** | **0,0189 $** |
 | durée | 77 s | 234 s |
 
-**Ce que ça donne comme verdict.** Le mode est **construit et validé dans sa
-partie risquée** ; ce qui manque n'est pas du code mais un modèle qui tienne
-l'attention sur mille lignes. Trois suites possibles, aucune tranchée :
-borner la taille d'une requête page (ce qui rapproche le mode du mode
-apparié et dilue l'économie), essayer un modèle plus gros, ou garder le mode
-comme il est et laisser `cinoc` arbitrer sur un banc. **Ne pas recommander le
-mode page tant que ce point n'est pas réglé.**
+**Deuxième passe, le même jour : la césure était une cause réelle mais
+secondaire.** Le contrat page n'envoyait que des chaînes nues, là où le
+contrat apparié porte six champs de césure par ligne. La cause de retentative
+capturée dans les événements est `hyphen_integrity_violation` : voyant la
+page comme du texte qui coule, le modèle **complète** le mot coupé — il écrit
+`plusieurs-` là où la ligne dit `plu-`. Ajout du signal le moins cher
+possible, une liste d'indices `coupes` (~200 jetons sur 518 lignes contre des
+milliers si les six champs revenaient).
+
+Mesuré : sur `f0001`, replis **101 → 88**, retentative de césure **supprimée**,
+livraisons **inchangées à 195** — soit le mode apparié à une ligne près (196).
+
+**Et une leçon de prompt, payée.** La première rédaction de la règle était
+longue, en majuscules, avec un exemple. Le modèle est devenu timide sur
+**toute** la page : propositions **271 → 50**, livraisons 195 → 38. La règle
+brève rétablit tout. L'insistance se paie ailleurs que là où on la met.
+
+**Ce qui reste, et c'est la taille de la page.** À 518 lignes le mode page
+égale le mode apparié (195 contre 196). À 986 lignes il livre **9 contre
+278**, et `coupes` n'y change rien.
+
+**Le levier « borner la requête » ne marche pas aujourd'hui, mesuré.** Un
+plafond de 400 lignes sur une page de 986 ne la coupe pas en trois : le
+planificateur **descend d'un cran de granularité** et produit **217 chunks**.
+Il récupère les corrections (169 sur 278) et détruit l'économie (217 appels
+contre 1). **Ce qui manque au planificateur est de savoir trancher une page
+en N tranches égales** — il ne sait que descendre PAGE → BLOCK → WINDOW →
+LINE. C'est un travail identifié, pas un mystère.
+
+**Verdict inchangé : ne pas recommander le mode page.** Sa partie risquée est
+prouvée, sa césure est réglée, et ce qui bloque est soit un découpage que le
+planificateur ne sait pas exprimer, soit un modèle qui tienne mille lignes.
 
 
 
