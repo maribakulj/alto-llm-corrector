@@ -79,6 +79,14 @@ rouge là-bas — c'est précisément à ça que sert la PR, et c'est pour ça q
    ouvert.** Un item peut être clos dans le code et resté ouvert dans le plan
    — `S3b` l'était, et la file en a hérité. Le plan décrit l'intention ; les
    tests décrivent l'état.
+7. **Une CI vide n'est pas une CI verte.** Merger demande de compter les
+   vérifications **réussies**, jamais de constater l'absence d'échec. Payé le
+   2026-08-19 : la condition automatique était « zéro en attente et zéro en
+   échec », elle a lu une liste **vide** — un commit venait d'être poussé et
+   les vérifications n'étaient pas encore enregistrées — et a mergé `#152`
+   sans qu'aucune n'ait tourné. `main` s'est trouvée verte par chance, pas par
+   méthode. La condition correcte compte les succès et exige qu'ils soient au
+   nombre attendu.
 
 ### Conditions d'arrêt
 
