@@ -438,7 +438,7 @@ class CorrectionPipeline:
             traces=index.traces,
         )
 
-        format_losses, corrected_files = await _render_outputs(
+        render = await _render_outputs(
             format_adapter=self.format_adapter,
             producer_metadata=self.producer_metadata,
             config_fingerprint=self.config_fingerprint(),
@@ -467,7 +467,7 @@ class CorrectionPipeline:
                 source_digests=source_digests,
                 image_assets=ctx.image_ref_by_page_id,
             ),
-            format_losses=format_losses,
+            render=render,
             sidecar_entries=sidecar_entries,
             confidence_policy=self.confidence_policy,
             confidence_scorers=self.confidence_scorers,
@@ -479,7 +479,7 @@ class CorrectionPipeline:
             decisions=decisions,
             traces=index.traces,
             report=report,
-            corrected_files=corrected_files,
+            corrected_files=render.corrected_files,
             source_digests=source_digests,
             total_chunks=total_chunks,
             total_reconciled=total_reconciled,

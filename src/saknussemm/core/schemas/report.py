@@ -351,6 +351,18 @@ class CorrectionReport(BaseModel):
     #: this accounting already suffered once: two sites for one event,
     #: free to drift apart.
     format_losses: dict[str, int] | None = None
+    #: Source files the run could NOT deliver, mapped to why — the artefact
+    #: did not carry the decisions, so the file is absent from
+    #: ``CorrectionResult.corrected_files`` rather than present in a
+    #: doubtful version. Empty on a run that delivered everything.
+    #:
+    #: Additive and optional, so this does NOT bump ``report_version``.
+    #:
+    #: This is the persisted half of the guarantee. The live half is
+    #: :attr:`CorrectionResult.undeliverable_files`, and the loud half is
+    #: :meth:`CorrectionResult.write`, which refuses a partial set unless
+    #: the caller passes ``allow_partial``.
+    undeliverable_files: dict[str, str] = Field(default_factory=dict)
     #: Per-line projection fidelity, counted by level over the run — e.g.
     #: ``{"exact": 498, "token_equivalent": 22, "normalized": 2}``. Two
     #: normalized lines mean two lines where a significant whitespace

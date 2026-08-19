@@ -250,6 +250,12 @@ def test_correction_report_json_keys_are_pinned():
         "provenance",  # P3.9 — optional, additive (no version bump)
         "usage",  # optional, additive (no version bump)
         "sidecar",  # optional, additive (no version bump)
+        # Files the run withheld, mapped to why. Additive and always
+        # present as an object — empty means "nothing is missing from the
+        # output", which is a fact worth stating rather than an absence to
+        # infer. No version bump: a v2.0 consumer ignoring it reads the
+        # same lines it always did.
+        "undeliverable_files",
     }, (
         "CorrectionReport JSON shape moved — a key removal/rename requires "
         "bumping CORRECTION_REPORT_VERSION (§9); an addition must stay "

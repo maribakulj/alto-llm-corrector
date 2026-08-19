@@ -27,6 +27,7 @@ from saknussemm.core.editing import (
 from saknussemm.core.identity import LineRef
 from saknussemm.core.pairing import unpaired_break_refs
 from saknussemm.core.projection import _fidelity_counts
+from saknussemm.core.protocols import RenderOutcome
 from saknussemm.core.schemas import (
     ConfidencePolicy,
     CorrectionReport,
@@ -169,7 +170,7 @@ def _build_correction_report(
     traces: dict[LineRef, LineTrace],
     ctx: RunContext,
     provenance: RunProvenance,
-    format_losses: dict[str, int],
+    render: RenderOutcome,
     sidecar_entries: list[SidecarEntry],
     confidence_policy: ConfidencePolicy,
     confidence_scorers: tuple[ConfidenceScorer, ...],
@@ -187,7 +188,11 @@ def _build_correction_report(
         # the report. None when no MARKUP was dropped (or nothing was
         # written) — never read as "the run lost nothing": a flattened
         # character is counted on the fidelity scale below.
-        format_losses=format_losses or None,
+        format_losses=render.losses or None,
+        # Files the run refused to deliver. Empty on a clean run; never
+        # None, because "no file was rewritten" and "every file was
+        # faithful" both mean nothing is missing from the output.
+        undeliverable_files=render.undeliverable,
         # How faithfully each rewritten line carries its decision,
         # counted by level. A non-zero "normalized" is the run telling
         # its host that a significant whitespace character did not

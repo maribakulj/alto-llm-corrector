@@ -24,6 +24,7 @@ from saknussemm.core.fidelity import ProjectionFidelity
 from saknussemm.core.protocols import (
     FormatAdapter,
     ProducerMetadata,
+    RenderOutcome,
     RewriteResult,
 )
 from saknussemm.core.schemas import DocumentManifest, LineTrace, PageManifest
@@ -40,24 +41,21 @@ async def _render_outputs(
     source_files: dict[str, Path],
     traces: dict[LineRef, LineTrace],
     decisions: DecisionSet,
-) -> tuple[dict[str, int], dict[str, bytes]]:
+) -> RenderOutcome:
     """Rewrite corrected files in memory and update the traces.
-    Returns ``(losses, corrected_files)`` — the format's
-    granularity-loss counters aggregated across every file (for
-    ``CorrectionReport.format_losses``) and the corrected bytes per
-    source file name (for ``CorrectionResult.corrected_files``).
 
-    ADR-011 — pure computation: nothing is persisted here (the
-    engine has no writer; the caller persists from the result). The
-    projection invariant verifies against the
-    :class:`RewriteResult`'s texts, read off the very tree the bytes
-    were serialized from: the second full parse of the output is
-    gone. The heavy ``rewrite_file`` call (a full lxml
-    parse/rewrite/serialize of the source file) runs in a worker
-    thread so a ~100 MiB rewrite no longer freezes the host's event
-    loop (SSE keepalives, /health). Observer events stay ON the
-    loop — emit sites must never run from a thread (the store's
-    queues are not thread-safe).
+    Returns a :class:`~saknussemm.core.protocols.RenderOutcome`, which is
+    also where the contract around an undeliverable file is written.
+
+    ADR-011 — pure computation: nothing is persisted here (the engine has no
+    writer; the caller persists from the result). The projection invariant
+    verifies against the :class:`RewriteResult`'s texts, read off the very
+    tree the bytes were serialized from: the second full parse of the output
+    is gone. The heavy ``rewrite_file`` call (a full lxml
+    parse/rewrite/serialize of the source file) runs in a worker thread so a
+    ~100 MiB rewrite no longer freezes the host's event loop (SSE
+    keepalives, /health). Observer events stay ON the loop — emit sites must
+    never run from a thread (the store's queues are not thread-safe).
     """
     # §11 — provenance stamped into every corrected file's processingStep.
 
@@ -67,7 +65,7 @@ async def _render_outputs(
     adapter: FormatAdapter | None = format_adapter
     losses_total: dict[str, int] = {}
     corrected_files: dict[str, bytes] = {}
-    projection_failures: list[str] = []
+    undeliverable: dict[str, str] = {}
 
     for source_name, xml_path in source_files.items():
         pages_for_file = [
@@ -95,7 +93,9 @@ async def _render_outputs(
                 decisions=decisions,
             )
         except ProjectionError as failure:
-            projection_failures.append(str(failure))  # _refuse_undeliverable
+            # No event: `ev.Warning` is chunk-scoped, and this file never
+            # reached a chunk boundary. See `RenderOutcome`.
+            undeliverable[source_name] = str(failure)
             continue
         corrected_files[source_name] = result.xml_bytes
 
@@ -121,41 +121,9 @@ async def _render_outputs(
             traces=traces,
         )
 
-    _refuse_undeliverable(projection_failures)
-
     # No trace persistence anywhere in the engine: trace.json IS the
     # CorrectionReport (§9), carried on the result for the caller.
-    return losses_total, corrected_files
-
-
-def _refuse_undeliverable(failures: list[str]) -> None:
-    """Fail the run once for every file whose artefact diverged. No-op if none.
-
-    **Why the rewrite loop finishes instead of returning on the first.** The
-    refusal itself is not in question: a file that does not say what the run
-    decided is corruption of the deliverable, and nothing is written. But
-    abandoning the loop meant a document with three bad files disclosed
-    ONE per run — and a producer's run is billed. Learning the second cost
-    the corpus re-sent, the tokens re-paid and the wait re-taken, to find
-    something the first run had in hand a few milliseconds of lxml later.
-    Three findings, three bills. Now: one.
-
-    **What does not move.** Still a raise, still nothing delivered, still
-    before any writer sees the bytes. This is about diagnosis, never salvage.
-
-    The one-file message is the exception's text verbatim, so a caller
-    reading ``str(exc)`` — or a log grep, or a test — sees exactly what it
-    saw before. The list rides on ``.failures`` as an addition.
-    """
-    if not failures:
-        return
-    raise ProjectionError(
-        failures[0]
-        if len(failures) == 1
-        else f"{len(failures)} source files diverge from the run's "
-        f"decisions: {'; '.join(failures)}",
-        failures=tuple(failures),
-    )
+    return RenderOutcome(losses_total, corrected_files, undeliverable)
 
 
 async def _rewrite_and_verify(

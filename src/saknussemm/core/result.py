@@ -72,6 +72,21 @@ class CorrectionResult:
     #: it is the caller's choice (:meth:`write`, or a host-owned
     #: transaction like the demo backend's staging writer).
     corrected_files: dict[str, bytes] = field(default_factory=dict)
+    #: Source files the run could NOT deliver, mapped to why: the rewritten
+    #: artefact did not carry the run's decisions for that file.
+    #:
+    #: Such a file is **absent** from :attr:`corrected_files`, never present
+    #: in a doubtful version — a lookup by name raises ``KeyError`` rather
+    #: than handing back bytes nobody vouched for. Reading this dict is how
+    #: a caller learns the output is a subset; :meth:`write` refuses the
+    #: partial set outright unless told otherwise, so the common path cannot
+    #: persist an incomplete volume by omission.
+    #:
+    #: Empty on a run that delivered everything, which is every run that
+    #: does not hit a library defect: a divergence means the artefact and
+    #: the decision disagree, and that has always been a bug rather than a
+    #: cost of the format.
+    undeliverable_files: dict[str, str] = field(default_factory=dict)
     #: lines the QE router judged already clean and SKIPPED
     #: (confirmed as-is, no producer call). 0 when routing is off. The
     #: economics signal: each skip is one LLM call not spent.
@@ -123,16 +138,58 @@ class CorrectionResult:
                 )
             seen[flattened] = source_name
 
-    def write(self, directory: str | Path) -> list[Path]:
+    def _refuse_partial_write(self, allow_partial: bool) -> None:
+        """A volume missing a file must not reach disk by omission.
+
+        The engine no longer throws a whole run away because one file's
+        artefact diverged — the other files are faithful, and refusing to
+        hand them over never made them better. But the risk that trade
+        creates is precise: a caller who writes ``corrected_files`` in a
+        loop persists 299 of 300 pages, reports success, and nobody looks.
+
+        So the loudness lands here, at the one door that puts bytes on
+        disk. ``allow_partial=True`` is the caller saying it has read
+        :attr:`undeliverable_files` and accepts the subset — a decision,
+        made once, in code someone reviews. Hosts with their own writer
+        (the demo's staging transaction) never reach this and answer the
+        same question in their own terms.
+
+        The same shape as :meth:`_refuse_colliding_names`: ``write``
+        defending its own contract rather than inheriting one.
+        """
+        if not self.undeliverable_files or allow_partial:
+            return
+        listed = "; ".join(
+            f"{name}: {why}" for name, why in sorted(self.undeliverable_files.items())
+        )
+        raise ConfigurationError(
+            f"{len(self.undeliverable_files)} of "
+            f"{len(self.corrected_files) + len(self.undeliverable_files)} source "
+            "files could not be delivered, so writing now would leave an "
+            f"INCOMPLETE set on disk — {listed}. Read "
+            "`result.undeliverable_files`, then either fix the cause or call "
+            "`write(..., allow_partial=True)` to persist the faithful files "
+            "on purpose."
+        )
+
+    def write(
+        self, directory: str | Path, *, allow_partial: bool = False
+    ) -> list[Path]:
         """Persist the run's artefacts into ``directory`` (created if
         needed): each corrected XML under its source file's name, plus
         the §9 report as ``report.json``. Returns the written paths.
+
+        Refuses outright when the run has :attr:`undeliverable_files`,
+        unless ``allow_partial=True`` — see :meth:`_refuse_partial_write`.
+        The report is written either way once the call is allowed, so what
+        is missing is on disk beside what is not.
 
         ADR-011 — a caller-side convenience, not engine behaviour: the
         engine only computes values. Hosts that own a file transaction
         (commit/discard staging) keep their injected writer instead.
         """
         target = Path(directory)
+        self._refuse_partial_write(allow_partial)
         self._refuse_colliding_names()
         target.mkdir(parents=True, exist_ok=True)
         written: list[Path] = []
@@ -197,6 +254,7 @@ def _build_correction_result(
         ),
         decisions=decisions,
         corrected_files=corrected_files,
+        undeliverable_files=report.undeliverable_files,
         # routing economics: lines skipped (no producer call) and the
         # run's total producer-call count.
         lines_skipped=ctx.lines_skipped,

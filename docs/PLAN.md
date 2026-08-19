@@ -520,9 +520,35 @@ ensemble, ou rien : attraper **par fichier**, **nommer dans le rapport**
 pourquoi celui-là n'est pas livrable, et un test qui prouve qu'un résultat
 partiel ne peut pas passer pour un succès complet.
 
-**Arbitrage à remonter** avant d'écrire : `run()` doit-il rendre un résultat
-partiel, ou lever comme aujourd'hui en portant le rapport sur l'exception ?
-Les deux sont défendables et le choix n'est pas technique.
+**Arbitrage tranché le 2026-08-19 : livrer les fichiers sains.** Et il a été
+tranché par une mesure, pas par une préférence.
+
+Trois des quatre arguments pour garder le refus total ne tenaient pas. « On
+ne peut pas ignorer le problème » est faux : un fichier retenu est *absent*,
+et une recherche par nom lève. « Un résultat rendu veut dire que tout est
+bon » est un confort de raisonnement, pas une propriété de correction — la
+garantie qui compte est **par fichier**, et elle est intacte. « C'est déjà
+écrit » n'est pas un argument sur ce qui est juste.
+
+Le quatrième était réel : un mot coupé peut enjamber deux **fichiers**, donc
+livrer le fichier *N* sans le *N+1* laisserait un mot à moitié corrigé dont
+l'autre moitié n'existe nulle part. Mesuré sur les deux fascicules Gallica
+réels — 12 fichiers, 8 787 lignes, **1 583 unités de césure** — il y en a
+**0** à cheval sur deux fichiers, sur un détecteur vérifié contre un positif
+fabriqué. Le mécanisme existe ; sur des volumes réels il est trop rare pour
+payer la perte de tout le reste.
+
+**Ce que le travail de `C3` a créé et qui a renforcé la décision** : avec
+tous les fichiers fautifs nommés d'un coup, la *forme* de l'échec devient
+lisible — 1 fichier sur 300 est un accident local, 300 sur 300 est une
+configuration cassée. Livrer les sains devient un choix informé, pas un pari.
+
+**Où atterrit le bruit.** Retenir le fichier ne suffisait pas : un appelant
+qui boucle sur `corrected_files` écrirait 299 pages sur 300 en rapportant un
+succès. Donc `CorrectionResult.write` — la seule porte qui pose des octets
+sur un disque — **refuse** l'ensemble incomplet, et `allow_partial=True` est
+l'appelant qui dit, dans du code relu, qu'il a lu la liste et accepte le
+sous-ensemble.
 
 ### `C4` — Le mode page — **priorité 4**
 
