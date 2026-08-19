@@ -148,9 +148,21 @@ The saving is real and measured on the same page: 2 calls against 147,
 worth nothing if the run corrects a fifth as much, and how much it corrects
 is not currently predictable.
 
-So: **keyed mode for work you depend on.** The realigned mode is complete and
-its risky half is proven; what it waits on is not more code but a model that
-holds attention over a thousand lines at once.
+Page SIZE is the factor. At **518 lines the realigned mode matches the keyed
+one** — 195 corrections against 196. At 986 it delivers **9 against 278**.
+
+Bounding the request does not currently help, and the reason is worth knowing.
+Caps of 400 and 250 lines on a 986-line page both emit **217 chunks** — the
+cap is not what splits anything. Once it is crossed the planner descends to
+BLOCK granularity, and the page has 217 blocks; below a block's size the cap
+stops mattering. That recovers the corrections and destroys the economy.
+Slicing a page into N equal parts is not something the planner can express
+today.
+
+So: **keyed mode for work you depend on.** The realigned mode is complete, its
+risky half is proven and its hyphenation is fixed; what it waits on is either a
+splitting mode the planner does not have, or a model that holds attention over
+a thousand lines at once.
 
 ## What's not
 

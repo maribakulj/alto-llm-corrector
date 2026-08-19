@@ -46,6 +46,7 @@ from saknussemm.core.schemas import CorrectionRequest, ModelCapabilities, Usage
 from saknussemm.errors import ProposalValidationError
 from saknussemm.integrations.llm import prompt_schema_fingerprint
 from saknussemm.integrations.page import (
+    PAGE_BREAKS_KEY,
     PAGE_OUTPUT_JSON_SCHEMA,
     PAGE_SYSTEM_PROMPT,
     page_lines_from_response,
@@ -99,6 +100,14 @@ class PageLLMEditProducer:
         self, payload: CorrectionRequest, *, options: ProducerOptions
     ) -> tuple[EditScript, Usage | None]:
         source_lines = [line.ocr_text for line in payload.lines]
+        # Which lines end on half a word. Without it the model completes the
+        # broken word on the first line and the validator refuses the whole
+        # page — measured as the mode's leading failure before this existed.
+        breaks = [
+            index
+            for index, line in enumerate(payload.lines)
+            if line.hyphenation_role in ("HypPart1", "HypBoth")
+        ]
         # The compact envelope IS the mode: bare strings, no ids, no
         # neighbour copies. Sending `payload.model_dump()` here would send
         # every line's text three times and give back the $1.11 this
@@ -107,7 +116,7 @@ class PageLLMEditProducer:
             api_key=self._api_key,
             model=self._model,
             system_prompt=self._system_prompt,
-            user_payload={"lines": source_lines},
+            user_payload={"lines": source_lines, PAGE_BREAKS_KEY: breaks},
             json_schema=self._output_schema,
             temperature=options.temperature,
         )
