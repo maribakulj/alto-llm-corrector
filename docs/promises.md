@@ -40,7 +40,7 @@ serait moulée sur l'existant et n'aurait rien trouvé.
 | I4a | le cœur et les formats n'importent aucune bibliothèque d'image | **gardée** |
 | I4b | l'installation de base n'embarque aucune dépendance image | **fermée le 2026-08-16** — voir plus bas |
 | I4c | l'extra `[vision]` importe Pillow paresseusement | **gardée** |
-| E1 | `line_id` dans le chunk visé | **partielle** — le seul test confond « hors chunk » et « inconnue » ; retirer la première clause laisse la suite verte |
+| E1 | `line_id` dans le chunk visé | **fermée le 2026-08-19** — la clause était *inatteignable*, pas mal testée : `attempt.py` passait TOUTES les lignes du chunk comme `chunk_line_ids`, donc « hors ensemble » n'était vrai que là où « inconnue » l'était déjà (constat du 2026-08-17). Elle passe désormais les **cibles**, et une édition sur une ligne de contexte est **refusée** avec son propre code `e1_context_line` au lieu d'être silencieusement jetée en aval. Le texte corrigé ne bouge pas — la suite entière est restée verte — seule la trace apparaît, ce que `edit_rejections` (`A2b`, 2026-08-17) permet enfin de porter. `test_a_context_edit_is_refused_not_dropped.py` |
 | E2a | spans sans chevauchement | **gardée** |
 | E2b | application **de droite à gauche** | **fermée le 2026-08-16** — un span qui change de longueur sépare enfin les deux ordres |
 | E3a/c/d | pas de `\n` et non-vide pour `replace_line` ; suppression permise par span | **gardées** |

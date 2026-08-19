@@ -55,6 +55,23 @@ The **top-level import surface** is provisional until `1.0.0`. It went from
 
 ### Changed — BREAKING
 
+- **Une édition sur une ligne de contexte est refusée, plus jetée en silence.**
+  `E1` avait deux clauses et la première était **inatteignable** : `attempt.py`
+  passait toutes les lignes du chunk comme cibles, donc « hors ensemble » n'était
+  vrai que là où « inconnue » l'était déjà. Elle passe maintenant les vraies
+  cibles, et le refus porte son propre code, `e1_context_line` — quatorzième
+  code de `EditRejection`, additif.
+
+  Le texte corrigé est inchangé : une édition de contexte était déjà écartée
+  plus bas par le filtrage des cibles, et la suite entière est restée verte.
+  Ce qui change est qu'un opérateur peut désormais voir qu'un producteur a
+  proposé quelque chose que le moteur a décliné, et laquelle des deux
+  accusations : un identifiant inconnu est un producteur qui **invente** une
+  ligne, un identifiant connu hors cibles est un producteur qui répond à une
+  question qu'on ne lui a pas posée. Le second est le cas courant — un payload
+  ne marque pas ses cibles — et le rapporter comme « inconnu » le rendait
+  illisible.
+
 - **A divergent file is withheld, not fatal to the run — surface 67 → 68.**
   `run()` used to raise `ProjectionError` the moment one source file's rewritten
   artefact diverged from what the run decided. Correct as a refusal, ruinous as
