@@ -405,3 +405,68 @@ Une ligne par réveil : date, item, résultat, ou la raison de l'arrêt.
   pypi.org et test.pypi.org plus les environnements GitHub — le workflow est
   scindé et stable depuis #119, donc c'est le bon moment. Et l'arbitrage sur
   l'aligneur.
+
+- 2026-08-19 — **le plan `C` écrit, puis exécuté en entier.** Sept PR mergées
+  ici, une à la démo. Le plan lui-même est né d'une **contre-analyse** exigée
+  par le mainteneur : sept constats sur dix de la première version ont bougé,
+  et la section les nomme plutôt que de les effacer.
+
+  **`C1` — la marque de coupure garde son espace** (#131, ferme #126). Une
+  ligne Gallica réelle décidée `'…et d -'` était écrite `'…et d-'` : les mots
+  divergent, donc `ProjectionError`, donc **le document entier perdu**. La
+  raison écrite pour laquelle le défaut est resté ouvert deux jours — « le
+  correctif touche la géométrie » — est fausse deux fois : la géométrie est
+  gratuite dès qu'on taille l'espace DANS la fente réservée au `HYP`, et le
+  vrai obstacle était une perte d'information en amont que personne n'avait
+  nommée. Et la population n'avait jamais été mesurée : 29 lignes sur 24 694,
+  mais **10 fichiers sur 35**, tous de deux fascicules — une signature de
+  producteur, pas un aléa.
+
+  **`C2` — le coût de la césure publié** (#132). Deuxième cause de refus du
+  run du 18 août, 2 271 lignes, et rien ne le disait. Le chiffre était déjà
+  dérivable ; ce qui manquait était la phrase, et la garde qui l'empêche de
+  dériver.
+
+  **`C3` — le rayon d'action, en deux temps** (#133, #134). D'abord finir la
+  boucle de réécriture : trois fichiers fautifs coûtaient trois runs facturés
+  pour être découverts, maintenant un seul. Puis l'arbitrage, **remonté au
+  mainteneur** : un fichier divergent est désormais **retenu** et non fatal
+  au run. Ma première recommandation était de garder le refus total ; le
+  mainteneur a demandé pourquoi, et trois de mes quatre arguments ne
+  tenaient pas. Le quatrième — un mot coupé à cheval sur deux fichiers livré
+  à moitié — a été **mesuré** : **0 sur 1 583** unités de césure, détecteur
+  vérifié contre un positif fabriqué. Recommandation inversée.
+
+  **La démo aurait menti** (`saknussemm-demo` #5). Elle a son propre
+  écrivain, donc elle contourne par conception le refus de `write()` : elle
+  aurait écrit 299 pages sur 300 en rapportant un succès. Et le défaut le
+  plus dangereux était côté interface — un état terminal absent de la liste
+  du flux SSE n'empêche pas d'afficher une étiquette, **il empêche le flux de
+  se fermer**.
+
+  **`C4` — le mode page, en quatre pièces** (#135 à #138). L'aligneur ne
+  matérialise plus ses matrices : de ~2,4 Go et un échec mémoire à **4,48 s
+  et 31 Mo** sur la page réelle la plus lourde, équivalence prouvée contre
+  l'algorithme d'origine gardé comme oracle. Puis l'alignement ligne-à-ligne
+  (Jaccard, aussi discriminant que Levenshtein et 13× moins cher, 0,05 s la
+  page), le contrat et le producteur, et les deux modes nommés dans le
+  README.
+
+  **Deux revendications à moi corrigées par la mesure.** « La bande donne la
+  garde gratuitement » : non — `band_exhausted` dit *où la recherche est
+  allée*, pas si la lecture est bonne, et une suppression massive ne le
+  déclenche pas du tout. Et la première version de `page_alignment` laissait
+  la ligne avalée par une fusion sans cible — test vert — pendant que
+  l'AUTRE ligne recevait les mots de sa voisine. Vu seulement en écrivant un
+  cas jouet qui a cassé pour la mauvaise raison. La garde qui a suivi est
+  mesurée : une correction déplace le compte de jetons de **±1, 100 % du
+  temps** sur 8 859 paires ; une fusion de **+6 à +14**.
+
+  **Les garde-fous du dépôt ont refusé sept fois** — longueurs de fonction,
+  nombre d'arguments, étiquettes de ticket, pin du JSON du rapport, protocole
+  `JobStore`, dérivation dupliquée. À chaque fois ils avaient raison : le
+  code a été déplacé, jamais le cran desserré.
+
+  **Ce que le mode page n'a pas** : un run réel. Tout est mesuré sur des
+  lignes réelles avec des corrections **simulées**, et une simulation ne dira
+  jamais ce qu'un modèle fait quand on lui demande mille lignes d'un coup.
