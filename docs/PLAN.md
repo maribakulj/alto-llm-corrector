@@ -550,7 +550,20 @@ sur un disque — **refuse** l'ensemble incomplet, et `allow_partial=True` est
 l'appelant qui dit, dans du code relu, qu'il a lu la liste et accepte le
 sous-ensemble.
 
-### `C4` — Le mode page — **priorité 4**
+### `C4` — Le mode page — **fait le 2026-08-19**
+
+Les quatre pièces sont posées : l'aligneur qui tient à l'échelle page
+(`#135`), l'alignement ligne-à-ligne et son refus de fusion (`#136`), le
+contrat et le producteur (`#137`), et les deux modes nommés dans le README.
+
+**Ce qui reste avant de pouvoir le recommander** : il n'a jamais tourné
+contre un vrai fournisseur sur un corpus entier. Tout ce qui est écrit
+ci-dessous a été mesuré sur des lignes réelles, mais avec des corrections
+simulées — la seule chose qu'une simulation ne peut pas donner est ce qu'un
+modèle fait vraiment quand on lui demande 1 000 lignes d'un coup. C'est le
+prochain run, et c'est lui qui dira si le mode est bon, pas ce plan.
+
+
 
 **Les deux modes, et comment les nommer.** Le critère est *qui détient
 l'identité de ligne* :
