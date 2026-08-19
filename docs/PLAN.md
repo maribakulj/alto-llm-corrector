@@ -556,12 +556,46 @@ Les quatre pièces sont posées : l'aligneur qui tient à l'échelle page
 (`#135`), l'alignement ligne-à-ligne et son refus de fusion (`#136`), le
 contrat et le producteur (`#137`), et les deux modes nommés dans le README.
 
-**Ce qui reste avant de pouvoir le recommander** : il n'a jamais tourné
-contre un vrai fournisseur sur un corpus entier. Tout ce qui est écrit
-ci-dessous a été mesuré sur des lignes réelles, mais avec des corrections
-simulées — la seule chose qu'une simulation ne peut pas donner est ce qu'un
-modèle fait vraiment quand on lui demande 1 000 lignes d'un coup. C'est le
-prochain run, et c'est lui qui dira si le mode est bon, pas ce plan.
+**Le run réel est fait — 2026-08-19 — et il ne dit pas ce que ce plan
+espérait.** Quatre pages Gallica, 3 135 lignes, `mistral-small-latest`.
+
+**L'aligneur n'est pas le problème.** Zéro ligne non appariée sur les quatre
+pages. Tout ce que `#135`, `#136` et `#137` ont construit tient contre un
+vrai modèle : la position suffit à retrouver chaque ligne, et la garde de
+fusion n'a eu à refuser personne.
+
+**Le modèle l'est.** Le taux de lignes que le modèle propose de changer est
+**erratique** en mode page, et systématiquement plus bas qu'en mode apparié :
+
+| page | lignes | page | apparié |
+|---|---|---|---|
+| f0001 | 518 | 52,3 % | 71,8 % |
+| f0002 | 986 | **2,3 %** | 53,5 % |
+| f0003 | 1 118 | 32,3 % | 47,9 % |
+| f0004 | 513 | 56,1 % | 70,2 % |
+
+Sur `f0002`, **963 des 986 propositions sont identiques à la source** : le
+modèle a rendu la page telle quelle. Ce n'est pas une loi de taille — 1 118
+lignes ont donné 32 % — c'est de la **variance**, et elle prolonge une
+instabilité déjà notée le 18 août (*« la même page, même config, a donné
+72/72 puis 3/72 »*).
+
+**L'économie, elle, est réelle et mesurée sur la même page** (`f0004`,
+513 lignes) :
+
+| | mode page | mode apparié |
+|---|---|---|
+| appels | **2** | **147** |
+| coût | **0,0051 $** | **0,0189 $** |
+| durée | 77 s | 234 s |
+
+**Ce que ça donne comme verdict.** Le mode est **construit et validé dans sa
+partie risquée** ; ce qui manque n'est pas du code mais un modèle qui tienne
+l'attention sur mille lignes. Trois suites possibles, aucune tranchée :
+borner la taille d'une requête page (ce qui rapproche le mode du mode
+apparié et dilue l'économie), essayer un modèle plus gros, ou garder le mode
+comme il est et laisser `cinoc` arbitrer sur un banc. **Ne pas recommander le
+mode page tant que ce point n'est pas réglé.**
 
 
 

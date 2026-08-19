@@ -598,3 +598,36 @@ Une ligne par réveil : date, item, résultat, ou la raison de l'arrêt.
   contrôle de sensibilité — vérifier que la mesure *peut* produire autre
   chose que zéro — l'a révélé. Sans lui, un 0 % rassurant serait parti dans
   une recommandation.
+
+- 2026-08-19 (dernier) — **le mode page contre un vrai fournisseur, la seule
+  dette que je pouvais régler seul.** Quatre pages Gallica, 3 135 lignes,
+  `mistral-small-latest`. Le résultat contredit ce que `C4` espérait, et
+  c'est précisément pourquoi le run existait.
+
+  **L'aligneur tient.** **Zéro** ligne non appariée sur les quatre pages.
+  Tout ce que `#135`, `#136` et `#137` ont construit résiste à un vrai
+  modèle : la position suffit à retrouver chaque ligne, et la garde de fusion
+  n'a eu personne à refuser. La partie que je croyais risquée est celle qui
+  n'a pas bougé.
+
+  **Le modèle ne tient pas.** Le taux de lignes qu'il propose de changer est
+  **erratique** — 52 %, 2 %, 32 %, 56 % — contre 48 à 72 % en mode apparié
+  sur les mêmes pages. Sur `f0002`, **963 propositions sur 986 sont
+  identiques à la source** : la page est revenue telle quelle. Pas une loi de
+  taille (1 118 lignes ont donné 32 %) mais de la variance, qui prolonge
+  l'instabilité de `mistral-small` déjà notée le 18 août.
+
+  **L'économie est réelle**, mesurée sur la même page : 2 appels contre 147,
+  0,0051 $ contre 0,0189 $, 77 s contre 234 s. Mais huit fois moins cher ne
+  vaut rien si le run corrige cinq fois moins, et combien il corrige n'est
+  pas prévisible aujourd'hui.
+
+  **Verdict écrit dans le README et le plan** : mode apparié pour ce dont on
+  dépend. Le mode page est complet et sa moitié risquée est prouvée ; ce
+  qu'il attend n'est pas du code mais un modèle qui tienne l'attention sur
+  mille lignes d'un coup.
+
+  Deux détails de méthode : les tâches de fond se sont fait tuer trois fois,
+  d'où une reprise ajoutée aux scripts pour ne pas repayer ce qui était déjà
+  collecté ; et le premier lancement a échoué sur un mauvais mot-clé de
+  constructeur, ce que seul le lancement révélait.
