@@ -22,6 +22,7 @@ correspondence — identity must never ride a zero-evidence match.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
 #: A deleted/weakly-matched token whose near-identical twin (≥ this
@@ -152,7 +153,11 @@ def _banded_range(i: int, n: int, m: int, band: int) -> tuple[int, int]:
 
 
 def _fill_cost_band(
-    source: list[str], target: list[str], effective: int, gap: float
+    source: list[str],
+    target: list[str],
+    effective: int,
+    gap: float,
+    similarity: Callable[[str, str], float],
 ) -> tuple[list[list[float]], list[int], list[int]]:
     """The banded DP table, as ``(cost, lo, hi)``.
 
@@ -199,7 +204,7 @@ def _fill_cost_band(
             if prev_off <= j - 1 < prev_hi:
                 diag = prev[j - 1 - prev_off]
                 if diag != inf:
-                    diag += 2.0 * (1.0 - char_similarity(token, target[j - 1]))
+                    diag += 2.0 * (1.0 - similarity(token, target[j - 1]))
                     if diag < best:
                         best = diag
             row[j - off] = best
@@ -207,7 +212,11 @@ def _fill_cost_band(
 
 
 def _suspect_move(
-    pairs: list[AlignedPair], source: list[str], target: list[str], effective: int
+    pairs: list[AlignedPair],
+    source: list[str],
+    target: list[str],
+    effective: int,
+    similarity: Callable[[str, str], float],
 ) -> bool:
     """Whether some unsettled token has a near-identical twin elsewhere.
 
@@ -226,14 +235,18 @@ def _suspect_move(
         scan_lo, scan_hi = _banded_range(src + 1, n, m, effective)
         for j2 in range(max(0, scan_lo), min(m, scan_hi)):
             if j2 != pair.target_index and (
-                char_similarity(source[src], target[j2]) >= _MOVE_SIMILARITY
+                similarity(source[src], target[j2]) >= _MOVE_SIMILARITY
             ):
                 return True
     return False
 
 
 def align_tokens(
-    source: list[str], target: list[str], *, band: int | None = None
+    source: list[str],
+    target: list[str],
+    *,
+    band: int | None = None,
+    similarity: Callable[[str, str], float] = char_similarity,
 ) -> TokenAlignment:
     """Align ``source`` tokens onto ``target`` tokens (both in reading order).
 
@@ -267,7 +280,7 @@ def align_tokens(
     # A band narrower than the length difference has NO path from corner to
     # corner: the answer would not merely be approximate, it would not exist.
     effective = max(band, abs(n - m)) if band is not None else max(n, m)
-    cost, lo, hi = _fill_cost_band(source, target, effective, gap)
+    cost, lo, hi = _fill_cost_band(source, target, effective, gap, similarity)
 
     def get(i: int, j: int) -> float:
         """One cell, everything outside the corridor being unreachable. Used
@@ -289,10 +302,10 @@ def align_tokens(
         if band is not None and (j <= lo[i] or j >= hi[i] - 1) and 0 < j < m:
             band_exhausted = True
         if i > 0 and j > 0:
-            similarity = char_similarity(source[i - 1], target[j - 1])
-            sub = get(i - 1, j - 1) + 2.0 * (1.0 - similarity)
-            if abs(get(i, j) - sub) < 1e-9 and similarity > 0.0:
-                pairs.append(AlignedPair(i - 1, j - 1, similarity))
+            pair_similarity = similarity(source[i - 1], target[j - 1])
+            sub = get(i - 1, j - 1) + 2.0 * (1.0 - pair_similarity)
+            if abs(get(i, j) - sub) < 1e-9 and pair_similarity > 0.0:
+                pairs.append(AlignedPair(i - 1, j - 1, pair_similarity))
                 i, j = i - 1, j - 1
                 continue
         if i > 0 and abs(get(i, j) - (get(i - 1, j) + gap)) < 1e-9:
@@ -312,7 +325,7 @@ def align_tokens(
     return TokenAlignment(
         pairs=tuple(pairs),
         score=score,
-        move_suspected=_suspect_move(pairs, source, target, effective),
+        move_suspected=_suspect_move(pairs, source, target, effective, similarity),
         band_exhausted=band_exhausted,
     )
 

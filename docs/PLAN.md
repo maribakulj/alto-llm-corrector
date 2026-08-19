@@ -616,7 +616,39 @@ signalée comme telle.
 
 **Le premier cas à écrire, avant le producteur** : une page où le modèle rend
 **moins de lignes qu'il n'en a reçu**, parce qu'il en a fusionné deux.
-L'aligneur doit refuser, pas redistribuer.
+L'aligneur doit refuser, pas redistribuer. **Fait le 2026-08-19**
+(`core/page_alignment.py`), et la mesure a corrigé le module deux fois.
+
+**L'alignement se fait sur les LIGNES, pas sur les jetons de la page.** Trois
+mesures de similarité comparées sur les lignes réelles avant d'écrire quoi que
+ce soit : Levenshtein sépare une ligne de ses voisines de 0,739 en moyenne, le
+Jaccard des jetons de **0,747** — pas moins bien — et coûte **13× moins**.
+L'insensibilité à l'ordre n'est pas une faiblesse à ce niveau : la question est
+*quelle ligne est-ce*, pas ce que ses mots font à l'intérieur. Résultat :
+**0,05 s** pour une page de 1 000 lignes.
+
+**Ce que la première version faisait, et qui a failli passer.** La ligne
+avalée par une fusion se retrouvait sans cible — le test passait, la garde
+semblait acquise. Sauf que l'AUTRE ligne, elle, était appariée à la ligne
+fusionnée et recevait donc les mots de sa voisine. C'est exactement la
+corruption que le mode ne doit jamais produire, et elle se cachait derrière un
+test vert. Vue seulement en écrivant un cas jouet qui a cassé pour la
+mauvaise raison.
+
+**Le garde-fou, mesuré, pas choisi.** Sur 8 859 paires appariées de huit pages
+réelles, une correction déplace le compte de jetons d'une ligne de **−1, 0 ou
++1 — 100 % du temps** (+0 seul à 94 %). Une fusion produit une ligne portant
+**1,64× à 1,86×** les jetons de sa source, soit 6 à 14 de plus. Les deux
+populations ne se touchent nulle part. Le seuil est donc à ±2 jetons, **à
+l'intérieur de la similarité** et non en filtre après coup, pour que la DP ne
+*préfère* jamais une fusion : les deux lignes reviennent non appariées et
+gardent leur OCR. Après la garde : fusion appariée **0 fois sur 6** (contre
+6 sur 6 avant), et les 8 859 appariements ordinaires **tous conservés**.
+
+Limite énoncée : sur une ligne d'un seul jeton la marge est plus grande que la
+ligne, donc fusionner deux lignes très courtes peut encore passer. Le dommage
+est borné et l'alternative — une marge sous le ±1 mesuré des vraies
+corrections — désapparierait des milliers de lignes légitimes.
 
 ### Ordre, et ce qui est correctif contre décision
 
