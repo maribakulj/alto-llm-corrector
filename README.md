@@ -126,6 +126,34 @@ produces). On a single page of several thousand lines *combined with a
 producer that fails often*, the fallback path degrades quadratically —
 measured, and on the list to fix rather than to live with.
 
+**A correction on a broken word costs the correction of two lines.** A word
+split across a line break is decided as a unit: the reconciler validates both
+fragments against `SUBS_CONTENT`, and when the join does not match it reverts
+**both** sides to the source. That is deliberate — a mixed pair would rewrite
+the joined word on one line and keep it verbatim on the other, which is the
+one thing the hyphen machinery exists to prevent — but it means one bad
+fragment discards a good correction next to it.
+
+It is not a rounding error. On the 24 592-line Gallica run of 2026-08-18 it
+was the **second cause of refusal**, 2 271 lines, behind exhausted attempts
+and ahead of every guard. And it concentrates where correction is most
+wanted:
+
+| pages | median word confidence | lines lost to the pairing rule |
+|---|---|---|
+| degraded (n=5) | 0.50 – 0.94 | **12 – 28%** |
+| clean (n=19) | 0.99 – 1.00 | 7 – 11% |
+
+Read it off the result, no message parsing:
+
+```python
+result.fallback_reasons.get("hyphen_pair_fallback", 0)   # in LINES
+```
+
+The unit is lines, and a fallen pair contributes two of them — halving it to
+count pairs understates what the run gave up. Both halves of that sentence
+are guarded by `tests/test_the_cost_of_a_broken_word_is_countable.py`.
+
 **Pages are corrected in reading order, and that is semantic.** Cross-page
 hyphen reconciliation assumes the earlier page was decided first, so
 reordering or parallelising pages changes the bytes produced.
