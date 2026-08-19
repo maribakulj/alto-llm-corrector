@@ -126,6 +126,39 @@ produces). On a single page of several thousand lines *combined with a
 producer that fails often*, the fallback path degrades quadratically —
 measured, and on the list to fix rather than to live with.
 
+**A file whose artefact does not carry its decisions is withheld, and the
+run continues.** The last thing the library does before handing anything back
+is re-read the XML it just built and compare it, word for word, against what
+it decided to write. A file that disagrees is corruption of the deliverable,
+so it is not handed back — **absent** from `corrected_files`, never present in
+a lesser version. A lookup by name raises `KeyError`; it never returns bytes
+nobody vouched for.
+
+It used to take the whole run down with it: a 300-page volume lost for one
+line, and the report lost too — every trace, every fidelity level, every
+decision — leaving one exception message about one line. The other 299 files
+were faithful, and refusing to hand them over never made them better.
+
+```python
+result = await pipeline.run(...)          # returns; does not raise for this
+result.undeliverable_files                # {'f17.xml': "line TL0441: decided … artefact …"}
+result.corrected_files['f17.xml']         # KeyError
+result.write(out)                         # ConfigurationError: INCOMPLETE set
+result.write(out, allow_partial=True)     # the 299, on purpose
+```
+
+That last line is where the loudness lives. Withholding alone would trade a
+loud failure for a quiet one — a caller looping over `corrected_files` would
+persist 299 of 300 pages and report success — so `write`, the one door that
+puts bytes on disk, refuses an incomplete set until the caller says in
+reviewed code that it accepts one.
+
+The argument for keeping the old total refusal was that a word broken across
+two files could be delivered half-corrected. Measured over the two real
+Gallica issues — 12 files, 8 787 lines, 1 583 hyphen units — **zero** cross a
+file boundary, on a detector checked against a fabricated positive. The
+mechanism exists; it is not worth losing everything else for.
+
 **A correction on a broken word costs the correction of two lines.** A word
 split across a line break is decided as a unit: the reconciler validates both
 fragments against `SUBS_CONTENT`, and when the join does not match it reverts

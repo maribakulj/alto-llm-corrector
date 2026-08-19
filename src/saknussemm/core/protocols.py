@@ -337,6 +337,37 @@ class RewriteMetrics(Protocol):
 
 
 @dataclass(frozen=True)
+class RenderOutcome:
+    """Everything the render step produces about a document's artefacts.
+
+    Three things travelled as a tuple and then as three parameters, which is
+    how ``_build_correction_report`` reached twelve arguments. They belong
+    together: each answers a different question about the SAME rewrite.
+
+    ``undeliverable`` is the one that carries a contract. A file listed there
+    is **absent** from ``corrected_files``, never present in a doubtful
+    version — a lookup by name raises rather than handing back bytes nobody
+    vouched for. The run does not fail for it: the other files are faithful,
+    and refusing to hand them over never made them better. What keeps that
+    from becoming a silent partial delivery is
+    :meth:`saknussemm.core.result.CorrectionResult.write`, which refuses an
+    incomplete set unless the caller says it accepts one.
+
+    "Not rewritten" and "undeliverable" are deliberately different: a file
+    the manifest never claimed is out of scope, whereas an undeliverable one
+    was rewritten and refused. Collapsing them would make ``write`` refuse a
+    clean run.
+    """
+
+    #: Format granularity losses aggregated across every file.
+    losses: dict[str, int]
+    #: Corrected bytes per source file name — the faithful ones only.
+    corrected_files: dict[str, bytes]
+    #: Source file name → why its artefact did not carry the decisions.
+    undeliverable: dict[str, str]
+
+
+@dataclass(frozen=True)
 class RewriteResult:
     """Everything one file's rewrite produced, in one value (ADR-011).
 

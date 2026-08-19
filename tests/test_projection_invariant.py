@@ -24,7 +24,6 @@ import pytest
 from saknussemm.core.protocols import ProducerMetadata
 from saknussemm import CorrectionPipeline
 from saknussemm.core.editing import EditScript, ReplaceLine
-from saknussemm.errors import ProjectionError
 from saknussemm.formats.alto.adapter import AltoFormatAdapter
 from saknussemm.formats.alto.parser import build_document_manifest
 from saknussemm.producers.rules import RulesProducer, SubstitutionRule
@@ -79,28 +78,60 @@ def _pipeline(adapter) -> CorrectionPipeline:
 
 
 @pytest.mark.asyncio
-async def test_corrupted_rewrite_fails_the_run() -> None:
+async def test_a_corrupted_rewrite_is_withheld_not_delivered() -> None:
+    """The file is ABSENT, and named. It is never handed back doubtful.
+
+    The run used to raise here, which threw away every other file and the
+    report with them. What must not change is the artefact itself: a
+    divergent rewrite is never a deliverable, whatever else the run
+    returns.
+    """
     doc = build_document_manifest([(_SAMPLE, _SAMPLE.name)])
-    with pytest.raises(ProjectionError) as excinfo:
-        await _pipeline(_CorruptingAdapter()).run(
-            document_manifest=doc,
-            source_files={_SAMPLE.name: _SAMPLE},
-        )
-    # The error names the file and the diverging line. The run raised, so
-    # no CorrectionResult exists — a divergent artefact can never be
-    # persisted by any caller.
-    assert _SAMPLE.name in str(excinfo.value)
-    assert "TL" in str(excinfo.value)
+    result = await _pipeline(_CorruptingAdapter()).run(
+        document_manifest=doc,
+        source_files={_SAMPLE.name: _SAMPLE},
+    )
+    assert _SAMPLE.name not in result.corrected_files
+    with pytest.raises(KeyError):
+        result.corrected_files[_SAMPLE.name]
+
+    why = result.undeliverable_files[_SAMPLE.name]
+    assert _SAMPLE.name in why and "TL" in why, why
+    assert result.report.undeliverable_files == result.undeliverable_files
 
 
 @pytest.mark.asyncio
-async def test_dropped_line_fails_the_run() -> None:
+async def test_a_dropped_line_is_withheld_too() -> None:
     doc = build_document_manifest([(_SAMPLE, _SAMPLE.name)])
-    with pytest.raises(ProjectionError, match="missing"):
-        await _pipeline(_LineDroppingAdapter()).run(
-            document_manifest=doc,
-            source_files={_SAMPLE.name: _SAMPLE},
-        )
+    result = await _pipeline(_LineDroppingAdapter()).run(
+        document_manifest=doc,
+        source_files={_SAMPLE.name: _SAMPLE},
+    )
+    assert _SAMPLE.name not in result.corrected_files
+    assert "missing" in result.undeliverable_files[_SAMPLE.name]
+
+
+@pytest.mark.asyncio
+async def test_writing_an_incomplete_set_is_refused(tmp_path) -> None:
+    """The one door that puts bytes on disk will not do it by omission.
+
+    This is what replaces the raise. Withholding the file is not enough on
+    its own: a caller looping over `corrected_files` would persist 299 of
+    300 pages and report success. `write` answers for that.
+    """
+    from saknussemm.errors import ConfigurationError
+
+    doc = build_document_manifest([(_SAMPLE, _SAMPLE.name)])
+    result = await _pipeline(_CorruptingAdapter()).run(
+        document_manifest=doc,
+        source_files={_SAMPLE.name: _SAMPLE},
+    )
+    with pytest.raises(ConfigurationError, match="INCOMPLETE"):
+        result.write(tmp_path)
+    assert not list(tmp_path.glob("*")), "nothing may be written before the refusal"
+
+    written = result.write(tmp_path, allow_partial=True)
+    assert [p.name for p in written] == ["report.json"], written
 
 
 class _DoubleSpaceProducer:

@@ -29,6 +29,7 @@ not because a migration is owed.
 
 | change | what it broke |
 |---|---|
+| **A divergent file is withheld, not fatal to the run** | `run()` no longer raises `ProjectionError` when an artefact does not carry its decisions. The file is absent from `corrected_files` and named on the new `CorrectionResult.undeliverable_files`; `write()` refuses the incomplete set unless passed `allow_partial=True`. Callers with `except ProjectionError` around `run()` now see a returned result instead |
 | **The `[qe]` extra is gone** | `pip install saknussemm[qe]` and `saknussemm.integrations.qe`. The scorer moved to the bench repository on 2026-08-16: it needed onnxruntime and a 545 MB model no CI could fetch, so its suite skipped everywhere and the module sat outside the coverage gate. The `QEScorer` protocol stays — the injection point is public, the implementation is not |
 | **The library is renamed `corrigenda` → `saknussemm`** | everything a caller writes: the distribution name, the import name, the extras (`saknussemm[qe]`, `saknussemm[vision]`), the error root `SaknussemmError`, the release tag prefix, and the `<softwareName>` the rewriter stamps into corrected files. The largest break in this list, and the cheapest: nothing has ever been published, so it is owed to nobody. Doing it after a release would have cost a major version and every consumer an edit |
 | OCR-confidence invalidation is counted per line | the PAGE `format_losses` key `conf_dropped` is gone; its replacement counts lines, not attributes |
@@ -53,6 +54,33 @@ The **top-level import surface** is provisional until `1.0.0`. It went from
 ## [Unreleased]
 
 ### Changed — BREAKING
+
+- **A divergent file is withheld, not fatal to the run — surface 67 → 68.**
+  `run()` used to raise `ProjectionError` the moment one source file's rewritten
+  artefact diverged from what the run decided. Correct as a refusal, ruinous as
+  a blast radius: a volume of 300 pages was lost for one line, and the report
+  went with it — every trace, every fidelity level, every decision — so the
+  operator was left holding one exception message about one line.
+
+  The refusal itself does not move. A divergent artefact is still never a
+  deliverable. What moves is its scope: the file is **absent** from
+  `corrected_files` — never present in a doubtful version — and named on
+  `CorrectionResult.undeliverable_files` with the reason, mirrored onto
+  `CorrectionReport.undeliverable_files` for the persisted artefact.
+
+  Withholding alone would have traded a loud failure for a quiet one: a caller
+  looping over `corrected_files` would persist 299 of 300 pages and report
+  success. So the loudness moves to the one door that puts bytes on disk —
+  `CorrectionResult.write` **refuses** an incomplete set, and `allow_partial=True`
+  is the caller saying, in reviewed code, that it read the list and accepts the
+  subset.
+
+  Measured before deciding: the argument for keeping the total refusal was that
+  a word broken across two files would be delivered half-corrected. Over the two
+  real Gallica issues — 12 files, 8 787 lines, 1 583 hyphen units — **zero**
+  cross the boundary between two files, on a detector verified against a
+  fabricated positive. The mechanism exists; on real volumes it is rare enough
+  that it does not pay for losing everything else.
 
 - **A refused edit is visible in the report (`A2b`) — surface 66 → 67.**
   `CorrectionReport.edit_rejections` names each refused op by page, line, op and

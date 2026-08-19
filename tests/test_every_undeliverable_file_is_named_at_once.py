@@ -1,17 +1,19 @@
 """One run, every undeliverable file — not one finding per run.
 
-The projection invariant refuses a document whose artefact does not say what
-the run decided, and that refusal is right: a divergent file is corruption of
-the deliverable, not a degradation to grade. What was wrong is that the
-rewrite loop *stopped* at the first one.
+The projection invariant withholds a file whose artefact does not say what
+the run decided, and that withholding is right: a divergent file is
+corruption of the deliverable, not a degradation to grade. What was wrong is
+that the rewrite loop *stopped* at the first one.
 
 A run is billed. Discovering a second bad file therefore cost a second full
 pass over the producer — the corpus re-sent, the tokens re-paid, the wait
 re-taken — to learn something the first run already had in hand three
 milliseconds of lxml later. Three bad files in a volume meant three bills.
 
-Nothing about the contract moves here: the run still raises, and no file is
-delivered. What the exception carries changes.
+Finishing the loop is what makes the *shape* of a failure readable too: one
+bad file out of three hundred is a local accident, three hundred out of three
+hundred is a broken configuration. Returning on the first made those two
+indistinguishable.
 """
 
 from __future__ import annotations
@@ -24,7 +26,6 @@ from saknussemm import CorrectionPipeline
 from saknussemm.core.editing import EditScript, ReplaceLine
 from saknussemm.core.protocols import ProducerMetadata
 from saknussemm.core.schemas import RetryPolicy
-from saknussemm.errors import ProjectionError
 from saknussemm.formats.alto.parser import build_document_manifest
 
 from tests.hyphenation.test_unit_fallback_atomicity import _Null
@@ -63,7 +64,7 @@ class _WritesAnUnrepresentableLine:
         return EditScript(ops=ops), None
 
 
-async def _run_over(tmp_path: Path, count: int) -> ProjectionError:
+async def _run_over(tmp_path: Path, count: int):
     sources = {}
     for n in range(count):
         path = tmp_path / f"f{n}.xml"
@@ -76,46 +77,43 @@ async def _run_over(tmp_path: Path, count: int) -> ProjectionError:
         retry_policy=RetryPolicy(transient_backoff_base=0.0, output_backoff_base=0.0),
         producer_metadata=ProducerMetadata(name="x", implementation="m"),
     )
-    with pytest.raises(ProjectionError) as caught:
-        await pipeline.run(document_manifest=doc, source_files=sources)
-    return caught.value
+    return await pipeline.run(document_manifest=doc, source_files=sources)
 
 
 @pytest.mark.asyncio
 async def test_three_bad_files_are_all_named_by_one_run(tmp_path) -> None:
     """The point of the change, stated as the count.
 
-    Before, `.failures` would have held one entry however many files
-    diverged, because the loop returned on the first.
+    Before, one entry however many files diverged, because the loop
+    returned on the first — so the second cost another billed run.
     """
-    error = await _run_over(tmp_path, 3)
-    assert len(error.failures) == 3, error.failures
-    assert {"f0.xml", "f1.xml", "f2.xml"} <= {
-        name for name in ("f0.xml", "f1.xml", "f2.xml") if name in str(error)
-    }
+    result = await _run_over(tmp_path, 3)
+    assert set(result.undeliverable_files) == {"f0.xml", "f1.xml", "f2.xml"}
 
 
 @pytest.mark.asyncio
-async def test_the_single_file_message_is_unchanged(tmp_path) -> None:
-    """A caller reading `str(exc)` must see what it always saw.
+async def test_each_one_says_which_line_and_why(tmp_path) -> None:
+    """A count is not a diagnosis: the reason travels per file.
 
-    The list is an addition, not a replacement: wrapping the one-file case in
-    a summary would break every log line and every test that greps the
-    message.
+    Without it the caller knows a file is missing and has to re-run under a
+    debugger to learn what for — which is the cost this module exists to
+    remove.
     """
-    error = await _run_over(tmp_path, 1)
-    assert error.failures == (str(error),)
-    assert "diverges from the run's decision" in str(error)
+    result = await _run_over(tmp_path, 2)
+    for name, why in result.undeliverable_files.items():
+        assert name in why, why
+        assert "diverges from the run's decision" in why, why
 
 
 @pytest.mark.asyncio
-async def test_nothing_is_delivered_when_any_file_diverges(tmp_path) -> None:
+async def test_a_withheld_file_is_absent_never_doubtful(tmp_path) -> None:
     """The half of the contract that does NOT move.
 
-    Finishing the loop is about diagnosis, not about salvage: a run with one
-    bad file still delivers nothing, and `run()` still raises rather than
-    returning a partial result.
+    Finishing the loop is about diagnosis, never salvage. A file whose
+    artefact diverged is not handed back in a lesser version — it is not
+    handed back at all, and a lookup by name says so.
     """
-    error = await _run_over(tmp_path, 3)
-    assert isinstance(error, ProjectionError)
-    assert error.code == "projection_mismatch"
+    result = await _run_over(tmp_path, 3)
+    assert result.corrected_files == {}
+    with pytest.raises(KeyError):
+        result.corrected_files["f0.xml"]

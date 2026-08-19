@@ -25,7 +25,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-import pytest
 
 from saknussemm.core import events as ev
 from saknussemm.core.decisions import derive_decision_set
@@ -150,7 +149,7 @@ def _render(adapter: _FakeAdapter, tmp_path: Path) -> tuple[Any, ...]:
     path = tmp_path / "doc.xml"
     path.write_bytes(_XML)
     events: list[ev.EngineEvent] = []
-    losses, files = asyncio.run(
+    outcome = asyncio.run(
         _render_outputs(
             format_adapter=adapter,
             producer_metadata=ProducerMetadata(name="rules", implementation="v1"),
@@ -162,11 +161,17 @@ def _render(adapter: _FakeAdapter, tmp_path: Path) -> tuple[Any, ...]:
             decisions=derive_decision_set(doc, traces),
         )
     )
-    return losses, files, traces, events
+    return (
+        outcome.losses,
+        outcome.corrected_files,
+        traces,
+        events,
+        outcome.undeliverable,
+    )
 
 
 def test_every_channel_lands_on_its_trace(tmp_path: Path) -> None:
-    _, _, traces, _ = _render(_FakeAdapter(_result()), tmp_path)
+    _, _, traces, _, _ = _render(_FakeAdapter(_result()), tmp_path)
     t1 = traces[LineRef(page_id="p1", line_id="l1")]
     t2 = traces[LineRef(page_id="p1", line_id="l2")]
 
@@ -186,13 +191,13 @@ def test_every_channel_lands_on_its_trace(tmp_path: Path) -> None:
 
 
 def test_losses_aggregate_and_bytes_come_back(tmp_path: Path) -> None:
-    losses, files, _, _ = _render(_FakeAdapter(_result()), tmp_path)
+    losses, files, _, _, _ = _render(_FakeAdapter(_result()), tmp_path)
     assert losses == {"word_dropped": 3}
     assert files == {"doc.xml": _XML}
 
 
 def test_rewriter_stats_event_carries_the_metrics(tmp_path: Path) -> None:
-    _, _, _, events = _render(_FakeAdapter(_result()), tmp_path)
+    _, _, _, events, _ = _render(_FakeAdapter(_result()), tmp_path)
     stats = [e for e in events if isinstance(e, ev.RewriterStats)]
     assert len(stats) == 1
     assert (stats[0].untouched, stats[0].fast_path) == (1, 1)
@@ -206,23 +211,28 @@ def test_a_channel_the_rewrite_left_empty_writes_nothing(tmp_path: Path) -> None
     adapter = _FakeAdapter(
         _result(losses={}, losses_by_line={}, word_order_suspected=frozenset())
     )
-    losses, _, traces, _ = _render(adapter, tmp_path)
+    losses, _, traces, _, _ = _render(adapter, tmp_path)
     assert losses == {}
     for trace in traces.values():
         assert trace.projection_losses is None
         assert trace.word_order_suspected is not True
 
 
-def test_a_line_the_rewrite_never_mentions_is_a_projection_failure(
+def test_a_line_the_rewrite_never_mentions_withholds_its_file(
     tmp_path: Path,
 ) -> None:
-    """The invariant runs BEFORE the bytes are handed back: a rewrite that
-    drops a line is corruption of the deliverable, not a partial success."""
-    from saknussemm.errors import ProjectionError
+    """The invariant runs BEFORE the bytes are handed back.
 
+    A rewrite that drops a line is corruption of the deliverable, so its
+    file does not come back — not in a lesser version, not at all. The
+    other channels still report, which is the whole point of withholding
+    the file rather than abandoning the run.
+    """
     adapter = _FakeAdapter(_result(texts={"l1": "source 1"}))
-    with pytest.raises(ProjectionError):
-        _render(adapter, tmp_path)
+    _, files, _, _, undeliverable = _render(adapter, tmp_path)
+    assert files == {}
+    assert "doc.xml" in undeliverable
+    assert "l2" in undeliverable["doc.xml"], undeliverable
 
 
 def test_a_file_with_no_pages_is_skipped_entirely(tmp_path: Path) -> None:
@@ -233,7 +243,7 @@ def test_a_file_with_no_pages_is_skipped_entirely(tmp_path: Path) -> None:
     other = tmp_path / "other.xml"
     other.write_bytes(_XML)
     adapter = _FakeAdapter(_result())
-    losses, files = asyncio.run(
+    outcome = asyncio.run(
         _render_outputs(
             format_adapter=adapter,
             producer_metadata=ProducerMetadata(name="rules", implementation="v1"),
@@ -246,4 +256,8 @@ def test_a_file_with_no_pages_is_skipped_entirely(tmp_path: Path) -> None:
         )
     )
     assert adapter.calls == []
-    assert (losses, files) == ({}, {})
+    assert (outcome.losses, outcome.corrected_files) == ({}, {})
+    # Not rewritten is not undeliverable: a file the manifest never claimed
+    # is out of scope, whereas an undeliverable one was rewritten and
+    # refused. Collapsing the two would make `write` refuse a clean run.
+    assert outcome.undeliverable == {}
