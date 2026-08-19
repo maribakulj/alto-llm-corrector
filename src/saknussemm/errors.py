@@ -135,9 +135,28 @@ class ProjectionError(SaknussemmError):
     when a decided line is missing from the artefact altogether. This is
     corruption of the deliverable, never a degradation: the run fails
     before the writer persists anything.
+
+    ``failures`` names EVERY undeliverable source file, not the first one.
+    The invariant still refuses the whole run — that part is deliberate and
+    unchanged — but it used to abandon the rewrite loop on the first
+    divergence, so a document with three bad files disclosed one per run.
+    Learning the second cost a second full run, and a producer's run is
+    billed: three findings, three bills, three waits. Finishing the loop
+    costs a few milliseconds of lxml per remaining file and turns that into
+    one.
+
+    Empty for the single-file case, where ``str(exc)`` already says
+    everything.
     """
 
     code: ClassVar[str] = "projection_mismatch"
+
+    def __init__(self, *args: object, failures: tuple[str, ...] = ()) -> None:
+        super().__init__(*args)
+        #: One message per undeliverable source file, in the order the files
+        #: were rewritten. A tuple because an exception a caller can mutate
+        #: is a diagnostic nobody can trust.
+        self.failures = failures
 
 
 class CorrectionAborted(SaknussemmError):
