@@ -35,7 +35,7 @@ serait moulée sur l'existant et n'aurait rien trouvé.
 |---|---|---|
 | I1 | le texte ne voyage jamais sans son ancre ; la recomposition est une écriture indexée | **gardée** |
 | I2a | rien n'atteint le XML sans passer les gardes ; au doute, repli sur la source | **gardée** |
-| I2b | une édition structurelle est **inexprimable** dans le protocole | **aucune** — l'interdit à l'exécution est bien tenu, mais rien ne fige l'union `EditOp`. Ajouter un `MergeLines` ne fait rougir aucun test |
+| I2b | une édition structurelle est **inexprimable** dans le protocole | **fermée le 2026-08-19** — `test_the_edit_union_does_not_grow_by_accident.py`. Le test ne décide **pas** que l'union ne grandira jamais : il décide qu'elle ne grandira pas *par accident*, comme `test_public_api_snapshot` pour la surface. Une liste figée, plus trois propriétés — toute op nomme **une** ligne, porte un texte de remplacement (donc propose une lecture au lieu d'ordonner une opération), et a son propre discriminant. Deux corrections apportées par la mesure : la règle « aucun champ pluriel » gardait une orthographe et laissait passer `with_line_id` ; et paramétrer les propriétés sur la liste figée plutôt que sur l'union réelle faisait qu'un nouveau membre ne rencontrait jamais les propriétés censées le juger — alors que la liste figée est la première assertion qu'un auteur pressé modifie. Un `MergeLines` fait désormais tomber **trois** assertions, dont deux par propriété |
 | I3 | IDs, géométrie, ordre XML, attributs non textuels préservés quand rien ne change | **gardée** |
 | I4a | le cœur et les formats n'importent aucune bibliothèque d'image | **gardée** |
 | I4b | l'installation de base n'embarque aucune dépendance image | **fermée le 2026-08-16** — voir plus bas |
