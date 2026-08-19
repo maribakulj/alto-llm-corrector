@@ -528,3 +528,73 @@ Une ligne par réveil : date, item, résultat, ou la raison de l'arrêt.
   (la garde du mot-frontière n'existe pas, et sa forme est une décision de
   conception) et `E6b` (la voie ligne entière ne passe ni par `E4` ni par
   `E5`, donc les deux gardes ne s'appliquent pas au producteur par défaut).
+
+- 2026-08-19 (fin) — **les deux derniers arbitrages tranchés, sur mesure.**
+  `docs/promises.md` ne porte plus aucune ligne « aucune ». Le mainteneur a
+  demandé une analyse complète appuyée sur des **runs réels** plutôt que sur
+  du raisonnement, ce qui a changé les deux réponses.
+
+  **Un vrai run `mistral-small-latest`** — 3 135 lignes, 1 796 propositions,
+  10 fichiers Gallica pour le volet `E5b` et 4 pour le volet `E6b`. Les
+  tâches de fond ont été tuées deux fois ; la reprise a été ajoutée au script
+  pour ne pas repayer ce qui était déjà collecté.
+
+  **`E5b`.** La règle « seuil de similarité sur le mot-frontière » était la
+  candidate évidente, et la mesure l'a réfutée : sur 1 433 lignes
+  `PART2`/`BOTH`, ce mot est **remplacé par du méconnaissable 25 % du
+  temps**, et ce sont de bonnes corrections — c'est l'endroit le plus dégradé
+  de la ligne, souvent réduit à un caractère isolé. Un seuil refuserait
+  **23–31 %** des corrections réelles. Refuser le seul **effacement** en
+  coûte **0**. Le trou lui-même : **0 occurrence sur 4 752** lignes réelles,
+  mais reproductible sur une ligne construite — d'où une assurance sans
+  seuil, plutôt qu'une note.
+
+  **`E6b`.** `E4` refuse **0** proposition, `E5` en refuse **205** dont
+  **204 étaient déjà refusées** en aval. La parité ne refuse donc pas plus :
+  plus tôt, et en nommant pourquoi. **La 205ᵉ a fait affiner `E5`** — une
+  espace avant la marque n'est refusée que si la correction l'a
+  *introduite*, parce que sur ces 205 elle est héritée de la source 1 fois et
+  introduite 0 fois, et cette unique ligne est `#126`, dont juger le seul
+  résultat punirait la fidélité. Rejoué : **204 refusées, 0 verdict changé.**
+
+  **Une erreur de mesure attrapée par son propre contrôle.** La première
+  passe donnait « `E5` refuse 0 % », et c'était faux : j'appelais
+  `_e5_hyphen_ok(texte, rôle)` alors que sa signature est `(rôle, texte)`. Le
+  contrôle de sensibilité — vérifier que la mesure *peut* produire autre
+  chose que zéro — l'a révélé. Sans lui, un 0 % rassurant serait parti dans
+  une recommandation.
+
+- 2026-08-19 (fin) — **les deux derniers arbitrages tranchés, sur mesure.**
+  `docs/promises.md` ne porte plus aucune ligne « aucune ». Le mainteneur a
+  demandé une analyse complète appuyée sur des **runs réels** plutôt que sur
+  du raisonnement, ce qui a changé les deux réponses.
+
+  **Un vrai run `mistral-small-latest`** — 3 135 lignes, 1 796 propositions,
+  10 fichiers Gallica pour le volet `E5b` et 4 pour le volet `E6b`. Les
+  tâches de fond ont été tuées deux fois ; la reprise a été ajoutée au script
+  pour ne pas repayer ce qui était déjà collecté.
+
+  **`E5b`.** La règle « seuil de similarité sur le mot-frontière » était la
+  candidate évidente, et la mesure l'a réfutée : sur 1 433 lignes
+  `PART2`/`BOTH`, ce mot est **remplacé par du méconnaissable 25 % du
+  temps**, et ce sont de bonnes corrections — c'est l'endroit le plus dégradé
+  de la ligne, souvent réduit à un caractère isolé. Un seuil refuserait
+  **23–31 %** des corrections réelles. Refuser le seul **effacement** en
+  coûte **0**. Le trou lui-même : **0 occurrence sur 4 752** lignes réelles,
+  mais reproductible sur une ligne construite — d'où une assurance sans
+  seuil, plutôt qu'une note.
+
+  **`E6b`.** `E4` refuse **0** proposition, `E5` en refuse **205** dont
+  **204 étaient déjà refusées** en aval. La parité ne refuse donc pas plus :
+  plus tôt, et en nommant pourquoi. **La 205ᵉ a fait affiner `E5`** — une
+  espace avant la marque n'est refusée que si la correction l'a
+  *introduite*, parce que sur ces 205 elle est héritée de la source 1 fois et
+  introduite 0 fois, et cette unique ligne est `#126`, dont juger le seul
+  résultat punirait la fidélité. Rejoué : **204 refusées, 0 verdict changé.**
+
+  **Une erreur de mesure attrapée par son propre contrôle.** La première
+  passe donnait « `E5` refuse 0 % », et c'était faux : j'appelais
+  `_e5_hyphen_ok(texte, rôle)` alors que sa signature est `(rôle, texte)`. Le
+  contrôle de sensibilité — vérifier que la mesure *peut* produire autre
+  chose que zéro — l'a révélé. Sans lui, un 0 % rassurant serait parti dans
+  une recommandation.
