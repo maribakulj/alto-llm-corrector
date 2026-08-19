@@ -610,13 +610,25 @@ brève rétablit tout. L'insistance se paie ailleurs que là où on la met.
 égale le mode apparié (195 contre 196). À 986 lignes il livre **9 contre
 278**, et `coupes` n'y change rien.
 
-**Le levier « borner la requête » ne marche pas aujourd'hui, mesuré.** Un
-plafond de 400 lignes sur une page de 986 ne la coupe pas en trois : le
-planificateur **descend d'un cran de granularité** et produit **217 chunks**.
-Il récupère les corrections (169 sur 278) et détruit l'économie (217 appels
-contre 1). **Ce qui manque au planificateur est de savoir trancher une page
-en N tranches égales** — il ne sait que descendre PAGE → BLOCK → WINDOW →
-LINE. C'est un travail identifié, pas un mystère.
+**Le levier « borner la requête » ne marche pas aujourd'hui, et deux points
+de mesure disent pourquoi.** Sur une page de 986 lignes :
+
+| plafond | chunks | appels | livré | coût |
+|---|---|---|---|---|
+| 400 lignes | **217** | 217 | 169 | 0,0133 $ |
+| 250 lignes | **217** | 217 | 189 | 0,0132 $ |
+| page entière | 1 | 1 | 9 | 0,0051 $ |
+| *mode apparié* | *121* | *147* | *278* | *0,0189 $* |
+
+**400 et 250 donnent le même nombre de chunks.** Le plafond n'est donc pas
+ce qui découpe : dès qu'il est franchi, le planificateur **descend au BLOC**,
+et la page a 217 blocs. En dessous de la taille d'un bloc, le plafond ne
+change plus rien — les 169 contre 189 livrés sont de la variance du modèle,
+pas un effet du réglage.
+
+**Ce qui manque au planificateur est de savoir trancher une page en N
+tranches égales** — il ne sait que descendre PAGE → BLOCK → WINDOW → LINE.
+C'est un travail identifié, pas un mystère.
 
 **Verdict inchangé : ne pas recommander le mode page.** Sa partie risquée est
 prouvée, sa césure est réglée, et ce qui bloque est soit un découpage que le
