@@ -136,11 +136,21 @@ merged line carries 1.64× to 1.86× its source's tokens. The two populations
 do not overlap, so a merged line matches neither of the lines that made it,
 and both keep their OCR.
 
-**Which to use.** Keyed mode when you want every line answered under its own
-name and can pay for it; realigned mode when the corpus is large enough that
-eight times the cost matters, and you accept that ~2% of lines will be left
-alone rather than guessed at. The realigned mode is newer and has not yet
-been run against a full corpus with a real provider.
+**Which to use — and today the answer is keyed mode.** The realigned mode was
+run against a real provider on 2026-08-19, four Gallica pages, 3 135 lines.
+The alignment held perfectly: **zero** lines came back unmatched. The model
+did not. The share of lines it proposes to change swings between **2.3% and
+56%** page to page, against a steady 48–72% in keyed mode — and on one page
+it returned **963 of 986 lines untouched**.
+
+The saving is real and measured on the same page: 2 calls against 147,
+`$0.0051` against `$0.0189`, 77 s against 234 s. But eight times cheaper is
+worth nothing if the run corrects a fifth as much, and how much it corrects
+is not currently predictable.
+
+So: **keyed mode for work you depend on.** The realigned mode is complete and
+its risky half is proven; what it waits on is not more code but a model that
+holds attention over a thousand lines at once.
 
 ## What's not
 
