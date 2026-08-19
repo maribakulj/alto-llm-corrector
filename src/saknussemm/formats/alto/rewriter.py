@@ -784,13 +784,120 @@ def _append_trailing_hyp(
     hyp.set("HEIGHT", str(height))
 
 
+def _write_text_for(manifest: LineManifest, corrected: str) -> tuple[str, bool]:
+    """What to WRITE for a line, and whether a break space goes with it.
+
+    An EXPLICIT PART1 line carries its end-of-line hyphen structurally, in
+    the ``<HYP>`` element (the rewrite paths re-emit it). If the LLM returned
+    the fragment WITH a trailing hyphen (``"préve-"``, natural at a word
+    break), storing it in the String CONTENT too would double the hyphen, so
+    it is dropped here — for the write text only, and only after the caller's
+    change detection has compared the full reconstructed line (String + HYP),
+    so an identity correction still classifies UNTOUCHED. A HEURISTIC PART1
+    (no HYP/SUBS markup) has no structural hyphen and keeps its trailing dash
+    in CONTENT — untouched by this branch.
+
+    The second return value exists because this is the ONLY place that sees
+    the text on both sides of that drop, and therefore the only one that can
+    tell a space BEFORE the mark from a space after it. See
+    :func:`_reserve_break_space` for what the distinction costs when it is
+    lost.
+    """
+    if manifest.hyphen_role in (
+        HyphenRole.PART1,
+        HyphenRole.BOTH,
+    ) and forward_break_is_explicit(manifest):
+        write_text = _drop_structural_break_hyphen(corrected)
+        return write_text, write_text != write_text.rstrip()
+    return corrected, False
+
+
+def _reserve_break_slot(
+    orig_hyp_attribs: dict[str, str], width: int, space_before_break: bool
+) -> tuple[int, int]:
+    """Split a PART1-like line's WIDTH into ``(hyp_slot, text)``.
+
+    Reserve the ORIGINAL HYP's real width when one was present, so the
+    rebuilt String/SP widths plus the HYP width sum EXACTLY to the line
+    WIDTH. The old 4% estimate combined with copying the original HYP's
+    verbatim WIDTH made the children sum to width + original_hyp_width and
+    overlapped the last String. Fall back to the 4% estimate only when
+    synthesising a HYP (explicit line with no HYP element).
+
+    Parse via the shared tolerant policy: HYP attributes are never
+    pre-parsed by ``_int_attr`` upstream, and a bare ``int(float(...))``
+    would let ``WIDTH="1e999"`` escape as an uncaught OverflowError.
+    Unusable → 0 → 4% estimate.
+
+    Two units is the floor when a break space is wanted, since
+    :func:`_reserve_break_space` splits this slot rather than adding to it.
+    """
+    orig_hyp_w = parse_int_tolerant(orig_hyp_attribs.get("WIDTH"), 0)
+    hyp_width = orig_hyp_w if orig_hyp_w > 0 else max(1, round(width * 0.04))
+    if space_before_break:
+        hyp_width = max(hyp_width, 2)
+    hyp_width = min(hyp_width, max(1, width - 1))  # keep room for text
+    return hyp_width, max(1, width - hyp_width)
+
+
+def _reserve_break_space(
+    el: etree._Element,
+    ns: str,
+    orig_sp_attribs: list[dict[str, str]],
+    sp_n: int,
+    hpos: int,
+    slot_width: int,
+    vpos: int,
+    *,
+    wanted: bool,
+) -> tuple[int, int]:
+    """Emit the space that stands between the last word and the break mark.
+
+    Returns what is left of the slot for the ``<HYP>``: ``(hpos, width)``,
+    unchanged when no space is wanted.
+
+    **Why the caller decides, and not this code.** The mark is gone by the
+    time a line is rebuilt — :func:`_drop_structural_break_hyphen` removed
+    it, because ``<HYP>`` carries it structurally — and with it went the
+    only thing that told two opposite spaces apart:
+
+    ================  ============================  =================
+    decision          where the space is            after the drop
+    ================  ============================  =================
+    ``'deux mots- '`` AFTER the mark, so noise      ``'deux mots'``
+    ``'et d -'``      BEFORE it, so the source's    ``'et d '``
+    ================  ============================  =================
+
+    Downstream both merely "end in whitespace". Reading the text here to
+    decide would also re-emit the noise, moving the geometry for an edge
+    space that means nothing — so the answer travels from the one place that
+    sees the text on both sides of the drop.
+
+    **Why the width comes out of the HYP's slot.** Taking it from anywhere
+    else would shift every token on the line, which is the objection that
+    kept the defect open for two days. Carved from the slot, nothing else
+    moves and the children still tile the line exactly. Below two units
+    there is nothing to split and the space is dropped — the line then
+    fails the projection invariant, as it did before, rather than being
+    delivered with overlapping children.
+    """
+    if not wanted or slot_width < 2:
+        return hpos, slot_width
+    sp_width = max(1, slot_width // 3)
+    _emit_sp(el, ns, orig_sp_attribs, sp_n, hpos, sp_width, vpos)
+    return hpos + sp_width, slot_width - sp_width
+
+
 def _rebuild_line(
     el: etree._Element,
     corrected: str,
     manifest: LineManifest,
     ns: str,
+    *,
+    space_before_break: bool = False,
 ) -> tuple[dict[str, int], bool]:
     """Slow-path rebuild for any TextLine (normal, PART1, BOTH, PART2).
+
 
     Behaviour by ``manifest.hyphen_role``:
       - PART1 / BOTH: reserve 4% of total width for a trailing HYP
@@ -889,20 +996,9 @@ def _rebuild_line(
     height = _int_attr(el, "HEIGHT")
 
     if is_part1_like:
-        # Reserve the ORIGINAL HYP's real width when one was present, so the
-        # rebuilt String/SP widths plus the HYP width sum EXACTLY to the line
-        # WIDTH. The old 4% estimate combined with copying the original HYP's
-        # verbatim WIDTH made the children sum to width + original_hyp_width
-        # and overlapped the last String. Fall back to the 4% estimate only
-        # when synthesising a HYP (explicit line with no HYP element).
-        # Parse via the shared tolerant policy: HYP attributes are never
-        # pre-parsed by ``_int_attr`` upstream, and a bare
-        # ``int(float(...))`` would let ``WIDTH="1e999"`` escape as an
-        # uncaught OverflowError. Unusable → 0 → 4% estimate.
-        orig_hyp_w = parse_int_tolerant(orig_hyp_attribs.get("WIDTH"), 0)
-        hyp_width = orig_hyp_w if orig_hyp_w > 0 else max(1, round(width * 0.04))
-        hyp_width = min(hyp_width, max(1, width - 1))  # keep room for text
-        text_width = max(1, width - hyp_width)
+        hyp_width, text_width = _reserve_break_slot(
+            orig_hyp_attribs, width, space_before_break
+        )
     else:
         hyp_width = 0
         text_width = width
@@ -915,13 +1011,7 @@ def _rebuild_line(
         _add_alignment_scoped_losses(losses, orig_string_attribs, set())
         if is_part1_like:
             _append_trailing_hyp(
-                el,
-                ns,
-                orig_hyp_attribs,
-                hpos=hpos + text_width,
-                vpos=vpos,
-                width=hyp_width,
-                height=height,
+                el, ns, orig_hyp_attribs, hpos + text_width, vpos, hyp_width, height
             )
         else:
             for h in saved_hyp:
@@ -973,14 +1063,18 @@ def _rebuild_line(
             str_n += 1
 
     if is_part1_like:
-        _append_trailing_hyp(
+        break_hpos, break_width = _reserve_break_space(
             el,
             ns,
-            orig_hyp_attribs,
-            hpos=last_word_hpos + last_word_width,
-            vpos=vpos,
-            width=hyp_width,
-            height=height,
+            orig_sp_attribs,
+            sp_n,
+            last_word_hpos + last_word_width,
+            hyp_width,
+            vpos,
+            wanted=space_before_break,
+        )
+        _append_trailing_hyp(
+            el, ns, orig_hyp_attribs, break_hpos, vpos, break_width, height
         )
     else:
         for h in saved_hyp:
@@ -1095,12 +1189,7 @@ def rewrite_alto_file(
         # (String + HYP) so an identity correction still classifies UNTOUCHED.
         # A HEURISTIC PART1 (no HYP/SUBS markup) has no structural hyphen and
         # keeps its trailing dash in CONTENT — untouched by this branch.
-        write_text = corrected
-        if lm.hyphen_role in (
-            HyphenRole.PART1,
-            HyphenRole.BOTH,
-        ) and forward_break_is_explicit(lm):
-            write_text = _drop_structural_break_hyphen(corrected)
+        write_text, break_space = _write_text_for(lm, corrected)
 
         # --- Path 3: FAST PATH (word count same) ---
         if _update_content_in_place(tl_el, write_text, ns):
@@ -1111,7 +1200,9 @@ def rewrite_alto_file(
             continue
 
         # --- Path 4: SLOW PATH (word count changed) ---
-        line_losses, move_suspected = _rebuild_line(tl_el, write_text, lm, ns)
+        line_losses, move_suspected = _rebuild_line(
+            tl_el, write_text, lm, ns, space_before_break=break_space
+        )
         _apply_subs(tl_el, lm, ns)
         metrics.slow_path += 1
         line_paths[line_id] = "slow_path"
