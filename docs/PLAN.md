@@ -588,11 +588,26 @@ Réutilisable : le modèle de coût et la forme du backtrack — **~30 %**. Les
 n'est donc **pas** le bandage, c'est une réécriture qui ne matérialise pas
 ses matrices.
 
-**Ce que le bandage apporte quand il arrive.** Le modèle rend la page dans
-l'ordre, donc l'alignement est quasi diagonal ; une bande de ±50 tokens
-ramène le coût à O(n × bande). **Et la bande donne la garde gratuitement** :
-si le chemin touche le bord, le modèle a réordonné ou sauté — refuser au bord
-de bande, jamais forcer. C'est la seule ligne de conception qui compte ici.
+**Ce que le bandage apporte — fait le 2026-08-19, et une revendication de
+cette section était fausse.** Le modèle rend la page dans l'ordre, donc
+l'alignement est quasi diagonal ; une bande ramène le coût à O(n × bande).
+Ça, c'est vérifié.
+
+Ce qui ne l'était pas : « **la bande donne la garde gratuitement** ». Mesuré,
+`band_exhausted` dit **où la recherche est allée, pas si la lecture est
+bonne**. Une transposition de blocs ne partageant aucun caractère le
+déclenche ; la *même* transposition de `w0`…`w59` ne le déclenche pas, parce
+qu'une correspondance diagonale médiocre (2 × 0,33) coûte moins qu'un trou
+apparié à une insertion (2,0), donc le chemin n'a jamais besoin de sortir. Et
+une suppression massive ne le déclenche pas non plus : le couloir **s'élargit**
+à la différence de longueur, faute de quoi il n'existe aucun chemin de coin à
+coin.
+
+Donc la garde du mode page n'est pas là. Un morceau sauté se voit comme une
+série de suppressions dans les paires ; une ligne décalée effondre
+`min_source_similarity` sur toutes les suivantes. Deux mesures pour deux
+défaillances — les confondre donnerait au mode page une garde silencieuse
+précisément quand elle compte.
 
 **Aucune garde neuve n'est nécessaire par ailleurs** : un décalage d'une
 ligne est attrapé **100 % du temps** par les gardes existantes (1 736 lignes,
