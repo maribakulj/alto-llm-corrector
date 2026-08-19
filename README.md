@@ -55,6 +55,10 @@ independent external API review first; see
   producer's job, in the `saknussemm[vision]` extra; the base install pulls
   no image dependency at all). See
   [`docs/edit-protocol.md`](docs/edit-protocol.md).
+- `saknussemm.core.page_alignment` + `saknussemm.producers.page_llm` — the
+  **realigned mode**: one call per page instead of one contract per line,
+  and the alignment that recovers which returned line is which. Eight times
+  cheaper, and its whole risk is in one module — see "Two modes" below.
 - `saknussemm.core` — chunk planning, LLM-response validation,
   per-line acceptance policy, and the pure `CorrectionPipeline` that
   ties them together (`run()` async, `run_sync()` façade).
@@ -92,6 +96,51 @@ independent external API review first; see
 Job-level concepts (`JobManifest`, `JobStatus`, the `Provider` vendor
 enum) are deliberately **not** here — the core does not enumerate LLM
 vendors or track a server job's lifecycle; they live in the consumer.
+
+## Two modes, and the one thing that separates them
+
+The library can be asked for the same correction in two ways. They differ in
+**who holds line identity**, and everything else follows from that.
+
+| | `line_keyed` — keyed mode | `page_aligned` — realigned mode |
+|---|---|---|
+| identity held by | the JSON contract, per line | the alignment, after the fact |
+| producer | `producers.llm_edit.LLMEditProducer` | `producers.page_llm.PageLLMEditProducer` |
+| calls (24 592 lines) | ~2 000 | **28** |
+| input tokens | 5.49 M | **0.39 M** |
+| cost | $1.11 | **$0.14** |
+| a model that merges two lines | refused by the validator (an id is missing) | refused by the alignment (neither line is vouched for) |
+| what an unresolvable line does | fails the chunk, then retries | keeps its OCR text |
+
+Both run on the same engine. The guards, the hyphenation reconciler, the
+projection invariant and the loss accounting are shared and unchanged, which
+is what makes the two comparable on the same corpus rather than two products.
+
+**Where the eight-fold saving comes from.** Not cleverness: the keyed
+envelope carries `prev_text` and `next_text` with every line, so each line's
+text is sent three times, and the JSON around it weighs **7.9× the text it
+transports**. The realigned mode sends the page once, as bare strings.
+
+**What it costs, stated plainly.** The answer comes back with no line ids, so
+which returned line answers which source line has to be *recovered*. Get that
+wrong and the file says something the scan does not, on a line nobody
+flagged — worse than never correcting. The recovery lives in
+`core/page_alignment.py`, and its refusals were measured before it was
+written: on eight real Gallica pages, **0** lines paired with the wrong line,
+17 of 1 035 left unmatched on the worst page (always in pairs, never a silent
+substitution), 0.05 s per page.
+
+The merge case in particular is not a heuristic. A correction moves a line's
+token count by −1, 0 or +1 — **100% of 8 859 measured pairs** — while a
+merged line carries 1.64× to 1.86× its source's tokens. The two populations
+do not overlap, so a merged line matches neither of the lines that made it,
+and both keep their OCR.
+
+**Which to use.** Keyed mode when you want every line answered under its own
+name and can pay for it; realigned mode when the corpus is large enough that
+eight times the cost matters, and you accept that ~2% of lines will be left
+alone rather than guessed at. The realigned mode is newer and has not yet
+been run against a full corpus with a real provider.
 
 ## What's not
 
