@@ -367,6 +367,230 @@ suivantes.
 C'est un **producteur**, donc aucun changement du cœur. Le travail neuf est
 l'aligneur et son test de désalignement.
 
+## C — Finir le mode actuel, puis ouvrir le second — plan du 2026-08-19
+
+Écrit après une **contre-analyse** de ma propre analyse, exigée parce que la
+première version était affirmée sans preuve. Sept constats sur dix ont bougé.
+Ce qui suit ne garde que ce qui a été prouvé par lecture du code ou par
+exécution, et **nomme les réfutations** plutôt que de les effacer : la
+première version de ce plan est elle-même une des choses que la mesure a
+corrigées.
+
+### Ce que la contre-analyse a réfuté
+
+| affirmation de la 1ʳᵉ analyse | verdict |
+|---|---|
+| le défaut de la marque est **bidirectionnel** | **faux** — unidirectionnel ; la 1ʳᵉ analyse contredisait `AUTOPILOT.md:368`, qui disait juste |
+| les deux sites `_append_trailing_hyp` doivent être réconciliés | **hors sujet** — le second n'est atteint que sur décision vide, qui ne peut pas porter d'espace |
+| chantiers « marque soudée » et « rayon d'action » indépendants | **faux** — la marque soudée *est* la page perdue |
+| « le correctif touche la géométrie, s'y tromper est pire » | **réfuté par prototype** — la géométrie pave sans effort |
+| `align_tokens` est réutilisable à 80 % pour le mode page | **faux** — ~30 %, et le mode page saturerait la mémoire avant d'être lent |
+| population du défaut négligeable | **non mesurée** — 29 % des fichiers d'un fonds réel |
+
+### `C1` — La marque soudée (`#126`) — **priorité 1**
+
+**Ce que c'est, prouvé.** Le chemin lent supprime l'espace qui précède la
+marque de coupure. Balayage de six décisions sur la forme réelle (le fixture
+de `tests/test_a_break_mark_must_not_weld_to_its_word.py`, tiré de la ligne
+Gallica qui a tué une page) :
+
+| décision | chemin | artefact | fidélité |
+|---|---|---|---|
+| `'et d -'` | untouched | `'et d -'` | exact |
+| `'et d-'` | lent | `'et d-'` | exact |
+| `'à la révision et d -'` | lent | `'à la révision et d-'` | **`None`** |
+| `'à la révision et d-'` | lent | `'à la révision et d-'` | exact |
+| `'et dd -'` | lent | `'et dd-'` | **`None`** |
+| `'et dd-'` | lent | `'et dd-'` | exact |
+
+**Une seule direction.** Le chemin rapide, lui, est fidèle à la structure
+`<SP>` de la source et ne soude jamais. La direction « espace ajoutée » que
+la 1ʳᵉ analyse annonçait n'est reproductible que sur une forme fabriquée —
+`String SP HYP` sans String-marque, **37 lignes sur 24 694** — et **aucun run
+ne l'a jamais rencontrée**. Elle sort du plan.
+
+**Ce que `None` déclenche.** `classify_projection_fidelity` compare des
+**mots** : `['et','d','-']` contre `['et','d-']`. Divergence de mots →
+`None` → `ProjectionError` (`projection.py:88`) → aucun `try` dans
+`rendering.py` ni dans `pipeline.py:441` → `run()` propage. Le moteur prend
+une décision correcte qu'il ne sait pas écrire, puis refuse correctement de
+mentir — en tuant le document.
+
+**La population, mesurée sur les 54 fichiers Gallica réels (24 694 lignes) :**
+
+| | |
+|---|---|
+| lignes terminées par `<HYP>` | 4 578 |
+| forme `#126` (`SP` + String-marque + `HYP`) | **29** (0,63 % des lignes à césure) |
+| **fichiers portant ≥ 1 ligne à risque** | **10 sur 35 — 29 %** |
+
+Les 10 fichiers appartiennent à **deux fascicules** (`bpt6k4607951t`,
+`bpt6k46079527`). C'est une **signature de producteur**, pas un aléa : pour
+un fonds numérisé par cette chaîne, le taux d'échec n'est pas 0,12 % des
+lignes, c'est près de 100 % des fichiers. Et le texte de ces 29 lignes est
+uniformément illisible (`"g'.e :.:;r.. --"`, `"1K' --"`) — exactement les
+lignes dont un correcteur change le nombre de mots, donc la probabilité de
+déclenchement *sachant la forme* est haute, pas faible.
+
+**Pourquoi le défaut est resté ouvert, et pourquoi cette raison est fausse.**
+La docstring du test dit « le correctif touche la géométrie, et écrire de la
+mauvaise géométrie est pire que l'espace perdue ». Prototypé hors dépôt :
+prendre l'espace **dans la fente déjà réservée au `HYP`** au lieu de l'ajouter
+laisse tout le reste immobile, et les enfants pavent la ligne exactement.
+
+```
+décidé 'à la révision et d -'  →  artefact 'à la révision et d -'   exact
+… String@817 w53, SP@870 w10, HYP@880 w20   → fin 900 = HPOS+WIDTH
+```
+
+**Le vrai obstacle, que personne n'avait nommé.** Un premier prototype a cassé
+`test_f6_no_whitespace_geometry_unchanged` — une propriété **déclarée** :
+une espace de bord ne doit pas changer la géométrie. Les deux tests ne
+parlent pas de la même espace :
+
+| entrée | où est l'espace | après `_drop_structural_break_hyphen` |
+|---|---|---|
+| `'deux mots- '` (`F6`) | **après** la marque | `'deux mots'` — absente |
+| `'et d -'` (`#126`) | **avant** la marque | `'et d '` — présente |
+
+`_drop_structural_break_hyphen` sépare donc déjà parfaitement les deux sens.
+Ce que `_rebuild_line` ne peut plus faire : il reçoit une chaîne nue et ne
+sait plus si l'espace précédait une marque ou en suivait une. **L'obstacle
+n'était pas géométrique, c'était une perte d'information en amont.** Deviner
+depuis l'intérieur du rebuild est précisément ce qui casse `F6`.
+
+**Le correctif.** Porter le drapeau depuis l'endroit qui sait — le site
+d'appel (`rewriter.py:1103`), seul à voir le texte avant *et* après le drop —
+plutôt que le reconstituer. Élargissement de signature sur deux fonctions.
+
+**Validé avant écriture.** Prototype monkeypatché, suite complète :
+**1 659 passés, 1 échec** — `test_the_slow_path_welds_the_mark_OPEN_DEFECT`,
+c'est-à-dire exactement l'inversion que sa propre docstring annonce. `F6`
+passe, les golden de parité octet passent.
+
+**Condition d'entrée.** Le test existant s'inverse (`assert delivered ==
+decided`) et sa docstring devient de l'histoire. Un second cas ajouté : la
+forme `#126` **sur le chemin rapide**, pour que la fidélité du chemin rapide
+cesse d'être un effet de bord non asserté.
+
+### `C2` — Publier le coût de la césure — **priorité 2**
+
+Le chiffre est **déjà dérivable** : `DecisionSet.fallback_reason_counts()`
+agrège `hyphen_pair_fallback` sans parser de message. Rien à construire.
+
+Deux nuances que la 1ʳᵉ analyse avait omises et qui doivent figurer dans le
+texte publié : `_refresh_pair_traces` (`reconcile.py:464`) n'écrit sa raison
+**que si aucune n'est déjà posée**, donc le compteur isole proprement le
+**dommage collatéral** ; et il compte des **lignes**, les deux membres d'une
+paire tombée en recevant une — le nombre vaut donc ~2× les paires.
+
+Ce qui manque est une phrase, nulle part écrite : une correction touchant un
+mot coupé **coûte la correction de ses deux lignes**. Sur le run du 18 août :
+**2 271 lignes**, deuxième cause de refus. Et le taux monte **12–28 % sur les
+pages dégradées** contre 7–11 % sur les propres — c'est-à-dire qu'il est le
+plus fort là où on veut corriger.
+
+**Les taux de la section `B` sont repris tels quels, pas recalculés** : ils
+viennent d'un run réel enregistré. Ce que `C2` ajoute est leur *publication*
+dans le contrat et le README, pas une nouvelle mesure.
+
+Vérité-en-documentation : autorisée sous le gel.
+
+### `C3` — Le rayon d'action — **priorité 3, arbitrage**
+
+**Le fait.** Une divergence de projection sur une ligne fait perdre **tout le
+run** — pas seulement les autres fichiers : le `CorrectionReport` entier
+disparaît avec, traces par ligne, niveaux de fidélité, décisions. Il ne
+survit que le message d'exception, qui nomme une ligne. Les sources ne
+risquent rien (vérifié par empreinte).
+
+**Pourquoi après `C1` et pas avant.** Ce n'est pas un correctif, c'est un
+**changement de contrat** de `run()`. Aujourd'hui la garantie est binaire et
+facile à raisonner ; la livraison partielle l'affaiblit, et mal faite elle
+devient le défaut que le dépôt combat depuis un an — accepter en silence
+quelque chose d'incomplet. On le décide mieux quand la cause connue est
+éteinte, pour ne pas confondre « on isole les dégâts » avec « on tolère un
+défaut ».
+
+**La forme honnête, et ce qui la rend possible.** `corrected_files` est un
+dictionnaire clé par nom de fichier : un fichier non livrable **n'y est pas**,
+donc un appelant qui attend son résultat obtient un `KeyError`, jamais un
+fichier douteux. L'absence est bruyante par construction. Trois choses
+ensemble, ou rien : attraper **par fichier**, **nommer dans le rapport**
+pourquoi celui-là n'est pas livrable, et un test qui prouve qu'un résultat
+partiel ne peut pas passer pour un succès complet.
+
+**Arbitrage à remonter** avant d'écrire : `run()` doit-il rendre un résultat
+partiel, ou lever comme aujourd'hui en portant le rapport sur l'exception ?
+Les deux sont défendables et le choix n'est pas technique.
+
+### `C4` — Le mode page — **priorité 4**
+
+**Les deux modes, et comment les nommer.** Le critère est *qui détient
+l'identité de ligne* :
+
+| nom | qui détient l'identité | appels / 28 pages | coût mesuré |
+|---|---|---|---|
+| **`line_keyed`** — mode apparié | le contrat JSON, ligne par ligne | ~2 000 | 1,11 $ |
+| **`page_aligned`** — mode réaligné | l'aligneur, après coup | **28** | **0,14 $** |
+
+Ce sont deux **producteurs**. Aucun changement du cœur, et c'est la propriété
+qui rend le double mode tenable : les gardes, la réconciliation, la
+projection et la comptabilité sont partagées, donc `cinoc` peut *benchmarker*
+les deux sur le même moteur.
+
+**Ce qui est réutilisable, mesuré, et bien moins que ce que la 1ʳᵉ analyse
+annonçait.** Trois murs dans `core/alignment.py`, aucun n'étant un paramètre
+à régler :
+
+1. **La matrice `sim` est matérialisée en entier** (`alignment.py:104`) avant
+   que la DP démarre — 8 Mo à 500², 33 Mo à 1 000², **128 Mo à 2 000²**. Une
+   page de 8 620 tokens : ≈ **2,4 Go** pour `sim`, autant pour `cost`. Le
+   mode page **saturerait la mémoire** avant d'être lent.
+2. **`source_for_target` est un balayage linéaire des paires**, appelé une
+   fois par token cible dans la boucle de `_rebuild_line` — une seconde
+   quadratique par-dessus la DP. Le scan `move_suspected` en est une
+   troisième.
+3. **`align_tokens` n'a aucune notion de ligne** — or c'est exactement ce que
+   le mode page doit reconstituer : où finit la ligne *k*.
+
+Les temps confirment la quadratique : 0,005 / 0,095 / 1,83 / 14,25 s pour
+50 / 200 / 800 / 2 000 tokens, soit ≈ 265 s extrapolés pour une page.
+
+Réutilisable : le modèle de coût et la forme du backtrack — **~30 %**. Les
+70 % restants sont exactement ce que l'échelle page casse. Le premier travail
+n'est donc **pas** le bandage, c'est une réécriture qui ne matérialise pas
+ses matrices.
+
+**Ce que le bandage apporte quand il arrive.** Le modèle rend la page dans
+l'ordre, donc l'alignement est quasi diagonal ; une bande de ±50 tokens
+ramène le coût à O(n × bande). **Et la bande donne la garde gratuitement** :
+si le chemin touche le bord, le modèle a réordonné ou sauté — refuser au bord
+de bande, jamais forcer. C'est la seule ligne de conception qui compte ici.
+
+**Aucune garde neuve n'est nécessaire par ailleurs** : un décalage d'une
+ligne est attrapé **100 % du temps** par les gardes existantes (1 736 lignes,
+trois corpora) — mesure du 18 août, **non rejouée** dans la contre-analyse et
+signalée comme telle.
+
+**Le premier cas à écrire, avant le producteur** : une page où le modèle rend
+**moins de lignes qu'il n'en a reçu**, parce qu'il en a fusionné deux.
+L'aligneur doit refuser, pas redistribuer.
+
+### Ordre, et ce qui est correctif contre décision
+
+**`C1` → `C2` → `C3` → `C4`.** `C1` d'abord parce que c'est prouvé, prototypé,
+petit, et que l'enjeu est 29 % des fichiers d'un fonds réel. `C2` ensuite
+parce qu'il coûte une heure. `C3` après, parce que c'est un arbitrage qu'on
+décide mieux la cause éteinte. `C4` en dernier, et plus loin que dit.
+
+| | nature |
+|---|---|
+| `C1` la marque soudée | **correctif** |
+| `C2` le coût publié | **correctif** (documentation) |
+| `C3` le rayon d'action | **décision** — change le contrat de `run()` |
+| `C4` le mode page | **décision** puis correctif |
+
 ## A — Audit du 2026-08-17 : le tri
 
 Huit axes mesurés en parallèle, en réponse à la revue externe du 2026-08-16. Les
