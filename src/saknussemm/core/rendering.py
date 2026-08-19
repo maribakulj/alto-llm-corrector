@@ -27,6 +27,7 @@ from saknussemm.core.protocols import (
     RewriteResult,
 )
 from saknussemm.core.schemas import DocumentManifest, LineTrace, PageManifest
+from saknussemm.errors import ProjectionError
 
 
 async def _render_outputs(
@@ -66,6 +67,7 @@ async def _render_outputs(
     adapter: FormatAdapter | None = format_adapter
     losses_total: dict[str, int] = {}
     corrected_files: dict[str, bytes] = {}
+    projection_failures: list[str] = []
 
     for source_name, xml_path in source_files.items():
         pages_for_file = [
@@ -82,15 +84,19 @@ async def _render_outputs(
 
             adapter = adapter_for_format(document_manifest.source_format)
 
-        result, fidelity_by_lid = await _rewrite_and_verify(
-            adapter,
-            xml_path=xml_path,
-            source_name=source_name,
-            pages=pages_for_file,
-            producer_metadata=producer_metadata,
-            config_fingerprint=config_fingerprint,
-            decisions=decisions,
-        )
+        try:
+            result, fidelity_by_lid = await _rewrite_and_verify(
+                adapter,
+                xml_path=xml_path,
+                source_name=source_name,
+                pages=pages_for_file,
+                producer_metadata=producer_metadata,
+                config_fingerprint=config_fingerprint,
+                decisions=decisions,
+            )
+        except ProjectionError as failure:
+            projection_failures.append(str(failure))  # _refuse_undeliverable
+            continue
         corrected_files[source_name] = result.xml_bytes
 
         # rewriter_stats observability event — pure read-only diagnostic
@@ -115,9 +121,41 @@ async def _render_outputs(
             traces=traces,
         )
 
+    _refuse_undeliverable(projection_failures)
+
     # No trace persistence anywhere in the engine: trace.json IS the
     # CorrectionReport (§9), carried on the result for the caller.
     return losses_total, corrected_files
+
+
+def _refuse_undeliverable(failures: list[str]) -> None:
+    """Fail the run once for every file whose artefact diverged. No-op if none.
+
+    **Why the rewrite loop finishes instead of returning on the first.** The
+    refusal itself is not in question: a file that does not say what the run
+    decided is corruption of the deliverable, and nothing is written. But
+    abandoning the loop meant a document with three bad files disclosed
+    ONE per run — and a producer's run is billed. Learning the second cost
+    the corpus re-sent, the tokens re-paid and the wait re-taken, to find
+    something the first run had in hand a few milliseconds of lxml later.
+    Three findings, three bills. Now: one.
+
+    **What does not move.** Still a raise, still nothing delivered, still
+    before any writer sees the bytes. This is about diagnosis, never salvage.
+
+    The one-file message is the exception's text verbatim, so a caller
+    reading ``str(exc)`` — or a log grep, or a test — sees exactly what it
+    saw before. The list rides on ``.failures`` as an addition.
+    """
+    if not failures:
+        return
+    raise ProjectionError(
+        failures[0]
+        if len(failures) == 1
+        else f"{len(failures)} source files diverge from the run's "
+        f"decisions: {'; '.join(failures)}",
+        failures=tuple(failures),
+    )
 
 
 async def _rewrite_and_verify(
