@@ -202,6 +202,12 @@ R_OVERLAP = "e2_overlap"
 R_DRIFT_RATIO = "e4_span_growth"
 R_DRIFT_BUDGET = "e4_line_budget"
 R_HYPHEN = "e5_hyphen"
+#: `E5b` — a span erased the word that continues a broken word, leaving the
+#: PART2 line to start on whatever followed. Its own code because it accuses
+#: the opposite side of the pair from ``e5_hyphen``: that one says the
+#: FORWARD line lost its mark, this one says the BACKWARD line lost the word
+#: the mark pointed at.
+R_BOUNDARY_WORD = "e5_boundary_word"
 R_ANCHOR_NOT_FOUND = "anchor_not_found"
 R_ANCHOR_AMBIGUOUS = "anchor_ambiguous"
 R_ANCHOR_RANGE = "anchor_out_of_range"
@@ -304,7 +310,9 @@ def _changed_chars(original: str, replacement: str) -> int:
     return max(len(original), len(replacement)) - p - s
 
 
-def _e5_hyphen_ok(role: HyphenRole, result_text: str) -> bool:
+def _e5_hyphen_ok(
+    role: HyphenRole, result_text: str, source: str | None = None
+) -> bool:
     """E5 — a span-edited hyphen line keeps its break mark AND a word to
     continue.
 
@@ -323,20 +331,81 @@ def _e5_hyphen_ok(role: HyphenRole, result_text: str) -> bool:
     legitimate correction is refused**, because none of them leaves a mark
     dangling.
 
-    The backward side (``PART2``) is NOT closed here. Its boundary word can
-    still be erased when the following word survives — the etage-B guard
-    catches the plain case by comparing first words, and is bypassed when
-    the next word shares two leading characters. Closing it needs a
-    threshold, which is a contract decision (`E5b`) and not a defect fix.
+    The backward side (``PART2``) is closed by :func:`_e5b_boundary_word_kept`,
+    which needs the SOURCE and the spans rather than the result alone.
     """
     if role in (HyphenRole.PART1, HyphenRole.BOTH):
         stripped = result_text.rstrip()
         if not stripped.endswith(HYPHEN_CHARS):
             return False
         before_mark = stripped.rstrip("".join(HYPHEN_CHARS))
-        if not before_mark or before_mark[-1].isspace():
+        if not before_mark:
+            return False
+        # A SPACE before the mark is refused only when the correction put it
+        # there. Measured on a real run: of 205 proposals this side refuses,
+        # the gap is inherited from the source once and introduced zero
+        # times — and that one inherited case is `#126`, an excellent
+        # correction of `'a la revision d: s juy<nnen!s e d -'` whose only
+        # oddity is a space the SOURCE already had. Judging the result alone
+        # punishes a producer for being faithful.
+        if before_mark[-1].isspace() and not (source or "").rstrip().rstrip(
+            "".join(HYPHEN_CHARS)
+        ).endswith(" "):
             return False
     return True
+
+
+def _first_word_range(text: str) -> tuple[int, int] | None:
+    """Where the first word of ``text`` starts and ends, or ``None`` if none."""
+    start = 0
+    while start < len(text) and text[start].isspace():
+        start += 1
+    if start >= len(text):
+        return None
+    end = start
+    while end < len(text) and not text[end].isspace():
+        end += 1
+    return start, end
+
+
+def _e5b_boundary_word_kept(
+    role: HyphenRole, canonical: str, accepted: list[tuple[RangeAnchor, str]]
+) -> bool:
+    """`E5b` — a span may not ERASE the word that continues a broken word.
+
+    A ``PART2`` line opens on the second half of a word cut at the previous
+    line's edge. Erase it and the pair reads ``plu-`` + ``et le reste``: the
+    line survives, so the non-emptiness check is satisfied, and the word the
+    mark pointed at is simply gone. ``_e5_hyphen_ok``'s docstring used to
+    claim the non-empty result covered this. It does not — that check
+    guarantees the LINE survives, not the WORD, and the two are different
+    properties.
+
+    **The rule is "erased", not "changed", and that is measured rather than
+    chosen.** On 1 433 real ``PART2``/``BOTH`` lines corrected by
+    ``mistral-small-latest``, the boundary word was left alone 63% of the
+    time, corrected 12%, and **replaced by something unrecognisable 25%** —
+    because a ``PART2``'s first word is where OCR is worst, often reduced to
+    a single stray character. ``'•'`` → ``'seil'``, ``';'`` → ``'dré'``,
+    ``'j'`` → ``'parole'``: all correct, all scoring near zero similarity. A
+    minimum-similarity rule would therefore refuse **23–31%** of real
+    corrections, and refuse them exactly where correction is worth most.
+    Refusing only ERASURE costs 0 of those 1 433 lines.
+
+    So this is insurance rather than a filter, and deliberately so: it names
+    the one gesture no legitimate correction makes, and takes no threshold
+    with it — nothing to recalibrate when the corpus changes.
+    """
+    if role not in (HyphenRole.PART2, HyphenRole.BOTH):
+        return True
+    word = _first_word_range(canonical)
+    if word is None:
+        return True
+    start, end = word
+    return not any(
+        anchor.start <= start and anchor.end >= end and not replacement.strip()
+        for anchor, replacement in accepted
+    )
 
 
 def _apply_spans(canonical: str, ranges: list[tuple[RangeAnchor, str]]) -> str:
@@ -345,6 +414,89 @@ def _apply_spans(canonical: str, ranges: list[tuple[RangeAnchor, str]]) -> str:
     for anchor, replacement in sorted(ranges, key=lambda rt: rt[0].start, reverse=True):
         text = text[: anchor.start] + replacement + text[anchor.end :]
     return text
+
+
+def _whole_line_verdict(
+    line_ops: list[ReplaceLine],
+    span_ops: list[ReplaceSpan],
+    role: HyphenRole,
+    canonical: str,
+    guard: GuardConfig,
+) -> tuple[str, str | None]:
+    """The whole-line path's proposed text, and why it may not stand.
+
+    Returns ``(text, None)`` when the proposal survives every check, else
+    ``(text, reason)``. The text comes back either way so the caller has
+    something to name in the refusal.
+
+    `E1`/`E3`/conflict have always been here. `E4`/`E5` joined them on
+    2026-08-19 — see :func:`_whole_line_drift_refusal` for what that cost,
+    measured before it was decided.
+    """
+    if len(line_ops) > 1 or span_ops:
+        return "", R_CONFLICT
+    text = line_ops[0].text
+    if _has_newline(text):
+        return text, R_NEWLINE
+    if text.strip() == "":
+        return text, R_EMPTY
+    return text, _whole_line_drift_refusal(role, canonical, text, guard)
+
+
+def _whole_line_drift_refusal(
+    role: HyphenRole, canonical: str, text: str, guard: GuardConfig
+) -> str | None:
+    """`E4`/`E5` on a whole-line proposal, or ``None`` if it may stand.
+
+    Until 2026-08-19 this path faced neither, so the two drift guards applied
+    only to span producers — the rarer kind — and the default LLM producer
+    was judged on meaning alone. `E6b` in ``docs/promises.md`` called that a
+    non-parity: the same result got a different verdict depending on which
+    vocabulary proposed it.
+
+    **Closed after measuring what it would cost**, on 1 796 real proposals
+    from ``mistral-small-latest``:
+
+    - `E4` refuses **0**. The median corrected line changes 20 characters and
+      the worst 168, against a budget of 200. The parity is free.
+    - `E5` refuses **205**, of which **204 are already refused** downstream.
+      It does not reject more; it rejects earlier, and names why. The cases
+      are worth naming: ``'…du bu-'`` → ``'…du bu'`` (mark gone),
+      ``'…dans la-'`` → ``'galerie des Fêtes.'`` (the NEXT line's text),
+      ``'…de la tran-'`` → ``'quillité des esprits…'`` (the PART2 fragment).
+      Every one is a line-integrity violation reaching acceptance under a
+      generic refusal.
+    - The 205th changed verdict, and it is why `E5`'s forward rule was
+      refined at the same time — see :func:`_e5_hyphen_ok`.
+
+    There is no per-op growth ratio here: a whole-line proposal is one op
+    covering the line, so the ratio would compare the line to itself.
+    """
+    if _changed_chars(canonical, text) > guard.edit_line_max_changed_chars:
+        return R_DRIFT_BUDGET
+    if not _e5_hyphen_ok(role, text, canonical):
+        return R_HYPHEN
+    return None
+
+
+def _e5_refusal(
+    role: HyphenRole,
+    canonical: str,
+    result: str,
+    accepted: list[tuple[RangeAnchor, str]],
+) -> str | None:
+    """`E5`'s verdict on a hyphenated line, or ``None`` if it may stand.
+
+    Two sides of one pair, and two codes, because they accuse opposite
+    lines: the FORWARD line losing the mark that promises a continuation,
+    and the BACKWARD line losing the word that mark pointed at. Reporting
+    both as ``e5_hyphen`` would make a refusal rate unreadable.
+    """
+    if not _e5_hyphen_ok(role, result, canonical):
+        return R_HYPHEN
+    if not _e5b_boundary_word_kept(role, canonical, accepted):
+        return R_BOUNDARY_WORD
+    return None
 
 
 def _apply_line_ops(
@@ -360,22 +512,12 @@ def _apply_line_ops(
     line_ops = [o for o in ops if isinstance(o, ReplaceLine)]
     span_ops = [o for o in ops if isinstance(o, ReplaceSpan)]
 
-    # --- replace_line: whole-line path (E1/E3/conflict only; NO E4/E5) ---
+    # --- replace_line: whole-line path (E1/E3/conflict, then E4/E5) ---
     if line_ops:
-        if len(line_ops) > 1 or span_ops:
+        text, reason = _whole_line_verdict(line_ops, span_ops, role, canonical, guard)
+        if reason is not None:
             rejected.append(
-                EditRejection(line_id=line_id, op="replace_line", reason=R_CONFLICT)
-            )
-            return None
-        text = line_ops[0].text
-        if _has_newline(text):
-            rejected.append(
-                EditRejection(line_id=line_id, op="replace_line", reason=R_NEWLINE)
-            )
-            return None
-        if text.strip() == "":
-            rejected.append(
-                EditRejection(line_id=line_id, op="replace_line", reason=R_EMPTY)
+                EditRejection(line_id=line_id, op="replace_line", reason=reason)
             )
             return None
         return text
@@ -454,10 +596,10 @@ def _apply_line_ops(
             EditRejection(line_id=line_id, op="replace_span", reason=R_EMPTY)
         )
         return None
-    # E5 — hyphenated line must keep its trailing hyphen (forward side).
-    if not _e5_hyphen_ok(role, result):
+    reason = _e5_refusal(role, canonical, result, accepted)
+    if reason is not None:
         rejected.append(
-            EditRejection(line_id=line_id, op="replace_span", reason=R_HYPHEN)
+            EditRejection(line_id=line_id, op="replace_span", reason=reason)
         )
         return None
     return result
