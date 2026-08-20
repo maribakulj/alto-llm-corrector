@@ -96,7 +96,19 @@ rouge là-bas — c'est précisément à ça que sert la PR, et c'est pour ça q
    devenu `'I |'`. Le tableau était flatteur, la sortie était une régression,
    et seule la lecture des lignes l'a montré. Lire le TEXTE, jamais
    seulement les compteurs.
-9. **Une CI vide n'est pas une CI verte.** Merger demande de compter les
+9. **Vérifier qu'un corpus de mesure porte bien l'ENTRÉE, pas la sortie
+   attendue.** Le 2026-08-20, la sonde vision sur `corpus/37-GT-BNL` a
+   donné au modèle le texte du XML — qui est la **vérité terrain**, pas
+   l'OCR. L'OCR dégradé vit dans `ocr_spa_sidecar.json`, que les campagnes
+   rejouent. Le modèle recevait donc la réponse et devait la « corriger ».
+   Lancé tel quel sur 522 lignes, ça aurait produit un CER excellent et un
+   énoncé faux — « un 3B local égale un modèle distant ». C'est le seul
+   piège de harnais de la journée qui aurait été **flatteur** : les trois
+   autres donnaient des résultats visiblement décevants, donc questionnés.
+   Ce qui l'a attrapé n'est pas le résultat mais une **incohérence de
+   contrôle** — des lignes filtrées comme « abîmées » se sont révélées
+   identiques à la référence.
+10. **Une CI vide n'est pas une CI verte.** Merger demande de compter les
    vérifications **réussies**, jamais de constater l'absence d'échec. Payé le
    2026-08-19 : la condition automatique était « zéro en attente et zéro en
    échec », elle a lu une liste **vide** — un commit venait d'être poussé et
