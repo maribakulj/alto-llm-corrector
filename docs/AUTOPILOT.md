@@ -398,9 +398,11 @@ Une ligne par réveil : date, item, résultat, ou la raison de l'arrêt.
   halluciner. Saturer son propre quota et l'attribuer au modèle — 67 % de
   corrections seul contre 37 % à trois jobs, sur la même page. Réimplémenter
   au lieu de lire les dépôts consommateurs, dont un commentaire citait déjà
-  l'erreur que j'ai redécouverte. Et comparer un bras texte à un bras vision,
-  alors que la campagne de référence dit elle-même que son mode texte ne
-  corrige rien.
+  l'erreur que j'ai redécouverte. Et comparer un bras texte à un bras vision —
+  reproche juste, mais la raison que j'en donnais était **fausse** (corrigée
+  le 2026-08-20) : la ligne « text » de la campagne de référence n'est pas un
+  LLM mais trois substitutions déterministes, sur un corpus où aucune ne
+  s'applique.
 
   **Le mode « une page, un appel » est chiffré** : 28 appels au lieu de 2 000,
   0,39 M de tokens au lieu de 5,49 M. L'enveloppe JSON par ligne pèse 7,9 fois
@@ -639,3 +641,25 @@ Une ligne par réveil : date, item, résultat, ou la raison de l'arrêt.
   d'où une reprise ajoutée aux scripts pour ne pas repayer ce qui était déjà
   collecté ; et le premier lancement a échoué sur un mauvais mot-clé de
   constructeur, ce que seul le lancement révélait.
+
+- 2026-08-20 — **« son mode texte fait 0 improved » était une faute de
+  lecture, signalée par le mainteneur.** Il a demandé comment concilier cette
+  phrase avec ses propres runs, où le plus petit ministral en texte pur
+  améliorait bien quelque chose. Il avait raison et la phrase était fausse.
+
+  La ligne « text » de la campagne BNL n'est pas un LLM : c'est
+  `default_french_ocr_rules`, **trois substitutions déterministes** — le `ſ`
+  long et les ligatures `ﬁ`/`ﬂ` — passées sur un corpus majoritairement
+  **allemand en Fraktur**. Aucune des trois n'y apparaît, donc zéro
+  correspondance et zéro changement. C'est le résultat attendu d'une table de
+  règles hors de son domaine, et ça ne dit **rien** d'un modèle.
+
+  Ce que le dépôt mesure ailleurs le contredisait déjà : sur Gallica,
+  `mistral-small` en texte pur livre **28 à 38 %** des lignes corrigées. Je
+  n'avais pas rapproché les deux.
+
+  **Le coût de l'erreur n'est pas la phrase, c'est ce qu'elle a autorisé** :
+  écrite deux fois dans le dépôt, elle a servi à justifier de ne pas relancer
+  le bras texte. Une conclusion tirée d'une colonne mal lue devient une
+  décision de ne pas mesurer — exactement le mécanisme que ce journal existe
+  pour attraper.
