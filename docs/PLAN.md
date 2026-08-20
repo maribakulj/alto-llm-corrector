@@ -319,9 +319,22 @@ réglage a de la valeur, pas sur le seuil de similarité.
    run vision, le plafond de 8 images — les quatre étaient déjà documentés
    dans `cinoc/campaigns/tooling/providers_multimodal.py`, dont un commentaire
    cite mot pour mot l'erreur 3051 que je me suis prise.
-4. **Comparer un bras texte à un bras vision.** La campagne BNL du 14 août,
-   que je prenais pour référence, dit elle-même que son mode texte fait *0
-   improved, 0 degraded*. Ses bons chiffres viennent entièrement du VLM.
+4. **Comparer un bras texte à un bras vision.** Le reproche tient — les deux
+   bras ne mesurent pas la même chose — mais la justification que j'en avais
+   tirée était **fausse, et corrigée le 2026-08-20** : « la campagne BNL dit
+   elle-même que son mode texte fait 0 improved, 0 degraded ». Sa ligne
+   « text » n'est pas un LLM. C'est `default_french_ocr_rules`, un producteur
+   **déterministe à trois substitutions** — le `ſ` long et les ligatures
+   `ﬁ`/`ﬂ` — passé sur un corpus BNL majoritairement **allemand en Fraktur**
+   (140 lignes) et français du XIXᵉ (313), où aucune des trois n'apparaît.
+   Zéro correspondance, donc zéro changement : le résultat attendu, et il ne
+   dit **rien** d'un LLM en mode texte.
+
+   Ce que le dépôt mesure vraiment sur le bras texte le contredit d'ailleurs :
+   sur le corpus Gallica, `mistral-small` en texte pur livre **28 à 38 %** des
+   lignes corrigées. Lire « text » dans un tableau et conclure « le mode texte
+   ne sert à rien » est une faute de lecture, et elle a servi à ne pas relancer
+   ce bras.
 
 ### Ce que le run a trouvé et que rien d'autre n'aurait trouvé
 
