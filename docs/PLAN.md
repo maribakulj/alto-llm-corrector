@@ -761,6 +761,90 @@ décide mieux la cause éteinte. `C4` en dernier, et plus loin que dit.
 | `C3` le rayon d'action | **décision** — change le contrat de `run()` |
 | `C4` le mode page | **décision** puis correctif |
 
+## D — Les petits modèles locaux, 2026-08-20
+
+Mesuré parce que le mainteneur a posé la contrainte : **la cible est un petit
+modèle qui tourne en local**, pas un fournisseur distant. Ça change ce qu'on
+optimise, et ça a d'abord servi à corriger une affirmation fausse de ce plan
+(voir `A`, point 4 : « son mode texte fait 0 improved » ne parlait pas d'un
+LLM).
+
+### Un modèle d'un milliard de paramètres corrige, en texte pur
+
+Appel isolé, `gemma3:1b`, contrat apparié, **4 secondes** :
+
+```
+'Le rvi de Frauce est mort hier'      ->  'Le roi de France est mort hier'      juste
+'et le peuple a plemé toute la nuit'  ->  'et le peuple a pleuré toute la nuit' juste
+'dans les rnes de la capitale'        ->  'dans les noms de la capitale'        faux (rues)
+```
+
+Deux sur trois, JSON valide. La question n'est donc pas « un petit modèle
+peut-il corriger » — il peut.
+
+### Sur une page entière, c'est le contrat qui casse, pas la correction
+
+Page réelle de 72 lignes, `gemma3:1b`, chunks de 12 :
+
+| | `requires_full_coverage=True` | `False` |
+|---|---|---|
+| appels | 121 | **87** |
+| retentatives | 61 | **35** |
+| descentes de granularité | 14 | **6** |
+| `all_attempts_exhausted` | 26 | **4** |
+| **lignes livrées corrigées** | 3 | **6** |
+| lignes en repli | 50 | **28** |
+| durée | 959 s | 889 s |
+
+Le modèle rate la structure attendue à peu près une fois sur douze — une
+ligne absente, un identifiant altéré. Avec `requires_full_coverage=True`,
+chaque manque est une **erreur de validation**, donc une retentative, puis
+une descente de granularité : **121 appels pour 72 lignes**.
+
+**Le drapeau seul double le rendement et divise les épuisements par six.**
+`LLMEditProducer` le déclare `True` en dur, ce qui est le bon choix pour un
+modèle qui tient son contrat et le mauvais pour un petit modèle local.
+**Décision à prendre** : en faire un réglage que l'hôte pose selon la classe
+de modèle. C'est de la surface publique, donc un arbitrage.
+
+### Ce que les gardes font face à un modèle faible — et c'est le bon résultat
+
+`too_different_from_source` reste à **22–23 lignes dans les deux
+configurations**. Le drapeau change la couverture, jamais la qualité : c'est
+le taux d'hallucination du 1B, et la bibliothèque le refuse au lieu de
+corrompre le fichier. Elle n'avait jamais été mise en situation de le
+prouver.
+
+### Les autres modèles de la machine
+
+`churro-3B` (qwen2-VL, 3 G, vision) **ne corrige rien en texte pur** : il rend
+les trois lignes identiques. Ce n'est pas un défaut — c'est un modèle d'OCR,
+fait pour lire une image. Il ne se juge qu'en vision.
+
+`gemma3:1b` n'a **pas** la vision (`completion` seul) ; elle commence à 4B
+dans cette famille.
+
+### Deux pièges de mesure, tous deux chez moi
+
+**Ollama tronque à 2 048 jetons de contexte par défaut**, silencieusement. La
+première mesure du mode page a rendu un JSON coupé au milieu, ce que j'ai
+failli lire comme « le modèle échoue ». Une page de 513 lignes demande ~6 000
+jetons en entrée **et autant en sortie**.
+
+**Et le plafond par défaut du planificateur est de 80 lignes**, donc une page
+de 72 lignes part **entière** dans les deux modes. Ma comparaison « beaucoup
+de petits appels contre un gros » était fausse : c'était un appel compact
+contre un appel six fois plus lourd — l'enveloppe appariée pèse **12 561
+caractères contre 2 420** pour 2 084 caractères de texte, soit **5,2×**.
+
+### État
+
+Aucune configuration locale n'est utilisable sur cette page : le meilleur
+résultat est **6 lignes corrigées sur 72 en 15 minutes**. Les causes sont
+identifiées et distinctes — contrat trop strict pour un petit modèle d'un
+côté, modèle qui décroche sur une longue liste de l'autre — et aucune n'est
+un défaut de la bibliothèque.
+
 ## A — Audit du 2026-08-17 : le tri
 
 Huit axes mesurés en parallèle, en réponse à la revue externe du 2026-08-16. Les
