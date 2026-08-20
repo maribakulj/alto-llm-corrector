@@ -79,7 +79,24 @@ rouge là-bas — c'est précisément à ça que sert la PR, et c'est pour ça q
    ouvert.** Un item peut être clos dans le code et resté ouvert dans le plan
    — `S3b` l'était, et la file en a hérité. Le plan décrit l'intention ; les
    tests décrivent l'état.
-7. **Une CI vide n'est pas une CI verte.** Merger demande de compter les
+7. **Choisir un corpus de mesure pour sa TAILLE est un biais, pas une
+   commodité.** Le 2026-08-20, toutes les mesures sur modèles locaux ont été
+   faites sur une page de 72 lignes choisie parce qu'elle finissait vite. Elle
+   s'est révélée être du bruit : **41,7 % de lignes lisibles, confiance OCR
+   médiane 0,50**, contre 84 % / 0,91 et 93 % / 0,98 pour les pages du corpus
+   de référence. Sur une telle page, la bonne réponse d'un correcteur est « ne
+   corrige presque rien » — donc aucun taux de correction mesuré là n'est
+   comparable à quoi que ce soit. Vérifier la représentativité AVANT de
+   mesurer, pas après avoir tiré des conclusions.
+8. **Un résultat qui va dans le sens espéré demande plus de vérification
+   qu'un résultat décevant, pas moins.** Même jour : un producteur en texte
+   brut a rendu « zéro retentative, zéro repli, deux fois plus de
+   corrections, quatorze fois plus rapide ». Les corrections étaient en
+   réalité le délimiteur du format qui **fuyait dans le texte** — `'I'`
+   devenu `'I |'`. Le tableau était flatteur, la sortie était une régression,
+   et seule la lecture des lignes l'a montré. Lire le TEXTE, jamais
+   seulement les compteurs.
+9. **Une CI vide n'est pas une CI verte.** Merger demande de compter les
    vérifications **réussies**, jamais de constater l'absence d'échec. Payé le
    2026-08-19 : la condition automatique était « zéro en attente et zéro en
    échec », elle a lu une liste **vide** — un commit venait d'être poussé et
