@@ -108,7 +108,20 @@ rouge là-bas — c'est précisément à ça que sert la PR, et c'est pour ça q
    Ce qui l'a attrapé n'est pas le résultat mais une **incohérence de
    contrôle** — des lignes filtrées comme « abîmées » se sont révélées
    identiques à la référence.
-10. **Une CI vide n'est pas une CI verte.** Merger demande de compter les
+10. **Sur une chaîne vision, REGARDER le crop avant de juger le modèle.**
+    Le 2026-08-20, `churro-3B` a été mesuré à CER 0,1825 — 76 % pire que de
+    ne rien faire — et le chiffre ne disait rien de lui : l'ALTO du corpus
+    BNL est en **dixièmes de millimètre**, son étendue faisant 674×845 pour
+    une image de 796×998, soit exactement `300/254`. Sans `ImageTransform`,
+    chaque crop était décalé et rétréci de **18 %**, de plus en plus loin du
+    texte en descendant la page — donc plausible, jamais vide. Le modèle
+    était jugé sur des régions qui ne contenaient pas la ligne annoncée.
+    `run_vision.py` documente le facteur en clair ; il n'avait pas été lu.
+    **Et c'est la deuxième fois** : le journal du 2026-08-06 porte déjà
+    « ImageAsset construit sans transform — échelle 0,1754, crops hors
+    cadre ». Écrire le crop sur disque et le regarder coûte trente secondes
+    et aurait épargné deux mesures complètes.
+11. **Une CI vide n'est pas une CI verte.** Merger demande de compter les
    vérifications **réussies**, jamais de constater l'absence d'échec. Payé le
    2026-08-19 : la condition automatique était « zéro en attente et zéro en
    échec », elle a lu une liste **vide** — un commit venait d'être poussé et
