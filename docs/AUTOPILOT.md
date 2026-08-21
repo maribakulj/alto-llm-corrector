@@ -196,11 +196,32 @@ mot-frontière, qui n'existe pas. Sa forme est une décision de conception,
 
 ### 3. Phase 4 — l'intégration au banc
 
-**Brique 1 faite le 2026-08-21** (`cinoc` #87, #90, #89) : l'étape
-`LAYOUT → LAYOUT` et la source ALTO existent, et la chaîne complète tourne
-par le vrai exécuteur de `cinoc`. Restent quatre briques : des métriques
-d'identité de ligne ; la dé-césure dans le projecteur ; des runs répétés ;
-la vision pour l'adapter Ollama.
+**FAITE le 2026-08-21** — les cinq briques, `cinoc` #87 à #95 :
+
+| brique | ce qu'elle a livré |
+|---|---|
+| étape `LAYOUT → LAYOUT` + source ALTO | un ALTO entre dans le banc **sans être aplati** ; la chaîne tourne par le vrai exécuteur |
+| vision pour l'adapter Ollama | l'adapter était `text_only` **en dur** alors que le planificateur lui passait déjà un `role` : « OCR → VLM » avec un modèle local produisait un run texte, **en silence** |
+| runs répétés | `--repeat N` et une **fourchette** par métrique — `M2` l'exigeait, rien ne le fournissait |
+| métriques d'identité de ligne | l'appariement était une devinette : elle diverge sur **57 lignes de 522** et porte le CER par ligne de 0,1188 à 0,1879 |
+| dé-césure | profil de normalisation, **pas** option du projecteur : les profils s'appliquent des deux côtés, donc la symétrie est acquise par construction |
+
+**Trois briques ont changé de justification une fois mesurées**, et c'est le
+gain principal de les avoir chiffrées avant de les écrire :
+
+- la **dé-césure** ne fait pas baisser l'erreur — elle la fait légèrement
+  *monter* (0,1119 → 0,1133). Son intérêt est l'asymétrie : un correcteur qui
+  recolle correctement un mot coupé est **pénalisé pour avoir bien fait**
+  (0,1179). Construite sans mesure, elle aurait été livrée avec la mauvaise
+  justification, et personne n'aurait su quand l'activer ;
+- les **métriques d'identité** : j'avais écrit que la devinette « décale tout
+  d'un cran ». Faux. Le test censé le prouver ne reproduisait pas le
+  phénomène ; vérification faite, l'effet est un décalage des **blocs
+  d'opcodes** qui fait déclarer non appariées des lignes voisines quasi
+  parfaites — 51 sur-notées contre 6 sous-notées, dont 14 à CER 1,0 ;
+- la **vision Ollama** n'était pas une fonctionnalité manquante mais un
+  **silence** : le mode existait dans l'interface, le planificateur le
+  déclarait, l'adapter l'ignorait, et rien ne le signalait.
 
 **Deux décisions de conception ont été tranchées par la mesure**, contre ce
 que l'analyse recommandait :
@@ -839,3 +860,42 @@ Une ligne par réveil : date, item, résultat, ou la raison de l'arrêt.
   **Lire un échec n'est pas lire un état.** C'est la règle 9 sous un autre
   angle : après une opération qui échoue partiellement, vérifier ce qui a
   quand même eu lieu — jamais supposer que l'échec a tout annulé.
+
+- 2026-08-21 — **Mesurer avant de construire a changé trois briques sur cinq.**
+
+  La Phase 4 listait cinq briques par leur *nom*. Trois se sont révélées
+  différentes de ce que leur nom laissait croire, et seule la mesure préalable
+  l'a montré :
+
+  **La dé-césure** ne fait pas baisser l'erreur — elle la fait monter. Son
+  intérêt est de ne pas *punir* un correcteur qui recolle. Construite sur son
+  nom, elle aurait été livrée avec la mauvaise justification, et le prochain
+  lecteur l'aurait activée en croyant améliorer sa mesure.
+
+  **La vision Ollama** n'était pas une fonctionnalité absente mais un
+  **silence** : `role="text_only"` en dur alors que le planificateur passait
+  déjà un `role`. L'interface laissait choisir le mode, le planificateur le
+  déclarait, l'adapter l'ignorait, et rien ne le disait.
+
+  **Les métriques d'identité** ont corrigé une phrase que j'avais écrite dans
+  une docstring *et* dans un test — « tout se décale d'un cran ». Le test ne
+  passait pas. J'aurais pu l'ajuster jusqu'à ce qu'il passe ; j'ai vérifié le
+  mécanisme réel à la place.
+
+  **Ce que je retiens** : un item de file nomme une intention, pas un fait. Le
+  chiffrer avant de l'écrire coûte une heure et évite de livrer du code juste
+  pour une raison fausse — ce qui est pire qu'un bug, parce que ça se propage
+  dans la documentation et dans les décisions suivantes.
+
+- 2026-08-21 — **Bilan de la journée : cinq défauts trouvés, tous dans ce qui
+  vérifie plutôt que dans ce qui est vérifié.**
+
+  Un contrat de docstring que personne n'implémentait (six lignes de campagne
+  faussées). Un contrôle de ligne de base qui « ne tombait pas juste » et qu'il
+  aurait été tentant de contourner. Deux erreurs symétriques dans le format
+  ALTO qui s'annulaient et que neuf tests verrouillaient. Un mode d'exécution
+  ignoré en silence. Un appariement de lignes qui déclare « aucune
+  correspondance » pour des lignes quasi parfaites.
+
+  Aucun n'était une valeur fausse dans un calcul. Tous étaient un contrôle
+  absent, contourné, ou qui se comparait à lui-même.
