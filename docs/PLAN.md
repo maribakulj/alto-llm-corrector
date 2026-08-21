@@ -837,13 +837,53 @@ de petits appels contre un gros » était fausse : c'était un appel compact
 contre un appel six fois plus lourd — l'enveloppe appariée pèse **12 561
 caractères contre 2 420** pour 2 084 caractères de texte, soit **5,2×**.
 
-### État
+### La sortie structurée est bien le frein — proposition du mainteneur
 
-Aucune configuration locale n'est utilisable sur cette page : le meilleur
-résultat est **6 lignes corrigées sur 72 en 15 minutes**. Les causes sont
-identifiées et distinctes — contrat trop strict pour un petit modèle d'un
-côté, modèle qui décroche sur une longue liste de l'autre — et aucune n'est
-un défaut de la bibliothèque.
+Il a demandé si on ne pouvait pas faire rendre au modèle **juste la phrase**
+et reconstruire la structure nous-mêmes. Les causes réelles de retentative,
+capturées, lui donnent raison : **toutes structurelles**, aucune n'est une
+mauvaise correction — sauts de ligne parasites (10), `line_id` manquants ou
+inventés (5), comptes de lignes faux (4), JSON tronqué (1). Les mauvaises
+corrections sont ailleurs, refusées par les gardes.
+
+Mais retirer le JSON ne suffit pas, et la mesure a corrigé l'idée deux fois :
+
+- **sans aucune structure**, `gemma3:1b` rend **une ligne pour cinq** — il
+  fusionne tout. Le schéma était ce qui tenait la séparation ;
+- **avec un délimiteur `|`**, le modèle décale toute la page, parce que l'OCR
+  dégradé en contient lui-même (`'| ai< i'` est une vraie ligne du corpus).
+  Un délimiteur présent dans les données casse là où on en a le plus besoin ;
+- **avec une TABULATION**, ça tient à partir de 4B : `gemma3:4b-it-qat` et
+  `gemma4:e2b` rendent 5 lignes sur 5 et gardent verbatim la ligne au `|`.
+
+Et le meilleur résultat de la série : face à douze lignes de bruit illisible,
+`gemma4:e2b` **ne hallucine pas** — il les rend inchangées. C'est le
+comportement voulu, prouvé sur le cas le plus dur.
+
+### État — et les taux ci-dessus sont invalides
+
+**Toutes les mesures de TAUX de cette section sont à jeter**, pour une erreur
+de méthode : la page de test a été choisie pour sa **taille** (72 lignes,
+elle finissait vite), et elle s'est révélée être du bruit — **41,7 % de
+lignes lisibles, confiance OCR médiane 0,50**, contre 84 % / 0,91 et
+93 % / 0,98 pour les pages du corpus de référence. Sur une telle page la
+bonne réponse d'un correcteur est « ne corrige presque rien », donc « 10
+livrées sur 72 » ne se compare à rien.
+
+**Ce qui survit**, parce que ça ne dépend pas de la lisibilité du texte : les
+causes de retentative sont structurelles ; un 1B ne tient pas la structure
+sans schéma et un 4B oui ; le délimiteur doit être absent des données ;
+`requires_full_coverage=False` supprime les épuisements ; et un petit modèle
+ne hallucine pas sur du bruit.
+
+**Corrigé aussi, et c'était faux pour la même raison** : « le planificateur ne
+sait pas faire des paquets de N lignes ». Le grain `WINDOW` est exactement
+ça, avec `line_window_size` réglable — sur une page représentative, un
+plafond de 12 donne **47 fenêtres de 12 lignes**. Sur la page de bruit il n'y
+allait pas parce que ses blocs font déjà une ligne : le planificateur
+s'arrête au premier grain qui rentre. Le comportement dépend donc de la
+structure de la page, ce qui le rend difficile à prévoir sans mesurer — mais
+il n'est pas absent.
 
 ## A — Audit du 2026-08-17 : le tri
 

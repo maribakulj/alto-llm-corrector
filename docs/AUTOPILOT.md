@@ -79,7 +79,49 @@ rouge là-bas — c'est précisément à ça que sert la PR, et c'est pour ça q
    ouvert.** Un item peut être clos dans le code et resté ouvert dans le plan
    — `S3b` l'était, et la file en a hérité. Le plan décrit l'intention ; les
    tests décrivent l'état.
-7. **Une CI vide n'est pas une CI verte.** Merger demande de compter les
+7. **Choisir un corpus de mesure pour sa TAILLE est un biais, pas une
+   commodité.** Le 2026-08-20, toutes les mesures sur modèles locaux ont été
+   faites sur une page de 72 lignes choisie parce qu'elle finissait vite. Elle
+   s'est révélée être du bruit : **41,7 % de lignes lisibles, confiance OCR
+   médiane 0,50**, contre 84 % / 0,91 et 93 % / 0,98 pour les pages du corpus
+   de référence. Sur une telle page, la bonne réponse d'un correcteur est « ne
+   corrige presque rien » — donc aucun taux de correction mesuré là n'est
+   comparable à quoi que ce soit. Vérifier la représentativité AVANT de
+   mesurer, pas après avoir tiré des conclusions.
+8. **Un résultat qui va dans le sens espéré demande plus de vérification
+   qu'un résultat décevant, pas moins.** Même jour : un producteur en texte
+   brut a rendu « zéro retentative, zéro repli, deux fois plus de
+   corrections, quatorze fois plus rapide ». Les corrections étaient en
+   réalité le délimiteur du format qui **fuyait dans le texte** — `'I'`
+   devenu `'I |'`. Le tableau était flatteur, la sortie était une régression,
+   et seule la lecture des lignes l'a montré. Lire le TEXTE, jamais
+   seulement les compteurs.
+9. **Vérifier qu'un corpus de mesure porte bien l'ENTRÉE, pas la sortie
+   attendue.** Le 2026-08-20, la sonde vision sur `corpus/37-GT-BNL` a
+   donné au modèle le texte du XML — qui est la **vérité terrain**, pas
+   l'OCR. L'OCR dégradé vit dans `ocr_spa_sidecar.json`, que les campagnes
+   rejouent. Le modèle recevait donc la réponse et devait la « corriger ».
+   Lancé tel quel sur 522 lignes, ça aurait produit un CER excellent et un
+   énoncé faux — « un 3B local égale un modèle distant ». C'est le seul
+   piège de harnais de la journée qui aurait été **flatteur** : les trois
+   autres donnaient des résultats visiblement décevants, donc questionnés.
+   Ce qui l'a attrapé n'est pas le résultat mais une **incohérence de
+   contrôle** — des lignes filtrées comme « abîmées » se sont révélées
+   identiques à la référence.
+10. **Sur une chaîne vision, REGARDER le crop avant de juger le modèle.**
+    Le 2026-08-20, `churro-3B` a été mesuré à CER 0,1825 — 76 % pire que de
+    ne rien faire — et le chiffre ne disait rien de lui : l'ALTO du corpus
+    BNL est en **dixièmes de millimètre**, son étendue faisant 674×845 pour
+    une image de 796×998, soit exactement `300/254`. Sans `ImageTransform`,
+    chaque crop était décalé et rétréci de **18 %**, de plus en plus loin du
+    texte en descendant la page — donc plausible, jamais vide. Le modèle
+    était jugé sur des régions qui ne contenaient pas la ligne annoncée.
+    `run_vision.py` documente le facteur en clair ; il n'avait pas été lu.
+    **Et c'est la deuxième fois** : le journal du 2026-08-06 porte déjà
+    « ImageAsset construit sans transform — échelle 0,1754, crops hors
+    cadre ». Écrire le crop sur disque et le regarder coûte trente secondes
+    et aurait épargné deux mesures complètes.
+11. **Une CI vide n'est pas une CI verte.** Merger demande de compter les
    vérifications **réussies**, jamais de constater l'absence d'échec. Payé le
    2026-08-19 : la condition automatique était « zéro en attente et zéro en
    échec », elle a lu une liste **vide** — un commit venait d'être poussé et
@@ -663,3 +705,46 @@ Une ligne par réveil : date, item, résultat, ou la raison de l'arrêt.
   le bras texte. Une conclusion tirée d'une colonne mal lue devient une
   décision de ne pas mesurer — exactement le mécanisme que ce journal existe
   pour attraper.
+
+- 2026-08-21 — **La ligne de base 0,1038 de la campagne BNL est contaminée :
+  six lignes reçoivent la vérité terrain en guise d'OCR.**
+
+  Le contrôle imposé par la règle « vérifier la baseline avant de comparer »
+  a refusé de tomber juste : le harnais churro mesurait 0,1146 là où la
+  campagne annonce 0,1038, sur les **mêmes 522 lignes et la même référence**
+  (vérifié : 0 référence divergente).
+
+  L'écart vient de **six lignes où l'OCR dégradé est vide** dans
+  `ocr_spa_sidecar.json`. La campagne du 14 août ne les a pas laissées vides :
+  elle est retombée sur le texte de l'ALTO, **qui est la vérité terrain**. Les
+  six sont identiques à leur référence au caractère près, vérifié une par une.
+
+  **Le mécanisme est écrit noir sur blanc dans le code**, et c'est ce qui
+  rend la chose instructive. `apply_ocr_manifest` (`campaigns/tooling/
+  vision_benchmark.py`) documente exactement ce piège :
+
+  > *A line the engine returned nothing for keeps its GT text **and is
+  > reported by the caller**: an empty reading is a real OCR outcome, but
+  > silently treating it as a correct line would flatter every configuration
+  > equally.*
+
+  L'auteur avait vu le risque, l'avait nommé, et avait délégué la parade à
+  l'appelant. **`run_benchmark` ne compte ni ne rapporte jamais ces lignes.**
+  Le contrat de la docstring n'est rempli nulle part, donc l'avertissement
+  n'est jamais sorti.
+
+  **Conséquence, et elle diffère selon le harnais.** Côté campagne, les six
+  lignes ont la vérité terrain des deux côtés : elles pèsent zéro erreur pour
+  la ligne de base *comme* pour chaque arme, et diluent tous les CER vers le
+  bas. Côté harnais churro, `ocr_text` est mis à vide explicitement, donc la
+  ligne de base y encaisse la perte totale — d'où 0,1146. Aucune des deux
+  bases n'est fausse en soi ; ce qui est fautif, c'est de comparer un chiffre
+  d'une base à un chiffre de l'autre. Il faut **exclure les six lignes** :
+  base propre **516 lignes, OCR 0,1049**.
+
+  C'est la troisième fois que le texte de l'ALTO d'un corpus de vérité
+  terrain se fait passer pour de l'OCR. Les deux premières fois, un contrôle
+  l'a attrapé. Cette fois, la contamination était **déjà publiée** dans les
+  chiffres d'une campagne, et c'est un désaccord de quatrième décimale qui l'a
+  révélée. Un contrôle qui « ne tombe pas juste » n'est pas un défaut de
+  harnais à contourner : c'est le seul avertissement qu'on recevra.
