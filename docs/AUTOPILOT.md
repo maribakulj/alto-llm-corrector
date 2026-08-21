@@ -719,11 +719,28 @@ Une ligne par réveil : date, item, résultat, ou la raison de l'arrêt.
   elle est retombée sur le texte de l'ALTO, **qui est la vérité terrain**. Les
   six sont identiques à leur référence au caractère près, vérifié une par une.
 
-  **Conséquence.** Tout arme évaluée sur ce jeu reçoit six lignes parfaites
-  gratuitement, et la ligne de base est créditée de ces six lignes comme si
-  l'OCR les avait ratées entièrement. Les deux erreurs vont dans des sens
-  opposés selon l'arme, donc aucune correction globale ne les rattrape : il
-  faut **exclure les six lignes**. Base propre : **516 lignes, OCR 0,1049**.
+  **Le mécanisme est écrit noir sur blanc dans le code**, et c'est ce qui
+  rend la chose instructive. `apply_ocr_manifest` (`campaigns/tooling/
+  vision_benchmark.py`) documente exactement ce piège :
+
+  > *A line the engine returned nothing for keeps its GT text **and is
+  > reported by the caller**: an empty reading is a real OCR outcome, but
+  > silently treating it as a correct line would flatter every configuration
+  > equally.*
+
+  L'auteur avait vu le risque, l'avait nommé, et avait délégué la parade à
+  l'appelant. **`run_benchmark` ne compte ni ne rapporte jamais ces lignes.**
+  Le contrat de la docstring n'est rempli nulle part, donc l'avertissement
+  n'est jamais sorti.
+
+  **Conséquence, et elle diffère selon le harnais.** Côté campagne, les six
+  lignes ont la vérité terrain des deux côtés : elles pèsent zéro erreur pour
+  la ligne de base *comme* pour chaque arme, et diluent tous les CER vers le
+  bas. Côté harnais churro, `ocr_text` est mis à vide explicitement, donc la
+  ligne de base y encaisse la perte totale — d'où 0,1146. Aucune des deux
+  bases n'est fausse en soi ; ce qui est fautif, c'est de comparer un chiffre
+  d'une base à un chiffre de l'autre. Il faut **exclure les six lignes** :
+  base propre **516 lignes, OCR 0,1049**.
 
   C'est la troisième fois que le texte de l'ALTO d'un corpus de vérité
   terrain se fait passer pour de l'OCR. Les deux premières fois, un contrôle
