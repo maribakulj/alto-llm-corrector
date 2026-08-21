@@ -705,3 +705,29 @@ Une ligne par réveil : date, item, résultat, ou la raison de l'arrêt.
   le bras texte. Une conclusion tirée d'une colonne mal lue devient une
   décision de ne pas mesurer — exactement le mécanisme que ce journal existe
   pour attraper.
+
+- 2026-08-21 — **La ligne de base 0,1038 de la campagne BNL est contaminée :
+  six lignes reçoivent la vérité terrain en guise d'OCR.**
+
+  Le contrôle imposé par la règle « vérifier la baseline avant de comparer »
+  a refusé de tomber juste : le harnais churro mesurait 0,1146 là où la
+  campagne annonce 0,1038, sur les **mêmes 522 lignes et la même référence**
+  (vérifié : 0 référence divergente).
+
+  L'écart vient de **six lignes où l'OCR dégradé est vide** dans
+  `ocr_spa_sidecar.json`. La campagne du 14 août ne les a pas laissées vides :
+  elle est retombée sur le texte de l'ALTO, **qui est la vérité terrain**. Les
+  six sont identiques à leur référence au caractère près, vérifié une par une.
+
+  **Conséquence.** Tout arme évaluée sur ce jeu reçoit six lignes parfaites
+  gratuitement, et la ligne de base est créditée de ces six lignes comme si
+  l'OCR les avait ratées entièrement. Les deux erreurs vont dans des sens
+  opposés selon l'arme, donc aucune correction globale ne les rattrape : il
+  faut **exclure les six lignes**. Base propre : **516 lignes, OCR 0,1049**.
+
+  C'est la troisième fois que le texte de l'ALTO d'un corpus de vérité
+  terrain se fait passer pour de l'OCR. Les deux premières fois, un contrôle
+  l'a attrapé. Cette fois, la contamination était **déjà publiée** dans les
+  chiffres d'une campagne, et c'est un désaccord de quatrième décimale qui l'a
+  révélée. Un contrôle qui « ne tombe pas juste » n'est pas un défaut de
+  harnais à contourner : c'est le seul avertissement qu'on recevra.
