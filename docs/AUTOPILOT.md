@@ -913,3 +913,31 @@ Une ligne par réveil : date, item, résultat, ou la raison de l'arrêt.
   Ce que ça ajoute aux règles : quand une table et sa prose divergent, la
   table fait foi — et la prose doit être relue à chaque changement de table,
   pas seulement écrite une fois.
+
+- 2026-08-21 — **Six lignes vides en coûtaient quarante, et j'ai failli
+  demander un arbitrage au lieu de regarder.**
+
+  Le validateur refusait toute correction vide, pour empêcher un modèle
+  d'**effacer** une ligne qui avait du contenu. Bonne règle. Mais il ne
+  regardait pas la ligne source : quand celle-ci est **déjà vide**, il n'y a
+  rien à effacer, et une réponse vide est la seule honnête.
+
+  Conséquence mesurée sur `corpus/37-GT-BNL` : 6 lignes à OCR vide sur 522
+  faisaient épuiser leurs tentatives à **4 lots de 12**, et chaque lot
+  retombait en entier — jetant **40 corrections justes**. Une page réelle
+  passait de 531 s / 0 correction à **88 s / 8 corrections**.
+
+  **Ce n'était pas un arbitrage.** J'ai présenté ça au mainteneur comme un
+  choix de conception à trancher — couverture totale contre lots partiels —
+  alors qu'en ouvrant le validateur, le défaut était local et la garantie
+  intacte : on n'efface toujours pas une ligne pleine. Le mainteneur a dû me
+  dire « tu ne peux pas simplement lancer le run ? » pour que je regarde.
+
+  **Ce que je retiens** : avant de demander un arbitrage, ouvrir le code. Une
+  question de conception et un défaut de trois lignes se ressemblent beaucoup
+  vus de loin, et seul l'un des deux justifie d'attendre.
+
+  **Et le correctif lui-même a reproduit l'erreur du matin** : ma première
+  version traitait « pas de texte source fourni » comme « source vide ». Les
+  tests l'ont attrapée. *Absent n'est pas vide* — c'est la troisième fois
+  aujourd'hui que cette confusion précise coûte quelque chose.

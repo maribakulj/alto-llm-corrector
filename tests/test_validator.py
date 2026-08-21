@@ -370,3 +370,55 @@ def test_no_targets_arg_is_byte_compatible_with_historical_count():
     raw = {"lines": [{"line_id": "L1", "corrected_text": "un"}]}
     with pytest.raises(ValueError, match="Line count mismatch"):
         validate_llm_response(raw, ["L1", "L2"])
+
+
+def test_an_empty_source_line_earns_an_empty_answer():
+    """Un moteur d'OCR qui n'a rien lu produit une ligne vide, et c'est une
+    **lecture**, pas un échec.
+
+    La règle existe pour empêcher un modèle d'EFFACER une ligne qui avait du
+    contenu. Une ligne qui n'en avait pas n'a rien à effacer.
+
+    Mesuré sur ``corpus/37-GT-BNL`` : 6 lignes source vides sur 522 faisaient
+    épuiser leurs tentatives à 4 lots de 12, et chaque lot retombait en entier
+    — jetant **40 corrections justes** pour les autres lignes. Six lignes en
+    coûtaient quarante.
+    """
+    raw = {
+        "lines": [
+            {"line_id": "L1", "corrected_text": "corrigée"},
+            {"line_id": "L2", "corrected_text": ""},
+        ]
+    }
+    resp = validate_llm_response(
+        raw, ["L1", "L2"], ocr_texts={"L1": "corrigee", "L2": ""}
+    )
+    assert {o.line_id: o.corrected_text for o in resp.lines} == {
+        "L1": "corrigée",
+        "L2": "",
+    }
+
+
+def test_a_non_empty_source_still_refuses_an_empty_answer():
+    """La garantie qui compte est intacte : on n'efface pas une ligne pleine."""
+    raw = {
+        "lines": [
+            {"line_id": "L1", "corrected_text": "ok"},
+            {"line_id": "L2", "corrected_text": "  "},
+        ]
+    }
+    with pytest.raises(ValueError, match="empty or missing"):
+        validate_llm_response(
+            raw, ["L1", "L2"], ocr_texts={"L1": "ok", "L2": "du contenu"}
+        )
+
+
+def test_an_unknown_source_refuses_too():
+    """**Absent n'est pas vide.** Sans le texte source, on ne peut pas
+    distinguer un effacement d'un blanc honnête, et la lecture prudente de
+    l'ignorance est le refus."""
+    raw = {"lines": [{"line_id": "L1", "corrected_text": ""}]}
+    with pytest.raises(ValueError, match="empty or missing"):
+        validate_llm_response(raw, ["L1"], ocr_texts={})
+    with pytest.raises(ValueError, match="empty or missing"):
+        validate_llm_response(raw, ["L1"])
