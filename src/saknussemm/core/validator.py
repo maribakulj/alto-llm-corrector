@@ -60,9 +60,7 @@ def _checked_text(
     if ocr_texts is not None and line_id in ocr_texts:
         if ocr_texts[line_id].strip() == "":
             return ""
-    raise ProposalValidationError(
-        f"corrected_text for {line_id!r} is empty or missing"
-    )
+    raise ProposalValidationError(f"corrected_text for {line_id!r} is empty or missing")
 
 
 def validate_llm_response(
