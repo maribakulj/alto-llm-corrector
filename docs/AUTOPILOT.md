@@ -748,3 +748,35 @@ Une ligne par réveil : date, item, résultat, ou la raison de l'arrêt.
   chiffres d'une campagne, et c'est un désaccord de quatrième décimale qui l'a
   révélée. Un contrôle qui « ne tombe pas juste » n'est pas un défaut de
   harnais à contourner : c'est le seul avertissement qu'on recevra.
+
+- 2026-08-21 — **`M3` est fait, et son premier résultat utile est d'avoir
+  cassé `M2`.**
+
+  Trois familles de modèles sur la vérité terrain BNL, base propre de 516
+  lignes, même chaîne et mêmes gardes pour les trois :
+
+  | | CER | mieux | pire |
+  |---|---|---|---|
+  | OCR brut | 0,1049 | — | — |
+  | `churro-3B` vision | 0,1044 | 62 | 11 |
+  | `gemma4:e2b` texte | 0,1021 | 112 | 43 |
+  | **`mistral` vision** | **0,0361** | **337** | **10** |
+
+  **Ce que `M3` existait pour séparer est séparé.** Le système ne bouge pas,
+  le modèle bouge d'un facteur trois, et aucune des trois familles n'a fait
+  casser l'alignement. L'écart de qualité est donc imputable au modèle et non
+  au harnais — c'est exactement la question que l'item posait.
+
+  **Ce que le classement seul ferait manquer.** `gemma4:e2b` gagne plus de
+  CER que `churro-3B` et **abîme quatre fois plus de lignes** (43 contre 11).
+  Pour une bibliothèque dont le principe est « l'application décide », un
+  modèle qui touche peu et se trompe rarement vaut mieux qu'un modèle qui
+  gagne en moyenne : la moyenne n'est pas la garantie que l'appelant achète.
+  Le CER seul est le mauvais critère de sélection ici.
+
+  **Et l'échec de `churro-3B` était le mien.** Avant correction de
+  `ImageTransform`, il mesurait 0,1825 — franchement destructeur. Avec les
+  bonnes découpes, 0,1044. Le modèle n'avait jamais été en cause ; il lisait
+  des bandes d'image décalées de 18 %. La règle du 20 août — *sur une chaîne
+  vision, REGARDER le crop avant de juger le modèle* — s'est payée le
+  lendemain de son écriture.
