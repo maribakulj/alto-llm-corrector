@@ -196,11 +196,42 @@ mot-frontière, qui n'existe pas. Sa forme est une décision de conception,
 
 ### 3. Phase 4 — l'intégration au banc
 
-Inchangée, et c'est le plus gros morceau restant. Cinq briques à ajouter à
-`cinoc`, chacune utile indépendamment de cette bibliothèque : une étape
-`LAYOUT → LAYOUT` et une source ALTO/PAGE ; des métriques d'identité de
-ligne ; la dé-césure dans le projecteur ; des runs répétés ; la vision pour
-l'adapter Ollama.
+**Brique 1 faite le 2026-08-21** (`cinoc` #87, #90, #89) : l'étape
+`LAYOUT → LAYOUT` et la source ALTO existent, et la chaîne complète tourne
+par le vrai exécuteur de `cinoc`. Restent quatre briques : des métriques
+d'identité de ligne ; la dé-césure dans le projecteur ; des runs répétés ;
+la vision pour l'adapter Ollama.
+
+**Deux décisions de conception ont été tranchées par la mesure**, contre ce
+que l'analyse recommandait :
+
+- **pas de type `CORRECTED_LAYOUT`.** Le module émet `LAYOUT` **et**
+  `CORRECTED_TEXT` ; le bilan de correction de `cinoc` fonctionne alors
+  **inchangé** — vérifié en appelant le vrai `correction_analysis`. Ajouter
+  un type d'artefact sans consommateur aurait été la feature spéculative que
+  le `CLAUDE.md` de `cinoc` interdit ;
+- **rien à changer à `_CANDIDATE_PRECEDENCE`.** J'avais lu la liste sans
+  lire la suite de la fonction : les types absents y sont ajoutés quand
+  même, après les autres.
+
+**Ce que la brique 1 a trouvé en chemin, et qui vaut plus qu'elle** :
+`cinoc` ne lisait ni les `<SP>` ni les `<HYP>` d'un ALTO. Sur le corpus
+BnF, **118 lignes sur 566 portaient un texte faux et 205 perdaient leur
+rôle de césure**. Le même défaut existait à l'écriture — `write_alto`
+n'émettait aucun `<SP>` — si bien que les deux erreurs **s'annulaient** et
+que l'aller-retour se comparait égal à lui-même. Corriger le parser seul a
+fait tomber 9 tests, qui mesuraient cette symétrie et non la fidélité du
+format.
+
+Sur `corpus/37-GT-BNL`, zéro perte avant comme après : ce corpus n'a ni
+`<HYP>` ni `SUBS_TYPE`. Un seul corpus ne prouvait donc rien — et c'était
+celui qui servait de référence.
+
+**Ce qui reste ouvert et demande un arbitrage** : montrer *pourquoi* une
+ligne n'a pas été corrigée. Les motifs de refus sont calculés puis jetés,
+faute d'un canal pour les porter jusqu'au rapport. Le seul canal de `cinoc`
+est un artefact typé, donc un ajout à `ArtifactType` — de la surface
+publique.
 
 Le corpus et les campagnes sont déjà là-bas. Le scorer QE aussi, en dépôt
 d'attente — l'intégrer demande un arbitrage, un scorer n'étant pas une
@@ -780,3 +811,31 @@ Une ligne par réveil : date, item, résultat, ou la raison de l'arrêt.
   des bandes d'image décalées de 18 %. La règle du 20 août — *sur une chaîne
   vision, REGARDER le crop avant de juger le modèle* — s'est payée le
   lendemain de son écriture.
+
+- 2026-08-21 — **Deux erreurs symétriques s'annulaient, et c'est le motif du
+  jour.**
+
+  `cinoc` ne lisait ni les `<SP>` ni les `<HYP>` d'un ALTO ; son écrivain n'en
+  émettait pas non plus. Chaque défaut rendait l'autre invisible : le parser
+  rejoignait les mots par des blancs, l'écrivain les écrivait sans blancs, et
+  l'aller-retour **se comparait égal à lui-même**. Neuf tests verrouillaient
+  cette symétrie en croyant vérifier la fidélité du format.
+
+  C'est la même forme que la contamination trouvée le matin même — un contrat
+  de docstring délégué à un appelant qui ne l'a jamais rempli — et que le
+  contrôle de ligne de base qui « ne tombait pas juste ». **Trois fois dans la
+  journée, le défaut n'était pas dans une valeur mais dans ce qui la
+  vérifiait.**
+
+  La leçon opérationnelle : un aller-retour qui compare une sortie à sa propre
+  relecture ne prouve rien sur le format. Il faut un point de référence
+  **extérieur** — ici, le parser de `saknussemm` lisant le même fichier.
+
+- 2026-08-21 — **J'ai fermé une PR sans le voir.** `gh pr merge --delete-branch`
+  a échoué au merge et supprimé la branche quand même, ce qui a fermé la PR.
+  J'ai lu « not mergeable » et je suis passé à la suite sans vérifier l'état
+  résultant. Le travail était intact sur le distant, mais la pile était cassée.
+
+  **Lire un échec n'est pas lire un état.** C'est la règle 9 sous un autre
+  angle : après une opération qui échoue partiellement, vérifier ce qui a
+  quand même eu lieu — jamais supposer que l'échec a tout annulé.
