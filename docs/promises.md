@@ -170,10 +170,17 @@ rien ne les atteignait. `E3b`, `E3e` et `E4c` étaient des branches mortes
 côté tests. `E2b` était pire — un test portait le nom de la propriété et ne
 la testait pas.
 
-Restent cinq « aucune », dont les deux trous d'implémentation ci-dessus et
-trois qui demandent une décision : figer l'union `EditOp` (`I2b`), faire
+**Les cinq restantes ont été fermées le 2026-08-19** : les deux trous
+d'implémentation (`E5b`, `E6a`) ont été comblés, et les trois qui demandaient
+une décision ont été tranchées — figer l'union `EditOp` (`I2b`), faire
 converger les deux voies d'édition sur un même verdict (`E6b`), et comparer
 les rôles de césure entre formats (`§6.3`).
+
+**Décompte au 2026-08-21 : 24 promesses, 10 gardées et 14 fermées, aucune
+découverte.** Le paragraphe ci-dessus est resté trois jours à dire « restent
+cinq » alors que la table disait le contraire — un fichier d'état qui se
+contredit lui-même est pire qu'un fichier absent, parce qu'on le croit. La
+table fait foi ; ce texte la commente et doit être relu quand elle change.
 
 ## Le motif dominant
 

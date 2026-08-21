@@ -899,3 +899,17 @@ Une ligne par réveil : date, item, résultat, ou la raison de l'arrêt.
 
   Aucun n'était une valeur fausse dans un calcul. Tous étaient un contrôle
   absent, contourné, ou qui se comparait à lui-même.
+
+- 2026-08-21 — **`docs/promises.md` se contredisait depuis trois jours.** Sa
+  table listait 24 promesses toutes gardées ou fermées ; son texte narratif
+  disait « restent cinq “aucune” ». Les cinq avaient été fermées le 19 août et
+  personne n'avait relu le paragraphe qui les commentait.
+
+  Ce n'est pas un détail de documentation. Le contrat de boucle dit qu'une
+  session réveillée n'a que ces fichiers pour contexte : elle aurait ouvert
+  trois arbitrages déjà tranchés. **Un fichier d'état qui se contredit
+  lui-même est pire qu'un fichier absent, parce qu'on le croit.**
+
+  Ce que ça ajoute aux règles : quand une table et sa prose divergent, la
+  table fait foi — et la prose doit être relue à chaque changement de table,
+  pas seulement écrite une fois.
