@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, ClassVar
+from typing import Any, ClassVar, cast
 
 from saknussemm.core._norm import has_line_separator, ncfold
 from saknussemm.errors import ProposalValidationError
@@ -30,6 +30,39 @@ class HyphenIntegrityError(ProposalValidationError):
     """
 
     code: ClassVar[str] = "hyphen_integrity_violation"
+
+
+def _checked_text(
+    line_id: str, corrected_text: object, ocr_texts: dict[str, str] | None
+) -> str:
+    """The proposed text, or raise if it would erase a line that had content.
+
+    Whitespace-only values ("   ", "\\t", NBSP) are as empty as "": the
+    rewriter would write ``CONTENT="   "`` and silently obliterate the original
+    word. ``.strip()`` catches every whitespace-only case.
+
+    **Unless the source line is itself empty.** The rule exists to stop a model
+    from ERASING a line that had content; a line that had none has nothing to
+    erase, and an empty answer is the only honest one. An OCR engine that read
+    nothing produces exactly that, and it is a real reading, not a failure.
+
+    Measured on ``corpus/37-GT-BNL`` (2026-08-21): 6 empty source lines out of
+    522 made 4 chunks of 12 exhaust their retries, and each whole chunk fell
+    back — discarding **40 correct** corrections for the other lines. Six lines
+    cost forty.
+    """
+    empty = not isinstance(corrected_text, str) or corrected_text.strip() == ""
+    if not empty:
+        return cast(str, corrected_text)
+    # ``absent`` is NOT ``empty``: without the source text we cannot tell an
+    # erasure from an honest blank, and the safe reading of ignorance is to
+    # refuse. Only an explicitly empty source earns the exception.
+    if ocr_texts is not None and line_id in ocr_texts:
+        if ocr_texts[line_id].strip() == "":
+            return ""
+    raise ProposalValidationError(
+        f"corrected_text for {line_id!r} is empty or missing"
+    )
 
 
 def validate_llm_response(
@@ -142,14 +175,7 @@ def validate_llm_response(
 
         seen_ids.add(line_id)
 
-        # Whitespace-only values ("   ", "\t", NBSP) are as empty as
-        # "": the rewriter would write `CONTENT="   "` and silently
-        # obliterate the original word. `.strip()` catches every
-        # whitespace-only case (ASCII + Unicode whitespace incl. NBSP).
-        if not isinstance(corrected_text, str) or corrected_text.strip() == "":
-            raise ProposalValidationError(
-                f"corrected_text for {line_id!r} is empty or missing"
-            )
+        corrected_text = _checked_text(line_id, corrected_text, ocr_texts)
         # Reject EVERY str.splitlines boundary, not just \n/\r:
         # U+2028/U+2029 (and \x0b \x0c \x85 \x1c-\x1e) would survive
         # clean_content into a single-line CONTENT attribute otherwise.
