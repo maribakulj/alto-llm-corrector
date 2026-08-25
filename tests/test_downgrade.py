@@ -15,12 +15,11 @@ Pins:
 from __future__ import annotations
 
 from typing import Any
-from unittest.mock import AsyncMock
-
 import pytest
 
 
 from saknussemm import CorrectionPipeline
+from saknussemm.core.schemas import RetryPolicy
 from saknussemm.formats.alto.parser import build_document_manifest
 
 from tests._paths import EXAMPLES
@@ -28,13 +27,19 @@ from tests._paths import EXAMPLES
 _SAMPLE = EXAMPLES / "sample.xml"
 
 
-@pytest.fixture(autouse=True)
-def _no_backoff_sleep(monkeypatch: pytest.MonkeyPatch):
-    """Skip the real retry back-off sleeps so these tests stay fast."""
-    monkeypatch.setattr(
-        "saknussemm.core.pipeline.asyncio.sleep",
-        AsyncMock(return_value=None),
-    )
+#: Le back-off, mis à zéro par la POLITIQUE plutôt que par un patch.
+#:
+#: Ces tests remplaçaient ``saknussemm.core.pipeline.asyncio.sleep``. Deux
+#: défauts dans une ligne : ``core/pipeline.py`` ne dort pas — le back-off
+#: est dans ``core/attempt.py`` — et le chemin résout vers le module
+#: ``asyncio`` GLOBAL, donc le patch neutralisait ``asyncio.sleep`` pour tout
+#: le processus le temps du test. Un test qui nomme un module sans rapport
+#: documente une architecture qui n'existe plus.
+#:
+#: ``RetryPolicy`` est publique et injectable, et met les deux bases à zéro
+#: sans toucher à quoi que ce soit d'autre : la rampe de température, le
+#: plafond d'essais et la bourse gardent leurs valeurs historiques.
+_NO_BACKOFF = RetryPolicy(transient_backoff_base=0.0, output_backoff_base=0.0)
 
 
 class _CountingProvider:
@@ -95,6 +100,7 @@ async def _run(provider: _CountingProvider, observer: _RecordingObserver):
         api_key="k",
         model="m",
         observer=observer,
+        retry_policy=_NO_BACKOFF,
     )
     return await pipeline.run(
         document_manifest=doc,
@@ -234,7 +240,7 @@ async def test_downgrade_replans_targets_only_never_context():
         model="m",
         observer=obs,
         config=cfg,
-        retry_policy=RetryPolicy(per_chunk_budget=12),
+        retry_policy=_NO_BACKOFF.model_copy(update={"per_chunk_budget": 12}),
     )
     result = await pipeline.run(
         document_manifest=doc,
@@ -281,7 +287,7 @@ async def test_should_abort_fires_inside_descent():
         model="m",
         observer=obs,
         config=cfg,
-        retry_policy=RetryPolicy(per_chunk_budget=12),
+        retry_policy=_NO_BACKOFF.model_copy(update={"per_chunk_budget": 12}),
     )
 
     def abort_once_downgraded() -> bool:

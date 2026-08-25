@@ -35,12 +35,16 @@ retirent du code mort peuvent en modifier un, et elles doivent dire pourquoi.
       arbitrage dans `docs/PLAN.md`, ce journal
 - [x] `RS-1.1` élargir le golden byte-parity à tout le corpus ⭐ — 15 documents
       × 4 scénarios, 64 assertions, 8,8 s ; sensibilité mesurée sur 5 mutations
-- [ ] `RS-1.2` cliquet des lecteurs de champs pointeurs
+- [x] `RS-1.2` cliquet des lecteurs de champs pointeurs — recensement AST
+      lecture/écriture, 4 modules épinglés, 2 à ramener à zéro
 - [x] `RS-1.3` caractériser `_build_hyphen_pairs` / `_cross_page_partners` — le
       filet d'octets ne les voit PAS (mesuré) ; 11 assertions différentielles
-- [ ] `RS-1.4` couvrir directement `core/driver.py` (descente, budget partagé)
-- [ ] `RS-1.5` clôture `LineTrace` → `LineOutcome`
-- [ ] `RS-1.6` corriger les deux cibles de patch `asyncio.sleep`
+- [x] `RS-1.4` couvrir directement `core/driver.py` — 8 assertions, la bourse
+      partagée bornée sur 5 valeurs, le refus permanent qui ne descend pas
+- [x] `RS-1.5` clôture `LineTrace` → `LineOutcome` — 15 champs, 9 projetés,
+      6 écartés avec leur raison, recalculée sur l'AST du traducteur
+- [x] `RS-1.6` corriger les deux cibles de patch `asyncio.sleep` — remplacées
+      par l'injection de `RetryPolicy`, plus aucun patch de module global
 - [x] `RS-1.7` rédiger `docs/la-vie-d-une-ligne.md` — fait tôt : la garde
       `test_a_cited_document_exists` refuse une citation vers un document non écrit
 
@@ -102,5 +106,6 @@ retirent du code mort peuvent en modifier un, et elles doivent dire pourquoi.
 | lecteurs de pointeurs hors `pairing`/`units` | 3 | 3 | 0 |
 | affirmations fausses recensées | 4 | 0 | 0 |
 
-Base de référence, 2026-08-25 : **1780 tests verts**, `mypy --strict` propre
+Base de référence, 2026-08-25 : **1780 tests verts** ; après la phase 1,
+**1871**, `mypy --strict` propre
 sur 76 fichiers, `ruff` propre sur 273 fichiers.

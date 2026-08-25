@@ -160,26 +160,18 @@ def test_f3_twin_three_run_duplicate_across_page_seam_reverts_third(tmp_path):
         assert lines[lid].status is LineStatus.FALLBACK, lid
 
 
-def test_review_w1_duplicate_across_downgrade_subchunk_seam_reverts(
-    tmp_path, monkeypatch
-):
+def test_review_w1_duplicate_across_downgrade_subchunk_seam_reverts(tmp_path):
     """Wave-1 review follow-up — the cross-chunk boundary pass built its
     owner map from the PLANNED chunks and was gated on
     ``len(plan.chunks) > 1``. A single planned chunk that granularity-
     descends into per-line sub-chunks therefore had NO boundary pass at
     all: an identical hallucination on two adjacent lines finalized by
     two different sub-chunks survived the duplicate guard entirely."""
-    from unittest.mock import AsyncMock
-
     from saknussemm.core.pipeline import CorrectionPipeline
     from saknussemm.core.schemas import ChunkPlannerConfig, GuardConfig, RetryPolicy
     from saknussemm.formats.alto.parser import build_document_manifest
     from tests._pipeline_harness import RecordingObserver, apply_decisions
     from tests.test_planner_budget_and_cross_chunk_guard import _write_doc
-
-    monkeypatch.setattr(
-        "saknussemm.core.pipeline.asyncio.sleep", AsyncMock(return_value=None)
-    )
 
     path = _write_doc(tmp_path)
     doc = build_document_manifest([(path, "doc.xml")])
@@ -224,8 +216,16 @@ def test_review_w1_duplicate_across_downgrade_subchunk_seam_reverts(
         # `len(plan.chunks) > 1` then skipped the boundary pass outright.
         config=ChunkPlannerConfig(),
         guard_config=GuardConfig(min_source_similarity=0.0, neighbour_margin=1.0),
+        # `max_attempts=1` : aucun essai supplémentaire, donc aucun
+        # back-off à neutraliser. Ce test remplaçait
+        # `saknussemm.core.pipeline.asyncio.sleep` — un module qui ne dort
+        # pas, par un chemin qui patchait `asyncio` pour tout le processus.
         retry_policy=RetryPolicy(
-            max_attempts=1, temperatures=(0.0,), per_chunk_budget=30
+            max_attempts=1,
+            temperatures=(0.0,),
+            transient_backoff_base=0.0,
+            output_backoff_base=0.0,
+            per_chunk_budget=30,
         ),
     )
     apply_decisions(
