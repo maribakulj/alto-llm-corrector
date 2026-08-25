@@ -10,6 +10,7 @@ theme:
   name: readthedocs
 nav:
   - Quickstart: quickstart.md
+  - La vie d'une ligne: la-vie-d-une-ligne.md
   - Edit protocol: edit-protocol.md
   - Formats (ALTO & PAGE): formats.md
   - Versioning & deprecation: versioning.md

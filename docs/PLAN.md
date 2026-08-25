@@ -253,6 +253,43 @@ un critère technique.
 
 ---
 
+## Décisions déléguées — 2026-08-25
+
+Un seul arbitrage, et il conditionne `RS-5`.
+
+**Sortir le routage QE, l'escalade et la confiance du chemin chaud est
+autorisé, sous trois conditions cumulatives.** Le motif : `driver` connaît
+aujourd'hui le score de qualité, le producteur d'escalade et le plafond
+d'images, et `_plan_page_chunks` fait lire ces trois étapes avant le cas
+nominal — alors qu'aucune des trois ne s'exécute par défaut. C'est de la
+réduction, et la règle de gel autorise la réduction.
+
+Les trois conditions, ensemble :
+
+1. **Comportement identique, prouvé par les octets.** Les digests du golden
+   ne bougent pas, et un run routé de référence — compteurs `lines_skipped`,
+   `escalated_lines`, `producer_calls` épinglés avant la phase — donne les
+   mêmes nombres après.
+2. **Aucune extension de surface publique.** La couture reste à son chemin de
+   module ; `test_public_api_snapshot` reste vert **sans modification**.
+   C'est la contrainte permanente de la décision n°1 du 2026-08-11, et elle
+   n'est pas assouplie ici.
+3. **Aucune nouvelle politique de routage.** Le travail déplace ce qui
+   existe. Une variante de routage, même meilleure, sort du périmètre et du
+   gel.
+
+**Ce qui est refusé d'avance** : faire du routage un simple décorateur
+d'`EditProducer`. La forme est séduisante et elle détruit ce que le mode
+existe pour prouver — un `EditProducer` reçoit une requête, pas un plan de
+chunks, donc un chunk entièrement `SKIP` serait quand même construit et
+`producer_calls` cesserait de mesurer l'économie. La couture autorisée est au
+niveau du **plan** (une méthode `route(chunks) -> [(chunk, producer)]`), ce
+qui est un déplacement pur.
+
+Réversible en modifiant ce paragraphe, comme les précédents.
+
+---
+
 ## B — Le premier vrai run, 2026-08-18
 
 **24 592 lignes de presse Gallica passées par `mistral-small`, un job à la
@@ -2267,6 +2304,77 @@ inter-pages n'est mesuré par **aucun** run aujourd'hui), `V7` (`M5` —
 `tests/external_corpus/pinned/` est vide et le tier téléchargé est
 `continue-on-error`, donc **aucune page externe ne bloque un merge**), `V10`
 (`P3`). Aucun de ces cinq n'est de la dette : ce sont des travaux.
+
+---
+
+## RS — Réparation structurelle (audit du 2026-08-25)
+
+Origine : `docs/audit/AUDIT-2026-08-25-complexite-accidentelle.md`, dix
+constats mesurés sur le dépôt lu à `4b59394`. Comme `RM`, cette vague **ne
+rouvre aucun** item `L`, `R`, `M`, `G` ou `V` et ne conteste aucune priorité.
+Un seul constat est un défaut latent au sens strict (`RS-3`, le rejeu de la
+carte rôle→slot) ; le reste est du coût d'évolution.
+
+Les sept items tiennent dans les catégories que la règle de gel autorise —
+correctifs, refactorisation **réductrice**, mesure, documentation de vérité,
+tests. **`RS-5` est le seul qui demande un arbitrage explicite** : déplacer le
+routage QE hors du chemin chaud est réducteur et sans changement de
+comportement, mais il déplace une couture d'injection ; l'arbitrage est écrit
+au § « Décisions déléguées — 2026-08-25 » avant tout commit de la phase.
+
+`RS-3` est le prérequis que `S1` attend : tant que trois modules lisent les
+champs pointeurs hors des primitives, `S1` traverse une base dont la garde ne
+voit que deux sites sur cinq.
+
+### La règle de vérification, commune aux sept
+
+Un différentiel d'octets sur tout le corpus, producteur déterministe
+(`RulesProducer`), avant et après chaque étape. **Sur `RS-3` à `RS-6`, tout
+digest qui bouge est un échec de l'étape, jamais une raison de mettre le
+golden à jour.** Les seules étapes autorisées à en modifier un sont celles
+qui retirent du code réellement mort (`RS-2`), et elles doivent dire pourquoi.
+
+### Carte
+
+| ID | Titre | Nature | Gravité | Fichiers | Dépend de | Statut |
+|---|---|---|---|---|---|---|
+| `RS-1` | Le filet manque là où l'on va couper : `_build_hyphen_pairs` et `_cross_page_partners` ne sont nommés par aucun test, `core/driver.py` non plus, le golden byte-parity est un échantillon | tests | **critique** | `tests/` (6 fichiers, dont 4 nouveaux), `docs/la-vie-d-une-ligne.md` (nouveau) | — | en cours |
+| `RS-2` | Quatre affirmations fausses ; un shim de compatibilité que seuls les tests gardent ; 400 Ko de XSD hors surface publique ; 4 classes qui ne sont pas des politiques dans `policies.py` | vérité | important | `README.md`, `core/protocols.py`, `core/schemas/policies.py`, `formats/validation.py` | — | en cours |
+| `RS-3` | Le rejeu de la carte rôle→slot sur les champs pointeurs, à 60 lignes d'une docstring qui l'interdisait ; garde sur 2 sites de 5 | **bugfix** (latent) | **critique** | `core/reconcile.py`, `core/indexing.py`, `core/hyphenation.py` | `RS-1` | à faire |
+| `RS-4` | Cliquets goodhartisés une seconde fois : le plafond d'arité a produit `PageWorkspace`, le plafond de longueur a produit neuf modules sous 130 l. | outillage | important | `tests/test_orchestrator_budget.py`, `core/workspace.py` | — | à faire |
+| `RS-5` | 5 des 14 paramètres du pipeline pilotent 1 667 lignes qu'aucun run par défaut n'emprunte ; cycle `formats.loader` ↔ `formats.alto.parser` ; frontière `integrations/` ↔ `producers/` incohérente | réducteur | important | `core/driver.py`, `core/routing.py`, `core/pipeline.py`, `formats/loader.py`, `producers/`, `integrations/` | `RS-1`, `RS-4`, arbitrage | à faire |
+| `RS-6` | Ratio prose/code à 0,84, dont 121 passages de récit de migration ; 14 raisons de repli sans énumération ; 21 seuils non calibrés à geler en `1.0` | vérité | important | tout `src/`, `docs/versioning.md` | `RS-3`, `RS-5` | à faire |
+| `RS-7` | Rien ne prouve, en fin de vague, que la trajectoire a tenu | mesure | important | `docs/PLAN.md`, `docs/promises.md`, `CHANGELOG.md` | tous | à faire |
+
+### Les six mesures de sortie
+
+Reproduire en fin de vague celles du relevé d'entrée :
+
+| mesure | entrée (2026-08-25) | cible |
+|---|---|---|
+| lignes de code effectif `src/` | 9 207 | ~9 000, jamais plus |
+| ratio prose/code | 0,84 | ≤ 0,45 |
+| modules dans `core/` | 42 | ≤ 42 — aucun nouveau module en `RS-6` |
+| paramètres de `CorrectionPipeline.__init__` | 14 | ≤ 9 |
+| modules lisant les pointeurs hors `pairing`/`units` | 3 | **0** |
+| affirmations fausses recensées | 4 | 0 |
+
+### Ce que cette vague ne fait pas
+
+- **`S1` n'y est pas.** `RS-3` le déverrouille ; il ne l'exécute pas.
+- **Le jeton d'ordre de `core/finalize.py` n'est pas retiré.** Il garde
+  précisément le refactor qui va traverser ces modules. À reconsidérer après
+  `S1`, jamais avant ; si `S1` est reporté sine die, la question est close et
+  le jeton reste.
+- **Aucune fusion des quatre représentations par ligne.** La séparation
+  mutable/immuable est une propriété acquise (`ADR-011`) et `LineOutcome` est
+  une surface publique versionnée. Le remède est un test de clôture, pas une
+  fusion.
+- **`formats/alto/rewriter.py` reste hors-limites.** `RS-1` élargit le corpus
+  byte-parity, ce qui lève la condition écrite au § `RM` — mais la levée est
+  une décision de ce plan, pas un effet de bord de `RS-1`.
+- **Aucun collapse des jumeaux de `GuardConfig`.** Les deux étages se règlent
+  indépendamment, et la docstring dit pourquoi.
 
 ---
 

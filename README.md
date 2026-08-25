@@ -33,6 +33,7 @@ CHANGELOG entry). Strict SemVer starts at `1.0.0`, which requires an
 independent external API review first; see
 [docs/versioning.md](docs/versioning.md). Docs:
 [quickstart](docs/quickstart.md) ·
+[la vie d'une ligne](docs/la-vie-d-une-ligne.md) ·
 [edit protocol](docs/edit-protocol.md) ·
 [formats](docs/formats.md) — and a runnable, test-guarded
 [examples/quickstart.py](examples/quickstart.py).
