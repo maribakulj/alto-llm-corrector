@@ -89,7 +89,7 @@ def _post_processing_descriptions(xml_bytes: bytes) -> list[str]:
 def test_processing_step_carries_version_and_fingerprint(tmp_path: Path):
     xml_path = _write(tmp_path)
     doc = build_document_manifest([(xml_path, xml_path.name)])
-    xml_bytes, _m, _p = rewrite_alto_file(
+    _res = rewrite_alto_file(
         xml_path,
         doc.pages,
         provider="openai",
@@ -97,6 +97,7 @@ def test_processing_step_carries_version_and_fingerprint(tmp_path: Path):
         lib_version="9.9.9",
         config_fingerprint="deadbeefcafe0000",
     )
+    xml_bytes = _res.xml_bytes
     descs = _processing_step_descriptions(xml_bytes)
     assert descs, "no processingStep written"
     assert any("openai/gpt-x" in d for d in descs)
@@ -108,9 +109,8 @@ def test_processing_step_backwards_compatible_without_provenance(tmp_path: Path)
     """Omitting version/fingerprint yields the historical description."""
     xml_path = _write(tmp_path)
     doc = build_document_manifest([(xml_path, xml_path.name)])
-    xml_bytes, _m, _p = rewrite_alto_file(
-        xml_path, doc.pages, provider="openai", model="gpt-x"
-    )
+    _res = rewrite_alto_file(xml_path, doc.pages, provider="openai", model="gpt-x")
+    xml_bytes = _res.xml_bytes
     descs = _processing_step_descriptions(xml_bytes)
     assert any(d == "Post-OCR correction via openai/gpt-x (saknussemm)" for d in descs)
 
@@ -127,7 +127,7 @@ def test_ocrprocessing_file_records_the_pass(tmp_path: Path):
     <postProcessingStep> inside the OCRProcessing container (spec §11)."""
     xml_path = _write_ocr(tmp_path)
     doc = build_document_manifest([(xml_path, xml_path.name)])
-    xml_bytes, _m, _p = rewrite_alto_file(
+    _res = rewrite_alto_file(
         xml_path,
         doc.pages,
         provider="openai",
@@ -135,6 +135,7 @@ def test_ocrprocessing_file_records_the_pass(tmp_path: Path):
         lib_version="9.9.9",
         config_fingerprint="deadbeefcafe0000",
     )
+    xml_bytes = _res.xml_bytes
     descs = _post_processing_descriptions(xml_bytes)
     assert descs, "no postProcessingStep written into <OCRProcessing>"
     assert any("openai/gpt-x" in d for d in descs)

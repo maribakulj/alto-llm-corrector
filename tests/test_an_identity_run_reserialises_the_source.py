@@ -53,7 +53,9 @@ def _identity_output(name: str) -> bytes:
         for line in page.lines:
             line.corrected_text = line.ocr_text
     total = sum(len(page.lines) for page in document.pages)
-    xml_bytes, metrics, _ = rewrite_alto_file(path, document.pages, "test", "mock")
+    _res = rewrite_alto_file(path, document.pages, "test", "mock")
+    xml_bytes = _res.xml_bytes
+    metrics = _res.metrics
     # EVERY line, not merely "no rebuild". Checking only fast/slow leaves the
     # subs-only path free to claim them, and that path also emits identical
     # bytes here — so the comparison below would still pass while the premise

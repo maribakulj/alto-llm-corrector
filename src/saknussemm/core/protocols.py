@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from collections.abc import Callable, Iterable, Iterator
+from collections.abc import Callable, Iterable
 from typing import Any, ClassVar, Protocol, runtime_checkable
 
 from saknussemm.core.editing import EditScript
@@ -408,17 +408,6 @@ class RewriteResult:
     #: that line's own loss counters (only lines that lost something
     #: appear). Summing the values reproduces ``losses``.
     losses_by_line: dict[str, dict[str, int]] = field(default_factory=dict)
-
-    def __iter__(self) -> Iterator[Any]:
-        """Transitional positional unpacking — the historical rewriter
-        return shape ``(xml_bytes, metrics, rewriter_paths)``, kept so
-        existing ``bytes_, metrics, paths = rewrite_…`` call sites
-        survive the ADR-011 migration. ``texts``/``losses`` are
-        attribute-only; new code should read attributes throughout.
-        Removed once the tuple call sites are gone."""
-        yield self.xml_bytes
-        yield self.metrics
-        yield self.rewriter_paths
 
 
 @runtime_checkable

@@ -279,7 +279,9 @@ def test_review_w1_hyp_width_overflow_end_to_end(tmp_path):
     lm.corrected_text = "deux mots-"  # forces the slow-path rebuild
     lm.status = LineStatus.CORRECTED
 
-    out_bytes, _metrics, paths = rewrite_alto_file(path, pages, "test", "model")
+    _res = rewrite_alto_file(path, pages, "test", "model")
+    out_bytes = _res.xml_bytes
+    paths = _res.rewriter_paths
     assert lm.line_id in paths
     assert (
         b"deux mots"

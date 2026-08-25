@@ -51,7 +51,8 @@ retirent du code mort peuvent en modifier un, et elles doivent dire pourquoi.
 ## Phase 2 — Code mort et vérité documentaire
 
 - [x] `RS-2.1` les quatre affirmations fausses
-- [ ] `RS-2.2` supprimer `RewriteResult.__iter__`
+- [x] `RS-2.2` supprimer `RewriteResult.__iter__` — 49 sites de test convertis
+      en accès par attribut, puis la méthode retirée
 - [ ] `RS-2.3` trancher le poids des XSD
 - [ ] `RS-2.4` sortir de `policies.py` les 4 classes qui n'en sont pas
 
