@@ -2343,8 +2343,8 @@ qui retirent du code réellement mort (`RS-2`), et elles doivent dire pourquoi.
 | `RS-3` | Le rejeu de la carte rôle→slot sur les champs pointeurs, à 60 lignes d'une docstring qui l'interdisait ; garde sur 2 sites de 5 | **bugfix** (latent) | **critique** | `core/reconcile.py`, `core/indexing.py`, `core/hyphenation.py` | `RS-1` | **fait (2026-08-25)** — 3 modules lecteurs → 0 |
 | `RS-4` | Cliquets goodhartisés une seconde fois : le plafond d'arité a produit `PageWorkspace`, le plafond de longueur a produit neuf modules sous 130 l. | outillage | important | `tests/test_orchestrator_budget.py`, `core/workspace.py` | — | **fait (2026-08-25)** — chaque entrée porte sa raison ; 3 conservations écrites |
 | `RS-5` | 5 des 14 paramètres du pipeline pilotent 1 667 lignes qu'aucun run par défaut n'emprunte ; cycle `formats.loader` ↔ `formats.alto.parser` ; frontière `integrations/` ↔ `producers/` incohérente | réducteur | important | `core/driver.py`, `core/routing.py`, `core/pipeline.py`, `formats/loader.py`, `producers/`, `integrations/` | `RS-1`, `RS-4`, arbitrage | **fait (2026-08-25)** — cible d'arité révisée, voir ci-dessus |
-| `RS-6` | Ratio prose/code à 0,84, dont 121 passages de récit de migration ; 14 raisons de repli sans énumération ; 21 seuils non calibrés à geler en `1.0` | vérité | important | tout `src/`, `docs/versioning.md` | `RS-3`, `RS-5` | à faire |
-| `RS-7` | Rien ne prouve, en fin de vague, que la trajectoire a tenu | mesure | important | `docs/PLAN.md`, `docs/promises.md`, `CHANGELOG.md` | tous | à faire |
+| `RS-6` | Ratio prose/code à 0,84, dont 121 passages de récit de migration ; 14 raisons de repli sans énumération ; 21 seuils non calibrés à geler en `1.0` | vérité | important | tout `src/`, `docs/versioning.md` | `RS-3`, `RS-5` | **fait (2026-08-25)** — 138 marqueurs → 62 ; vocabulaire de repli clos |
+| `RS-7` | Rien ne prouve, en fin de vague, que la trajectoire a tenu | mesure | important | `docs/PLAN.md`, `docs/promises.md`, `CHANGELOG.md` | tous | **fait (2026-08-25)** sauf `V10`, qui demande un relecteur extérieur |
 
 ### Les six mesures de sortie
 

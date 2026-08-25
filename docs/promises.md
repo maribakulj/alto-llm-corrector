@@ -182,6 +182,38 @@ cinq » alors que la table disait le contraire — un fichier d'état qui se
 contredit lui-même est pire qu'un fichier absent, parce qu'on le croit. La
 table fait foi ; ce texte la commente et doit être relu quand elle change.
 
+## Relevé complémentaire du 2026-08-25 — vague `RS`
+
+Deux entrées de la table changent d'état, et une promesse non écrite s'ajoute.
+
+**« parité d'octets ALTO quand rien ne change » et « le rapport dit du
+fichier ce qui y est » étaient gardées sur un ÉCHANTILLON.** Onze des quinze
+documents du dépôt ne passaient sous aucune empreinte — dont les deux pages
+NewsEye de 2,4 Mo, les trois pages Gallica épinglées et les paires ALTO/PAGE
+de Descartes et La Fayette. `tests/test_byte_parity_all_fixtures.py` met les
+quinze sous empreinte, sur quatre scénarios dont deux traversent le pipeline
+entier, et une assertion refuse qu'un document du dépôt échappe à la liste.
+
+**Et l'échantillon cachait un défaut, ce qui est le motif habituel de ce
+document.** La géométrie des tokens ALTO dépendait de la version de Python :
+`sum()` de flottants a changé d'algorithme en CPython 3.12, donc les mêmes
+poids de tokens donnaient un total différent, et un `<SP>` d'une ligne réelle
+sortait un pixel plus large sur 3.11 que sur 3.12. La CI matriçait pourtant
+déjà les trois versions — mais aucune empreinte préexistante ne tombait sur
+un arrondi à la demi-unité, donc rien ne pouvait le voir.
+
+**Une promesse s'ajoute, qui n'était écrite nulle part : le vocabulaire des
+raisons de repli est clos.** Un consommateur agrège sur ces codes ; il y en
+avait vingt, dispersés en littéraux sur huit modules, et rien ne disait
+combien. `core.decide.FALLBACK_REASON_CODES` les porte,
+`tests/test_the_fallback_reasons_are_a_closed_set.py` les garde dans les deux
+sens et vérifie que `docs/la-vie-d-une-ligne.md` les liste tous.
+
+**Ce que la vague n'a PAS fermé, et qui reste au motif dominant ci-dessous :**
+les scénarios `probe` et `drift` du nouveau golden exercent PAGE comme ALTO,
+ce qui réduit l'écart — mais aucune des six promesses « partielles pour cause
+de PAGE » n'est reprise une par une. Le motif tient.
+
 ## Le motif dominant
 
 **PAGE est le format sous-gardé.** Six promesses passent de gardée à

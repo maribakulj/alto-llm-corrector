@@ -114,23 +114,34 @@ retirent du code mort peuvent en modifier un, et elles doivent dire pourquoi.
 
 ## Phase 7 — Vérification globale
 
-- [ ] `RS-7.1` différentiel complet, digests comparés à l'entrée
-- [ ] `RS-7.2` re-mesurer les six métriques
-- [ ] `RS-7.3` refermer `docs/PLAN.md`, `docs/promises.md`, `CHANGELOG.md`
-- [ ] `RS-7.4` relire `README.md` et `docs/la-vie-d-une-ligne.md` en externe
+- [x] `RS-7.1` différentiel complet — 1882 tests verts sur 3.11 / 3.12 / 3.13
+      et aux minima déclarés ; couverture 97,07 % (seuil 85 %) ; `twine check`
+      PASSED sur les deux distributions ; smoke-install du wheel OK
+- [x] `RS-7.2` re-mesurer les six métriques — voir le tableau ci-dessous
+- [x] `RS-7.3` refermer `docs/PLAN.md`, `docs/promises.md`, `CHANGELOG.md`
+- [ ] `RS-7.4` relire `README.md` et `docs/la-vie-d-une-ligne.md` en externe —
+      **la seule étape que cette session ne peut pas faire** : elle demande un
+      relecteur extérieur à la construction, ce qu'exige `V10`
 
 ---
 
 ## Les six mesures
 
-| mesure | entrée (2026-08-25) | courant | cible |
-|---|---|---|---|
-| lignes de code effectif `src/` | 9 207 | 9 207 | ~9 000 |
-| ratio prose/code | 0,844 | 0,838 | cible retirée¹ |
-| modules dans `core/` | 42 | 42 | ≤ 42 |
-| paramètres `CorrectionPipeline.__init__` | 14 | 14 | cible retirée¹ |
-| lecteurs de pointeurs hors `pairing`/`units` | 3 | **0** | 0 |
-| affirmations fausses recensées | 4 | 0 | 0 |
+| mesure | entrée (2026-08-25) | sortie | cible | verdict |
+|---|---|---|---|---|
+| lignes de code effectif `src/` | 9 207 | 9 257 | ~9 000 | **manquée**, +50 : `ChunkRouter`, `chunking.py`, `FALLBACK_REASON_CODES`, `GuardConfig.text()` |
+| ratio prose/code | 0,844 | 0,841 | ~~≤ 0,45~~ | cible **retirée**, mesure à l'appui¹ |
+| modules dans `core/` | 42 | 42 | ≤ 42 | **tenue** |
+| paramètres `CorrectionPipeline.__init__` | 14 | 14 | ~~≤ 9~~ | cible **retirée**, mesure à l'appui¹ |
+| lecteurs de pointeurs hors `pairing`/`units` | 3 | **0** | 0 | **tenue** |
+| affirmations fausses recensées | 4 | **0** | 0 | **tenue** |
+| tests | 1 780 | **1 882** | — | +102 |
+| couverture | ~91 % | **97,07 %** | ≥ 85 % | **tenue** |
+
+Le ratio est resté à 0,841 alors que 76 marqueurs narratifs sont partis :
+les 50 lignes de code ajoutées portent leur propre documentation, et elle
+compense presque exactement ce qui a été retiré. Les deux mouvements sont
+réels et de sens opposé.
 
 ¹ La cible reposait sur une hypothèse que `RS-5.1` a vérifiée et
 invalidée — voir `docs/PLAN.md`, § « La cible ≤ 9 paramètres était fausse ».

@@ -53,6 +53,48 @@ The **top-level import surface** is provisional until `1.0.0`. It went from
 
 ## [Unreleased]
 
+### Fixed
+
+- **La géométrie des tokens ALTO ne dépend plus de la version de Python.**
+  `_compute_geometry` pesait ses tokens en flottants — `0.6` par caractère
+  d'espace — et sommait ces poids avec `sum()`. CPython 3.12 a donné à `sum()`
+  la sommation compensée de Neumaier : les mêmes dix-sept tokens pèsent
+  `48.80000000000001` sur 3.11 et `48.8` sur 3.12, donc **le fichier livré
+  différait selon l'interpréteur**. Les poids sont des entiers depuis, en
+  dixièmes de caractère, et chaque frontière est arrondie depuis une division
+  exacte plutôt que depuis un flottant qui s'accumule.
+
+  Deux empreintes d'octets bougent, classées par TextLine avant régénération :
+  1 ligne sur 33 (`Descartes…_alto4.xml`) et 1 sur 1 145
+  (`bpt6k2324031_p0002.alto.xml`), géométrie seule, deux éléments décalés d'un
+  pixel, aucune dérive de texte ni de structure, somme des `WIDTH` inchangée.
+  La nouvelle empreinte 3.11 est exactement celle que 3.12 produisait déjà.
+  Les empreintes de `test_byte_parity_corpus.py`, `test_byte_parity_page_corpus.py`
+  et `test_rewriter_byte_stability.py` ne bougent pas : 81 des 83 assertions
+  d'octets du dépôt sont indifférentes au correctif.
+
+  Trouvé par `tests/test_byte_parity_all_fixtures.py`, ajouté par la vague
+  `RS` : aucune empreinte préexistante ne tombait sur un arrondi à la
+  demi-unité.
+
+### Added
+
+- `GuardConfig.text()` — le profil d'un producteur de texte, nommé face à
+  `GuardConfig.vision()`. Mêmes valeurs que `GuardConfig()`.
+- `saknussemm.core.decide.FALLBACK_REASON_CODES` — le vocabulaire clos des
+  vingt raisons de repli, jusqu'ici dispersé en littéraux sur huit modules.
+
+### Changed
+
+- **`docs/versioning.md` sort les VALEURS des seuils de politique du contrat
+  SemVer** ; leurs NOMS y restent. Les gardes ne sont pas calibrées — le plan
+  et `GuardConfig.vision()` le disent tous deux — et figer des nombres
+  provisoires ferait de leur recalibrage un changement cassant.
+- `VisionEditProducer` passe de `saknussemm.integrations.vision` à
+  `saknussemm.producers.vision`. Le module n'a jamais été réexporté au niveau
+  du paquet et la surface publique ne bouge pas ; un consommateur qui
+  l'importait par son chemin de module doit changer cette ligne.
+
 ### Changed — BREAKING
 
 - **Les deux voies d'édition affrontent les mêmes gardes de dérive, et le

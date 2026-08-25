@@ -119,20 +119,34 @@ def _compute_geometry(
     character count, a run of spaces weighs 0.6x its character count
     (spaces render narrower than glyphs).
 
-    Spec F6 — the 0.6 space weight must enter the total weight used to
-    compute the per-unit width. Pre-fix, ``unit`` was computed against the
-    full character count (spaces at 1.0) while each space was then drawn
-    at 0.6; the accumulated shortfall of every space was dumped onto the
-    LAST token via a single ``correction`` term, inflating it. Now the
-    weight is consistent on both sides and the rounding error is spread
-    across all tokens by cumulative rounding — the final token only ever
-    absorbs the residual rounding, never the sum of every space's deficit.
+    The space weight enters the TOTAL as well as each token's share. With
+    ``unit`` computed against the full character count while each space is
+    drawn at 0.6, the accumulated shortfall of every space lands on the
+    LAST token and inflates it. Consistent on both sides, the rounding
+    error is spread across all tokens by cumulative rounding, and the final
+    token only ever absorbs the residual.
+
+    **Weights are integers, in tenths of a character**, and that is not a
+    micro-optimisation. Summed as floats, ``0.6`` per space makes the total
+    depend on the interpreter: CPython 3.12 gave ``sum()`` Neumaier
+    compensated summation, so the same seventeen tokens weigh
+    ``48.80000000000001`` on 3.11 and ``48.8`` on 3.12 — and one ``<SP>``
+    of one real line comes out a pixel wider on one of them. Token geometry
+    that depends on the Python version is not reproducible, and this
+    function writes the geometry of the delivered file.
+
+    Each boundary is then rounded from ONE exact division
+    (``width * cumulative_weight / total_weight``) rather than from an
+    accumulating float, so nothing depends on the order or the algorithm of
+    a summation.
     """
     if not tokens:
         return []
 
-    def _weight(t: str) -> float:
-        return len(t) * 0.6 if _is_space_token(t) else float(len(t))
+    def _weight(t: str) -> int:
+        """The token's weight in TENTHS of a character — 6 per space
+        character, 10 per glyph. Integers so the total is exact."""
+        return len(t) * 6 if _is_space_token(t) else len(t) * 10
 
     weights = [_weight(t) for t in tokens]
     total_weight = sum(weights)
@@ -140,17 +154,15 @@ def _compute_geometry(
         per = width // len(tokens)
         return [(t, hpos + i * per, per) for i, t in enumerate(tokens)]
 
-    unit = width / total_weight
-
-    # Cumulative rounding: round the running total at each token boundary
-    # and take successive differences. Every token lands on the floor or
-    # ceil of its ideal share and the widths sum EXACTLY to ``width``.
+    # Cumulative rounding: round each boundary of the running weight and
+    # take successive differences. Every token lands on the floor or ceil
+    # of its ideal share and the widths sum EXACTLY to ``width``.
     widths: list[int] = []
-    cumulative = 0.0
+    cumulative = 0
     prev_rounded = 0
     for w in weights:
-        cumulative += w * unit
-        rounded = round(cumulative)
+        cumulative += w
+        rounded = round(width * cumulative / total_weight)
         widths.append(rounded - prev_rounded)
         prev_rounded = rounded
 

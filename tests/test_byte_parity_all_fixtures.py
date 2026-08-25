@@ -51,6 +51,31 @@ simplification est un échec de l'étape.
 La réécriture est invoquée sans arguments de provenance, donc ces empreintes
 sont indépendantes de la version de la bibliothèque.
 
+**Deux empreintes ont bougé le 2026-08-25, et pour un défaut réel.**
+``_compute_geometry`` pesait ses tokens en flottants — ``0.6`` par caractère
+d'espace — et sommait ces poids avec ``sum()``. CPython 3.12 a donné à
+``sum()`` la sommation compensée de Neumaier : les mêmes dix-sept tokens
+pèsent ``48.80000000000001`` sur 3.11 et ``48.8`` sur 3.12, donc la géométrie
+du fichier LIVRÉ dépendait de l'interpréteur. Les poids sont des entiers
+depuis, en dixièmes de caractère, et chaque frontière est arrondie depuis une
+division exacte plutôt que depuis un flottant qui s'accumule.
+
+Classé par TextLine avant de régénérer, comme la règle l'exige : **1 ligne
+sur 33** pour Descartes, **1 sur 1 145** pour la page Gallica ; géométrie
+seule dans les deux cas, deux éléments décalés d'un pixel, aucune dérive de
+texte ni de structure, et la somme des ``WIDTH`` inchangée (5 542 → 5 542 ;
+1 806 → 1 806) — l'invariant de somme exacte tient.
+
+La preuve que le correctif converge plutôt qu'il ne déplace : la nouvelle
+empreinte 3.11 de Descartes est **exactement** celle que 3.12 produisait
+déjà. Les empreintes de ``test_byte_parity_corpus.py``,
+``test_byte_parity_page_corpus.py`` et ``test_rewriter_byte_stability.py``
+n'ont pas bougé — 81 des 83 assertions d'octets du dépôt sont indifférentes
+au correctif, ce qui est la mesure de son rayon.
+
+C'est ce module qui a trouvé le défaut, et rien d'autre ne le pouvait :
+aucune empreinte préexistante ne tombait sur un arrondi à la demi-unité.
+
 **Sensibilité mesurée, et les deux trous qu'elle a trouvés.** Cinq mutations
 sur le chemin livré, comptées sur les 64 assertions du module :
 
@@ -255,7 +280,7 @@ _GOLDEN: dict[tuple[str, str], str] = {
     (
         "Descartes1637_Discours_btv1b86069594_corrected_0014_alto4.xml",
         "probe",
-    ): "0358a211f6db81ec84f00808b95b74edcec90f4ae9bb5e0461e1d51d16f52eea",
+    ): "283d69986ebacf4f54c5451166c241cad66684cf356c66bd10a42cc56271c10f",
     (
         "Descartes1637_Discours_btv1b86069594_corrected_0014_alto4.xml",
         "drift",
@@ -395,7 +420,7 @@ _GOLDEN: dict[tuple[str, str], str] = {
     (
         "bpt6k2324031_p0002.alto.xml",
         "scripted",
-    ): "71d2197decd9b5890974b819b168442bd606fb3eddbb796ec597a9ec8059913e",
+    ): "61504f606340e6602033e3a50a21047186d7fb7a26c0c4871d6a4a696422d81b",
     (
         "bpt6k2324031_p0002.alto.xml",
         "probe",
