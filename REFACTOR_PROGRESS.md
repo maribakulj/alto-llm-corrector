@@ -87,7 +87,12 @@ retirent du code mort peuvent en modifier un, et elles doivent dire pourquoi.
 - [x] `RS-5.2` casser le cycle `formats.loader` ↔ `formats.alto.parser` —
       `sniff_format` descend dans `formats/_xml.py`, dont les deux dépendent
       déjà ; l'import différé disparaît
-- [ ] `RS-5.1` sortir routage / QE / confiance du chemin chaud
+- [x] `RS-5.1` sortir routage / QE / confiance du chemin chaud — `ChunkRouter`,
+      `core/driver.py` n'importe plus `core.quality` ni `core.batching`.
+      **Cible « ≤ 9 paramètres » retirée** : les cinq restants sont des
+      coutures publiques, les retirer serait un changement de surface que
+      l'arbitrage du 2026-08-25 interdit à cette vague (raison écrite dans
+      `docs/PLAN.md`)
 - [ ] `RS-5.3` trancher la frontière `integrations/` ↔ `producers/`, et la garder
 
 ## Phase 6 — Nettoyage final
@@ -113,9 +118,12 @@ retirent du code mort peuvent en modifier un, et elles doivent dire pourquoi.
 | lignes de code effectif `src/` | 9 207 | 9 207 | ~9 000 |
 | ratio prose/code | 0,84 | 0,84 | ≤ 0,45 |
 | modules dans `core/` | 42 | 42 | ≤ 42 |
-| paramètres `CorrectionPipeline.__init__` | 14 | 14 | ≤ 9 |
+| paramètres `CorrectionPipeline.__init__` | 14 | 14 | cible retirée¹ |
 | lecteurs de pointeurs hors `pairing`/`units` | 3 | **0** | 0 |
 | affirmations fausses recensées | 4 | 0 | 0 |
+
+¹ La cible reposait sur une hypothèse que `RS-5.1` a vérifiée et
+invalidée — voir `docs/PLAN.md`, § « La cible ≤ 9 paramètres était fausse ».
 
 Base de référence, 2026-08-25 : **1780 tests verts** ; après la phase 1,
 **1871**, `mypy --strict` propre

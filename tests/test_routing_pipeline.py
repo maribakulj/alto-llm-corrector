@@ -136,3 +136,46 @@ def test_producer_calls_counted_and_routing_proves_cheaper(tmp_path: Path):
     assert skip_all.producer_calls == 0
     assert skip_all.producer_calls < off.producer_calls
     assert skip_all.lines_skipped == 2
+
+
+def test_the_driver_does_not_know_the_routing_exists() -> None:
+    """La couture est ce qui rend le chemin nominal lisible ; sans garde,
+    elle se défait au premier ajout.
+
+    `core/driver.py` portait le scoreur de qualité, le producteur d'escalade
+    et le plafond d'images par appel — trois mécanismes qu'AUCUN run par
+    défaut n'exécute, et qu'il fallait pourtant lire avant d'atteindre le cas
+    nominal. Ils sont derrière :class:`ChunkRouter` depuis `RS-5.1`.
+
+    L'assertion porte sur les IMPORTS plutôt que sur le comportement, et
+    c'est délibéré : le comportement est déjà tenu par les empreintes
+    d'octets et par les tests de routage de ce module, qui n'ont pas eu à
+    changer d'une ligne. Ce qui n'était tenu par rien, c'est que le pilote
+    reste ignorant.
+    """
+    import ast
+
+    from tests._paths import SRC
+
+    tree = ast.parse((SRC / "core" / "driver.py").read_text(encoding="utf-8"))
+    imported = {
+        node.module
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ImportFrom) and node.module
+    }
+    forbidden = {
+        "saknussemm.core.quality",
+        "saknussemm.core.confidence",
+        "saknussemm.core.batching",
+    }
+    reached = sorted(imported & forbidden)
+    assert not reached, (
+        f"`core/driver.py` importe {reached}. La boucle interne du moteur "
+        f"n'a pas à connaître le routage, l'escalade ni le plafond d'images : "
+        f"elle demande son plan à `ChunkRouter`, qui le rend inchangé quand "
+        f"aucun des trois n'est actif."
+    )
+    assert "saknussemm.core.routing" in imported, (
+        "le pilote n'atteint plus la couture de routage — il a soit repris "
+        "le travail lui-même, soit cessé de router"
+    )

@@ -2342,7 +2342,7 @@ qui retirent du code réellement mort (`RS-2`), et elles doivent dire pourquoi.
 | `RS-2` | Quatre affirmations fausses ; un shim de compatibilité que seuls les tests gardent ; 400 Ko de XSD hors surface publique ; 4 classes qui ne sont pas des politiques dans `policies.py` | vérité | important | `README.md`, `core/protocols.py`, `core/schemas/policies.py`, `formats/validation.py` | — | **fait (2026-08-25)** |
 | `RS-3` | Le rejeu de la carte rôle→slot sur les champs pointeurs, à 60 lignes d'une docstring qui l'interdisait ; garde sur 2 sites de 5 | **bugfix** (latent) | **critique** | `core/reconcile.py`, `core/indexing.py`, `core/hyphenation.py` | `RS-1` | **fait (2026-08-25)** — 3 modules lecteurs → 0 |
 | `RS-4` | Cliquets goodhartisés une seconde fois : le plafond d'arité a produit `PageWorkspace`, le plafond de longueur a produit neuf modules sous 130 l. | outillage | important | `tests/test_orchestrator_budget.py`, `core/workspace.py` | — | **fait (2026-08-25)** — chaque entrée porte sa raison ; 3 conservations écrites |
-| `RS-5` | 5 des 14 paramètres du pipeline pilotent 1 667 lignes qu'aucun run par défaut n'emprunte ; cycle `formats.loader` ↔ `formats.alto.parser` ; frontière `integrations/` ↔ `producers/` incohérente | réducteur | important | `core/driver.py`, `core/routing.py`, `core/pipeline.py`, `formats/loader.py`, `producers/`, `integrations/` | `RS-1`, `RS-4`, arbitrage | à faire |
+| `RS-5` | 5 des 14 paramètres du pipeline pilotent 1 667 lignes qu'aucun run par défaut n'emprunte ; cycle `formats.loader` ↔ `formats.alto.parser` ; frontière `integrations/` ↔ `producers/` incohérente | réducteur | important | `core/driver.py`, `core/routing.py`, `core/pipeline.py`, `formats/loader.py`, `producers/`, `integrations/` | `RS-1`, `RS-4`, arbitrage | en cours — cible d'arité révisée, voir ci-dessus |
 | `RS-6` | Ratio prose/code à 0,84, dont 121 passages de récit de migration ; 14 raisons de repli sans énumération ; 21 seuils non calibrés à geler en `1.0` | vérité | important | tout `src/`, `docs/versioning.md` | `RS-3`, `RS-5` | à faire |
 | `RS-7` | Rien ne prouve, en fin de vague, que la trajectoire a tenu | mesure | important | `docs/PLAN.md`, `docs/promises.md`, `CHANGELOG.md` | tous | à faire |
 
@@ -2355,7 +2355,7 @@ Reproduire en fin de vague celles du relevé d'entrée :
 | lignes de code effectif `src/` | 9 207 | ~9 000, jamais plus |
 | ratio prose/code | 0,84 | ≤ 0,45 |
 | modules dans `core/` | 42 | ≤ 42 — aucun nouveau module en `RS-6` |
-| paramètres de `CorrectionPipeline.__init__` | 14 | ≤ 9 |
+| paramètres de `CorrectionPipeline.__init__` | 14 | **14, cible révisée** — voir ci-dessous |
 | modules lisant les pointeurs hors `pairing`/`units` | 3 | **0** |
 | affirmations fausses recensées | 4 | 0 |
 
@@ -2387,6 +2387,34 @@ des passes que `S1` va traverser. Sa condition de retrait est que `S1` soit
 passé ; `S1` n'est pas dans cette vague, donc la condition n'est pas remplie
 et ne le sera pas ici. Si `S1` est reporté sine die, la question est close et
 le jeton reste — un garde-fou dont on n'a plus besoin ne coûte que sa lecture.
+
+### La cible « ≤ 9 paramètres » était fausse, et voici pourquoi
+
+Elle reposait sur une hypothèse que `RS-5.1` a pu vérifier : que les cinq
+paramètres du programme de recherche pouvaient sortir du constructeur comme
+ils sortent du chemin chaud. Ils ne le peuvent pas au même prix.
+
+Sortir le routage de `core/driver.py` est un DÉPLACEMENT : le pilote demande
+son plan à `ChunkRouter` au lieu de porter le scoreur, le producteur
+d'escalade et le plafond d'images. Rien de public n'est touché, et les tests
+de routage passent sans une modification — c'est le critère qui distingue un
+déplacement d'une réécriture, et il est tenu.
+
+Retirer ces cinq paramètres du CONSTRUCTEUR est autre chose : ce sont des
+coutures d'injection publiques, épinglées par `test_public_api_snapshot`.
+Les regrouper derrière un objet unique changerait la signature, donc la
+surface, donc passerait par le snapshot, le `CHANGELOG` et
+`docs/versioning.md` dans le même commit — la porte que la décision n°1 du
+2026-08-11 décrit pour une extension délibérée. C'est une décision de
+conception, pas une étape de réparation, et la condition n°2 de l'arbitrage
+du 2026-08-25 l'interdit explicitement à cette vague.
+
+La cible est donc **retirée plutôt que manquée**. Ce qui la remplace est ce
+que `RS-4.2` a déjà écrit à côté de l'entrée : l'arité de ce constructeur est
+une surface de configuration, pas du drilling de paramètres, et les deux ne
+se soignent pas de la même façon. Le vrai gain de `RS-5.1` se mesure ailleurs
+— `core/driver.py` n'importe plus `core.quality` ni `core.batching`, et une
+assertion le tient.
 
 ### Ce que cette vague ne fait pas
 

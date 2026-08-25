@@ -37,6 +37,7 @@ from saknussemm.core import events as ev
 from saknussemm.core.redaction import sanitize_error
 from saknussemm.core.context import RunContext
 from saknussemm.core.driver import PageDriver
+from saknussemm.core.routing import ChunkRouter
 from saknussemm.core.finalize import _finalize_document
 from saknussemm.core.indexing import (
     DocumentIndex,
@@ -528,12 +529,14 @@ class CorrectionPipeline:
         configuration is immutable, so two concurrent runs may share it."""
         return PageDriver(
             producer=self.producer,
-            escalation_producer=self.escalation_producer,
             config=self.config,
             retry_policy=self.retry_policy,
             guard_config=self.guard_config,
-            qe_scorer=self.qe_scorer,
-            routing_policy=self.routing_policy,
+            router=ChunkRouter(
+                qe_scorer=self.qe_scorer,
+                routing_policy=self.routing_policy,
+                escalation_producer=self.escalation_producer,
+            ),
             emit=self._emit,
         )
 

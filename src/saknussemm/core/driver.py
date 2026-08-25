@@ -22,7 +22,6 @@ from dataclasses import dataclass
 
 from saknussemm.core import events as ev
 from saknussemm.core.attempt import _AttemptOutcome, _attempt_chunk
-from saknussemm.core.batching import _split_for_image_cap
 from saknussemm.core.context import RunContext
 from saknussemm.core.identity import LineRef
 from saknussemm.core.outcome import (
@@ -33,9 +32,8 @@ from saknussemm.core.outcome import (
 from saknussemm.core.planner import downgrade_granularity, plan_page
 from saknussemm.core.protocols import EditProducer, ProviderPermanentError
 from saknussemm.core.retry import ChunkBudget
-from saknussemm.core.quality import QEScorer, RoutingPolicy
 from saknussemm.core.reconcile import _build_hyphen_pairs, _subpage_for_lines
-from saknussemm.core.routing import _route_and_filter_chunks
+from saknussemm.core.routing import ChunkRouter
 from saknussemm.core.workspace import PageWorkspace
 from saknussemm.core.schemas import (
     ChunkGranularity,
@@ -61,19 +59,17 @@ class PageDriver:
 
     #: The primary edit producer every chunk goes to by default.
     producer: EditProducer
-    #: §5.2 bis — the ESCALATE tier's producer (a VLM), or None.
-    escalation_producer: EditProducer | None
     #: Chunk planning: granularity selection, sizes, windows.
     config: ChunkPlannerConfig
     #: Retry ramp, attempt cap, per-chunk budget.
     retry_policy: RetryPolicy
     #: Acceptance and anti-migration thresholds.
     guard_config: GuardConfig
-    #: The QE scorer behind hybrid-selective routing; None turns it off.
-    qe_scorer: QEScorer | None
-    #: How a scored line is routed. The default sends everything to the
-    #: producer, so a default run is byte-identical to a routing-less one.
-    routing_policy: RoutingPolicy
+    #: Qui reçoit quoi, une fois la page planifiée. Le pilote ne connaît ni
+    #: le score de qualité, ni le producteur d'escalade, ni le plafond
+    #: d'images : il demande son plan à cette couture, qui le lui rend
+    #: inchangé quand aucun des trois n'est actif — c'est-à-dire par défaut.
+    router: ChunkRouter
     #: Where engine events go.
     emit: Callable[[ev.EngineEvent], None]
 
@@ -167,33 +163,21 @@ class PageDriver:
         document_id: str,
         workspace: PageWorkspace,
     ) -> list[tuple[ChunkRequest, EditProducer]]:
-        """Decide what this page's producer calls will be.
+        """Ce que les appels au producteur de cette page seront.
 
-        Three stages that must run in this order: plan the chunks, route
-        them, then cap the images. Routing pre-decides SKIP lines
-        (confirmed clean, no producer call) and sends ESCALATE lines to the
-        vision producer, returning each chunk paired with the producer that
-        owns it — a no-op when routing is off (the default), so every chunk
-        pairs with the primary producer and every existing run stays
-        byte-identical. The image cap comes AFTER routing because only the
-        chunks that actually reached a vision producer are constrained by
-        it: a producer crops every line it is sent, and providers cap
-        images per call.
+        Planifier, puis demander à la couture de routage qui reçoit quoi.
+        Elle rend le plan inchangé quand aucun de ses trois mécanismes n'est
+        actif — ce qui est le cas par défaut — et le pilote n'a donc pas à
+        savoir qu'ils existent pour lire ce chemin.
         """
         plan = plan_page(page, document_id, self.config)
         ctx.hyphen_splits.extend(plan.hyphen_splits)
-        routed_chunks = _route_and_filter_chunks(
-            qe_scorer=self.qe_scorer,
-            routing_policy=self.routing_policy,
-            producer=self.producer,
-            escalation_producer=self.escalation_producer,
+        routed_chunks = self.router.route(
             page=page,
             chunks=plan.chunks,
+            producer=self.producer,
             ctx=ctx,
             workspace=workspace,
-        )
-        routed_chunks = _split_for_image_cap(
-            routed=routed_chunks, line_by_id=workspace.line_by_id
         )
         self.emit(
             ev.ChunkPlanned(
