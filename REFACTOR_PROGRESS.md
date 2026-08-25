@@ -65,7 +65,8 @@ retirent du code mort peuvent en modifier un, et elles doivent dire pourquoi.
 - [x] `RS-3.2` router `indexing._cross_page_partners` sur les primitives — 4 → 0
 - [x] `RS-3.3` fermer le cliquet à zéro hors exemptions justifiées — `_ACCESS`
       ne porte plus que `pairing` et `units`, `_MUST_REACH_ZERO` est vide
-- [ ] `RS-3.4` retirer le sentinel à trois états de `reconcile_hyphen_pair`
+- [x] `RS-3.4` retirer le sentinel à trois états de `reconcile_hyphen_pair` —
+      classe `_Unset` typée, le `type: ignore[assignment]` disparaît
 
 ## Phase 4 — Réduction des abstractions
 
