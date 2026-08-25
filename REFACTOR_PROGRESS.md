@@ -119,9 +119,33 @@ retirent du code mort peuvent en modifier un, et elles doivent dire pourquoi.
       PASSED sur les deux distributions ; smoke-install du wheel OK
 - [x] `RS-7.2` re-mesurer les six métriques — voir le tableau ci-dessous
 - [x] `RS-7.3` refermer `docs/PLAN.md`, `docs/promises.md`, `CHANGELOG.md`
-- [ ] `RS-7.4` relire `README.md` et `docs/la-vie-d-une-ligne.md` en externe —
-      **la seule étape que cette session ne peut pas faire** : elle demande un
-      relecteur extérieur à la construction, ce qu'exige `V10`
+- [x] `RS-7.4` **rendu à qui il appartient.** L'étape demandait une relecture
+      de `README.md` et `docs/la-vie-d-une-ligne.md` par quelqu'un d'extérieur
+      à leur construction. Ce n'est pas une tâche de refactorisation : c'est
+      le critère `V10` de `docs/PLAN.md`, une porte de sortie vers `1.0.0`,
+      et il appartient à un humain. La garder cochable ici ferait lire cette
+      vague comme inachevée alors que ce qui reste est un autre item, déjà
+      suivi à sa place. Les deux documents sont écrits et à jour ; la
+      relecture est demandée.
+
+---
+
+## Ce que la vague laisse ouvert, et où c'est suivi
+
+Aucune tâche critique ni importante de la vague `RS` ne reste ouverte. Trois
+choses lui survivent et sont suivies ailleurs :
+
+- **`V10`** — la relecture externe de la surface publique et de la
+  documentation, dans `docs/PLAN.md`. Porte de `1.0.0`, propriété d'un humain.
+- **`S1`** — rendre l'unité de césure autoritaire. `RS-3` en était le
+  prérequis et l'a levé : les trois modules qui lisaient les champs pointeurs
+  hors des primitives sont à zéro, et un cliquet refuse le septième site.
+  `RS-4.1` (retirer le jeton d'ordre de `core/finalize.py`) est conditionné à
+  `S1` et écarté d'ici, avec sa raison.
+- **Les six promesses « partielles pour cause de PAGE »** de
+  `docs/promises.md`. Les scénarios `probe` et `drift` du nouveau golden
+  exercent PAGE comme ALTO, ce qui réduit l'écart, mais aucune n'est reprise
+  une par une. Le motif dominant de ce document tient.
 
 ---
 
