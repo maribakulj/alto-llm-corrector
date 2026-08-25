@@ -157,6 +157,21 @@ _SEAMS: dict[str, tuple[str, str]] = {
         "returns how far a unit reaches from a position — an integer, and the "
         "window walk's whole correctness",
     ),
+    "saknussemm.core.indexing._cross_page_partners": (
+        "value",
+        "page + index in, the partners this page must borrow out. Read "
+        "directly because it is one of the two remaining sites that resolve "
+        "a partner off the pointer fields instead of asking the primitives, "
+        "and comparing the two derivations is the only net it has — the byte "
+        "goldens do not see it (every fixture is one page at a time)",
+    ),
+    "saknussemm.core.reconcile._build_hyphen_pairs": (
+        "value",
+        "lines in, the bidirectional pair map the VALIDATOR consults. Same "
+        "reason as the entry above: it replays the role→slot map by hand, and "
+        "neutralising it moves no byte because it feeds a guard rather than a "
+        "transformation",
+    ),
     "saknussemm.core.reconcile._units_visible_on_page": (
         "value",
         "the batcher's projection of the same derivation; `RM-08` proposed "

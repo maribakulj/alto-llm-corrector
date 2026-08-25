@@ -33,9 +33,11 @@ retirent du code mort peuvent en modifier un, et elles doivent dire pourquoi.
 
 - [x] `RS-1.0` inscrire la vague : audit dans `docs/audit/`, lignes `RS-*` et
       arbitrage dans `docs/PLAN.md`, ce journal
-- [ ] `RS-1.1` élargir le golden byte-parity à tout le corpus ⭐
+- [x] `RS-1.1` élargir le golden byte-parity à tout le corpus ⭐ — 15 documents
+      × 4 scénarios, 64 assertions, 8,8 s ; sensibilité mesurée sur 5 mutations
 - [ ] `RS-1.2` cliquet des lecteurs de champs pointeurs
-- [ ] `RS-1.3` caractériser `_build_hyphen_pairs` / `_cross_page_partners`
+- [x] `RS-1.3` caractériser `_build_hyphen_pairs` / `_cross_page_partners` — le
+      filet d'octets ne les voit PAS (mesuré) ; 11 assertions différentielles
 - [ ] `RS-1.4` couvrir directement `core/driver.py` (descente, budget partagé)
 - [ ] `RS-1.5` clôture `LineTrace` → `LineOutcome`
 - [ ] `RS-1.6` corriger les deux cibles de patch `asyncio.sleep`
