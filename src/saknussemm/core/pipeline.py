@@ -372,8 +372,8 @@ class CorrectionPipeline:
         (:attr:`~CorrectionResult.corrected_files`) and the §9 report,
         and persisting them is the caller's choice —
         :meth:`CorrectionResult.write` for the simple case, or a
-        host-owned transaction (like the demo backend's staging writer)
-        when the host needs commit/discard semantics.
+        host-owned transaction when the host needs commit/discard
+        semantics.
         """
         # ADR-011 slice E — the working copy IS the run's mutable state;
         # the caller's document stays exactly as parsed.

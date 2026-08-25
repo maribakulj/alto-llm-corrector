@@ -7,11 +7,10 @@ returns values, and everything about *running* a correction service
 belongs to whoever calls it. *Saknussemm*: the printed errata leaf bound
 into books — literally what this library produces.
 
-It is developed in the [saknussemm](https://github.com/maribakulj/saknussemm)
-repository, which also carries a FastAPI + React demonstration of it. That
-demo is **not part of this package** — it is not published, and it will be
-removed once the library reaches its final form. Nothing here imports it;
-the coupling only runs the other way.
+This repository is the library, and nothing else. The web demonstration
+left it on 2026-08-16 for [`saknussemm-demo`](https://github.com/maribakulj/saknussemm-demo),
+and the benchmark for [`cinoc`](https://github.com/maribakulj/cinoc).
+Both import this library; nothing here imports either.
 
 ## The three repositories
 
@@ -170,9 +169,9 @@ a thousand lines at once.
   an adapter like XerLLM).
 - No filesystem writes, ever — reading source ALTO files is the only
   I/O; outputs travel on `CorrectionResult` (ADR-011).
-- No FastAPI, no SSE, no job store. Those belong to the consumer: the
-  repository's demo backend implements them for itself, and a future
-  extraction of them would be its own distribution, not this one.
+- No FastAPI, no SSE, no job store. Those belong to the consumer:
+  `saknussemm-demo` implements them for itself, in its own repository and
+  its own distribution.
 
 ## What it costs, and what it does not scale to
 

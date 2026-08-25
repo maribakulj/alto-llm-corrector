@@ -119,9 +119,9 @@ class ModelCatalog(Protocol):
     """Model discovery — APPLICATION vocabulary.
 
     The engine never lists models: a run is handed one resolved model
-    string. Catalog lookups belong to the host (the demo backend's
-    ``/providers/{p}/models`` endpoint); the protocol lives here only so
-    the split is nameable on one seam.
+    string. Catalog lookups belong to the host (a
+    ``/providers/{p}/models`` endpoint, say); the protocol lives here only
+    so the split is nameable on one seam.
     """
 
     async def list_models(self, api_key: str) -> list[ModelInfo]: ...
@@ -131,8 +131,8 @@ class ModelCatalog(Protocol):
 class BaseProvider(StructuredCompletionClient, ModelCatalog, Protocol):
     """A full vendor client: completions + catalog.
 
-    Convenience composition for hosts whose provider objects do both
-    (the demo backend's). The CORE only ever requires
+    Convenience composition for hosts whose provider objects do both.
+    The CORE only ever requires
     :class:`StructuredCompletionClient` — ``LLMEditProducer`` and
     ``CorrectionPipeline.for_provider`` accept a client with no
     ``list_models`` at all.

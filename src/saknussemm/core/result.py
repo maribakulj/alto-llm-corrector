@@ -70,7 +70,7 @@ class CorrectionResult:
     #: ADR-011 — the corrected artefacts themselves, keyed by source file
     #: name, computed on EVERY run: the result IS the output; persisting
     #: it is the caller's choice (:meth:`write`, or a host-owned
-    #: transaction like the demo backend's staging writer).
+    #: transaction with commit/discard semantics).
     corrected_files: dict[str, bytes] = field(default_factory=dict)
     #: Source files the run could NOT deliver, mapped to why: the rewritten
     #: artefact did not carry the run's decisions for that file.
@@ -150,9 +150,9 @@ class CorrectionResult:
         So the loudness lands here, at the one door that puts bytes on
         disk. ``allow_partial=True`` is the caller saying it has read
         :attr:`undeliverable_files` and accepts the subset — a decision,
-        made once, in code someone reviews. Hosts with their own writer
-        (the demo's staging transaction) never reach this and answer the
-        same question in their own terms.
+        made once, in code someone reviews. A host with its own writer
+        (a staging transaction) never reaches this and answers the same
+        question in its own terms.
 
         The same shape as :meth:`_refuse_colliding_names`: ``write``
         defending its own contract rather than inheriting one.

@@ -6,8 +6,13 @@ decided — and none of it needs a pipeline, a producer or an observer. They
 were 224 lines in the middle of a 3200-line orchestrator, which is
 where "who is my partner?" grew five parallel answers in the first place.
 
-Every one of them reads the shared derivation (`units.derive_hyphen_groups`)
-or the directed primitives (`pairing`); none reads a pointer field directly.
+Most of them read the shared derivation (`units.derive_hyphen_groups`) or
+the directed primitives (`pairing`). ``_build_hyphen_pairs`` does not yet:
+it re-reads the role→slot map off the pointer fields, which makes it a
+sixth resolver of the question the primitives answer once. The count is
+held by
+``tests/hyphenation/test_only_pairing_reads_the_pointer_fields.py`` and may
+only go down.
 """
 
 from __future__ import annotations
