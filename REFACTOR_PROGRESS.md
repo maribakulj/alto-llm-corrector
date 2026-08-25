@@ -53,8 +53,11 @@ retirent du code mort peuvent en modifier un, et elles doivent dire pourquoi.
 - [x] `RS-2.1` les quatre affirmations fausses
 - [x] `RS-2.2` supprimer `RewriteResult.__iter__` — 49 sites de test convertis
       en accès par attribut, puis la méthode retirée
-- [ ] `RS-2.3` trancher le poids des XSD
-- [ ] `RS-2.4` sortir de `policies.py` les 4 classes qui n'en sont pas
+- [x] `RS-2.3` trancher le poids des XSD — **gardés dans l'installation de
+      base**, décision écrite dans `docs/format-support.md`, et le wheel
+      construit est désormais vérifié comme les portant
+- [x] `RS-2.4` sortir de `policies.py` les 4 classes qui n'en sont pas —
+      `core/schemas/chunking.py` (3) et `report.py` (1), zéro import touché
 
 ## Phase 3 — Simplifications locales
 

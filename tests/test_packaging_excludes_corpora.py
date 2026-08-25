@@ -46,7 +46,7 @@ from pathlib import Path
 
 import pytest
 
-from tests._paths import PKG
+from tests._paths import PKG, SRC
 
 _PACKAGE_ROOT = PKG
 _REPO_ROOT = _PACKAGE_ROOT  # flat tree: the package IS the repository
@@ -202,6 +202,33 @@ def test_the_built_sdist_carries_only_what_the_allowlist_names(
         "name. hatchling matches include entries as patterns — anchor them "
         "with a leading slash, or widen the allowlist deliberately (that is a "
         "licensing decision)."
+    )
+
+
+def test_the_wheel_actually_ships_the_bundled_schemas(built: dict[str, Path]) -> None:
+    """Les XSD sont une fonctionnalité, pas un résidu — et rien ne le tenait.
+
+    ``formats/validation.py`` résout ses schémas depuis
+    ``src/saknussemm/formats/xsd/``. ``test_xsd_validation.py`` s'exécute
+    depuis l'ARBRE SOURCE, donc il passerait à l'identique sur un wheel qui
+    ne les embarquerait pas — et la validation hors-ligne échouerait chez
+    tout consommateur installé, sur une erreur de fichier manquant.
+
+    Mesuré : 7 schémas, 380 Ko décompressés, 32 % du contenu du wheel pour
+    363 Ko compressés au total. C'est le prix assumé de la validation
+    hors-ligne dans l'installation de base, et `docs/format-support.md` le
+    dit maintenant plutôt que de le laisser deviner.
+    """
+    with zipfile.ZipFile(built["wheel"]) as zf:
+        shipped = {Path(n).name for n in zf.namelist() if n.endswith(".xsd")}
+    declared = {p.name for p in (SRC / "formats" / "xsd").glob("*.xsd")}
+    assert declared, "l'arbre source ne porte plus aucun schéma"
+    assert shipped == declared, (
+        f"le wheel embarque {sorted(shipped)} alors que la source déclare "
+        f"{sorted(declared)}. `formats.validation` résout ses schémas depuis "
+        f"le paquet installé : un schéma absent du wheel est une "
+        f"fonctionnalité cassée qu'aucun test lancé depuis l'arbre source ne "
+        f"peut voir."
     )
 
 
