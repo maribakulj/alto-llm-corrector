@@ -4,7 +4,8 @@ from pathlib import Path
 
 from lxml import etree
 
-from saknussemm.formats._xml import classified_parse_errors
+from saknussemm.errors import ParseError
+from saknussemm.formats._xml import classified_parse_errors, sniff_format
 from saknussemm.formats.alto._ns import (
     _detect_namespace,
     _int_attr,
@@ -488,9 +489,6 @@ def build_document_manifest(
     on the document instead of being told. This is the guard for when they
     do not.
     """
-    from saknussemm.errors import ParseError
-    from saknussemm.formats.loader import sniff_format  # local: loader imports us
-
     for xml_path, source_name in files:
         detected = sniff_format(xml_path)
         if detected != "alto":

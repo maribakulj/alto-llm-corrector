@@ -84,7 +84,9 @@ retirent du code mort peuvent en modifier un, et elles doivent dire pourquoi.
 ## Phase 5 — Découplage architectural
 
 - [x] `RS-5.0` arbitrage écrit (`docs/PLAN.md`, Décisions déléguées 2026-08-25)
-- [ ] `RS-5.2` casser le cycle `formats.loader` ↔ `formats.alto.parser`
+- [x] `RS-5.2` casser le cycle `formats.loader` ↔ `formats.alto.parser` —
+      `sniff_format` descend dans `formats/_xml.py`, dont les deux dépendent
+      déjà ; l'import différé disparaît
 - [ ] `RS-5.1` sortir routage / QE / confiance du chemin chaud
 - [ ] `RS-5.3` trancher la frontière `integrations/` ↔ `producers/`, et la garder
 

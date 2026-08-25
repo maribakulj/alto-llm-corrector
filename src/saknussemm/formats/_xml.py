@@ -284,7 +284,77 @@ def classified_parse_errors(source_name: str) -> Iterator[None]:
         raise ParseError(f"{source_name}: cannot read source file: {exc}") from exc
 
 
+# ---------------------------------------------------------------------------
+# Reniflage de format
+# ---------------------------------------------------------------------------
+#
+# Vit ici plutôt que dans ``formats/loader.py``, où il était, pour une raison
+# de dépendances : le loader importe les deux parseurs au niveau module, et
+# ``formats/alto/parser.py`` a besoin de ce reniflage pour refuser un fichier
+# qui n'est pas de l'ALTO. Il le réimportait donc du loader À L'INTÉRIEUR de
+# sa fonction, avec un commentaire disant « local: loader imports us » — un
+# cycle réel, contourné par un import différé.
+#
+# ``formats/_xml.py`` ne dépend d'aucun format et les deux le connaissent
+# déjà. Le cycle disparaît sans que personne ait à se rappeler pourquoi un
+# import est au mauvais endroit.
+
+_ALTO_MARKER = "loc.gov/standards/alto"
+_PAGE_MARKER = "primaresearch.org/PAGE"
+
+#: Root local name -> format, for a producer that publishes one of these two
+#: schemas under its OWN namespace URI. This is not hypothetical: Gallica
+#: serves a large family of its ALTO under ``bibnum.bnf.fr/ns/alto_prod``,
+#: with `TextLine`/`String`/`HYP` and explicit `SUBS_TYPE` hyphenation — the
+#: richest input this library accepts — and the standard-namespace check
+#: alone refused every one of them at the door.
+_ROOT_LOCAL_NAME = {"alto": "alto", "PcGts": "page"}
+
+#: The element each schema makes mandatory under the root. Requiring it is
+#: what keeps the fallback a check on the FORMAT and not merely on a name:
+#: a document whose root happens to be called `alto` but that carries no
+#: `Layout` is still refused, and says so.
+_MANDATORY_CHILD = {"alto": "Layout", "page": "Page"}
+
+
+def sniff_format(path: Path) -> str:
+    """``"alto"`` / ``"page"`` from the file's root element.
+
+    The two standard namespaces answer first and are authoritative. Anything
+    else falls through to the root's local name plus the schema's mandatory
+    element — because a namespace URI says who *published* a document, not
+    what format it is in.
+
+    Nothing downstream ever needed the change: the ALTO and PAGE parsers and
+    rewriters read the namespace off the document they were handed
+    (``detect_namespace``) and re-emit it unchanged, so a vendor namespace
+    survives a full round-trip. This door was the only branded place.
+    """
+    with classified_parse_errors(path.name):
+        ns, root_name, _ = read_source_header(path)
+        if _ALTO_MARKER in ns:
+            return "alto"
+        if _PAGE_MARKER in ns:
+            return "page"
+        # Only a vendor namespace pays for the second question, and only it
+        # needs to: the two standard markers answered above without reading
+        # past the root element.
+        fmt = _ROOT_LOCAL_NAME.get(root_name)
+        if fmt is not None:
+            _, _, found = read_source_header(path, _MANDATORY_CHILD[fmt])
+            if found:
+                return fmt
+    raise ParseError(
+        f"{path.name!r}: root {root_name!r} in namespace {ns!r} is "
+        "neither ALTO nor PAGE — saknussemm recognises a standard namespace, "
+        f"or a root named {sorted(_ROOT_LOCAL_NAME)} carrying its schema's "
+        "mandatory element (ALTO: Layout, PAGE: Page). Parse other formats "
+        "through their own adapter."
+    )
+
+
 __all__ = [
+    "sniff_format",
     "classified_parse_errors",
     "detect_namespace",
     "local_name",
