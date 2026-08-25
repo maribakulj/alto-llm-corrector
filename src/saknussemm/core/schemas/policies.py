@@ -9,13 +9,11 @@ from __future__ import annotations
 
 import hashlib
 import json
-import uuid
 from typing import Any, ClassVar, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from saknussemm.core.schemas.manifest import (
-    ChunkGranularity,
     Coords,
     HyphenRole,
     LineManifest,
@@ -518,95 +516,3 @@ class RetryPolicy(FrozenPolicy):
 
 #: Module-level default reused wherever a caller passes no RetryPolicy.
 DEFAULT_RETRY_POLICY = RetryPolicy()
-
-
-class ChunkRequest(BaseModel):
-    chunk_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    document_id: str
-    page_id: str
-    block_id: str | None = None
-    granularity: ChunkGranularity
-    line_ids: list[str]
-    # Target lines the pipeline actually corrects/accepts. Any line in
-    # ``line_ids`` but NOT in ``target_line_ids`` is *context only*: it is
-    # still sent to the producer so a target near it keeps full surrounding
-    # context, but its output is discarded here (it is a target of an
-    # adjacent chunk). ``None`` means every line is a target (PAGE / BLOCK /
-    # LINE granularity, and the historical default for windows).
-    target_line_ids: list[str] | None = None
-
-    def targets(self) -> list[str]:
-        """The line_ids this chunk owns (all of them when unrestricted)."""
-        return self.line_ids if self.target_line_ids is None else self.target_line_ids
-
-    attempt: int = Field(default=0, ge=0)
-
-    @model_validator(mode="after")
-    def _targets_subset_of_lines(self) -> "ChunkRequest":
-        """A target outside the chunk's lines would be silently
-        ignored at correction time (it has no enriched input) while still
-        counting as "owned" — a line lost without a trace."""
-        if self.target_line_ids is not None:
-            extra = set(self.target_line_ids) - set(self.line_ids)
-            if extra:
-                raise ValueError(
-                    f"target_line_ids not contained in line_ids: {sorted(extra)!r}"
-                )
-        return self
-
-
-class HyphenSplit(BaseModel):
-    """Record of a severed forward hyphen link (ADR-010 unit SPLIT).
-
-    Emitted by :func:`saknussemm.core.units.split_forward_link` when the
-    LINE planner cuts a chain longer than ``max_lines_per_request``, and
-    carried on the :class:`ChunkPlan` so the cut is a recorded unit
-    operation rather than a silent pointer side effect. Line ids are
-    bare on purpose: the chain walk is page-scoped, so a split never
-    crosses a page, and ``page_id`` qualifies both (ADR-009).
-    """
-
-    model_config = ConfigDict(frozen=True)
-
-    page_id: str
-    tail_line_id: str
-    head_line_id: str
-
-
-class RefusedEdit(BaseModel):
-    """One producer op the edit guards refused, and why (`A2b`).
-
-    ``EditRejection`` has carried thirteen reason codes since the protocol
-    landed and **no consumer outside the tests**: a line whose only op was
-    refused reported ``corrected`` with no reason, ``fallback_chunks`` at
-    zero, and nothing anywhere said a guard had fired. The report could not
-    distinguish "the producer proposed nothing" from "it proposed something
-    the guards refused", so the refusal rate of `E1`–`E5` was not merely
-    unmeasured, it was **unmeasurable** — and a consumer tuning a
-    ``GuardConfig``, or a bench sweeping one, was steering blind.
-
-    That is the reason this exists rather than a counter: a rate needs the
-    reason to be actionable. ``e5_hyphen`` and ``e4_line_budget`` firing on
-    the same corpus mean opposite things about what to change.
-
-    Line ids are bare and ``page_id`` qualifies them, as for
-    :class:`HyphenSplit` (ADR-009).
-    """
-
-    model_config = ConfigDict(frozen=True)
-
-    page_id: str
-    line_id: str
-    op: str
-    reason: str
-    detail: str = ""
-
-
-class ChunkPlan(BaseModel):
-    page_id: str
-    chunks: list[ChunkRequest]
-    granularity: ChunkGranularity
-    #: ADR-010 — the forward links the LINE planner severed so that no
-    #: still-linked pair spans two chunks (over-cap chains). Empty at
-    #: every other granularity.
-    hyphen_splits: list[HyphenSplit] = Field(default_factory=list)
