@@ -70,9 +70,12 @@ retirent du code mort peuvent en modifier un, et elles doivent dire pourquoi.
 
 ## Phase 4 — Réduction des abstractions
 
-- [ ] `RS-4.2` figer et recalibrer les cliquets de `test_orchestrator_budget`
-- [ ] `RS-4.3` décision écrite : `PageWorkspace` / `RunContext` restent
-- [ ] `RS-4.4` décision écrite : les quatre représentations par ligne restent
+- [x] `RS-4.2` recalibrer les cliquets — chaque entrée porte sa raison (≥40
+      car.), les 6 entrées `formats/` quittent la table des dettes, 6
+      plafonds descendent à leur valeur mesurée
+- [x] `RS-4.3` décision écrite : `PageWorkspace` / `RunContext` restent —
+      docstring ramenée de 36 à 27 lignes, décision dans `docs/PLAN.md`
+- [x] `RS-4.4` décision écrite : les quatre représentations par ligne restent
 - [x] `RS-4.1` `_FinalizeOrder` — **écarté, pas reporté.** Le jeton garde
       l'ordre des passes que `S1` va traverser ; `S1` n'est pas dans cette
       vague, donc la condition de retrait n'est pas remplie et ne le sera pas

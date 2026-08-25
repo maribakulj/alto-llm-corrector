@@ -45,6 +45,29 @@ entries below are inscribed at their measured size; **inscribing is not a
 plan to cut them.** ``formats/alto/rewriter.py`` is explicitly off-limits
 until the byte-parity corpus is wider (`docs/PLAN.md`, § `RM`).
 
+**Ce que `RS-4.2` a changé, le 2026-08-25.** Le plafond de longueur et celui
+d'arité mesuraient bien, et demandaient mal. Une entrée coûtait un chiffre,
+donc la porte n'a jamais demandé d'argument : elle demandait de découper — ce
+qui a produit `PageWorkspace`, un objet à trois champs et zéro méthode dont
+la docstring dit qu'il est né du plafond d'arité — ou d'inscrire, en silence.
+
+Trois corrections, aucune qui relâche le cliquet :
+
+1. **chaque entrée porte sa raison**, et une raison de moins de 40
+   caractères est refusée. On peut garder une fonction longue ; il faut dire
+   ce que la découper coûterait, et la phrase se relit. C'est la règle que
+   `test_internal_seams_are_named` applique déjà aux symboles privés.
+2. **les six entrées `formats/` quittent la table des dettes** pour
+   `_MEASURED_NOT_A_DEBT`. La vague qui les avait inscrites écrivait déjà
+   « inscribing is not a plan to cut them » ; les garder au même endroit que
+   les dettes faisait lire la liste comme une file d'attente.
+3. **six plafonds descendent à leur valeur mesurée** — ils avaient jusqu'à
+   dix lignes de mou, ce que `test_budget_stays_ahead_of_the_file` interdit
+   déjà au budget de module et que rien n'interdisait aux fonctions.
+
+Ce qui NE change pas : `_MODULE_BUDGET` reste bloquant sur `core/pipeline.py`,
+une entrée ne peut que rétrécir, et une entrée qui atteint la cible s'en va.
+
 Keys are ``path/to/module.py::QualifiedName``. Both halves matter. The
 path, because ``formats/alto/parser.py`` and ``formats/page/parser.py``
 are two different files with functions of the same name. The qualified
@@ -85,64 +108,157 @@ _FUNCTION_TARGET = 100
 #: is not part of that.
 _PARAMETER_TARGET = 8
 
-#: Every function still over :data:`_FUNCTION_TARGET`, each with its current
-#: ceiling. An entry may shrink, never grow; removing one is how a slice
-#: records that it finished.
+#: Chaque entrée porte son plafond ET la raison de sa longueur. Le nombre
+#: seul était la faille de l'instrument : ajouter une fonction de 110 lignes
+#: à la liste ne coûtait qu'un chiffre, donc le plafond ne demandait jamais
+#: d'argument — il demandait de découper, ou d'inscrire. `RS-4.2` remplace
+#: l'inégalité par la règle que le dépôt applique déjà à ses coutures
+#: internes : on peut garder une fonction longue, il faut dire pourquoi.
 #:
-#: The ``core/`` entries all predate `S2`. Two of them
-#: (``link_hyphen_pairs``, ``reconcile_hyphen_pair``) are hyphen-partner
-#: resolution, where the plan's standing rule says not to go without
-#: finishing `S1` first. The six ``formats/`` entries were added by `RM-10`
-#: at their measured size — they had never been under any gate.
-#:
-#: ``_loss_policy_pass`` left the list on 2026-08-06, and how it left is
-#: the rule working as intended rather than a slice aimed at it: `RM-01`'s
-#: order guard added four lines to it, the ratchet refused, and the remedy
-#: it prescribes — lift a stage out, never raise the budget — took the
-#: function from 107 to 91 by giving the sidecar construction its own
-#: name.
-_OVERSIZED: dict[str, int] = {
-    "core/editing.py::_apply_line_ops": 114,
-    "core/editing.py::apply_edit_script": 103,
-    "core/hyphenation.py::enrich_chunk_lines": 101,
-    "core/hyphenation.py::reconcile_hyphen_pair": 110,
-    "core/pairing.py::link_hyphen_pairs": 119,
-    "core/validator.py::validate_llm_response": 149,
-    "formats/alto/parser.py::_parse_alto_file": 146,
-    "formats/alto/parser.py::_parse_textline_hyphen_info": 105,
-    "formats/alto/rewriter.py::_rebuild_line": 203,
-    "formats/alto/rewriter.py::rewrite_alto_file": 161,
-    "formats/page/parser.py::_parse_page_file": 125,
-    "formats/page/rewriter.py::rewrite_page_file": 119,
+#: Sémantique inchangée par ailleurs : une entrée peut RÉTRÉCIR, jamais
+#: grandir, et une entrée qui atteint la cible s'en va.
+_OVERSIZED: dict[str, tuple[int, str]] = {
+    "core/editing.py::_apply_line_ops": (
+        104,
+        "applique les ops d'une ligne et rend le verdict E1-E5. Chaque garde "
+        "est une branche nommée et l'ordre dans lequel elles refusent EST le "
+        "contrat ; les sortir une à une déplacerait cet ordre dans la liste "
+        "des appels, où il ne se lit plus",
+    ),
+    "core/editing.py::apply_edit_script": (
+        101,
+        "la boucle par ligne au-dessus de la précédente. Sa longueur est "
+        "celle de la table de refus qu'elle assemble, pas d'un enchaînement "
+        "de décisions",
+    ),
+    "core/hyphenation.py::enrich_chunk_lines": (
+        101,
+        "construit le LineContext que le producteur voit : un champ par "
+        "ligne de code, presque aucune branche. Découper reviendrait à "
+        "répartir une structure de données entre deux fonctions",
+    ),
+    "core/hyphenation.py::reconcile_hyphen_pair": (
+        110,
+        "résolution de partenaire de césure. La règle permanente du plan "
+        "interdit d'y toucher tant que l'unité n'est pas le stockage de "
+        "référence — un découpage ici produirait la formulation "
+        "supplémentaire que ce travail existe pour retirer",
+    ),
+    "core/pairing.py::link_hyphen_pairs": (
+        119,
+        "même raison que la précédente, côté établissement des liens",
+    ),
+    "core/validator.py::validate_llm_response": (
+        142,
+        "les contrôles structurels d'une réponse, dans l'ordre exact où ils "
+        "doivent tomber pour que le message d'erreur nomme la bonne cause. "
+        "Le découpage déplacerait cet ordre dans les appels",
+    ),
 }
 
-#: Every function still over :data:`_PARAMETER_TARGET`, each with its current
-#: ceiling. Same ratchet semantics as :data:`_OVERSIZED`.
+#: Mesuré, et délibérément pas une dette.
 #:
-#: Read this list next to that one. It started at thirteen, nine of them on
-#: the chunk path, wide for one reason: `S2` turned what used to be
-#: ``self.retry_policy`` and friends into arguments, and the same handful of
-#: per-run indices then travelled the whole chain by hand.
+#: La vague qui a élargi le scan à ``formats/`` a inscrit ces six entrées à
+#: leur taille mesurée en écrivant que « inscribing is not a plan to cut
+#: them ». Les garder dans la même table que les dettes faisait lire la
+#: liste comme une file d'attente ; elles ont la leur.
 #:
-#: `RM-03` bound three of those indices into
-#: :class:`~saknussemm.core.workspace.PageWorkspace` and four entries left
-#: this list outright. What remains is a different debt with a different
-#: answer: the two ``pipeline`` constructors are configuration surface, not
-#: threading, and ``_attempt_chunk``/``_build_correction_report`` assemble
-#: from many sources rather than passing one thing along. `RM-03`
-#: deliberately did not touch ``integrations/`` or ``producers/`` — the
-#: list is a ceiling, not a queue.
-_OVERPARAMETERISED: dict[str, int] = {
-    "core/attempt.py::_attempt_chunk": 11,
-    "core/driver.py::PageDriver._descend_granularity": 10,
-    "core/driver.py::PageDriver._handle_chunk_failure": 9,
-    "core/pipeline.py::CorrectionPipeline.__init__": 14,
-    "core/pipeline.py::CorrectionPipeline.for_provider": 9,
-    "core/report.py::_build_correction_report": 11,
-    "formats/alto/rewriter.py::_emit_string": 11,
-    "integrations/vision.py::VisionEditProducer.__init__": 11,
-    "producers/llm_edit.py::LLMEditProducer.__init__": 9,
+#: La condition qui les protégeait — « hors-limites tant que le corpus
+#: byte-parity n'est pas plus large » — est LEVÉE depuis `RS-1.1` : les
+#: quinze documents du dépôt sont sous empreinte sur quatre scénarios. Les
+#: couper reste une décision du plan et non un effet de bord de cette
+#: vague, qui l'écrit au § « Ce que cette vague ne fait pas ».
+_MEASURED_NOT_A_DEBT: dict[str, tuple[int, str]] = {
+    "formats/alto/parser.py::_parse_alto_file": (
+        146,
+        "un parseur de format : sa longueur est celle du format, et chaque "
+        "branche correspond à une variante ALTO réelle",
+    ),
+    "formats/alto/parser.py::_parse_textline_hyphen_info": (
+        105,
+        "la détection de césure explicite et heuristique sur une TextLine ; "
+        "les cas sont ceux du corpus, pas ceux d'une abstraction",
+    ),
+    "formats/alto/rewriter.py::_rebuild_line": (
+        193,
+        "la plus longue du paquet, et le seul code qui décide de la "
+        "géométrie des tokens livrés. Chaque branche porte un cas réel "
+        "documenté ; c'est aussi le seul endroit où une erreur corrompt le "
+        "fichier au lieu de le dégrader",
+    ),
+    "formats/alto/rewriter.py::rewrite_alto_file": (
+        158,
+        "la boucle qui choisit un des quatre chemins de réécriture par "
+        "ligne et tient la comptabilité des pertes",
+    ),
+    "formats/page/parser.py::_parse_page_file": (
+        125,
+        "même nature que le parseur ALTO, sur les trois millésimes PAGE",
+    ),
+    "formats/page/rewriter.py::rewrite_page_file": (
+        117,
+        "même nature que le rewriter ALTO, sur un format qui porte sa "
+        "granularité mot dans des éléments Word",
+    ),
 }
+
+#: Même forme, pour les signatures. Chaque entrée dit pourquoi la fonction
+#: assemble depuis autant de sources.
+_OVERPARAMETERISED: dict[str, tuple[int, str]] = {
+    "core/attempt.py::_attempt_chunk": (
+        11,
+        "assemble depuis plusieurs origines — le chunk, le producteur, deux "
+        "politiques, l'observateur, les index — au lieu de faire suivre un "
+        "état. `RM-03` a lié les trois index qui pouvaient l'être ; ce qui "
+        "reste vient d'endroits différents",
+    ),
+    "core/driver.py::PageDriver._descend_granularity": (
+        10,
+        "même nature, plus la bourse partagée que la descente doit "
+        "transmettre explicitement pour que le sous-chunk dépense au même "
+        "endroit",
+    ),
+    "core/driver.py::PageDriver._handle_chunk_failure": (
+        9,
+        "l'aiguillage entre descente et repli ; il lui faut ce que les deux "
+        "branches consomment",
+    ),
+    "core/pipeline.py::CorrectionPipeline.__init__": (
+        14,
+        "surface de CONFIGURATION, pas du threading : chaque paramètre est "
+        "une couture d'injection publique. Cinq d'entre eux pilotent des "
+        "chemins qu'aucun run par défaut n'emprunte, et `RS-5` doit les "
+        "sortir — c'est la seule entrée de cette table qu'un travail "
+        "planifié vise",
+    ),
+    "core/pipeline.py::CorrectionPipeline.for_provider": (
+        9,
+        "les paramètres que ce constructeur POSSÈDE — l'appel vendeur et le "
+        "contrat de prompt — le reste passant par **pipeline_kwargs",
+    ),
+    "core/report.py::_build_correction_report": (
+        11,
+        "assemble le rapport depuis six sources indépendantes ; leur faire "
+        "un objet commun reviendrait à créer le sac que `ADR-011` a retiré",
+    ),
+    "formats/alto/rewriter.py::_emit_string": (
+        11,
+        "émet un élément String avec sa géométrie recalculée ; les "
+        "paramètres sont les attributs ALTO qu'il écrit",
+    ),
+    "integrations/vision.py::VisionEditProducer.__init__": (
+        11,
+        "surface de configuration d'un producteur, comme celle du pipeline",
+    ),
+    "producers/llm_edit.py::LLMEditProducer.__init__": (
+        9,
+        "même nature : le client, les identifiants et le contrat de prompt",
+    ),
+}
+
+#: Toutes les entrées de longueur, dettes et mesures confondues — ce que la
+#: porte « aucune fonction non nommée » consulte.
+_ALL_OVERSIZED: dict[str, tuple[int, str]] = {**_OVERSIZED, **_MEASURED_NOT_A_DEBT}
 
 
 def _definitions() -> dict[str, tuple[int, int]]:
@@ -232,7 +348,7 @@ def test_no_unnamed_function_exceeds_the_target() -> None:
     over = {
         key: size
         for key, size in _function_lengths().items()
-        if size > _FUNCTION_TARGET and key not in _OVERSIZED
+        if size > _FUNCTION_TARGET and key not in _ALL_OVERSIZED
     }
     assert not over, (
         f"{over} exceed the {_FUNCTION_TARGET}-line target and are not on the "
@@ -255,15 +371,16 @@ def test_no_unnamed_function_exceeds_the_parameter_target() -> None:
     )
 
 
-@pytest.mark.parametrize("key", sorted(_OVERSIZED))
+@pytest.mark.parametrize("key", sorted(_ALL_OVERSIZED))
 def test_known_oversized_functions_only_shrink(key: str) -> None:
     lengths = _function_lengths()
+    ceiling, _reason = _ALL_OVERSIZED[key]
     assert key in lengths, (
-        f"{key} no longer exists — drop it from _OVERSIZED, the entry is the "
+        f"{key} no longer exists — drop it from its table, the entry is the "
         "debt, not the function."
     )
-    assert lengths[key] <= _OVERSIZED[key], (
-        f"{key} grew to {lengths[key]} lines, over its pinned {_OVERSIZED[key]}. "
+    assert lengths[key] <= ceiling, (
+        f"{key} grew to {lengths[key]} lines, over its pinned {ceiling}. "
         "Known-oversized functions may only shrink."
     )
 
@@ -275,10 +392,52 @@ def test_known_overparameterised_functions_only_shrink(key: str) -> None:
         f"{key} no longer exists — drop it from _OVERPARAMETERISED, the entry "
         "is the debt, not the function."
     )
-    assert arities[key] <= _OVERPARAMETERISED[key], (
+    ceiling, _reason = _OVERPARAMETERISED[key]
+    assert arities[key] <= ceiling, (
         f"{key} grew to {arities[key]} arguments, over its pinned "
-        f"{_OVERPARAMETERISED[key]}. Known-overparameterised functions may "
-        "only shrink."
+        f"{ceiling}. Known-overparameterised functions may only shrink."
+    )
+
+
+def test_every_inscribed_entry_carries_a_reason() -> None:
+    """Le nombre seul était la faille de l'instrument.
+
+    Inscrire une fonction de 110 lignes ne coûtait qu'un chiffre. Le plafond
+    ne demandait donc jamais d'argument : il demandait de découper — ce qui a
+    poussé à sortir de l'état dans les signatures jusqu'à ce qu'un second
+    plafond arrive — ou d'inscrire, en silence.
+
+    Une raison écrite change ce que la porte demande. On peut garder une
+    fonction longue ; il faut dire pourquoi, et la phrase se relit.
+
+    Le seuil de 40 caractères n'est pas une mesure de qualité : il refuse
+    « historique », « à voir », « TODO » — la classe d'entrée qui satisfait
+    la règle sans rien dire.
+    """
+    thin: dict[str, str] = {}
+    for table in (_OVERSIZED, _MEASURED_NOT_A_DEBT, _OVERPARAMETERISED):
+        for key, (_ceiling, reason) in table.items():
+            if len(reason.strip()) < 40:
+                thin[key] = reason
+    assert not thin, (
+        f"{thin} : une entrée sans raison lisible est un plafond qui ne "
+        f"demande rien. Écrire ce que le découpage coûterait, ou découper."
+    )
+
+
+def test_the_two_length_tables_do_not_overlap() -> None:
+    """Une dette et une mesure ne peuvent pas être la même entrée.
+
+    Sans cette assertion, déplacer une fonction de `_OVERSIZED` vers
+    `_MEASURED_NOT_A_DEBT` sans retirer l'ancienne ligne la sortirait
+    silencieusement de la liste des dettes tout en la gardant plafonnée
+    deux fois — et la table cesserait de dire ce qui reste à faire.
+    """
+    both = sorted(set(_OVERSIZED) & set(_MEASURED_NOT_A_DEBT))
+    assert not both, (
+        f"{both} figurent dans les deux tables. `_OVERSIZED` est ce qu'on "
+        f"prévoit de réduire, `_MEASURED_NOT_A_DEBT` ce qu'on a mesuré et "
+        f"décidé de garder — une entrée est l'un ou l'autre."
     )
 
 
@@ -288,12 +447,12 @@ def test_finished_functions_are_not_still_listed() -> None:
     lengths = _function_lengths()
     done = {
         key: lengths[key]
-        for key in _OVERSIZED
+        for key in _ALL_OVERSIZED
         if key in lengths and lengths[key] <= _FUNCTION_TARGET
     }
     assert not done, (
         f"{done} are within the {_FUNCTION_TARGET}-line target — remove them "
-        "from _OVERSIZED so the list still shows what is left."
+        "from their table so the list still shows what is left."
     )
 
 

@@ -1,38 +1,29 @@
-"""What one page's correction can SEE (`RM-03`).
+"""Les trois index qu'une page consulte, réunis en une valeur.
 
-Three indices travelled the whole chunk path by hand — ``line_by_id``
-(this page's lines by bare id), ``cross_page_partners`` (the hyphen
-members this page needs from other pages, page-qualified) and ``traces``
-(the run's per-line audit records). They appeared together in nine
-signatures from :meth:`PageDriver.process_page` down to
-``outcome._extend_to_units``, and were counted 24, 38 and 35 times across
-the source.
+``line_by_id`` (les lignes de cette page, par id nu), ``cross_page_partners``
+(les membres de césure qu'elle emprunte à d'autres pages, page-qualifiés) et
+``traces`` (les enregistrements d'audit du run) voyagent ensemble et n'ont de
+sens qu'ensemble : un appelant ne peut pas recevoir l'un sans les autres, ni
+le workspace d'une autre page.
 
-That is not three arguments, it is one thing spelled three times. The
-orchestrator split turned what used to be ``self.line_by_id``
-into a parameter, which was right in intent and produced
-``_descend_granularity`` at twelve arguments. `RM-02` made that visible
-by measuring arity next to length; this is the item that acts on it.
+**Ce que ce type ne fait pas.** Il ne rend rien immuable : la dataclass est
+gelée, mais les dicts qu'elle porte sont les index VIVANTS du run —
+``core.decide`` écrit dans ``traces`` et les manifestes de ``line_by_id`` sont
+l'état de travail muté.
 
-**Read-only by construction, and the limit of that claim is worth
-stating.** The dataclass is frozen, so a field cannot be rebound, and it
-exposes no method that writes anything. The dicts it holds are the run's
-LIVE indices, not copies — ``traces`` is written by
-:mod:`saknussemm.core.decide` and the manifests in ``line_by_id`` are the
-working state a run mutates. Handing them around in one object does not
-make them immutable and this module does not pretend otherwise. What it
-does is stop the three from being separable: a caller cannot now be given
-``line_by_id`` without ``traces``, or be handed a workspace from another
-page.
+**Ce n'est pas un sac.** Il porte des INDEX qu'une page lit, jamais ce qu'un
+run accumule ; l'état du run est :class:`~saknussemm.core.context.RunContext`.
+``tests/test_page_workspace_is_not_a_bag.py`` refuse un quatrième champ, donc
+le prochain à vouloir en ajouter un doit faire l'argument à voix haute.
 
-**It is not a bag.** `ADR-011` spent a slice removing per-run mutable
-state from the engine, and a workspace that grew a counter, a metric or a
-cache would put it straight back. The rule is narrow and mechanical:
-this holds INDICES a page's work reads, nothing a run accumulates. Run
-state is :class:`~saknussemm.core.context.RunContext` and stays there —
-``tests/test_page_workspace_is_not_a_bag.py`` fails if this class grows a
-field that is neither of the three, so the next person to reach for it
-has to make that argument out loud.
+**Origine, et la décision de le garder.** Ce type est né d'une métrique :
+`_descend_granularity` atteignait douze arguments et le plafond d'arité
+demandait de descendre. L'audit du 2026-08-25 l'a relevé comme une abstraction
+créée pour un compteur, et la vague `RS` a tranché de le GARDER — le retirer
+rendrait ses douze arguments à une fonction qui n'en a pas besoin, pour un
+gain qui serait de principe. Ce qui change plutôt, c'est le compteur : depuis
+`RS-4.2`, inscrire une fonction longue ou large demande d'écrire pourquoi, ce
+qui retire l'incitation à fabriquer un objet pour faire baisser un nombre.
 """
 
 from __future__ import annotations

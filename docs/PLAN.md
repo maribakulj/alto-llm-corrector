@@ -2341,7 +2341,7 @@ qui retirent du code réellement mort (`RS-2`), et elles doivent dire pourquoi.
 | `RS-1` | Le filet manque là où l'on va couper : `_build_hyphen_pairs` et `_cross_page_partners` ne sont nommés par aucun test, `core/driver.py` non plus, le golden byte-parity est un échantillon | tests | **critique** | `tests/` (6 fichiers, dont 4 nouveaux), `docs/la-vie-d-une-ligne.md` (nouveau) | — | **fait (2026-08-25)** — 1780 → 1871 tests |
 | `RS-2` | Quatre affirmations fausses ; un shim de compatibilité que seuls les tests gardent ; 400 Ko de XSD hors surface publique ; 4 classes qui ne sont pas des politiques dans `policies.py` | vérité | important | `README.md`, `core/protocols.py`, `core/schemas/policies.py`, `formats/validation.py` | — | **fait (2026-08-25)** |
 | `RS-3` | Le rejeu de la carte rôle→slot sur les champs pointeurs, à 60 lignes d'une docstring qui l'interdisait ; garde sur 2 sites de 5 | **bugfix** (latent) | **critique** | `core/reconcile.py`, `core/indexing.py`, `core/hyphenation.py` | `RS-1` | **fait (2026-08-25)** — 3 modules lecteurs → 0 |
-| `RS-4` | Cliquets goodhartisés une seconde fois : le plafond d'arité a produit `PageWorkspace`, le plafond de longueur a produit neuf modules sous 130 l. | outillage | important | `tests/test_orchestrator_budget.py`, `core/workspace.py` | — | à faire |
+| `RS-4` | Cliquets goodhartisés une seconde fois : le plafond d'arité a produit `PageWorkspace`, le plafond de longueur a produit neuf modules sous 130 l. | outillage | important | `tests/test_orchestrator_budget.py`, `core/workspace.py` | — | **fait (2026-08-25)** — chaque entrée porte sa raison ; 3 conservations écrites |
 | `RS-5` | 5 des 14 paramètres du pipeline pilotent 1 667 lignes qu'aucun run par défaut n'emprunte ; cycle `formats.loader` ↔ `formats.alto.parser` ; frontière `integrations/` ↔ `producers/` incohérente | réducteur | important | `core/driver.py`, `core/routing.py`, `core/pipeline.py`, `formats/loader.py`, `producers/`, `integrations/` | `RS-1`, `RS-4`, arbitrage | à faire |
 | `RS-6` | Ratio prose/code à 0,84, dont 121 passages de récit de migration ; 14 raisons de repli sans énumération ; 21 seuils non calibrés à geler en `1.0` | vérité | important | tout `src/`, `docs/versioning.md` | `RS-3`, `RS-5` | à faire |
 | `RS-7` | Rien ne prouve, en fin de vague, que la trajectoire a tenu | mesure | important | `docs/PLAN.md`, `docs/promises.md`, `CHANGELOG.md` | tous | à faire |
@@ -2359,17 +2359,38 @@ Reproduire en fin de vague celles du relevé d'entrée :
 | modules lisant les pointeurs hors `pairing`/`units` | 3 | **0** |
 | affirmations fausses recensées | 4 | 0 |
 
+### Trois décisions de conservation, tranchées le 2026-08-25
+
+L'audit relève trois abstractions comme candidates au retrait. Les trois sont
+**gardées**, et la raison est écrite ici pour que la question ne se rouvre pas
+au prochain relevé.
+
+**`PageWorkspace` et `RunContext` restent.** Le premier est né d'une métrique
+— `_descend_granularity` à douze arguments — et c'est un vrai constat. Le
+retirer rendrait ces douze arguments à une fonction qui n'en a pas besoin,
+pour un gain de principe. Ce qui est corrigé est le compteur, pas l'objet :
+depuis `RS-4.2`, inscrire une fonction longue ou large demande d'écrire
+pourquoi, ce qui retire l'incitation à fabriquer un objet pour faire baisser
+un nombre. `tests/test_page_workspace_is_not_a_bag.py` continue d'interdire
+qu'il grossisse.
+
+**Les quatre représentations par ligne restent.** `LineManifest` (l'état de
+travail), `LineTrace` (l'audit), `LineDecision` (la décision terminale) et
+`LineOutcome` (la projection publique) ne fusionnent pas : la séparation
+muable/immuable est une propriété acquise par `ADR-011`, et `LineOutcome` est
+une surface publique versionnée. Le défaut réel n'était pas leur nombre mais
+le recopiage non vérifié entre elles, que `RS-1.5` a fermé par un test de
+clôture — quinze champs, neuf projetés, six écartés avec leur raison.
+
+**Le jeton d'ordre de `core/finalize.py` reste.** Il garde exactement l'ordre
+des passes que `S1` va traverser. Sa condition de retrait est que `S1` soit
+passé ; `S1` n'est pas dans cette vague, donc la condition n'est pas remplie
+et ne le sera pas ici. Si `S1` est reporté sine die, la question est close et
+le jeton reste — un garde-fou dont on n'a plus besoin ne coûte que sa lecture.
+
 ### Ce que cette vague ne fait pas
 
 - **`S1` n'y est pas.** `RS-3` le déverrouille ; il ne l'exécute pas.
-- **Le jeton d'ordre de `core/finalize.py` n'est pas retiré.** Il garde
-  précisément le refactor qui va traverser ces modules. À reconsidérer après
-  `S1`, jamais avant ; si `S1` est reporté sine die, la question est close et
-  le jeton reste.
-- **Aucune fusion des quatre représentations par ligne.** La séparation
-  mutable/immuable est une propriété acquise (`ADR-011`) et `LineOutcome` est
-  une surface publique versionnée. Le remède est un test de clôture, pas une
-  fusion.
 - **`formats/alto/rewriter.py` reste hors-limites.** `RS-1` élargit le corpus
   byte-parity, ce qui lève la condition écrite au § `RM` — mais la levée est
   une décision de ce plan, pas un effet de bord de `RS-1`.
