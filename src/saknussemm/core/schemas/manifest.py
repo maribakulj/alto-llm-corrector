@@ -74,11 +74,9 @@ class PipelineEventType(str, Enum):
     they stay stable across releases and change only through the same
     door as any other public rename.
 
-    The guard that used to be named here lived in the demo application
-    and left with it on 2026-08-16. Naming a test in a repository this
-    one does not own would be a reference that rots without anyone
-    noticing — which is the failure this docstring would otherwise
-    demonstrate rather than describe.
+    No test is named here: the one that would be lives in a repository
+    this one does not own, and such a reference rots without anyone
+    noticing.
     """
 
     # Document / page / chunk lifecycle (emitted by CorrectionPipeline)
@@ -120,10 +118,10 @@ class Coords(BaseModel):
     on the PAGE side, so the source polygon is a read-only provenance field.
     """
 
-    # ADR-011 slice E, made structural — on this model, not yet on every
-    # manifest type. The engine works on
-    # a deep copy and never writes here — freezing says so in the type
-    # instead of leaving it to hold by the discipline of one call site.
+    # ADR-011, made structural — on this model, not yet on every manifest
+    # type. The engine works on a deep copy and never writes here; freezing
+    # says so in the type instead of leaving it to the discipline of one
+    # call site.
     #
     # Not yet frozen, and each for its own measured reason: `LineManifest`
     # IS the run's working state (246 assignment sites — corrected_text,
@@ -230,10 +228,10 @@ class PageManifest(BaseModel):
 class DocumentManifest(BaseModel):
     """A multi-page document: the top-level structure the pipeline consumes."""
 
-    # ADR-011 slice E, made structural — on this model, not yet on every
-    # manifest type. The engine works on
-    # a deep copy and never writes here — freezing says so in the type
-    # instead of leaving it to hold by the discipline of one call site.
+    # ADR-011, made structural — on this model, not yet on every manifest
+    # type. The engine works on a deep copy and never writes here; freezing
+    # says so in the type instead of leaving it to the discipline of one
+    # call site.
     #
     # Not yet frozen, and each for its own measured reason: `LineManifest`
     # IS the run's working state (246 assignment sites — corrected_text,

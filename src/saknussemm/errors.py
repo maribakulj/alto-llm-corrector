@@ -56,8 +56,8 @@ class SaknussemmError(Exception):
 class ParseError(SaknussemmError, ValueError):
     """A source document could not be parsed into a manifest.
 
-    Inherits ``ValueError`` for backwards compatibility with call sites
-    that caught the bare ``ValueError`` the parser used to raise.
+    Inherits ``ValueError`` so a call site catching the bare
+    ``ValueError`` a parser raises keeps working.
     """
 
     code: ClassVar[str] = "parse_error"
@@ -137,12 +137,10 @@ class ProjectionError(SaknussemmError):
     before the writer persists anything.
 
     ``failures`` names EVERY undeliverable source file, not the first one.
-    The invariant still refuses the whole run — that part is deliberate and
-    unchanged — but it used to abandon the rewrite loop on the first
-    divergence, so a document with three bad files disclosed one per run.
-    Learning the second cost a second full run, and a producer's run is
-    billed: three findings, three bills, three waits. Finishing the loop
-    costs a few milliseconds of lxml per remaining file and turns that into
+    Abandoning the rewrite loop on the first divergence discloses one bad
+    file per run, and a producer's run is billed: three findings, three
+    bills, three waits. Finishing the loop costs a few milliseconds of lxml
+    per remaining file and turns that into
     one.
 
     Empty for the single-file case, where ``str(exc)`` already says

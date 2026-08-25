@@ -20,20 +20,16 @@ from saknussemm.core.schemas.producer import Usage
 
 
 class RefusedEdit(BaseModel):
-    """One producer op the edit guards refused, and why (`A2b`).
+    """One producer op the edit guards refused, and why.
 
-    ``EditRejection`` has carried thirteen reason codes since the protocol
-    landed and **no consumer outside the tests**: a line whose only op was
-    refused reported ``corrected`` with no reason, ``fallback_chunks`` at
-    zero, and nothing anywhere said a guard had fired. The report could not
-    distinguish "the producer proposed nothing" from "it proposed something
-    the guards refused", so the refusal rate of `E1`–`E5` was not merely
-    unmeasured, it was **unmeasurable** — and a consumer tuning a
-    ``GuardConfig``, or a bench sweeping one, was steering blind.
+    Without it the report cannot distinguish "the producer proposed
+    nothing" from "it proposed something the guards refused": a line whose
+    only op is refused reports ``corrected`` with no reason, and the refusal
+    rate of the edit guards is not merely unmeasured but **unmeasurable**.
 
-    That is the reason this exists rather than a counter: a rate needs the
-    reason to be actionable. ``e5_hyphen`` and ``e4_line_budget`` firing on
-    the same corpus mean opposite things about what to change.
+    A reason rather than a counter, because a rate needs one to be
+    actionable: ``e5_hyphen`` and ``e4_line_budget`` firing on the same
+    corpus mean opposite things about what to change.
 
     Line ids are bare and ``page_id`` qualifies them, as for
     :class:`HyphenSplit` (ADR-009).
@@ -185,8 +181,8 @@ class ProjectionStage(BaseModel):
     #: line's words. Flagged, never acted on: lines never merge and words
     #: never move, so the text is written exactly as decided and the source
     #: identities stay where the alignment could vouch for them. Not a loss
-    #: and no longer counted as one — it used to sit in :attr:`losses`, where
-    #: a consumer summing loss counters added a non-loss to the total.
+    #: therefore not counted as one: inside :attr:`losses` it would make a
+    #: consumer summing the loss counters add a non-loss to the total.
     #: ``None`` when the alignment saw no reorder (and on every path that
     #: does not align: untouched, subs-only, fast). Additive and optional —
     #: no ``report_version`` bump.
@@ -397,8 +393,8 @@ class CorrectionReport(BaseModel):
     #: normalized lines mean two lines where a significant whitespace
     #: character (U+00A0, U+202F, a tab) was flattened into an ordinary
     #: space: the artefact still says the same WORDS, and no longer says
-    #: them the same way. Before this existed the invariant compared in
-    #: whitespace normal form and could not see that at all. ``None`` when
+    #: them the same way — which an invariant comparing in whitespace normal
+    #: form cannot see at all. ``None`` when
     #: the run rendered no output file. Additive and optional — no
     #: ``report_version`` bump.
     projection_fidelity: dict[str, int] | None = None
@@ -425,9 +421,8 @@ class CorrectionReport(BaseModel):
     #: Additive and optional — no ``report_version`` bump.
     hyphen_splits: list[HyphenSplit] | None = None
 
-    #: Every producer op the edit guards refused (`A2b`), or ``None`` when
-    #: none were. Additive, so ``report_version`` does not move — the same
-    #: argument ``projection_fidelity`` made.
+    #: Every producer op the edit guards refused, or ``None`` when none
+    #: were. Additive, so ``report_version`` does not move.
     #:
     #: This is the field that makes a ``GuardConfig`` tunable. Before it, a
     #: line whose only op was refused reported ``corrected`` with no reason
@@ -439,8 +434,7 @@ class CorrectionReport(BaseModel):
     #:
     #: Sorted by ``(page_id, line_id, op, reason)`` rather than accumulated
     #: in execution order, so two runs over the same document produce the
-    #: same report — which is not true of ``hyphen_splits`` above, and is
-    #: the reason that one is on the list for `A7c`.
+    #: same report — which is not yet true of ``hyphen_splits`` above.
     edit_rejections: list[RefusedEdit] | None = None
     #: §11 — the run's full provenance record. Optional and
     #: additive (no ``report_version`` bump): a v2.0 consumer that

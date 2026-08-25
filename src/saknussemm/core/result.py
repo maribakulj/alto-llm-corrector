@@ -1,10 +1,8 @@
 """What a run returns, and what a caller may do with it (ADR-011).
 
 The engine never writes: it computes values and hands them back. This module
-holds that value, and the assembly of it. Lifted out of the orchestrator
-because a result object is not execution control — it is the shape of an
-answer, and a reader looking for "what do I get back?" should not have to
-scroll past the retry loop.
+holds that value and the assembly of it — the shape of an answer, not
+execution control.
 """
 
 from __future__ import annotations
@@ -27,7 +25,7 @@ from saknussemm.core.schemas import CorrectionReport, LineTrace, Usage
 class CorrectionResult:
     """Outcome of a full pipeline run.
 
-    The input manifest is never mutated (ADR-011 slice E): what the run
+    The input manifest is never mutated (ADR-011): what the run
     decided is read off ``decisions`` (and ``corrected_files`` for the
     artefacts). `traces` is the line-by-line text trace through every
     stage.
@@ -63,8 +61,8 @@ class CorrectionResult:
     #: ``replace_span`` ops here too.
     edit_script: EditScript
     #: ADR-011 — the run's immutable :class:`DecisionSet`: one terminal
-    #: decision per line in document reading order. Since ADR-011 slice E the
-    #: input manifest is never mutated, so THIS is where a caller reads
+    #: decision per line in document reading order. The input manifest
+    #: is never mutated, so THIS is where a caller reads
     #: what the run decided (``decisions.by_ref[LineRef(...)]``).
     decisions: DecisionSet
     #: ADR-011 — the corrected artefacts themselves, keyed by source file
@@ -141,11 +139,11 @@ class CorrectionResult:
     def _refuse_partial_write(self, allow_partial: bool) -> None:
         """A volume missing a file must not reach disk by omission.
 
-        The engine no longer throws a whole run away because one file's
-        artefact diverged — the other files are faithful, and refusing to
-        hand them over never made them better. But the risk that trade
-        creates is precise: a caller who writes ``corrected_files`` in a
-        loop persists 299 of 300 pages, reports success, and nobody looks.
+        A divergent artefact does not throw the whole run away — the other
+        files are faithful, and refusing to hand them over never made them
+        better. The risk that trade creates is precise: a caller who writes
+        ``corrected_files`` in a loop persists 299 of 300 pages, reports
+        success, and nobody looks.
 
         So the loudness lands here, at the one door that puts bytes on
         disk. ``allow_partial=True`` is the caller saying it has read

@@ -2353,7 +2353,7 @@ Reproduire en fin de vague celles du relevé d'entrée :
 | mesure | entrée (2026-08-25) | cible |
 |---|---|---|
 | lignes de code effectif `src/` | 9 207 | ~9 000, jamais plus |
-| ratio prose/code | 0,84 | ≤ 0,45 |
+| ratio prose/code | 0,84 | **0,838, cible retirée** — voir ci-dessous |
 | modules dans `core/` | 42 | ≤ 42 — aucun nouveau module en `RS-6` |
 | paramètres de `CorrectionPipeline.__init__` | 14 | **14, cible révisée** — voir ci-dessous |
 | modules lisant les pointeurs hors `pairing`/`units` | 3 | **0** |
@@ -2415,6 +2415,41 @@ une surface de configuration, pas du drilling de paramètres, et les deux ne
 se soignent pas de la même façon. Le vrai gain de `RS-5.1` se mesure ailleurs
 — `core/driver.py` n'importe plus `core.quality` ni `core.batching`, et une
 assertion le tient.
+
+### La cible « ratio prose/code ≤ 0,45 » était fausse aussi
+
+Deuxième cible retirée par la mesure, et pour un motif plus instructif que
+la première : **le relevé d'entrée avait surestimé la prose supprimable d'un
+ordre de grandeur.**
+
+Il comptait 121 lignes portant un marqueur narratif (« used to »,
+« historically », un tag de vague) et en déduisait, par une règle de trois
+sur la taille des paragraphes, quelque deux mille lignes de récit de
+migration. La règle de tri a été appliquée intégralement — invariant et
+justification mesurée restent, récit de migration part — sur les trente-six
+modules concernés. Résultat : **138 marqueurs ramenés à 62**, et le ratio
+passe de 0,844 à 0,838.
+
+La raison est dans la composition de ce qui reste, mesurée après coup :
+
+| catégorie | lignes |
+|---|---|
+| docstrings de fonction | 2 665 |
+| commentaires `#:` sur les modèles publics | 919 |
+| docstrings de classe | 921 |
+| docstrings de module | 1 062 |
+| commentaires simples | 1 445 |
+
+Les trois premières lignes du tableau — 4 505 lignes — **sont la référence
+d'API** : ce qu'un champ de `CorrectionReport` signifie, ce que chaque
+niveau de l'échelle de fidélité vaut, ce qu'une garde refuse. Atteindre 0,45
+demanderait d'en supprimer une bonne part, c'est-à-dire de faire exactement
+ce que la clause « quand s'arrêter » du plan interdit.
+
+Ce qui reste vrai du constat : les paragraphes qui racontaient COMMENT le
+code en est arrivé là étaient du bruit, et ils sont partis. Ce qui était faux
+est la quantité — et l'avoir chiffré au jugé plutôt que mesuré est
+précisément le défaut que le reste de ce dépôt évite avec soin.
 
 ### Ce que cette vague ne fait pas
 

@@ -99,7 +99,10 @@ retirent du code mort peuvent en modifier un, et elles doivent dire pourquoi.
 
 ## Phase 6 — Nettoyage final
 
-- [ ] `RS-6.1` trier la prose, un module par commit (0,84 → ≤ 0,45)
+- [x] `RS-6.1` trier la prose — 138 marqueurs narratifs → 62, sur 36 modules.
+      **Cible « ≤ 0,45 » retirée** : le relevé d'entrée surestimait la prose
+      supprimable d'un ordre de grandeur ; 4 505 des 7 735 lignes restantes
+      sont la référence d'API (raison mesurée dans `docs/PLAN.md`)
 - [ ] `RS-6.2` fermer l'ensemble des raisons de repli
 - [ ] `RS-6.3` profils `GuardConfig` et vérité SemVer
 - [ ] `RS-6.4` finaliser `docs/la-vie-d-une-ligne.md`
@@ -118,7 +121,7 @@ retirent du code mort peuvent en modifier un, et elles doivent dire pourquoi.
 | mesure | entrée (2026-08-25) | courant | cible |
 |---|---|---|---|
 | lignes de code effectif `src/` | 9 207 | 9 207 | ~9 000 |
-| ratio prose/code | 0,84 | 0,84 | ≤ 0,45 |
+| ratio prose/code | 0,844 | 0,838 | cible retirée¹ |
 | modules dans `core/` | 42 | 42 | ≤ 42 |
 | paramètres `CorrectionPipeline.__init__` | 14 | 14 | cible retirée¹ |
 | lecteurs de pointeurs hors `pairing`/`units` | 3 | **0** | 0 |

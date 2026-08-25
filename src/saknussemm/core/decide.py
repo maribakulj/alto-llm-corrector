@@ -1,12 +1,9 @@
-"""The one place a line's decision is written (ADR-013, `RM-01`).
+"""The one place a line's decision is written (ADR-013).
 
 A line's decision is two manifest fields — ``corrected_text`` and
-``status`` — plus the trace's ``fallback_reason``. Twenty-two statements
-across seven functions in five modules used to write them, and what kept
-them coherent was the order the document-wide passes happened to run in.
-This module is where they are collapsing to, one site per commit;
-``tests/decision/test_decision_write_exclusivity.py`` is the ratchet that
-counts what is left.
+``status`` — plus the trace's ``fallback_reason``. Every write of them goes
+through here; ``tests/decision/test_decision_write_exclusivity.py`` refuses
+the first statement anywhere else in the package.
 
 Three verbs, because there are three genuinely different things to say
 about a line, and collapsing them would make the module lie about what
@@ -45,18 +42,17 @@ ADR-010's fallback atomicity. Deferring the text too would leave a mixed
 pair — one member at source, one corrected — which is the single state
 the reconciler guarantees cannot survive.
 
-**Why ``renormalise`` exists rather than reusing ``accept``** (`RM-01`
-phase 2, the question ADR-013 left open). ``finalize._preserve_break_chars``
+**Why ``renormalise`` exists rather than reusing ``accept``.**
+``finalize._preserve_break_chars``
 forces the source line's word-break character onto an accepted
 correction. It decides nothing: it does not choose between a proposal
 and a source, it respells a choice already made, and it never runs on a
 line that fell back (a reverted line has ``corrected_text ==
 ocr_text``, which it skips). Routing it through ``accept`` would make it
 assert ``CORRECTED`` on lines whose status it has no business setting —
-a behaviour change bought for the tidiness of having two verbs instead
-of three. The point of this module is that a reader can tell what
-happened to a line from the call; a verb that means "text only, decision
-untouched" is the honest one.
+a behaviour change bought for the tidiness of two verbs instead of
+three. A reader must be able to tell what happened to a line from the call
+alone, and "text only, decision untouched" is a third thing to say.
 """
 
 from __future__ import annotations

@@ -1,7 +1,7 @@
 """Immutable decision record of a run (ADR-011, slices C+E).
 
 The engine expresses its decisions by mutating its PRIVATE working copy
-of the manifests (since ADR-011 slice E the caller's document is never
+of the manifests (the caller's document is never
 touched); this module defines THE decision model and materializes it
 exactly once — after the global consistency pass, when every line's
 decision is final. Everything downstream of the run reads the

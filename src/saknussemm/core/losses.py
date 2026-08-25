@@ -1,47 +1,32 @@
-"""What a format loss IS, for both formats (`RM-07`).
+"""What a format loss IS, for both formats.
 
-The loss counters grew one fix at a time: someone noticed an attribute
-disappearing, added a counter, moved on. Nothing ever stated what each
-attribute is *supposed* to do, so "every loss is counted" was a claim with
-no referent — and it was false in both directions at once. The report
-claimed 229 dropped ``SUBS_CONTENT`` on a file that kept every one of them,
-while 3339 ``WC`` left the same file uncounted.
-
-The referent is a table per format, saying for every attribute which of
-four things happens to it, and separately whether that thing is something
-the report counts. **The tables are not here.** ALTO's lives in
-:mod:`saknussemm.formats.alto.losses`; PAGE counts its own equivalent in
-its rewriter. What is here is the vocabulary they share and neither owns:
-the two classes, the four fates, and the three constants that make the
-two formats say the same thing about the same event.
-
-`RM-07` made that split. Before it, this module carried ALTO's table —
-``HPOS``, ``SUBS_CONTENT``, ``WC`` — inside the package whose stated
-property is that the pure core knows no format. No test failed, because
-nothing imported ``lxml``: the violation was semantic, and a true
-statement about the architecture that the architecture did not make. PAGE
-imports exactly two names from this module and never needed the table,
-which is what made the boundary obvious once it was measured.
-
-The distinction that makes the table work, and that the counters missed:
+Only a SEMANTIC attribute can be lost, and that distinction is the whole
+content of this module.
 
 ``STRUCTURAL``
     The attribute belongs to the ``String`` element, one per token. When a
     correction re-segments a line the token count changes and so does the
-    attribute count — the slow path on X0000002 goes from 3395 ``HPOS`` to
-    3963 because it wrote MORE words, not because it lost any. Counting
+    attribute count — the slow path on ``X0000002`` goes from 3395 ``HPOS``
+    to 3963 because it wrote MORE words, not because it lost any. Counting
     that delta as loss (or gain) is a category error: nothing was lost, the
     line was re-tokenised, and the re-tokenisation is the correction.
 
 ``SEMANTIC``
-    The attribute carries information the source engine asserted about a
+    The attribute carries something the source engine asserted about a
     specific reading — a confidence, a style, a tag reference. It does not
     follow the tokens, and when it goes, something an archive cared about
     is gone.
 
-Only SEMANTIC attributes can be lost. That is the whole of the false
-half above: SUBS_TYPE and SUBS_CONTENT were being counted as lost when
-they are re-established from the manifest on the very same pass.
+Missing that distinction made the counters wrong in both directions at
+once: the report claimed 229 dropped ``SUBS_CONTENT`` on a file that kept
+every one of them (they are re-established from the manifest on the same
+pass), while 3339 ``WC`` left the same file uncounted.
+
+**The per-format tables are not here.** ALTO's lives in
+:mod:`saknussemm.formats.alto.losses`; PAGE counts its own equivalent in its
+rewriter. What is here is the vocabulary they share and neither owns: two
+classes, four fates, three constants — so that the two formats say the same
+thing about the same event, and the pure core still knows no format.
 """
 
 from __future__ import annotations

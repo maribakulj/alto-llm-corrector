@@ -98,11 +98,11 @@ def adapter_for_format(source_format: str | None) -> FormatAdapter:
     default — is exactly how a PAGE document ended up rewritten by the
     ALTO rewriter.
 
-    Lives here since `RM-07`, next to :func:`build_document_manifest`,
-    because the two answer the same question: which module speaks this
-    format. It sat in ``core/provenance.py`` before, where it was the one
-    place the pure core enumerated ALTO and PAGE by name — lazily, so no
-    import rule was broken, but the knowledge was there and a third format
+    Lives next to :func:`build_document_manifest` because the two answer
+    the same question: which module speaks this format. In
+    ``core/provenance.py`` it was the one place the pure core enumerated
+    ALTO and PAGE by name — lazily, so no import rule was broken, but the
+    knowledge was there and a third format
     would have had to be added to a core module to be usable.
 
     The imports stay function-local: this module is reached from ``core``

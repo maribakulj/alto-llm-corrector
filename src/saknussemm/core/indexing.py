@@ -3,12 +3,8 @@
 Three facts about the document have to exist before the first chunk is
 planned: the trace each line starts from, the page-qualified registry that
 makes a partner on another page findable, and how many hyphen units the
-document holds. The orchestrator built all three with three separate
-traversals of every page of every file, interleaved with the event it emits
-about them — which is why the traversals kept being read as part of the run
-and not as what they are: an index, derived from the manifest alone.
-
-One pass now, and one value to carry. Line identity is
+document holds. They are an INDEX, derived from the manifest alone — not
+part of the run — and one pass builds all three. Line identity is
 ``(page_id, line_id)`` throughout (ADR-001/ADR-007): a bare ``line_id``
 legitimately repeats across source files, so every key here is a
 :class:`LineRef`.
@@ -38,7 +34,7 @@ _OPENS_A_UNIT = (HyphenRole.PART1, HyphenRole.BOTH)
 class DocumentIndex:
     """What a run knows about its document before any correction work.
 
-    Built once, from the run's private manifest copy (ADR-011 slice E).
+    Built once, from the run's private manifest copy (ADR-011).
     ``traces`` is handed to every later stage and accumulates as the run
     goes; ``lines`` and ``hyphen_pairs`` are read-only views of the
     document as parsed.

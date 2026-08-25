@@ -14,9 +14,7 @@ state onto the same lines:
     back to OCR text NOW.
 
 They live together because the third one is easy to forget, and forgetting
-it is how a run finishes "successfully" with lines in no state at all. It
-used to sit inline in the page loop, fifty lines deep inside an ``except``,
-where nothing suggested it was a sibling of the fallback path.
+it is how a run finishes "successfully" with lines in no state at all.
 
 Two invariants they share, and neither is optional:
 

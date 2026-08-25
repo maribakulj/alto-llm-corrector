@@ -7,11 +7,11 @@ module — each one depends on running against what the previous left behind:
   1. the adjacent-duplicate consistency pass, which needs every
      line still holding its pre-revert accepted correction, so it must be
      the first thing to revert anything;
-  2. break-character preservation (P5), which normalises the accepted text
-     BEFORE it becomes a decision — historically the PAGE rewriter forced
-     the source's break character after the decision was recorded, so the
-     artefact spelled something the decision did not and the projection
-     invariant raised on the engine's own output;
+  2. break-character preservation, which normalises the accepted text
+     BEFORE it becomes a decision. Forcing the source's break character
+     AFTER the decision is recorded makes the artefact spell something the
+     decision does not, and the projection invariant then raises on the
+     engine's own output;
   3. the loss-policy gates (ADR-012 strict, token_realign), which reject a
      correction that cannot project without losing word granularity —
      before the decisions materialise and before any output exists, so the
@@ -20,11 +20,10 @@ module — each one depends on running against what the previous left behind:
      still PENDING: outputs exist only for a document where every line
      carries a terminal decision.
 
-Free function. None of it is execution control — no producer, no
-retry, no observer — and reading it inline in the orchestrator, between the
-page loop and the report, is what made the ordering look incidental.
+Free function: none of it is execution control — no producer, no retry,
+no observer.
 
-Since `RM-01` the order is no longer only stated here: each pass takes a
+The order is not only stated here. Each pass takes a
 :class:`~saknussemm.core.acceptance._FinalizeOrder` token, declares what
 must have run before it, and REFUSES otherwise. The list above is the
 contract; the token is what makes breaking it an error instead of a

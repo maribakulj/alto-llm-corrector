@@ -190,13 +190,12 @@ class CorrectionPipeline:
                 declared if isinstance(declared, ProducerMetadata) else None
             )
         self.producer_metadata = producer_metadata or ProducerMetadata()
-        # No reentrancy guard (ADR-011 slice E, retiring ADR-005): the
-        # instance carries only immutable configuration, every run works
-        # on a fresh RunContext plus its own deep copy of the input
-        # manifest, so concurrent runs on one instance cannot contaminate
-        # each other. The shared observer sees interleaved events under
-        # concurrency — inherent to sharing an observer, and the
-        # caller's choice.
+        # No reentrancy guard (ADR-011): the instance carries only
+        # immutable configuration, and every run works on a fresh
+        # RunContext plus its own deep copy of the input manifest, so
+        # concurrent runs on one instance cannot contaminate each other.
+        # A shared observer still sees interleaved events — inherent to
+        # sharing one, and the caller's choice.
 
     @classmethod
     def for_provider(
@@ -239,14 +238,13 @@ class CorrectionPipeline:
         has no such problem and goes through ``**pipeline_kwargs``
         (`RM-03`).
 
-        It used to re-declare all thirteen and copy them across by hand,
-        which is not merely long: the copy is a SECOND declaration of the
-        constructor's signature, and nothing made the two agree. A knob
-        added to ``__init__`` and forgotten here was silently unreachable
-        through this door, and a default drifting apart between the two
-        would have been invisible in review. Forwarding removes the class
-        of bug; ``tests/test_public_api_snapshot.py`` pins both signatures
-        so the loss of explicitness stays visible where consumers read it.
+        Re-declaring the optional knobs here would be a SECOND declaration
+        of the constructor's signature with nothing making the two agree: a
+        knob added to ``__init__`` and forgotten here is silently
+        unreachable through this door, and a drifting default is invisible
+        in review. ``tests/test_public_api_snapshot.py`` pins both
+        signatures so the loss of explicitness stays visible where consumers
+        read it.
         """
         from saknussemm.producers.llm_edit import LLMEditProducer
 
@@ -326,23 +324,23 @@ class CorrectionPipeline:
     ) -> CorrectionResult:
         """Run the full pipeline. The input manifest is never modified.
 
-        **Immutability & reentrancy (ADR-011 slice E, retiring
-        ADR-005)** — the engine works on its own deep copy of
+        **Immutability & reentrancy (ADR-011)** — the engine works on
+        its own deep copy of
         ``document_manifest``: the input is read, never written, so the
         same document object can be run again (or concurrently) and
         every run starts from the original OCR text. All per-run state
         lives in a fresh :class:`RunContext` plus that copy; the
         instance carries only immutable configuration, so one pipeline
         instance supports concurrent ``run()`` calls (within one event
-        loop — instances are still not thread-safe). The run's
-        decisions are returned on the result
+        loop — instances are not thread-safe). The run's decisions are
+        returned on the result
         (:attr:`CorrectionResult.decisions`), not written back onto the
         caller's manifest.
 
-        §5.1 resorption — there is no ``api_key``/``model``/``provider_name``
-        here anymore: credentials and the vendor call live inside the
-        injected :class:`EditProducer` (see :meth:`for_provider`), and the
-        provenance labels are constructor state.
+        Credentials and the vendor call live inside the injected
+        :class:`EditProducer` (see :meth:`for_provider`); the provenance
+        labels are constructor state. Nothing here carries an
+        ``api_key``.
 
         ``page_images`` (§5.1) — optional mapping of **page_id** (document-
         unique, ADR-007) to a :data:`PageImage`: the historical opaque
@@ -376,7 +374,7 @@ class CorrectionPipeline:
         host-owned transaction when the host needs commit/discard
         semantics.
         """
-        # ADR-011 slice E — the working copy IS the run's mutable state;
+        # ADR-011 — the working copy IS the run's mutable state;
         # the caller's document stays exactly as parsed.
         return await self._run_impl(
             document_manifest=document_manifest.model_copy(deep=True),

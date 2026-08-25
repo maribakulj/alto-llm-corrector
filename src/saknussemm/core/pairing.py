@@ -69,11 +69,11 @@ def preserve_break_char(source_text: str, corrected: str) -> str:
     whitespace preserved). Idempotent; a no-op when either side carries
     no word-break hyphen.
 
-    Historically enforced by the PAGE rewriter only, AFTER the decision
-    was recorded — so the artefact could diverge from the decision and
-    trip ``_verify_projection`` (found by the OCR17+ corpus, 2026-07-23:
-    source ``tou-`` / oracle ``tou¬``). The pipeline now applies it
-    BEFORE decisions materialize; the rewriter keeps its call as
+    Applied BEFORE the decisions materialize. Enforced by the rewriter
+    alone, AFTER the decision is recorded, the artefact can diverge from
+    the decision and trip ``_verify_projection`` (OCR17+ corpus,
+    2026-07-23: source ``tou-`` / oracle ``tou¬``). The rewriter keeps its
+    call as
     defence in depth (idempotent).
     """
     src_h = trailing_hyphen_char(source_text, HYPHEN_CHARS)
@@ -348,8 +348,8 @@ def link_hyphen_pairs(
         # candidate is the MIDDLE of a chain — it ends with its own hyphen
         # AND continues this line's word.
         #
-        # That last case used to be rejected, and only heuristically: a
-        # PART2 role is set at parse time solely from an explicit
+        # The last case must be admitted: rejecting it loses whole chains.
+        # A PART2 role is set at parse time solely from an explicit
         # SUBS_TYPE="HypPart2", so in a file with no SUBS_TYPE (the common
         # case — the whole BNL ground-truth corpus, any engine that does
         # not mark hyphenation) BOTH was unreachable and every link of a
@@ -488,11 +488,11 @@ def link_cross_page_hyphens(
     2-element ``[last_line, first_line]`` list is enough. Only fires when
     the last line looks like an unlinked PART1/BOTH.
 
-    Pages with no lines are **skipped over**, not treated as a wall. The
-    walk used to compare adjacent pages and ``continue`` on an empty one,
-    so a word broken from page 1 onto page 3 was never linked when page 2
-    happened to carry no text — the pair was silently lost and both
-    fragments were corrected as unrelated lines. An empty page carries
+    Pages with no lines are **skipped over**, not treated as a wall. A walk
+    that compares adjacent pages and ``continue``s on an empty one never
+    links a word broken from page 1 onto page 3 when page 2 happens to
+    carry no text: the pair is silently lost and both fragments corrected
+    as unrelated lines. An empty page carries
     nothing and can say nothing about a word that spans it; it is a fact
     about the scan, not about the sentence.
     """

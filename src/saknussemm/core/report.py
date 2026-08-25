@@ -180,9 +180,9 @@ def _build_correction_report(
     report = CorrectionReport(
         run_id=run_id,
         total_lines=len(decisions.decisions),
-        # ADR-011 slice C — the report builder reads the
-        # DecisionSet (terminal stage) + the working traces
-        # (proposal/projection stages), staged per line (§9 v2).
+        # ADR-011 — the report builder reads the DecisionSet (terminal
+        # stage) plus the working traces (proposal/projection stages),
+        # staged per line (§9 v2).
         lines=build_line_outcomes(decisions, traces),
         # ADR-011 — the rewrite's granularity-loss counters surface on
         # the report. None when no MARKUP was dropped (or nothing was

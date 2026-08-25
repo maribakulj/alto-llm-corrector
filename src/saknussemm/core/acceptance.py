@@ -1,10 +1,9 @@
 """Deciding whether a proposal may stand, and what falls back with it.
 
-Four passes the orchestrator used to carry as methods. Each takes the
-policy it consults as an explicit argument rather than reading it off the
-engine — which is what makes them readable on their own: "given THIS guard
-config, is this line acceptable?" is a question about a line and a policy,
-not about a run.
+Four passes, each taking the policy it consults as an explicit argument
+rather than reading it off the engine: "given THIS guard config, is this
+line acceptable?" is a question about a line and a policy, not about a
+run.
 
 ``_apply_unit_reverts`` is the one they share: a member of a hyphen unit
 never falls back alone (ADR-010).
