@@ -186,6 +186,24 @@ class GuardConfig(FrozenPolicy):
     _VISION_MIN_SOURCE_SIMILARITY: ClassVar[float] = 0.15
 
     @classmethod
+    def text(cls, **overrides: Any) -> "GuardConfig":
+        """Le profil d'un producteur de TEXTE — les défauts, nommés.
+
+        ``GuardConfig()`` fait déjà exactement cela. Ce qui manquait est le
+        NOM : sans lui, le seul profil qui existe est ``vision()``, et un
+        consommateur qui lit les deux ne peut pas voir qu'il choisit entre
+        deux points cohérents plutôt qu'entre « le défaut » et « autre
+        chose ».
+
+        Les trois étages de garde se règlent ENSEMBLE (voir la docstring de
+        la classe) : un profil est un point cohérent de cet espace, un seuil
+        isolé n'en est pas un. `docs/versioning.md` recommande donc les
+        profils, et exclut les VALEURS des seuils du contrat SemVer — elles
+        ne sont pas calibrées et le dire empêche de figer un provisoire.
+        """
+        return cls(**overrides)
+
+    @classmethod
     def vision(cls, **overrides: Any) -> "GuardConfig":
         """The VLM guard profile (§5.2 bis, the vision/QE programme).
 

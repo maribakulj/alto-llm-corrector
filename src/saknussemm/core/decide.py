@@ -62,6 +62,55 @@ from saknussemm.core.schemas import LineManifest, LineStatus, LineTrace
 from saknussemm.core.traces import _set_trace
 
 
+#: Le vocabulaire CLOS des raisons de repli.
+#:
+#: Un repli est ce qu'un consommateur lit en premier quand une ligne n'a pas
+#: été corrigée, et il l'agrège par ce code — ``fallback_reason_counts`` coupe
+#: sur le ``:`` et compte le préfixe. Un code inconnu dans un rapport est donc
+#: un défaut de la bibliothèque, pas une raison inédite.
+#:
+#: L'ensemble était ouvert : vingt littéraux dispersés sur huit modules, et
+#: rien ne disait combien il y en avait. `docs/la-vie-d-une-ligne.md` les
+#: documente pour un lecteur ; cette constante les ferme pour un programme, et
+#: ``tests/test_the_fallback_reasons_are_a_closed_set.py`` refuse un
+#: vingt-et-unième qui n'y figurerait pas.
+#:
+#: Volontairement un ``frozenset[str]`` et non un ``Enum`` : ``DecisionReason.code``
+#: est ``str`` sur une surface publique versionnée, et le durcir serait un
+#: changement de contrat, pas une clôture.
+FALLBACK_REASON_CODES: frozenset[str] = frozenset(
+    {
+        # -- étage C : la ligne et ses voisines (`guards.check_line`) -------
+        "too_different_from_source",
+        "closer_to_previous_line",
+        "closer_to_next_line",
+        "absorbs_previous_line",
+        "absorbs_next_line",
+        # Le défaut de `check_line` quand une branche de refus ne nomme pas
+        # sa raison. Aucune ne le fait aujourd'hui ; il reste parce que le
+        # site d'appel ne peut pas le prouver.
+        "rejected",
+        # -- césure : l'unité, jamais un membre seul (ADR-010) -------------
+        "hyphen_pair_fallback",
+        "hyphen_partner_fell_back",
+        "hyphen_unit_fallback",
+        "orphan_hyphen_completed",
+        # -- passes document-wide (`core/finalize.py`) ---------------------
+        "adjacent_duplicate_detected",
+        "adjacent_duplicate_pair_atomicity",
+        "boundary_migration_forward",
+        "boundary_migration_backward",
+        "format_loss",
+        "format_loss_pair_atomicity",
+        "token_realign",
+        "token_realign_pair_atomicity",
+        # -- niveau chunk (`core/outcome.py`) ------------------------------
+        "all_attempts_exhausted",
+        "chunk_error_absorbed",
+    }
+)
+
+
 def accept(
     line: LineManifest,
     text: str,
@@ -128,4 +177,4 @@ def renormalise(line: LineManifest, text: str) -> None:
     line.corrected_text = text
 
 
-__all__ = ["accept", "fall_back", "renormalise"]
+__all__ = ["FALLBACK_REASON_CODES", "accept", "fall_back", "renormalise"]

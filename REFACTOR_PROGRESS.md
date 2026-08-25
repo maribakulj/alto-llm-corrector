@@ -103,9 +103,14 @@ retirent du code mort peuvent en modifier un, et elles doivent dire pourquoi.
       **Cible « ≤ 0,45 » retirée** : le relevé d'entrée surestimait la prose
       supprimable d'un ordre de grandeur ; 4 505 des 7 735 lignes restantes
       sont la référence d'API (raison mesurée dans `docs/PLAN.md`)
-- [ ] `RS-6.2` fermer l'ensemble des raisons de repli
-- [ ] `RS-6.3` profils `GuardConfig` et vérité SemVer
-- [ ] `RS-6.4` finaliser `docs/la-vie-d-une-ligne.md`
+- [x] `RS-6.2` fermer l'ensemble des raisons de repli — `FALLBACK_REASON_CODES`
+      (20 codes), scan AST sur 6 formes syntaxiques, dans les deux sens,
+      plus la vérification que la doc les liste tous
+- [x] `RS-6.3` profils `GuardConfig` et vérité SemVer — `GuardConfig.text()`
+      nommé face à `.vision()`, et `docs/versioning.md` exclut les VALEURS
+      des seuils du contrat SemVer avec la raison
+- [x] `RS-6.4` finaliser `docs/la-vie-d-une-ligne.md` — la couture `ChunkRouter`
+      et la liste close désormais tenue par un test
 
 ## Phase 7 — Vérification globale
 

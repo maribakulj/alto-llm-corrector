@@ -87,8 +87,12 @@ parce qu'un retry est moins cher qu'un repli.
 
 ## 3. Toutes les raisons de repli
 
-La liste est close. Un code inconnu dans un rapport est un défaut de la
-bibliothèque, pas une raison inédite.
+La liste est close, et pas seulement en prose :
+`saknussemm.core.decide.FALLBACK_REASON_CODES` la porte, et
+`tests/test_the_fallback_reasons_are_a_closed_set.py` refuse un code que le
+moteur émettrait sans qu'il y figure — comme il refuse un code déclaré ici et
+absent de cette page. Un code inconnu dans un rapport est donc un défaut de
+la bibliothèque, pas une raison inédite.
 
 ### Étage C — la ligne et ses voisines (`guards.check_line`)
 
@@ -124,6 +128,7 @@ permet au rapport de distinguer la ligne fautive de celles qu'elle entraîne.
 | `boundary_migration_forward` | un mot entier a traversé la couture vers l'aval |
 | `boundary_migration_backward` | idem vers l'amont |
 | `format_loss: …` | `LossPolicy.strict` : la correction ne peut pas se projeter sans perdre la granularité `Word` |
+| `rejected` | le défaut de `check_line` si une branche de refus ne nommait pas sa raison — aucune ne le fait aujourd'hui |
 | `format_loss_pair_atomicity` | membre d'unité tiré par une perte de format |
 | `token_realign: …` | `min_alignment_score` : les tokens ne s'alignent pas assez, ou un déplacement de mot est suspecté |
 | `token_realign_pair_atomicity` | membre d'unité tiré par un refus d'alignement |
@@ -194,8 +199,11 @@ sauter :
 - **le plafond d'images par appel** (`core/batching.py`) — sans producteur qui
   déclare `max_images`, aucune découpe.
 
-Ils sont court-circuités, pas seulement inactifs : leur coût est cognitif, pas
-en temps d'exécution.
+Les trois sont derrière une couture, `core.routing.ChunkRouter`, à laquelle
+`PageDriver` demande son plan. Le pilote ne les connaît pas — une assertion
+de `tests/test_routing_pipeline.py` le tient — donc lire la boucle interne du
+moteur n'oblige pas à les comprendre. Ils sont court-circuités, pas seulement
+inactifs : leur coût est cognitif, pas en temps d'exécution.
 
 ---
 
