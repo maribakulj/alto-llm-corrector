@@ -61,9 +61,10 @@ retirent du code mort peuvent en modifier un, et elles doivent dire pourquoi.
 
 ## Phase 3 — Simplifications locales
 
-- [ ] `RS-3.1` router `reconcile._build_hyphen_pairs` sur les primitives
-- [ ] `RS-3.2` router `indexing._cross_page_partners` sur les primitives
-- [ ] `RS-3.3` fermer le cliquet à zéro hors exemptions justifiées
+- [x] `RS-3.1` router `reconcile._build_hyphen_pairs` sur les primitives — 6 → 0
+- [x] `RS-3.2` router `indexing._cross_page_partners` sur les primitives — 4 → 0
+- [x] `RS-3.3` fermer le cliquet à zéro hors exemptions justifiées — `_ACCESS`
+      ne porte plus que `pairing` et `units`, `_MUST_REACH_ZERO` est vide
 - [ ] `RS-3.4` retirer le sentinel à trois états de `reconcile_hyphen_pair`
 
 ## Phase 4 — Réduction des abstractions
@@ -107,7 +108,7 @@ retirent du code mort peuvent en modifier un, et elles doivent dire pourquoi.
 | ratio prose/code | 0,84 | 0,84 | ≤ 0,45 |
 | modules dans `core/` | 42 | 42 | ≤ 42 |
 | paramètres `CorrectionPipeline.__init__` | 14 | 14 | ≤ 9 |
-| lecteurs de pointeurs hors `pairing`/`units` | 3 | 3 | 0 |
+| lecteurs de pointeurs hors `pairing`/`units` | 3 | **0** | 0 |
 | affirmations fausses recensées | 4 | 0 | 0 |
 
 Base de référence, 2026-08-25 : **1780 tests verts** ; après la phase 1,

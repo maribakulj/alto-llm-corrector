@@ -9,10 +9,16 @@ parallèles.
 
 **La règle était écrite et rien ne la vérifiait.** La garde qui existait,
 ``test_the_unit_projections_are_not_duplicates.py``, itère sur DEUX fonctions
-nommées à la main. Elle passe, et pendant qu'elle passait,
+nommées à la main. Elle passait, et pendant qu'elle passait,
 ``reconcile._build_hyphen_pairs`` rejouait la carte rôle→slot six lignes
 durant et ``indexing._cross_page_partners`` lisait les quatre champs
 directement. Une liste de deux noms ne dit rien du troisième.
+
+Les deux sont routés sur les primitives depuis le 2026-08-25, et la table
+ci-dessous ne porte plus que les deux détenteurs. Ce module ne devient pas
+inutile pour autant : il change de métier, comme
+``test_decision_write_exclusivity`` l'a fait à zéro — il cesse d'être un
+compte à rebours et devient la frontière qui refuse le SEPTIÈME site.
 
 Ce module remplace la liste par un recensement. Il ne se prononce pas sur la
 qualité d'un site : il compte, par module, et refuse que le compte monte.
@@ -74,22 +80,21 @@ _POINTER_FIELDS = frozenset(
 #: ``core/schemas/manifest.py`` n'apparaît pas : la déclaration des champs
 #: n'est ni une lecture ni une écriture au sens de l'AST.
 _ACCESS: dict[str, tuple[int, int]] = {
-    # -- les deux détenteurs ------------------------------------------------
+    # -- les deux détenteurs, et il n'y a plus qu'eux -----------------------
     "core/pairing.py": (10, 10),
     "core/units.py": (4, 10),
-    # -- la dette, et ce qu'elle vaut --------------------------------------
-    # `_build_hyphen_pairs` rejoue la carte rôle→slot pour la carte de paires
-    # que le validateur consulte. Elle est le sixième résolveur.
-    "core/reconcile.py": (6, 0),
-    # `_cross_page_partners` lit les deux slots au lieu de demander
-    # `pair_ref`/`forward_ref`.
-    "core/indexing.py": (4, 0),
 }
 
-#: Les modules dont le compte de LECTURES doit tomber à zéro. Le distinguer
-#: des exemptions par construction est ce qui empêche la table de se lire
-#: comme une liste d'autorisations.
-_MUST_REACH_ZERO = frozenset({"core/reconcile.py", "core/indexing.py"})
+#: Les modules dont le compte de LECTURES doit tomber à zéro. **Vide**, et
+#: c'est l'état d'arrivée : `core/reconcile.py` (6 lectures) et
+#: `core/indexing.py` (4) en sont sortis le 2026-08-25 en passant par
+#: `pairing.forward_partner_id` et `pairing.pair_ref`/`forward_ref`.
+#:
+#: Le distinguer des exemptions par construction reste ce qui empêche
+#: `_ACCESS` de se lire comme une liste d'autorisations : les deux entrées
+#: qui restent ne sont pas de la dette tolérée, ce sont les deux encodages
+#: que `CLAUDE.md` autorise.
+_MUST_REACH_ZERO: frozenset[str] = frozenset()
 
 
 def _census() -> dict[str, tuple[int, int]]:
