@@ -37,7 +37,7 @@ import pytest
 
 from saknussemm.core.schemas import Coords
 from saknussemm.errors import ConfigurationError
-from saknussemm.integrations.vision import (
+from saknussemm.producers.vision import (
     build_image_asset,
     crop_region,
     verified_image_bytes,

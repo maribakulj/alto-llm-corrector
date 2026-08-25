@@ -246,7 +246,7 @@ _OVERPARAMETERISED: dict[str, tuple[int, str]] = {
         "émet un élément String avec sa géométrie recalculée ; les "
         "paramètres sont les attributs ALTO qu'il écrit",
     ),
-    "integrations/vision.py::VisionEditProducer.__init__": (
+    "producers/vision.py::VisionEditProducer.__init__": (
         11,
         "surface de configuration d'un producteur, comme celle du pipeline",
     ),

@@ -2,7 +2,7 @@
 
 Two modules are gated behind optional dependencies — ``integrations/qe.py``
 (``saknussemm[qe]``: onnxruntime, tokenizers, a 545 MB model) and
-``integrations/vision.py`` (``saknussemm[vision]``: Pillow). Both predate
+``producers/vision.py`` (``saknussemm[vision]``: Pillow). Both predate
 this wave and both are already omitted from the coverage gate.
 
 What did NOT exist is anything holding the boundary. The gate is a
@@ -43,7 +43,7 @@ from tests._paths import EXAMPLES  # noqa: E402  (the arithmetic lives there)
 
 #: Modules gated behind an optional dependency. Nothing on the base install
 #: path may import these.
-_GATED = ("saknussemm.integrations.qe", "saknussemm.integrations.vision")
+_GATED = ("saknussemm.integrations.qe", "saknussemm.producers.vision")
 
 
 def _import_probe(body: str) -> set[str]:

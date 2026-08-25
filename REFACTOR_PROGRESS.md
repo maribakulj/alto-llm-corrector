@@ -93,7 +93,9 @@ retirent du code mort peuvent en modifier un, et elles doivent dire pourquoi.
       coutures publiques, les retirer serait un changement de surface que
       l'arbitrage du 2026-08-25 interdit à cette vague (raison écrite dans
       `docs/PLAN.md`)
-- [ ] `RS-5.3` trancher la frontière `integrations/` ↔ `producers/`, et la garder
+- [x] `RS-5.3` trancher la frontière `integrations/` ↔ `producers/`, et la garder
+      — `VisionEditProducer` rejoint `producers/`, deux assertions tiennent
+      la règle (ce qu'un producteur importe, et où vit un producteur)
 
 ## Phase 6 — Nettoyage final
 

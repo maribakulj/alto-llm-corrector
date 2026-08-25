@@ -33,7 +33,7 @@ dependencies = [
 # Vision chain (ROADMAP V3 Phase 4): the saknussemm[vision] producer decodes,
 # validates and crops page images and calls a multimodal provider. Pillow is
 # the ONLY image dependency and it is imported LAZILY, inside
-# integrations/vision.py — never at module import and never on the base
+# producers/vision.py — never at module import and never on the base
 # install path (enforced by the I4 static scan + the runtime import contract
 # in tests/test_import_contract.py). The pixel-blind correction engine never
 # pulls it. Keep this the single image dep: heavier stacks (cv2, torch) stay
@@ -137,7 +137,7 @@ source = ["saknussemm"]
 branch = true
 # Nothing is omitted any more. `integrations/qe.py` was, because it needed
 # onnxruntime and a 545 MB model no CI could fetch; it left for the bench on
-# 2026-08-16. `integrations/vision.py` was too, on a reason that turned out
+# 2026-08-16. `producers/vision.py` was too, on a reason that turned out
 # to be false — it is 96% covered by its own tests and CI simply never ran
 # them. An omission is a claim that a file cannot be measured here; both
 # claims are now spent.
@@ -170,7 +170,7 @@ module = ["lxml.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
-# saknussemm[vision]: Pillow is lazy-imported inside integrations/vision.py
+# saknussemm[vision]: Pillow is lazy-imported inside producers/vision.py
 # and absent from the mypy CI env. Same treatment as the qe deps — untyped
 # so --strict still runs; the module coerces every value it returns to a
 # concrete type so no Any leaks past the seam.

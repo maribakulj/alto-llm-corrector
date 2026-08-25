@@ -222,6 +222,81 @@ def test_producers_are_pure_and_formats_ignore_producers():
         assert not bad, bad
 
 
+#: Ce qu'un module de ``producers/`` a le droit d'importer du paquet.
+#: ``core`` pour le protocole et les schémas, ``errors`` pour la taxonomie,
+#: ``integrations`` pour le vocabulaire de vendeur — le prompt système et le
+#: schéma de sortie JSON, qui n'existent que parce que le producteur est un
+#: LLM et n'ont donc rien à faire dans le cœur.
+_PRODUCERS_MAY_IMPORT = (
+    "saknussemm.core",
+    "saknussemm.errors",
+    "saknussemm.integrations",
+)
+
+
+def test_the_producers_boundary_is_the_one_its_docstring_states():
+    """``producers/__init__.py`` a longtemps dit « Import only
+    ``saknussemm.core`` » pendant que deux de ses trois modules importaient
+    ``integrations.llm``.
+
+    La phrase a été corrigée le 2026-08-25 ; ce test est ce qui l'empêche de
+    redevenir fausse. Une règle écrite que rien ne vérifie se périme au
+    premier import, et celle-là s'était périmée sans que personne le voie.
+
+    La frontière est aussi devenue lisible dans le même mouvement :
+    ``VisionEditProducer`` vivait dans ``integrations/`` alors que les autres
+    producteurs vivaient dans ``producers/``. Le critère annoncé — « ce qui
+    existe seulement parce que le producteur est un LLM » — ne discriminait
+    rien, puisqu'il vaut aussi pour ``LLMEditProducer``. Il vaut maintenant
+    ce qu'il dit : ``producers/`` porte les implémentations d'``EditProducer``,
+    ``integrations/`` le vocabulaire de vendeur qu'elles consomment.
+    """
+    offenders: dict[str, list[str]] = {}
+    for f in sorted((SRC / "producers").glob("*.py")):
+        reached = sorted(
+            name
+            for name, _ in _imports(ast.parse(f.read_text(encoding="utf-8")))
+            if name.startswith("saknussemm.")
+            and not name.startswith(_PRODUCERS_MAY_IMPORT)
+        )
+        if reached:
+            offenders[f.name] = reached
+    assert not offenders, (
+        f"{offenders} : un producteur n'importe du paquet que `core`, "
+        f"`errors` et `integrations`. Élargir cette liste est une décision "
+        f"sur ce que `producers/` EST, pas un import de plus."
+    )
+
+
+def test_no_producer_lives_outside_the_producers_package():
+    """Un producteur rangé ailleurs rend la frontière inutilisable.
+
+    ``integrations/`` porte du vocabulaire, pas des implémentations. Le
+    critère est mécanique : une classe qui expose ``produce`` remplit le
+    protocole ``EditProducer`` et appartient à ``producers/``.
+    """
+    misplaced: dict[str, list[str]] = {}
+    for f in sorted((SRC / "integrations").glob("*.py")):
+        tree = ast.parse(f.read_text(encoding="utf-8"))
+        classes = [
+            node.name
+            for node in tree.body
+            if isinstance(node, ast.ClassDef)
+            and any(
+                isinstance(m, (ast.FunctionDef, ast.AsyncFunctionDef))
+                and m.name == "produce"
+                for m in node.body
+            )
+        ]
+        if classes:
+            misplaced[f.name] = classes
+    assert not misplaced, (
+        f"{misplaced} remplissent le protocole EditProducer depuis "
+        f"`integrations/`. Les implémentations vivent dans `producers/` ; "
+        f"`integrations/` porte ce qu'elles consomment."
+    )
+
+
 # ---------------------------------------------------------------------------
 # An optional extra must be optional in fact, not only in the metadata: the
 # module stays importable, costs nothing to anyone who does not use it, and
@@ -257,7 +332,7 @@ def test_vision_keeps_every_heavy_dep_function_local():
     this one reads the source, so it also catches a dependency that is
     installed in the test environment and would therefore import cleanly.
     """
-    vision = SRC / "integrations" / "vision.py"
+    vision = SRC / "producers" / "vision.py"
     module_level = _module_level_imports(vision)
     leaked = [
         h
@@ -328,11 +403,11 @@ def test_importing_vision_module_never_loads_pillow_at_import():
     pay the image runtime — it arrives only when a crop is actually taken
     (mirrors the qe scorer's contract)."""
     code = (
-        "import sys; import saknussemm.integrations.vision as _; "
+        "import sys; import saknussemm.producers.vision as _; "
         f"libs = {IMAGE_LIBS!r}; "
         "sys.exit(1 if any(m.split('.')[0] in libs for m in sys.modules) else 0)"
     )
     proc = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
     assert proc.returncode == 0, (
-        f"importing integrations.vision loaded an image lib\n{proc.stderr}"
+        f"importing producers.vision loaded an image lib\n{proc.stderr}"
     )
