@@ -1,7 +1,7 @@
 """Immutable decision record of a run (ADR-011, slices C+E).
 
 The engine expresses its decisions by mutating its PRIVATE working copy
-of the manifests (since ADR-011 slice E the caller's document is never
+of the manifests (the caller's document is never
 touched); this module defines THE decision model and materializes it
 exactly once — after the global consistency pass, when every line's
 decision is final. Everything downstream of the run reads the
@@ -43,11 +43,33 @@ class LineDecision:
     ref: LineRef
     source_text: str
     final_text: str
-    #: Terminal by construction: ``CORRECTED`` or ``FALLBACK``.
+    #: Terminal by construction: ``CORRECTED``, ``REVIEW_REQUIRED`` or
+    #: ``FALLBACK``.
     status: LineStatus
     #: The trace's fallback reason for a fallen line (``None`` on
     #: corrected lines, or when the host ran without traces).
     fallback_reason: str | None
+    #: The trace's review reasons for a REFERRED line — empty on
+    #: every other status, and on a referred line when the host ran
+    #: without traces. Plural because the causes are independent: a
+    #: correction can change an amount AND a proper noun, and a reviewer
+    #: needs to be told both.
+    review_reasons: tuple[str, ...] = ()
+
+    @property
+    def carries_a_correction(self) -> bool:
+        """Did this line keep a correction the artefact must carry?
+
+        That is no longer the same question as ``status is
+        CORRECTED``: a referred line kept its correction and merely
+        declares the run could not verify it. Every site that used to
+        ask the status in order to ask THIS asks here instead — the
+        edit-script builder is the one that did, and answering it with
+        the old test would have silently dropped the ops of every
+        referred line, so a consumer replaying the script would have
+        diverged from the file the same run wrote.
+        """
+        return self.status in (LineStatus.CORRECTED, LineStatus.REVIEW_REQUIRED)
 
 
 @dataclass(frozen=True)
@@ -66,6 +88,37 @@ class DecisionSet:
         """Lines whose terminal status is ``FALLBACK`` (they kept their
         OCR source text, whatever path led there)."""
         return sum(1 for d in self.decisions if d.status is LineStatus.FALLBACK)
+
+    @property
+    def review_lines(self) -> int:
+        """Lines the run corrected and could not verify.
+
+        Disjoint from :attr:`fallback_lines` by construction — a line
+        holds exactly one terminal status — and NOT a subset of the
+        corrected ones: ``CORRECTED`` counts only what the run could
+        both correct and check. ``corrected + review_required`` is the
+        number of lines whose text changed hands.
+        """
+        return sum(1 for d in self.decisions if d.status is LineStatus.REVIEW_REQUIRED)
+
+    def review_reason_counts(self) -> dict[str, int]:
+        """Referred lines aggregated by reason PREFIX, same convention as
+        :meth:`fallback_reason_counts`.
+
+        One line can contribute to SEVERAL codes — the counts therefore
+        sum to at least :attr:`review_lines`, not to it. That is the
+        honest shape: "31 lines changed a digit, 12 changed a proper
+        noun, 38 lines in all" is three facts, and forcing one reason per
+        line would have to drop two of them.
+        """
+        counts: dict[str, int] = {}
+        for d in self.decisions:
+            if d.status is not LineStatus.REVIEW_REQUIRED:
+                continue
+            for raw in d.review_reasons or ("unspecified",):
+                prefix = raw.split(":", 1)[0].strip() or "unspecified"
+                counts[prefix] = counts.get(prefix, 0) + 1
+        return counts
 
     def fallback_reason_counts(self) -> dict[str, int]:
         """Fallen lines aggregated by reason PREFIX (the part before
@@ -110,9 +163,13 @@ def derive_decision_set(
         for lm in page.lines:
             ref = line_ref(lm)
             reason: str | None = None
+            review: tuple[str, ...] = ()
             if lm.status is LineStatus.FALLBACK:
                 trace = traces.get(ref)
                 reason = trace.fallback_reason if trace is not None else None
+            elif lm.status is LineStatus.REVIEW_REQUIRED:
+                trace = traces.get(ref)
+                review = trace.review_reasons if trace is not None else ()
             decisions.append(
                 LineDecision(
                     ref=ref,
@@ -124,6 +181,7 @@ def derive_decision_set(
                     ),
                     status=lm.status,
                     fallback_reason=reason,
+                    review_reasons=review,
                 )
             )
     return DecisionSet(decisions=tuple(decisions))
@@ -195,6 +253,11 @@ def build_line_outcomes(
                     status=d.status.value,
                     final_text=d.final_text,
                     reason=_structured_reason(d.fallback_reason),
+                    review_reasons=[
+                        motif
+                        for raw in d.review_reasons
+                        if (motif := _structured_reason(raw)) is not None
+                    ],
                     features=trace.proposal_features if trace else None,
                 ),
                 projection=projection,

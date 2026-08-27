@@ -161,8 +161,8 @@ def test_rewrite_never_touches_textline_geometry(doc: str, data: st.DataObject) 
                         data.draw(st.lists(_WORD, min_size=1, max_size=5))
                     )
 
-        out, _metrics, _ = rewrite_alto_file(path, manifest.pages, "test", "test")
-
+        _res = rewrite_alto_file(path, manifest.pages, "test", "test")
+        out = _res.xml_bytes
         assert _textline_geometry(out) == _textline_geometry(doc.encode("utf-8")), (
             "TextLine identity/geometry must be byte-stable through the rewriter"
         )
@@ -225,7 +225,8 @@ def test_rewrite_without_corrections_preserves_all_string_content(doc: str) -> N
     path = _write_tmp(doc)
     try:
         manifest = build_document_manifest([(path, path.name)])
-        out, _metrics, _ = rewrite_alto_file(path, manifest.pages, "test", "test")
+        _res = rewrite_alto_file(path, manifest.pages, "test", "test")
+        out = _res.xml_bytes
         assert _string_contents(out) == _string_contents(doc.encode("utf-8"))
     finally:
         path.unlink(missing_ok=True)

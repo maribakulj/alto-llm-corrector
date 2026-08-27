@@ -1,11 +1,6 @@
 """All mutable state of ONE pipeline execution.
 
-Lifted out of the orchestrator. It is a VALUE — what a run accumulates
-as it goes — not execution control, and keeping it beside the retry loop was
-also a circular-import waiting to happen: the report assembly needs to read
-this state, and could not import it from the module that imports the report
-assembly.
-
+A VALUE — what a run accumulates as it goes — never execution control.
 Nothing here survives the run: the public outcome is copied into
 :class:`~saknussemm.core.result.CorrectionResult` before returning.
 """
@@ -26,7 +21,7 @@ class RunContext:
     """All mutable state of ONE pipeline execution.
 
     Created fresh at the top of every :meth:`CorrectionPipeline.run`
-    (together with the run's private manifest copy — ADR-011 slice E)
+    (together with the run's private manifest copy — ADR-011)
     and threaded through the internal methods, so ``CorrectionPipeline``
     itself carries only immutable configuration and injected
     dependencies. Nothing here survives the run: the public outcome is

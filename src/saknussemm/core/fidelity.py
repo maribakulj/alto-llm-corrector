@@ -31,10 +31,9 @@ a reader can act on:
     break mark as U+00AD SOFT HYPHEN inside ``<HYP>``. The reconstruction
     reads that back as ``-`` (deliberately — a soft hyphen must not reach a
     CONTENT attribute, and the collapse is what makes those lines pair at
-    all), the rewrite re-emits the source element untouched, and the run
-    used to grade all 115 ``exact``. It could not have graded them anything
-    else: the collapse runs on BOTH sides of the comparison and compares
-    equal to itself.
+    all) and the rewrite re-emits the source element untouched. Graded on
+    the reading alone, all 115 come out ``exact`` and cannot come out
+    anything else: the collapse runs on BOTH sides of the comparison.
 
 ``TOKEN_EQUIVALENT``
     Same words, and every whitespace character that mattered survived; only
@@ -54,7 +53,7 @@ a reader can act on:
 Below the scale there is no level: if the WORDS differ, the artefact does
 not say what the run decided, and that is corruption rather than a fidelity
 grade. :func:`classify_projection_fidelity` returns ``None`` and the caller
-fails the run, exactly as before.
+fails the run.
 
 Pure: no lxml, no format import, nothing from the rest of the package.
 """

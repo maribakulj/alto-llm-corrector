@@ -41,7 +41,7 @@ externe du 2026-08-16. Ce qui reste :
 1. Les gardes ne sont pas calibrées ; le code le dit lui-même
    (`GuardConfig.vision()`, seuil « safe default, not a calibrated one »).
 2. Un seul modèle, un seul profil de gardes, deux runs mesurés.
-3. La surface publique **est** close, à 66 symboles (`S3b`, fait le
+3. La surface publique **est** close, à 67 symboles (`S3b`, fait le
    2026-08-01, affiné par `RM-04` le 2026-08-06 — voir `V5`). Elle n'est
    donc plus un travail à faire, mais elle n'a jamais été relue par
    quelqu'un d'extérieur à sa construction, ce qu'exige `V10`. Publier
@@ -59,7 +59,7 @@ propriétés tenables. Critères de sortie, à ne pas négocier à la baisse :
 | V1 | Aucune altération du texte livré qui ne soit **déclarée et comptée** | `L*` fermés, échelle de fidélité au rapport |
 | V2 | La comptabilité des pertes ne produit **ni fantôme ni angle mort** | `R*` fermés, matrice versionnée |
 | V3 | Une **seule** définition de l'unité de césure dans tout le code — **atteint** : une famille de primitives dirigées (`core/pairing.py`, seul lecteur des champs pointeurs) + une dérivation d'unité (`core/units.py`), et la cohérence des pointeurs est tenue par l'invariant de symétrie | fait |
-| V4 | Ce que le système **ne peut pas** établir est signalé, pas décidé | `review_required` livré (`G*`) |
+| V4 | Ce que le système **ne peut pas** établir est signalé, pas décidé | **tenu (2026-08-27)** — `review_required` livré, `G1`-`G3` clos ; les trois règles que le moteur ne peut pas alimenter sont écrites plutôt que déclarées |
 | V5 | La surface publique est la clôture de ce que la façade retourne | `S3b` fermé (`S3a`, son statut provisoire écrit, est fait) |
 | V6 | Toute revendication chiffrée est un **intervalle**, sur ≥2 familles de modèles, dont le chemin inter-pages | `M*` fermés |
 | V7 | Un corpus externe versionné **bloque** un merge | **tenu (2026-08-16)** — `tests/external_corpus/pinned/` porte trois pages Gallica réelles, dans la suite par défaut, sans marqueur ni saut |
@@ -250,6 +250,43 @@ dernière dépendance budgétaire de la route vers `1.0.0`.
 toute dépense au-delà du plafond convenu, et tout tag ou publication. S'y
 ajoute la **liste des corpus à télécharger**, qui est un choix de projet et non
 un critère technique.
+
+---
+
+## Décisions déléguées — 2026-08-25
+
+Un seul arbitrage, et il conditionne `RS-5`.
+
+**Sortir le routage QE, l'escalade et la confiance du chemin chaud est
+autorisé, sous trois conditions cumulatives.** Le motif : `driver` connaît
+aujourd'hui le score de qualité, le producteur d'escalade et le plafond
+d'images, et `_plan_page_chunks` fait lire ces trois étapes avant le cas
+nominal — alors qu'aucune des trois ne s'exécute par défaut. C'est de la
+réduction, et la règle de gel autorise la réduction.
+
+Les trois conditions, ensemble :
+
+1. **Comportement identique, prouvé par les octets.** Les digests du golden
+   ne bougent pas, et un run routé de référence — compteurs `lines_skipped`,
+   `escalated_lines`, `producer_calls` épinglés avant la phase — donne les
+   mêmes nombres après.
+2. **Aucune extension de surface publique.** La couture reste à son chemin de
+   module ; `test_public_api_snapshot` reste vert **sans modification**.
+   C'est la contrainte permanente de la décision n°1 du 2026-08-11, et elle
+   n'est pas assouplie ici.
+3. **Aucune nouvelle politique de routage.** Le travail déplace ce qui
+   existe. Une variante de routage, même meilleure, sort du périmètre et du
+   gel.
+
+**Ce qui est refusé d'avance** : faire du routage un simple décorateur
+d'`EditProducer`. La forme est séduisante et elle détruit ce que le mode
+existe pour prouver — un `EditProducer` reçoit une requête, pas un plan de
+chunks, donc un chunk entièrement `SKIP` serait quand même construit et
+`producer_calls` cesserait de mesurer l'économie. La couture autorisée est au
+niveau du **plan** (une méthode `route(chunks) -> [(chunk, producer)]`), ce
+qui est un déplacement pur.
+
+Réversible en modifiant ce paragraphe, comme les précédents.
 
 ---
 
@@ -2090,7 +2127,7 @@ une formulation de `V5` qui ne parlait que de la façade.
 et l'erreur mérite d'être gardée parce qu'elle est reproductible.
 
 `S3b` **est déjà fait** — exécuté le 2026-08-01, et `RM-04` l'a affiné le
-2026-08-06. Les 66 symboles actuels ne sont pas une accumulation : c'est la
+2026-08-06. Les 67 symboles actuels ne sont pas une accumulation : c'est la
 clôture calculée, et `tests/test_public_api_snapshot.py` porte le raisonnement
 complet, que la mesure d'hier n'avait pas lu.
 
@@ -2252,21 +2289,190 @@ pas un constat, et il commande une séquence :
   gèlerait sous SemVer — c'est la raison n°1 pour laquelle ce plan refuse de
   publier `1.0` en premier.
 
-Deux ordres sont donc défendables, et le choix appartient au mainteneur :
-publier `0.10.0` avec la surface actuelle (68 symboles) puis couper en
-`0.11.0` ; ou couper d'abord et publier une seule fois. Le premier livre plus
-tôt et dépense une rupture de plus ; le second retarde la première publication
-d'un item structurel entier.
+**Périmé le 2026-08-25 : le dilemme n'existe plus.** `S3b` a coupé le
+2026-08-01 et `RM-04` a affiné la surface le 2026-08-06 — elle est à **67
+symboles**, close et recalculée à chaque run par
+`test_public_surface_is_the_closure`. Il n'y a donc plus de « couper avant ou
+après » à arbitrer : c'est coupé.
 
 ### Et `1.0.0` reste loin, pour des raisons de fond
 
-`V4` (`G1`-`G3`, l'état `review_required` — une vraie fonctionnalité, et le
-plan démontre qu'aucun réglage de seuil ne ferme la famille des gardes
-sémantiquement aveugles), `V5` (`S3b`), `V6` (`M1`-`M3`, `M7` — le chemin
-inter-pages n'est mesuré par **aucun** run aujourd'hui), `V7` (`M5` —
-`tests/external_corpus/pinned/` est vide et le tier téléchargé est
-`continue-on-error`, donc **aucune page externe ne bloque un merge**), `V10`
-(`P3`). Aucun de ces cinq n'est de la dette : ce sont des travaux.
+**Corrigé le 2026-08-25.** Ce paragraphe listait cinq critères restants et se
+contredisait avec le tableau vingt lignes plus haut : il donnait `V5` pour à
+faire alors que `S3b` a coupé le 2026-08-01, et `V7` pour non tenu en
+affirmant que `tests/external_corpus/pinned/` est **vide** — il porte trois
+pages Gallica depuis le 2026-08-16, dans la suite par défaut, sans marqueur
+ni saut. Deux affirmations fausses dans un paragraphe de synthèse, pendant
+que la table normative disait juste : exactement le motif que la vague `RS`
+traitait ailleurs.
+
+Il en restait **trois** le 2026-08-25 ; `V4` est tenu depuis le 2026-08-27,
+il en reste **deux**, et ni l'un ni l'autre n'est de la dette :
+
+- ~~**`V4`**~~ — **tenu le 2026-08-27.** `G1`-`G3` sont clos : l'état
+  `review_required`, cinq règles de renvoi rendues sur six codes clos, et
+  trois règles écrites comme non implémentables en l'état avec leur raison.
+- **`V6`** (`M1`, `M2`, `M7`) — `M3` est fait depuis le 2026-08-21 (trois
+  familles de modèles, le système ne varie pas, le modèle varie d'un facteur
+  trois). Restent la campagne de variance post-correctif, le chemin
+  inter-pages qu'**aucun** run ne mesure encore, et deux ventilations de
+  métriques. Tout cela s'exécute sur `cinoc`, pas ici.
+- **`V10`** (`P3`) — la revue humaine externe de l'API publique.
+
+---
+
+## RS — Réparation structurelle (audit du 2026-08-25)
+
+Origine : `docs/audit/AUDIT-2026-08-25-complexite-accidentelle.md`, dix
+constats mesurés sur le dépôt lu à `4b59394`. Comme `RM`, cette vague **ne
+rouvre aucun** item `L`, `R`, `M`, `G` ou `V` et ne conteste aucune priorité.
+Un seul constat est un défaut latent au sens strict (`RS-3`, le rejeu de la
+carte rôle→slot) ; le reste est du coût d'évolution.
+
+Les sept items tiennent dans les catégories que la règle de gel autorise —
+correctifs, refactorisation **réductrice**, mesure, documentation de vérité,
+tests. **`RS-5` est le seul qui demande un arbitrage explicite** : déplacer le
+routage QE hors du chemin chaud est réducteur et sans changement de
+comportement, mais il déplace une couture d'injection ; l'arbitrage est écrit
+au § « Décisions déléguées — 2026-08-25 » avant tout commit de la phase.
+
+`RS-3` est le prérequis que `S1` attend : tant que trois modules lisent les
+champs pointeurs hors des primitives, `S1` traverse une base dont la garde ne
+voit que deux sites sur cinq.
+
+### La règle de vérification, commune aux sept
+
+Un différentiel d'octets sur tout le corpus, producteur déterministe
+(`RulesProducer`), avant et après chaque étape. **Sur `RS-3` à `RS-6`, tout
+digest qui bouge est un échec de l'étape, jamais une raison de mettre le
+golden à jour.** Les seules étapes autorisées à en modifier un sont celles
+qui retirent du code réellement mort (`RS-2`), et elles doivent dire pourquoi.
+
+### Carte
+
+| ID | Titre | Nature | Gravité | Fichiers | Dépend de | Statut |
+|---|---|---|---|---|---|---|
+| `RS-1` | Le filet manque là où l'on va couper : `_build_hyphen_pairs` et `_cross_page_partners` ne sont nommés par aucun test, `core/driver.py` non plus, le golden byte-parity est un échantillon | tests | **critique** | `tests/` (6 fichiers, dont 4 nouveaux), `docs/la-vie-d-une-ligne.md` (nouveau) | — | **fait (2026-08-25)** — 1780 → 1871 tests |
+| `RS-2` | Quatre affirmations fausses ; un shim de compatibilité que seuls les tests gardent ; 400 Ko de XSD hors surface publique ; 4 classes qui ne sont pas des politiques dans `policies.py` | vérité | important | `README.md`, `core/protocols.py`, `core/schemas/policies.py`, `formats/validation.py` | — | **fait (2026-08-25)** |
+| `RS-3` | Le rejeu de la carte rôle→slot sur les champs pointeurs, à 60 lignes d'une docstring qui l'interdisait ; garde sur 2 sites de 5 | **bugfix** (latent) | **critique** | `core/reconcile.py`, `core/indexing.py`, `core/hyphenation.py` | `RS-1` | **fait (2026-08-25)** — 3 modules lecteurs → 0 |
+| `RS-4` | Cliquets goodhartisés une seconde fois : le plafond d'arité a produit `PageWorkspace`, le plafond de longueur a produit neuf modules sous 130 l. | outillage | important | `tests/test_orchestrator_budget.py`, `core/workspace.py` | — | **fait (2026-08-25)** — chaque entrée porte sa raison ; 3 conservations écrites |
+| `RS-5` | 5 des 14 paramètres du pipeline pilotent 1 667 lignes qu'aucun run par défaut n'emprunte ; cycle `formats.loader` ↔ `formats.alto.parser` ; frontière `integrations/` ↔ `producers/` incohérente | réducteur | important | `core/driver.py`, `core/routing.py`, `core/pipeline.py`, `formats/loader.py`, `producers/`, `integrations/` | `RS-1`, `RS-4`, arbitrage | **fait (2026-08-25)** — cible d'arité révisée, voir ci-dessus |
+| `RS-6` | Ratio prose/code à 0,84, dont 121 passages de récit de migration ; 14 raisons de repli sans énumération ; 21 seuils non calibrés à geler en `1.0` | vérité | important | tout `src/`, `docs/versioning.md` | `RS-3`, `RS-5` | **fait (2026-08-25)** — 138 marqueurs → 62 ; vocabulaire de repli clos |
+| `RS-7` | Rien ne prouve, en fin de vague, que la trajectoire a tenu | mesure | important | `docs/PLAN.md`, `docs/promises.md`, `CHANGELOG.md` | tous | **fait (2026-08-25)** sauf `V10`, qui demande un relecteur extérieur |
+
+### Les six mesures de sortie
+
+Reproduire en fin de vague celles du relevé d'entrée :
+
+| mesure | entrée (2026-08-25) | cible |
+|---|---|---|
+| lignes de code effectif `src/` | 9 207 | ~9 000, jamais plus |
+| ratio prose/code | 0,84 | **0,838, cible retirée** — voir ci-dessous |
+| modules dans `core/` | 42 | ≤ 42 — aucun nouveau module en `RS-6` |
+| paramètres de `CorrectionPipeline.__init__` | 14 | **14, cible révisée** — voir ci-dessous |
+| modules lisant les pointeurs hors `pairing`/`units` | 3 | **0** |
+| affirmations fausses recensées | 4 | 0 |
+
+### Trois décisions de conservation, tranchées le 2026-08-25
+
+L'audit relève trois abstractions comme candidates au retrait. Les trois sont
+**gardées**, et la raison est écrite ici pour que la question ne se rouvre pas
+au prochain relevé.
+
+**`PageWorkspace` et `RunContext` restent.** Le premier est né d'une métrique
+— `_descend_granularity` à douze arguments — et c'est un vrai constat. Le
+retirer rendrait ces douze arguments à une fonction qui n'en a pas besoin,
+pour un gain de principe. Ce qui est corrigé est le compteur, pas l'objet :
+depuis `RS-4.2`, inscrire une fonction longue ou large demande d'écrire
+pourquoi, ce qui retire l'incitation à fabriquer un objet pour faire baisser
+un nombre. `tests/test_page_workspace_is_not_a_bag.py` continue d'interdire
+qu'il grossisse.
+
+**Les quatre représentations par ligne restent.** `LineManifest` (l'état de
+travail), `LineTrace` (l'audit), `LineDecision` (la décision terminale) et
+`LineOutcome` (la projection publique) ne fusionnent pas : la séparation
+muable/immuable est une propriété acquise par `ADR-011`, et `LineOutcome` est
+une surface publique versionnée. Le défaut réel n'était pas leur nombre mais
+le recopiage non vérifié entre elles, que `RS-1.5` a fermé par un test de
+clôture — quinze champs, neuf projetés, six écartés avec leur raison.
+
+**Le jeton d'ordre de `core/finalize.py` reste.** Il garde exactement l'ordre
+des passes que `S1` va traverser. Sa condition de retrait est que `S1` soit
+passé ; `S1` n'est pas dans cette vague, donc la condition n'est pas remplie
+et ne le sera pas ici. Si `S1` est reporté sine die, la question est close et
+le jeton reste — un garde-fou dont on n'a plus besoin ne coûte que sa lecture.
+
+### La cible « ≤ 9 paramètres » était fausse, et voici pourquoi
+
+Elle reposait sur une hypothèse que `RS-5.1` a pu vérifier : que les cinq
+paramètres du programme de recherche pouvaient sortir du constructeur comme
+ils sortent du chemin chaud. Ils ne le peuvent pas au même prix.
+
+Sortir le routage de `core/driver.py` est un DÉPLACEMENT : le pilote demande
+son plan à `ChunkRouter` au lieu de porter le scoreur, le producteur
+d'escalade et le plafond d'images. Rien de public n'est touché, et les tests
+de routage passent sans une modification — c'est le critère qui distingue un
+déplacement d'une réécriture, et il est tenu.
+
+Retirer ces cinq paramètres du CONSTRUCTEUR est autre chose : ce sont des
+coutures d'injection publiques, épinglées par `test_public_api_snapshot`.
+Les regrouper derrière un objet unique changerait la signature, donc la
+surface, donc passerait par le snapshot, le `CHANGELOG` et
+`docs/versioning.md` dans le même commit — la porte que la décision n°1 du
+2026-08-11 décrit pour une extension délibérée. C'est une décision de
+conception, pas une étape de réparation, et la condition n°2 de l'arbitrage
+du 2026-08-25 l'interdit explicitement à cette vague.
+
+La cible est donc **retirée plutôt que manquée**. Ce qui la remplace est ce
+que `RS-4.2` a déjà écrit à côté de l'entrée : l'arité de ce constructeur est
+une surface de configuration, pas du drilling de paramètres, et les deux ne
+se soignent pas de la même façon. Le vrai gain de `RS-5.1` se mesure ailleurs
+— `core/driver.py` n'importe plus `core.quality` ni `core.batching`, et une
+assertion le tient.
+
+### La cible « ratio prose/code ≤ 0,45 » était fausse aussi
+
+Deuxième cible retirée par la mesure, et pour un motif plus instructif que
+la première : **le relevé d'entrée avait surestimé la prose supprimable d'un
+ordre de grandeur.**
+
+Il comptait 121 lignes portant un marqueur narratif (« used to »,
+« historically », un tag de vague) et en déduisait, par une règle de trois
+sur la taille des paragraphes, quelque deux mille lignes de récit de
+migration. La règle de tri a été appliquée intégralement — invariant et
+justification mesurée restent, récit de migration part — sur les trente-six
+modules concernés. Résultat : **138 marqueurs ramenés à 62**, et le ratio
+passe de 0,844 à 0,838.
+
+La raison est dans la composition de ce qui reste, mesurée après coup :
+
+| catégorie | lignes |
+|---|---|
+| docstrings de fonction | 2 665 |
+| commentaires `#:` sur les modèles publics | 919 |
+| docstrings de classe | 921 |
+| docstrings de module | 1 062 |
+| commentaires simples | 1 445 |
+
+Les trois premières lignes du tableau — 4 505 lignes — **sont la référence
+d'API** : ce qu'un champ de `CorrectionReport` signifie, ce que chaque
+niveau de l'échelle de fidélité vaut, ce qu'une garde refuse. Atteindre 0,45
+demanderait d'en supprimer une bonne part, c'est-à-dire de faire exactement
+ce que la clause « quand s'arrêter » du plan interdit.
+
+Ce qui reste vrai du constat : les paragraphes qui racontaient COMMENT le
+code en est arrivé là étaient du bruit, et ils sont partis. Ce qui était faux
+est la quantité — et l'avoir chiffré au jugé plutôt que mesuré est
+précisément le défaut que le reste de ce dépôt évite avec soin.
+
+### Ce que cette vague ne fait pas
+
+- **`S1` n'y est pas.** `RS-3` le déverrouille ; il ne l'exécute pas.
+- **`formats/alto/rewriter.py` reste hors-limites.** `RS-1` élargit le corpus
+  byte-parity, ce qui lève la condition écrite au § `RM` — mais la levée est
+  une décision de ce plan, pas un effet de bord de `RS-1`.
+- **Aucun collapse des jumeaux de `GuardConfig`.** Les deux étages se règlent
+  indépendamment, et la docstring dit pourquoi.
 
 ---
 
@@ -2965,9 +3171,17 @@ qu'avec la vérité terrain. En production il n'y en a pas.
 
 | id | item |
 |---|---|
-| G1 | État `review_required`, distinct de `CORRECTED` / `FALLBACK` / `FAILED` |
-| G2 | Règles conservatrices d'envoi en revue : chiffres, dates et montants modifiés ; négation modifiée ; nom propre probable ; **substitution systématique au niveau du run** (le cas `⸗` 34/34 et `’` 69/69 — invisible ligne à ligne, évident au run) ; signe typographique supprimé sur toutes ses occurrences ; ligne propre modifiée ; désaccord producteur texte / producteur vision ; confiance non calibrée sous seuil |
-| G3 | Le système ne prétend pas décider si le changement est correct — seulement reconnaître qu'il n'a pas les moyens de l'établir. À documenter comme tel (`D6`) |
+| ~~G1~~ | **fait (2026-08-27).** `LineStatus.REVIEW_REQUIRED`, quatrième statut terminal. La correction est **livrée** — mêmes octets, même opération dans l'`EditScript` — et le run déclare ne pas pouvoir l'établir. Un quatrième verbe dans `core/decide.py`, `refer_for_review`, qui n'écrit **que** le statut : c'est le miroir exact de `renormalise`, qui n'écrit que le texte. Le seul site du paquet qui demandait `status is CORRECTED` pour savoir « cette ligne porte-t-elle une correction ? » était `_build_final_edit_script` ; il demande maintenant `LineDecision.carries_a_correction`, sans quoi rejouer le script aurait cessé de reproduire le fichier livré |
+| ~~G2~~ | **fait pour ce que le moteur peut alimenter, et les absences sont écrites.** Cinq règles rendues, six codes clos dès l'écriture (`REVIEW_REASON_CODES`) : `digits_changed` (couvre dates et montants — aucune grammaire, le constat suffit), `negation_changed`, `proper_noun_changed`, `systematic_substitution` / `systematic_removal` (la règle au niveau du RUN, le cas `⸗` 34/34 et `’` 69/69), plus `hyphen_unit_review`, conséquence et non décision (ADR-010). **Trois n'existent pas, chacune parce que le moteur n'a pas d'entrée pour elle** : « ligne propre modifiée » — écrite, mesurée, retirée : sans lexique elle renvoyait **30 des 47 lignes modifiées** du corpus de vérité terrain, 23 sur son seul indice, et ce qu'elle attrapait était de simples corrections `f` → `ſ` ; le désaccord texte/vision — aucun run n'interroge deux producteurs sur la même ligne, l'escalade *remplace* ; la confiance sous seuil — l'agrégat est construit après que le `DecisionSet` est immuable, et `core/confidence.py` dit lui-même que ses valeurs ne sont pas calibrées. Taux mesuré sur le corpus de vérité terrain : **11 des 47 lignes modifiées** renvoyées, 23 % |
+| ~~G3~~ | **fait.** `docs/la-vie-d-une-ligne.md` §3 bis (le tableau repli/renvoi, les six codes, les trois absences), `docs/reading-a-report.md` (`review_lines` n'est pas un taux de défaut), `README.md` (« What it does not claim to have checked »), `docs/promises.md` (relevé du 2026-08-27), `docs/versioning.md` (ajouter un membre à `LineStatus` est une rupture, et celle-ci est assumée) |
+
+**Ce que la vague `G` n'a pas fait, et où c'est suivi.** Les trois règles
+absentes ci-dessus ne sont pas de la dette : deux demandent une entrée que le
+moteur ne produit pas (un lexique injecté, un mode de routage qui interroge
+deux producteurs et garde les deux réponses) et la troisième demande le
+harnais de calibration. Chacune est écrite à l'endroit où quelqu'un ira la
+chercher — le module qui aurait dû les porter — plutôt qu'ici comme un item
+qui attend.
 
 ---
 
@@ -3030,7 +3244,7 @@ mesurer avant de corriger.
 
 | id | item |
 |---|---|
-| P1 | Répétition sur TestPyPI (le workflow n'a jamais été exercé, 0 tag git) | **répétée en local (2026-08-01), upload non fait** — il demande l'OIDC de GitHub Actions. Toute la chaîne du workflow rejouée : `python -m build`, `twine check` (PASSED sur les deux artefacts), smoke-install de la wheel (`_smoke_imports.py` : 68 symboles publics), SBOM CycloneDX + l'assertion anti-pollution, cohérence `__version__` ↔ CHANGELOG, forme du tag attendu (`saknussemm-v0.9.0`). **Deux constats, corrigés** : (a) le sdist livré ne correspondait pas à son allowlist — hatchling traite les entrées comme des MOTIFS, donc `README.md` attrapait `tests/corpus_gt/README.md` et `tests/external_corpus/pinned/README.md` ; aucune donnée de corpus n'est jamais partie, mais le test de packaging vérifiait la *déclaration* et non l'artefact. Entrées ancrées (`/README.md`), test réécrit pour lire le sdist et la wheel CONSTRUITS. (b) la CI sautait `twine check` sur une raison périmée (twine < 7 rejetait `License-File` de Metadata 2.4) : twine 7 l'accepte, vérifié sur cette wheel, la porte est rétablie | reste : dispatcher le workflow sur `testpypi` depuis GitHub, ce qui exige le tag donc `P2` |
+| P1 | Répétition sur TestPyPI (le workflow n'a jamais été exercé, 0 tag git) | **répétée en local (2026-08-01), upload non fait** — il demande l'OIDC de GitHub Actions. Toute la chaîne du workflow rejouée : `python -m build`, `twine check` (PASSED sur les deux artefacts), smoke-install de la wheel (`_smoke_imports.py` : 67 symboles publics), SBOM CycloneDX + l'assertion anti-pollution, cohérence `__version__` ↔ CHANGELOG, forme du tag attendu (`saknussemm-v0.9.0`). **Deux constats, corrigés** : (a) le sdist livré ne correspondait pas à son allowlist — hatchling traite les entrées comme des MOTIFS, donc `README.md` attrapait `tests/corpus_gt/README.md` et `tests/external_corpus/pinned/README.md` ; aucune donnée de corpus n'est jamais partie, mais le test de packaging vérifiait la *déclaration* et non l'artefact. Entrées ancrées (`/README.md`), test réécrit pour lire le sdist et la wheel CONSTRUITS. (b) la CI sautait `twine check` sur une raison périmée (twine < 7 rejetait `License-File` de Metadata 2.4) : twine 7 l'accepte, vérifié sur cette wheel, la porte est rétablie | reste : dispatcher le workflow sur `testpypi` depuis GitHub, ce qui exige le tag donc `P2` |
 | P2 | Premier tag `0.10.0`, SBOM, publier l'artefact testé |
 | P3 | `1.0.0` uniquement : revue humaine externe indépendante de l'API publique, après `V1`-`V9` |
 

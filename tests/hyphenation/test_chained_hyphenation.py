@@ -336,7 +336,9 @@ class TestChainedRewriting:
         lines = {lm.line_id: lm for lm in pages[0].lines}
 
         # No corrections → untouched, SUBS should be preserved from source
-        xml_bytes, metrics, _paths = rewrite_alto_file(path, pages, "test", "model")
+        _res = rewrite_alto_file(path, pages, "test", "model")
+        xml_bytes = _res.xml_bytes
+        metrics = _res.metrics
         root = etree.fromstring(xml_bytes)
 
         # TL2 first String (PART2 side): SUBS_TYPE=HypPart2, SUBS_CONTENT=praticables.
@@ -461,7 +463,9 @@ class TestDiagnosticTraces:
             traces[lid].projected_text = lm.corrected_text or lm.ocr_text
 
         # 5. Rewrite
-        xml_bytes, metrics, _paths = rewrite_alto_file(path, pages, "test", "model")
+        _res = rewrite_alto_file(path, pages, "test", "model")
+        xml_bytes = _res.xml_bytes
+        metrics = _res.metrics
         root = etree.fromstring(xml_bytes)
 
         # 6. Re-extract from output ALTO

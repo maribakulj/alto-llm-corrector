@@ -58,7 +58,9 @@ def _rewrite(tmp_path: Path, corrected_l1: str):
     by_id = {lm.line_id: lm for p in doc.pages for lm in p.lines}
     by_id["L1"].corrected_text = corrected_l1
     by_id["L2"].corrected_text = by_id["L2"].ocr_text
-    xml_bytes, _m, paths = rewrite_alto_file(xml_path, doc.pages, "test", "mock")
+    _res = rewrite_alto_file(xml_path, doc.pages, "test", "mock")
+    xml_bytes = _res.xml_bytes
+    paths = _res.rewriter_paths
     root = etree.fromstring(xml_bytes)
     ns = _detect_namespace(root)
     line = next(tl for tl in root.iter(f"{{{ns}}}TextLine") if tl.get("ID") == "L1")

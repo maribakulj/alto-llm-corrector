@@ -1,30 +1,34 @@
 """Turning a corrected document into the run's terminal decisions.
 
 Between "every page has been through the producer" and "the outputs exist"
-sit four document-wide passes, and their ORDER is the whole content of this
+sit five document-wide passes, and their ORDER is the whole content of this
 module — each one depends on running against what the previous left behind:
 
   1. the adjacent-duplicate consistency pass, which needs every
      line still holding its pre-revert accepted correction, so it must be
      the first thing to revert anything;
-  2. break-character preservation (P5), which normalises the accepted text
-     BEFORE it becomes a decision — historically the PAGE rewriter forced
-     the source's break character after the decision was recorded, so the
-     artefact spelled something the decision did not and the projection
-     invariant raised on the engine's own output;
+  2. break-character preservation, which normalises the accepted text
+     BEFORE it becomes a decision. Forcing the source's break character
+     AFTER the decision is recorded makes the artefact spell something the
+     decision does not, and the projection invariant then raises on the
+     engine's own output;
   3. the loss-policy gates (ADR-012 strict, token_realign), which reject a
      correction that cannot project without losing word granularity —
      before the decisions materialise and before any output exists, so the
      unit falls back to source and the markup keeps its Word geometry;
-  4. deriving the immutable :class:`DecisionSet`, which refuses a line
+  4. the review pass, which qualifies the corrections that survived all
+     three — LAST, because every pass above can still take a correction
+     away and a referral on a reverted line describes something nobody
+     receives. It is also the only pass that writes no text, so it can
+     move no output byte;
+  5. deriving the immutable :class:`DecisionSet`, which refuses a line
      still PENDING: outputs exist only for a document where every line
      carries a terminal decision.
 
-Free function. None of it is execution control — no producer, no
-retry, no observer — and reading it inline in the orchestrator, between the
-page loop and the report, is what made the ordering look incidental.
+Free function: none of it is execution control — no producer, no retry,
+no observer.
 
-Since `RM-01` the order is no longer only stated here: each pass takes a
+The order is not only stated here. Each pass takes a
 :class:`~saknussemm.core.acceptance._FinalizeOrder` token, declares what
 must have run before it, and REFUSES otherwise. The list above is the
 contract; the token is what makes breaking it an error instead of a
@@ -38,6 +42,7 @@ from saknussemm.core.acceptance import (
     _FinalizeOrder,
     _global_adjacency_pass,
     _loss_policy_pass,
+    _review_pass,
 )
 from saknussemm.core.decisions import DecisionSet, derive_decision_set
 from saknussemm.core.identity import LineRef
@@ -48,6 +53,7 @@ from saknussemm.core.schemas import (
     LineManifest,
     LineTrace,
     LossPolicy,
+    ReviewPolicy,
     SidecarEntry,
 )
 
@@ -88,6 +94,7 @@ def _finalize_document(
     *,
     guard_config: GuardConfig,
     loss_policy: LossPolicy,
+    review_policy: ReviewPolicy,
     document_manifest: DocumentManifest,
     all_lines: dict[LineRef, LineManifest],
     traces: dict[LineRef, LineTrace],
@@ -109,6 +116,13 @@ def _finalize_document(
     _preserve_break_chars(document_manifest, order)
     sidecar_entries = _loss_policy_pass(
         loss_policy=loss_policy,
+        document_manifest=document_manifest,
+        all_lines=all_lines,
+        traces=traces,
+        order=order,
+    )
+    _review_pass(
+        review_policy=review_policy,
         document_manifest=document_manifest,
         all_lines=all_lines,
         traces=traces,

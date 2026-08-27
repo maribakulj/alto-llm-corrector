@@ -1,10 +1,8 @@
 """What a run returns, and what a caller may do with it (ADR-011).
 
 The engine never writes: it computes values and hands them back. This module
-holds that value, and the assembly of it. Lifted out of the orchestrator
-because a result object is not execution control — it is the shape of an
-answer, and a reader looking for "what do I get back?" should not have to
-scroll past the retry loop.
+holds that value and the assembly of it — the shape of an answer, not
+execution control.
 """
 
 from __future__ import annotations
@@ -27,7 +25,7 @@ from saknussemm.core.schemas import CorrectionReport, LineTrace, Usage
 class CorrectionResult:
     """Outcome of a full pipeline run.
 
-    The input manifest is never mutated (ADR-011 slice E): what the run
+    The input manifest is never mutated (ADR-011): what the run
     decided is read off ``decisions`` (and ``corrected_files`` for the
     artefacts). `traces` is the line-by-line text trace through every
     stage.
@@ -49,6 +47,22 @@ class CorrectionResult:
     #: fallen lines (e.g. ``{"all_attempts_exhausted": 20}``), so a
     #: consumer can say WHY without parsing messages.
     fallback_reasons: dict[str, int]
+    #: Number of LINES whose terminal status is ``REVIEW_REQUIRED`` —
+    #: they kept their CORRECTION, and the run declares it has no means
+    #: of establishing the change is right. Disjoint from
+    #: ``fallback_lines``: a referred line was not taken away.
+    #:
+    #: Reading it as a failure count is the one mistake to avoid. It
+    #: counts what the library refuses to VOUCH for, not what it got
+    #: wrong — on the run this feature was measured against, the great
+    #: majority of the flagged changes were good ones, which is exactly
+    #: why they are delivered rather than reverted.
+    review_lines: int
+    #: Aggregated review-reason prefixes → line counts (e.g.
+    #: ``{"digits_changed": 31, "proper_noun_changed": 12}``). One line
+    #: can appear under several codes, so these sum to at least
+    #: ``review_lines`` rather than to it.
+    review_reasons: dict[str, int]
     traces: dict[LineRef, LineTrace]
     reconcile_metrics: ReconcileMetrics
     #: Aggregate token consumption across every producer call in the
@@ -63,14 +77,14 @@ class CorrectionResult:
     #: ``replace_span`` ops here too.
     edit_script: EditScript
     #: ADR-011 — the run's immutable :class:`DecisionSet`: one terminal
-    #: decision per line in document reading order. Since ADR-011 slice E the
-    #: input manifest is never mutated, so THIS is where a caller reads
+    #: decision per line in document reading order. The input manifest
+    #: is never mutated, so THIS is where a caller reads
     #: what the run decided (``decisions.by_ref[LineRef(...)]``).
     decisions: DecisionSet
     #: ADR-011 — the corrected artefacts themselves, keyed by source file
     #: name, computed on EVERY run: the result IS the output; persisting
     #: it is the caller's choice (:meth:`write`, or a host-owned
-    #: transaction like the demo backend's staging writer).
+    #: transaction with commit/discard semantics).
     corrected_files: dict[str, bytes] = field(default_factory=dict)
     #: Source files the run could NOT deliver, mapped to why: the rewritten
     #: artefact did not carry the run's decisions for that file.
@@ -141,18 +155,18 @@ class CorrectionResult:
     def _refuse_partial_write(self, allow_partial: bool) -> None:
         """A volume missing a file must not reach disk by omission.
 
-        The engine no longer throws a whole run away because one file's
-        artefact diverged — the other files are faithful, and refusing to
-        hand them over never made them better. But the risk that trade
-        creates is precise: a caller who writes ``corrected_files`` in a
-        loop persists 299 of 300 pages, reports success, and nobody looks.
+        A divergent artefact does not throw the whole run away — the other
+        files are faithful, and refusing to hand them over never made them
+        better. The risk that trade creates is precise: a caller who writes
+        ``corrected_files`` in a loop persists 299 of 300 pages, reports
+        success, and nobody looks.
 
         So the loudness lands here, at the one door that puts bytes on
         disk. ``allow_partial=True`` is the caller saying it has read
         :attr:`undeliverable_files` and accepts the subset — a decision,
-        made once, in code someone reviews. Hosts with their own writer
-        (the demo's staging transaction) never reach this and answer the
-        same question in their own terms.
+        made once, in code someone reviews. A host with its own writer
+        (a staging transaction) never reaches this and answers the same
+        question in its own terms.
 
         The same shape as :meth:`_refuse_colliding_names`: ``write``
         defending its own contract rather than inheriting one.
@@ -245,6 +259,8 @@ def _build_correction_result(
         fallback_chunks=ctx.fallback_chunks,
         fallback_lines=decisions.fallback_lines,
         fallback_reasons=decisions.fallback_reason_counts(),
+        review_lines=decisions.review_lines,
+        review_reasons=decisions.review_reason_counts(),
         traces=traces,
         reconcile_metrics=ctx.reconcile_metrics,
         usage=ctx.usage,

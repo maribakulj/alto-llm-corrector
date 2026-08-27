@@ -30,7 +30,10 @@ def test_identity_roundtrip_leaves_every_line_untouched():
     doc = build_document_manifest([(_NEWSEYE, _NEWSEYE.name)])
     all_ids = {lm.line_id for p in doc.pages for lm in p.lines}
     src = {lm.line_id: lm.ocr_text for p in doc.pages for lm in p.lines}
-    xml, metrics, paths = rewrite_page_file(_NEWSEYE, doc.pages, "t", "m")
+    _res = rewrite_page_file(_NEWSEYE, doc.pages, "t", "m")
+    xml = _res.xml_bytes
+    metrics = _res.metrics
+    paths = _res.rewriter_paths
     assert metrics.untouched == len(all_ids)
     assert metrics.fast_path == 0 and metrics.slow_path == 0
     out = extract_output_texts(xml, all_ids)
@@ -80,7 +83,10 @@ def test_fast_path_updates_words_line_drops_conf_and_alternatives(tmp_path: Path
     assert lm.ocr_text == "helo wrld"
     lm.corrected_text = "hello world"  # same word count → fast path
 
-    xml, metrics, paths = rewrite_page_file(p, doc.pages, "prov", "mdl")
+    _res = rewrite_page_file(p, doc.pages, "prov", "mdl")
+    xml = _res.xml_bytes
+    metrics = _res.metrics
+    paths = _res.rewriter_paths
     assert paths["ln1"] == "fast_path"
     assert metrics.fast_path == 1
 
@@ -109,7 +115,10 @@ def test_slow_path_drops_words_when_count_changes(tmp_path: Path):
     doc = build_document_manifest([(p, p.name)])
     doc.pages[0].lines[0].corrected_text = "hello brave new world"  # 4 != 2 words
 
-    xml, metrics, paths = rewrite_page_file(p, doc.pages, "prov", "mdl")
+    _res = rewrite_page_file(p, doc.pages, "prov", "mdl")
+    xml = _res.xml_bytes
+    metrics = _res.metrics
+    paths = _res.rewriter_paths
     assert paths["ln1"] == "slow_path"
     assert metrics.slow_path == 1
     assert metrics.words_dropped == 2  # both Word elements removed
@@ -123,7 +132,8 @@ def test_geometry_polygons_never_rewritten(tmp_path: Path):
     p = _write(tmp_path, _RICH)
     doc = build_document_manifest([(p, p.name)])
     doc.pages[0].lines[0].corrected_text = "hello world"
-    xml, _m, _paths = rewrite_page_file(p, doc.pages, "p", "m")
+    _res = rewrite_page_file(p, doc.pages, "p", "m")
+    xml = _res.xml_bytes
     text = xml.decode("utf-8")
     # Region + line polygons preserved verbatim (P1).
     assert 'points="0,0 300,0 300,50 0,50"' in text
@@ -147,7 +157,9 @@ def test_hyphen_char_preserved_when_producer_normalises(tmp_path: Path):
             hid = lm.line_id
             break
     assert hid is not None
-    xml, _m, paths = rewrite_page_file(_LAFAYETTE_CORR, doc.pages, "p", "m")
+    _res = rewrite_page_file(_LAFAYETTE_CORR, doc.pages, "p", "m")
+    xml = _res.xml_bytes
+    paths = _res.rewriter_paths
     out = extract_output_texts(xml, {hid})
     assert out[hid].endswith("¬")
     assert paths[hid] == "untouched"
@@ -165,7 +177,8 @@ def test_hyphen_preserved_with_real_word_change(tmp_path: Path):
     lm = doc.pages[0].lines[0]
     assert lm.ocr_text.endswith("¬")
     lm.corrected_text = "hello world-"  # corrected word + normalised hyphen
-    xml, _m, _paths = rewrite_page_file(p, doc.pages, "p", "m")
+    _res = rewrite_page_file(p, doc.pages, "p", "m")
+    xml = _res.xml_bytes
     out = extract_output_texts(xml, {"ln1"})
     assert out["ln1"] == "hello world¬"  # word fixed, ¬ restored
 
@@ -179,7 +192,7 @@ def test_provenance_metadata_item_on_2019(tmp_path: Path):
     p = _write(tmp_path, _RICH)
     doc = build_document_manifest([(p, p.name)])
     doc.pages[0].lines[0].corrected_text = "hello world"
-    xml, _m, _paths = rewrite_page_file(
+    _res = rewrite_page_file(
         p,
         doc.pages,
         "openai",
@@ -187,6 +200,7 @@ def test_provenance_metadata_item_on_2019(tmp_path: Path):
         lib_version="0.1.0a1",
         config_fingerprint="deadbeef",
     )
+    xml = _res.xml_bytes
     text = xml.decode("utf-8")
     assert "MetadataItem" in text
     assert 'type="processingStep"' in text
@@ -197,7 +211,8 @@ def test_provenance_comments_fallback_on_2013():
     """2013 schema has no MetadataItem slot → provenance goes to Comments."""
     doc = build_document_manifest([(_LAFAYETTE_CORR, _LAFAYETTE_CORR.name)])
     doc.pages[0].lines[0].corrected_text = "CHANGED"
-    xml, _m, _paths = rewrite_page_file(_LAFAYETTE_CORR, doc.pages, "openai", "gpt")
+    _res = rewrite_page_file(_LAFAYETTE_CORR, doc.pages, "openai", "gpt")
+    xml = _res.xml_bytes
     text = xml.decode("utf-8")
     assert "MetadataItem" not in text
     assert "Post-OCR correction via openai/gpt" in text
@@ -207,11 +222,12 @@ def test_output_reparses_and_is_deterministic(tmp_path: Path):
     p = _write(tmp_path, _RICH)
     doc1 = build_document_manifest([(p, p.name)])
     doc1.pages[0].lines[0].corrected_text = "hello world"
-    a, _m1, _p1 = rewrite_page_file(p, doc1.pages, "p", "m")
-
+    _res = rewrite_page_file(p, doc1.pages, "p", "m")
+    a = _res.xml_bytes
     doc2 = build_document_manifest([(p, p.name)])
     doc2.pages[0].lines[0].corrected_text = "hello world"
-    b, _m2, _p2 = rewrite_page_file(p, doc2.pages, "p", "m")
+    _res = rewrite_page_file(p, doc2.pages, "p", "m")
+    b = _res.xml_bytes
     assert a == b  # deterministic, no wall-clock timestamp
     # And it re-parses cleanly.
     reparsed = tmp_path / "again.xml"

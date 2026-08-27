@@ -9,13 +9,11 @@ from __future__ import annotations
 
 import hashlib
 import json
-import uuid
 from typing import Any, ClassVar, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from saknussemm.core.schemas.manifest import (
-    ChunkGranularity,
     Coords,
     HyphenRole,
     LineManifest,
@@ -186,6 +184,24 @@ class GuardConfig(FrozenPolicy):
     #: Phase-4 vision benchmark (roadmap) — until then it is a safe default,
     #: not a calibrated one.
     _VISION_MIN_SOURCE_SIMILARITY: ClassVar[float] = 0.15
+
+    @classmethod
+    def text(cls, **overrides: Any) -> "GuardConfig":
+        """Le profil d'un producteur de TEXTE — les défauts, nommés.
+
+        ``GuardConfig()`` fait déjà exactement cela. Ce qui manquait est le
+        NOM : sans lui, le seul profil qui existe est ``vision()``, et un
+        consommateur qui lit les deux ne peut pas voir qu'il choisit entre
+        deux points cohérents plutôt qu'entre « le défaut » et « autre
+        chose ».
+
+        Les trois étages de garde se règlent ENSEMBLE (voir la docstring de
+        la classe) : un profil est un point cohérent de cet espace, un seuil
+        isolé n'en est pas un. `docs/versioning.md` recommande donc les
+        profils, et exclut les VALEURS des seuils du contrat SemVer — elles
+        ne sont pas calibrées et le dire empêche de figer un provisoire.
+        """
+        return cls(**overrides)
 
     @classmethod
     def vision(cls, **overrides: Any) -> "GuardConfig":
@@ -516,97 +532,68 @@ class RetryPolicy(FrozenPolicy):
         return self.temperatures[idx]
 
 
+class ReviewPolicy(FrozenPolicy):
+    """Which corrections the run declares it cannot verify.
+
+    A referral moves a line to ``LineStatus.REVIEW_REQUIRED``. It
+    **changes no delivered byte**: the correction stays, the artefact is
+    identical, and only what the run CLAIMS about the line changes. The
+    rules live in ``core/review.py``, which also records what each one
+    can and cannot see.
+
+    **On by default**, and that is the whole point rather than an
+    aggressive default. A library that can signal what it cannot
+    establish, and does so only when asked, has not signalled it. A host
+    that wants the previous behaviour asks for it: :meth:`silent`.
+
+    Expect referrals on a substantial share of the corrected lines —
+    the proper-noun rule alone fires on every respelled name, which in
+    heritage print is a lot of them. That number is not a defect rate.
+    It is the size of what the guards were already unable to check and
+    were not saying.
+
+    Each rule has its own switch because their noise is not comparable:
+    a host with clean modern print may want the digit and negation
+    rules and not the proper-noun one. Turning a rule off removes its
+    code from the run's vocabulary; it never turns a referral into a
+    ``CORRECTED``-with-an-asterisk.
+    """
+
+    #: Master switch. ``False`` reproduces the behaviour that predates
+    #: referral exactly: no line is ever ``REVIEW_REQUIRED``.
+    enabled: bool = True
+    #: The digits are not the same ones (covers dates and amounts —
+    #: neither is parsed; see ``core/review.py``).
+    digits_changed: bool = True
+    #: A negation particle appeared, vanished, or changed in number.
+    negation_changed: bool = True
+    #: A probable proper noun was respelled, added or dropped.
+    proper_noun_changed: bool = True
+    #: A character the run edited on EVERY one of its occurrences —
+    #: the run-level rule, invisible line by line.
+    systematic_substitution: bool = True
+    #: How many occurrences a character needs before "every one of them"
+    #: means anything. Three is the smallest number for which the word
+    #: "systematic" is not an overstatement; the measured cases were 34
+    #: and 69.
+    min_systematic_occurrences: int = 3
+
+    @classmethod
+    def silent(cls) -> "ReviewPolicy":
+        """No referrals at all — every corrected line reads ``corrected``.
+
+        Named rather than spelled ``ReviewPolicy(enabled=False)`` at each
+        call site, and named ``silent`` rather than ``disabled`` because
+        that is what it does: the corrections the rules would have
+        flagged still ship, unflagged. It suppresses the report, not the
+        uncertainty.
+        """
+        return cls(enabled=False)
+
+
+#: Module-level default reused wherever a caller passes no ReviewPolicy.
+DEFAULT_REVIEW_POLICY = ReviewPolicy()
+
+
 #: Module-level default reused wherever a caller passes no RetryPolicy.
 DEFAULT_RETRY_POLICY = RetryPolicy()
-
-
-class ChunkRequest(BaseModel):
-    chunk_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    document_id: str
-    page_id: str
-    block_id: str | None = None
-    granularity: ChunkGranularity
-    line_ids: list[str]
-    # Target lines the pipeline actually corrects/accepts. Any line in
-    # ``line_ids`` but NOT in ``target_line_ids`` is *context only*: it is
-    # still sent to the producer so a target near it keeps full surrounding
-    # context, but its output is discarded here (it is a target of an
-    # adjacent chunk). ``None`` means every line is a target (PAGE / BLOCK /
-    # LINE granularity, and the historical default for windows).
-    target_line_ids: list[str] | None = None
-
-    def targets(self) -> list[str]:
-        """The line_ids this chunk owns (all of them when unrestricted)."""
-        return self.line_ids if self.target_line_ids is None else self.target_line_ids
-
-    attempt: int = Field(default=0, ge=0)
-
-    @model_validator(mode="after")
-    def _targets_subset_of_lines(self) -> "ChunkRequest":
-        """A target outside the chunk's lines would be silently
-        ignored at correction time (it has no enriched input) while still
-        counting as "owned" — a line lost without a trace."""
-        if self.target_line_ids is not None:
-            extra = set(self.target_line_ids) - set(self.line_ids)
-            if extra:
-                raise ValueError(
-                    f"target_line_ids not contained in line_ids: {sorted(extra)!r}"
-                )
-        return self
-
-
-class HyphenSplit(BaseModel):
-    """Record of a severed forward hyphen link (ADR-010 unit SPLIT).
-
-    Emitted by :func:`saknussemm.core.units.split_forward_link` when the
-    LINE planner cuts a chain longer than ``max_lines_per_request``, and
-    carried on the :class:`ChunkPlan` so the cut is a recorded unit
-    operation rather than a silent pointer side effect. Line ids are
-    bare on purpose: the chain walk is page-scoped, so a split never
-    crosses a page, and ``page_id`` qualifies both (ADR-009).
-    """
-
-    model_config = ConfigDict(frozen=True)
-
-    page_id: str
-    tail_line_id: str
-    head_line_id: str
-
-
-class RefusedEdit(BaseModel):
-    """One producer op the edit guards refused, and why (`A2b`).
-
-    ``EditRejection`` has carried thirteen reason codes since the protocol
-    landed and **no consumer outside the tests**: a line whose only op was
-    refused reported ``corrected`` with no reason, ``fallback_chunks`` at
-    zero, and nothing anywhere said a guard had fired. The report could not
-    distinguish "the producer proposed nothing" from "it proposed something
-    the guards refused", so the refusal rate of `E1`–`E5` was not merely
-    unmeasured, it was **unmeasurable** — and a consumer tuning a
-    ``GuardConfig``, or a bench sweeping one, was steering blind.
-
-    That is the reason this exists rather than a counter: a rate needs the
-    reason to be actionable. ``e5_hyphen`` and ``e4_line_budget`` firing on
-    the same corpus mean opposite things about what to change.
-
-    Line ids are bare and ``page_id`` qualifies them, as for
-    :class:`HyphenSplit` (ADR-009).
-    """
-
-    model_config = ConfigDict(frozen=True)
-
-    page_id: str
-    line_id: str
-    op: str
-    reason: str
-    detail: str = ""
-
-
-class ChunkPlan(BaseModel):
-    page_id: str
-    chunks: list[ChunkRequest]
-    granularity: ChunkGranularity
-    #: ADR-010 — the forward links the LINE planner severed so that no
-    #: still-linked pair spans two chunks (over-cap chains). Empty at
-    #: every other granularity.
-    hyphen_splits: list[HyphenSplit] = Field(default_factory=list)

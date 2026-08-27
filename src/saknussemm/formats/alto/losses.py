@@ -1,11 +1,10 @@
 """What happens to each ALTO ``String`` attribute when a line is rewritten.
 
-The table, and the four predicates that read it. Lived in
-``core/losses.py`` until `RM-07`, which is the defect it was: a module
-whose whole point is that the pure core knows no format was the module
-naming ``HPOS``, ``SUBS_CONTENT`` and ``WC``. Nothing imported ``lxml``
-because of it and the import contract stayed green, so the violation was
-never a broken rule — it was a true statement about the architecture that
+The table, and the four predicates that read it. It belongs to the format,
+not to the core: a module whose whole point is that the pure core knows no
+format has no business naming ``HPOS``, ``SUBS_CONTENT`` and ``WC``. Such a
+violation breaks no import rule and keeps the contract green — it is a true
+statement about the architecture that
 the architecture did not make.
 
 What stayed behind in :mod:`saknussemm.core.losses` is what BOTH formats
@@ -19,10 +18,9 @@ that asymmetry is what made the split obvious once it was measured.
 **Written from measurement, not from belief.** Every fate below was
 observed on ``examples/sample.xml`` and ``examples/X0000002.xml`` across
 all three write paths; the numbers in the comments are what those files
-actually do. `RM-07` moved the table without touching a value —
-``tests/test_loss_accounting_is_real.py`` is the differential that says
-so, and it checks the rewriter against this table rather than against
-anyone's memory.
+actually do. ``tests/test_loss_accounting_is_real.py`` is the differential
+that checks the rewriter against this table rather than against anyone's
+memory.
 """
 
 from __future__ import annotations
@@ -63,7 +61,7 @@ ALTO_STRING_ATTRIBUTES: dict[str, tuple[AttributeClass, AttributeFate]] = {
     # REWRITTEN stays, because it is right for the values this rewriter
     # writes; what was missing is a counter for the ones it does not.
     # `_semantic_attr_losses` owns that, keyed on the source value against
-    # what the line wants — see `A2d`.
+    # what the line wants.
     "SUBS_TYPE": (AttributeClass.SEMANTIC, AttributeFate.REWRITTEN),
     "SUBS_CONTENT": (AttributeClass.SEMANTIC, AttributeFate.REWRITTEN),
     # --- semantic, carried through ---

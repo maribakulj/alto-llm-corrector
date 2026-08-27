@@ -145,7 +145,8 @@ def test_corpus_output_bytes_are_pinned(filename: str, scenario: str) -> None:
             else:
                 lm.corrected_text = _scripted_correction(i, lm.ocr_text)
             i += 1
-    xml_bytes, _metrics, _paths = rewrite_alto_file(xml_path, doc.pages, "test", "mock")
+    _res = rewrite_alto_file(xml_path, doc.pages, "test", "mock")
+    xml_bytes = _res.xml_bytes
     digest = hashlib.sha256(xml_bytes).hexdigest()
     assert digest == _GOLDEN[(filename, scenario)], (
         f"{filename}/{scenario}: output bytes moved. If deliberate, classify "
@@ -166,7 +167,9 @@ def test_identity_output_equals_source_reserialisation() -> None:
         for lm in page.lines:
             lm.corrected_text = lm.ocr_text
             all_ids.add(lm.line_id)
-    xml_bytes, metrics, _ = rewrite_alto_file(xml_path, doc.pages, "test", "mock")
+    _res = rewrite_alto_file(xml_path, doc.pages, "test", "mock")
+    xml_bytes = _res.xml_bytes
+    metrics = _res.metrics
     assert metrics.fast_path == 0 and metrics.slow_path == 0
     out_texts = extract_output_texts(xml_bytes, all_ids)
     by_id = {lm.line_id: lm for p in doc.pages for lm in p.lines}

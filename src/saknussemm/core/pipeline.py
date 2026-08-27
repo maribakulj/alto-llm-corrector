@@ -37,6 +37,7 @@ from saknussemm.core import events as ev
 from saknussemm.core.redaction import sanitize_error
 from saknussemm.core.context import RunContext
 from saknussemm.core.driver import PageDriver
+from saknussemm.core.routing import ChunkRouter
 from saknussemm.core.finalize import _finalize_document
 from saknussemm.core.indexing import (
     DocumentIndex,
@@ -71,6 +72,7 @@ from saknussemm.core.schemas import (
     DEFAULT_GUARD_CONFIG,
     DEFAULT_CONFIDENCE_POLICY,
     DEFAULT_LOSS_POLICY,
+    DEFAULT_REVIEW_POLICY,
     DEFAULT_PAIRING_POLICY,
     DEFAULT_RETRY_POLICY,
     ChunkPlannerConfig,
@@ -79,6 +81,7 @@ from saknussemm.core.schemas import (
     PageImage,
     ConfidencePolicy,
     LossPolicy,
+    ReviewPolicy,
     PairingPolicy,
     RetryPolicy,
 )
@@ -113,6 +116,7 @@ class CorrectionPipeline:
         format_adapter: FormatAdapter | None = None,
         *,
         loss_policy: LossPolicy | None = None,
+        review_policy: ReviewPolicy | None = None,
         producer_metadata: ProducerMetadata | None = None,
         confidence_policy: ConfidencePolicy | None = None,
         confidence_scorers: tuple[ConfidenceScorer, ...] | None = None,
@@ -138,12 +142,14 @@ class CorrectionPipeline:
         # lose format granularity: REPORT (default, historical) counts
         # and attributes; STRICT rejects the unit pre-projection.
         self.loss_policy = loss_policy or DEFAULT_LOSS_POLICY
-        # line confidences on the report. DROP
-        # (default) computes nothing; REPORT_ONLY fills
-        # LineOutcome.confidence via the injected scorers (default: the
-        # zero-dependency HeuristicScorer). Deliberately outside the
-        # §8.2 composite fingerprint until write_wc unlocks (report-only
-        # never affects the corrected XML).
+        # Which corrections the run declares it cannot establish. ON by
+        # default; writes no text, so it changes what a run REPORTS only.
+        self.review_policy = review_policy or DEFAULT_REVIEW_POLICY
+        # Line confidences on the report. DROP (default) computes
+        # nothing; REPORT_ONLY fills LineOutcome.confidence via the
+        # injected scorers (default: the zero-dependency HeuristicScorer).
+        # Outside the §8.2 composite fingerprint until write_wc unlocks —
+        # report-only never affects the corrected XML.
         self.confidence_policy = confidence_policy or DEFAULT_CONFIDENCE_POLICY
         self.confidence_scorers: tuple[ConfidenceScorer, ...] = (
             confidence_scorers
@@ -189,13 +195,12 @@ class CorrectionPipeline:
                 declared if isinstance(declared, ProducerMetadata) else None
             )
         self.producer_metadata = producer_metadata or ProducerMetadata()
-        # No reentrancy guard (ADR-011 slice E, retiring ADR-005): the
-        # instance carries only immutable configuration, every run works
-        # on a fresh RunContext plus its own deep copy of the input
-        # manifest, so concurrent runs on one instance cannot contaminate
-        # each other. The shared observer sees interleaved events under
-        # concurrency — inherent to sharing an observer, and the
-        # caller's choice.
+        # No reentrancy guard (ADR-011): the instance carries only
+        # immutable configuration, and every run works on a fresh
+        # RunContext plus its own deep copy of the input manifest, so
+        # concurrent runs on one instance cannot contaminate each other.
+        # A shared observer still sees interleaved events — inherent to
+        # sharing one, and the caller's choice.
 
     @classmethod
     def for_provider(
@@ -238,14 +243,13 @@ class CorrectionPipeline:
         has no such problem and goes through ``**pipeline_kwargs``
         (`RM-03`).
 
-        It used to re-declare all thirteen and copy them across by hand,
-        which is not merely long: the copy is a SECOND declaration of the
-        constructor's signature, and nothing made the two agree. A knob
-        added to ``__init__`` and forgotten here was silently unreachable
-        through this door, and a default drifting apart between the two
-        would have been invisible in review. Forwarding removes the class
-        of bug; ``tests/test_public_api_snapshot.py`` pins both signatures
-        so the loss of explicitness stays visible where consumers read it.
+        Re-declaring the optional knobs here would be a SECOND declaration
+        of the constructor's signature with nothing making the two agree: a
+        knob added to ``__init__`` and forgotten here is silently
+        unreachable through this door, and a drifting default is invisible
+        in review. ``tests/test_public_api_snapshot.py`` pins both
+        signatures so the loss of explicitness stays visible where consumers
+        read it.
         """
         from saknussemm.producers.llm_edit import LLMEditProducer
 
@@ -325,23 +329,23 @@ class CorrectionPipeline:
     ) -> CorrectionResult:
         """Run the full pipeline. The input manifest is never modified.
 
-        **Immutability & reentrancy (ADR-011 slice E, retiring
-        ADR-005)** — the engine works on its own deep copy of
+        **Immutability & reentrancy (ADR-011)** — the engine works on
+        its own deep copy of
         ``document_manifest``: the input is read, never written, so the
         same document object can be run again (or concurrently) and
         every run starts from the original OCR text. All per-run state
         lives in a fresh :class:`RunContext` plus that copy; the
         instance carries only immutable configuration, so one pipeline
         instance supports concurrent ``run()`` calls (within one event
-        loop — instances are still not thread-safe). The run's
-        decisions are returned on the result
+        loop — instances are not thread-safe). The run's decisions are
+        returned on the result
         (:attr:`CorrectionResult.decisions`), not written back onto the
         caller's manifest.
 
-        §5.1 resorption — there is no ``api_key``/``model``/``provider_name``
-        here anymore: credentials and the vendor call live inside the
-        injected :class:`EditProducer` (see :meth:`for_provider`), and the
-        provenance labels are constructor state.
+        Credentials and the vendor call live inside the injected
+        :class:`EditProducer` (see :meth:`for_provider`); the provenance
+        labels are constructor state. Nothing here carries an
+        ``api_key``.
 
         ``page_images`` (§5.1) — optional mapping of **page_id** (document-
         unique, ADR-007) to a :data:`PageImage`: the historical opaque
@@ -372,10 +376,10 @@ class CorrectionPipeline:
         (:attr:`~CorrectionResult.corrected_files`) and the §9 report,
         and persisting them is the caller's choice —
         :meth:`CorrectionResult.write` for the simple case, or a
-        host-owned transaction (like the demo backend's staging writer)
-        when the host needs commit/discard semantics.
+        host-owned transaction when the host needs commit/discard
+        semantics.
         """
-        # ADR-011 slice E — the working copy IS the run's mutable state;
+        # ADR-011 — the working copy IS the run's mutable state;
         # the caller's document stays exactly as parsed.
         return await self._run_impl(
             document_manifest=document_manifest.model_copy(deep=True),
@@ -433,6 +437,7 @@ class CorrectionPipeline:
         decisions, sidecar_entries = _finalize_document(
             guard_config=self.guard_config,
             loss_policy=self.loss_policy,
+            review_policy=self.review_policy,
             document_manifest=document_manifest,
             all_lines=index.lines,
             traces=index.traces,
@@ -528,12 +533,14 @@ class CorrectionPipeline:
         configuration is immutable, so two concurrent runs may share it."""
         return PageDriver(
             producer=self.producer,
-            escalation_producer=self.escalation_producer,
             config=self.config,
             retry_policy=self.retry_policy,
             guard_config=self.guard_config,
-            qe_scorer=self.qe_scorer,
-            routing_policy=self.routing_policy,
+            router=ChunkRouter(
+                qe_scorer=self.qe_scorer,
+                routing_policy=self.routing_policy,
+                escalation_producer=self.escalation_producer,
+            ),
             emit=self._emit,
         )
 

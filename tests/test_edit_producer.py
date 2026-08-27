@@ -309,13 +309,15 @@ def test_llm_producer_declares_text_only_capabilities():
 _IMAGE_MODULES = ("PIL", "cv2", "imageio", "skimage", "wand", "pillow", "torchvision")
 
 #: The ONE sanctioned place a heavy image lib may be imported (lazily): the
-#: opt-in saknussemm[vision] producer, under src/saknussemm/integrations/.
-#: Everything else is the pixel-blind zone.
+#: opt-in saknussemm[vision] producer. It moved from ``integrations/`` to
+#: ``producers/`` on 2026-08-25 — it fills the ``EditProducer`` protocol, so
+#: it belongs where the implementations are, and ``integrations/`` keeps the
+#: vendor vocabulary they consume. Everything else is the pixel-blind zone.
 _VISION_SURFACE = {"vision.py"}
 
 
 def _is_vision_surface(py: Path) -> bool:
-    return py.parent.name == "integrations" and py.name in _VISION_SURFACE
+    return py.parent.name == "producers" and py.name in _VISION_SURFACE
 
 
 def _image_imports(py: Path, *, nested: bool) -> list[str]:

@@ -17,10 +17,10 @@ retry policy it implements:
     retry costs;
   - :func:`_attempt_chunk` — the loop itself, and nothing else.
 
-Free functions. What the engine used to supply from ``self`` is an
-argument: the retry policy that shapes the ramp, the guard config the
-validator and the span protocol read, and the observer callback. An
-attempt is a call over a chunk and a policy, not a property of a run.
+Free functions: the retry policy that shapes the ramp, the guard config the
+validator and the span protocol read, and the observer callback all arrive
+as arguments. An attempt is a call over a chunk and a policy, not a property
+of a run.
 
 **This function never applies the OCR fallback.** That decision — and the
 warning event that goes with it — belongs to the caller, which may descend
@@ -94,11 +94,8 @@ class _Proposed:
     """What a producer's script became: the batch to validate, and the lines
     whose ops the guards refused.
 
-    One value rather than two parameters because they come from the same
-    computation and are only correct together. The refused set used to be
-    dropped where it was computed, and the parameter budget refuses to let
-    it travel as a ninth argument — "handing a function's state to the
-    halves is not a split".
+    One value rather than two parameters: they come from the same
+    computation and are only correct together.
     """
 
     raw: dict[str, Any]
@@ -158,11 +155,11 @@ def _script_to_raw(
         )
         for lid, txt in span_result.text_by_id.items():
             entries.append({"line_id": lid, "corrected_text": txt})
-        # The refused lines, which this function used to drop on the floor.
-        # With ``requires_full_coverage = False`` the next block then fills
-        # them with their canonical text, so the report saw
-        # ``produced == final`` and concluded the op had survived every
-        # guard — and PUBLISHED it. Measured 2026-08-17: delivered
+        # The refused lines must travel. Dropped here, and with
+        # ``requires_full_coverage = False``, the next block fills them with
+        # their canonical text — so the report sees ``produced == final``,
+        # concludes the op survived every guard, and PUBLISHES it. Measured
+        # 2026-08-17: delivered
         # 'Le peuple att-', published the refused span, and a consumer
         # replaying the script got 'Le peuple -'.
         refusals = tuple(span_result.rejected)
@@ -437,10 +434,9 @@ async def _handle_failed_attempt(
     """
     if not isinstance(exc, _RECOVERABLE_ERROR_TYPES):
         raise exc
-    # §5.1 — the pipeline no longer holds credentials; the pattern-based
-    # redaction still masks secret-shaped substrings a producer may leak
-    # into the message, and the consumer layer (which DOES hold the key)
-    # sanitises again on its own error paths.
+    # The pipeline holds no credentials, but a producer may still leak a
+    # secret-shaped substring into a message; the consumer layer (which DOES
+    # hold the key) sanitises again on its own error paths.
     msg = f"{_failure_family(exc)}: {sanitize_error(str(exc))}"
     decision = _classify_retry(
         exc=exc,

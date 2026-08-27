@@ -10,13 +10,38 @@ from __future__ import annotations
 from pydantic import BaseModel, ConfigDict, Field
 
 from saknussemm.core.fidelity import ProjectionFidelity
-from saknussemm.core.schemas.policies import HyphenSplit, RefusedEdit
+from saknussemm.core.schemas.chunking import HyphenSplit
 from saknussemm.core.schemas.producer import Usage
 
 
 # ---------------------------------------------------------------------------
 # Line trace — per-line observability through the correction pipeline
 # ---------------------------------------------------------------------------
+
+
+class RefusedEdit(BaseModel):
+    """One producer op the edit guards refused, and why.
+
+    Without it the report cannot distinguish "the producer proposed
+    nothing" from "it proposed something the guards refused": a line whose
+    only op is refused reports ``corrected`` with no reason, and the refusal
+    rate of the edit guards is not merely unmeasured but **unmeasurable**.
+
+    A reason rather than a counter, because a rate needs one to be
+    actionable: ``e5_hyphen`` and ``e4_line_budget`` firing on the same
+    corpus mean opposite things about what to change.
+
+    Line ids are bare and ``page_id`` qualifies them, as for
+    :class:`HyphenSplit` (ADR-009).
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    page_id: str
+    line_id: str
+    op: str
+    reason: str
+    detail: str = ""
 
 
 class LineTrace(BaseModel):
@@ -68,8 +93,18 @@ class LineTrace(BaseModel):
     #: The rewriter's token alignment suspected a word reorder on this
     #: line. Flagged, never acted on.
     word_order_suspected: bool | None = None
-    validation_status: str | None = None  # corrected / fallback / failed
+    validation_status: str | None = (
+        None  # corrected / review_required / fallback / failed
+    )
     fallback_reason: str | None = None
+    #: Why this line was referred for review — the codes of
+    #: :data:`~saknussemm.core.decide.REVIEW_REASON_CODES`, each
+    #: optionally followed by ``": detail"``. Empty on every line the
+    #: run could decide, which is most of them. Unlike
+    #: ``fallback_reason`` this ACCUMULATES: a line may be unverifiable
+    #: for several independent causes at once, and a reviewer needs all
+    #: of them rather than the first.
+    review_reasons: tuple[str, ...] = ()
 
 
 # ---------------------------------------------------------------------------
@@ -116,11 +151,23 @@ class ProposalFeatures(BaseModel):
 
 class DecisionStage(BaseModel):
     """The line's terminal decision (always present — every line ends
-    ``corrected`` or ``fallback``, enforced by the DecisionSet)."""
+    ``corrected``, ``review_required`` or ``fallback``, enforced by the
+    DecisionSet).
 
-    status: str  # corrected / fallback
+    ``review_required`` is ``corrected`` plus an admission: the text
+    below is the correction, and the run has no means of establishing it
+    is right. A consumer filtering on ``status == "corrected"`` will not
+    see those lines, which is what the value is for."""
+
+    status: str  # corrected / review_required / fallback
     final_text: str  # the text the artefact carries
     reason: DecisionReason | None = None  # why a fallen line fell
+    #: Why the run could not establish this correction is right —
+    #: empty unless ``status`` is ``review_required``. A referred line
+    #: DID keep its correction: ``final_text`` carries it, and the
+    #: artefact carries ``final_text``. Additive and optional, so this
+    #: does NOT bump ``report_version``.
+    review_reasons: list[DecisionReason] = Field(default_factory=list)
     #: The guard's once-computed metrics for the proposal this decision
     #: judged; ``None`` for lines that never reached per-line acceptance
     #: (chunk-level fallbacks, hyphen-unit extensions, …).
@@ -156,8 +203,8 @@ class ProjectionStage(BaseModel):
     #: line's words. Flagged, never acted on: lines never merge and words
     #: never move, so the text is written exactly as decided and the source
     #: identities stay where the alignment could vouch for them. Not a loss
-    #: and no longer counted as one — it used to sit in :attr:`losses`, where
-    #: a consumer summing loss counters added a non-loss to the total.
+    #: therefore not counted as one: inside :attr:`losses` it would make a
+    #: consumer summing the loss counters add a non-loss to the total.
     #: ``None`` when the alignment saw no reorder (and on every path that
     #: does not align: untouched, subs-only, fast). Additive and optional —
     #: no ``report_version`` bump.
@@ -368,8 +415,8 @@ class CorrectionReport(BaseModel):
     #: normalized lines mean two lines where a significant whitespace
     #: character (U+00A0, U+202F, a tab) was flattened into an ordinary
     #: space: the artefact still says the same WORDS, and no longer says
-    #: them the same way. Before this existed the invariant compared in
-    #: whitespace normal form and could not see that at all. ``None`` when
+    #: them the same way — which an invariant comparing in whitespace normal
+    #: form cannot see at all. ``None`` when
     #: the run rendered no output file. Additive and optional — no
     #: ``report_version`` bump.
     projection_fidelity: dict[str, int] | None = None
@@ -396,9 +443,8 @@ class CorrectionReport(BaseModel):
     #: Additive and optional — no ``report_version`` bump.
     hyphen_splits: list[HyphenSplit] | None = None
 
-    #: Every producer op the edit guards refused (`A2b`), or ``None`` when
-    #: none were. Additive, so ``report_version`` does not move — the same
-    #: argument ``projection_fidelity`` made.
+    #: Every producer op the edit guards refused, or ``None`` when none
+    #: were. Additive, so ``report_version`` does not move.
     #:
     #: This is the field that makes a ``GuardConfig`` tunable. Before it, a
     #: line whose only op was refused reported ``corrected`` with no reason
@@ -410,8 +456,7 @@ class CorrectionReport(BaseModel):
     #:
     #: Sorted by ``(page_id, line_id, op, reason)`` rather than accumulated
     #: in execution order, so two runs over the same document produce the
-    #: same report — which is not true of ``hyphen_splits`` above, and is
-    #: the reason that one is on the list for `A7c`.
+    #: same report — which is not yet true of ``hyphen_splits`` above.
     edit_rejections: list[RefusedEdit] | None = None
     #: §11 — the run's full provenance record. Optional and
     #: additive (no ``report_version`` bump): a v2.0 consumer that

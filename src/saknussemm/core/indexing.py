@@ -3,12 +3,8 @@
 Three facts about the document have to exist before the first chunk is
 planned: the trace each line starts from, the page-qualified registry that
 makes a partner on another page findable, and how many hyphen units the
-document holds. The orchestrator built all three with three separate
-traversals of every page of every file, interleaved with the event it emits
-about them — which is why the traversals kept being read as part of the run
-and not as what they are: an index, derived from the manifest alone.
-
-One pass now, and one value to carry. Line identity is
+document holds. They are an INDEX, derived from the manifest alone — not
+part of the run — and one pass builds all three. Line identity is
 ``(page_id, line_id)`` throughout (ADR-001/ADR-007): a bare ``line_id``
 legitimately repeats across source files, so every key here is a
 :class:`LineRef`.
@@ -19,6 +15,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from saknussemm.core.identity import LineRef, line_ref
+from saknussemm.core.pairing import forward_ref, pair_ref
 from saknussemm.core.schemas import (
     DocumentManifest,
     HyphenRole,
@@ -37,7 +34,7 @@ _OPENS_A_UNIT = (HyphenRole.PART1, HyphenRole.BOTH)
 class DocumentIndex:
     """What a run knows about its document before any correction work.
 
-    Built once, from the run's private manifest copy (ADR-011 slice E).
+    Built once, from the run's private manifest copy (ADR-011).
     ``traces`` is handed to every later stage and accumulates as the run
     goes; ``lines`` and ``hyphen_pairs`` are read-only views of the
     document as parsed.
@@ -80,27 +77,26 @@ def _cross_page_partners(
 ) -> dict[LineRef, LineManifest] | None:
     """The partners this page's hyphen units need from OTHER pages.
 
-    Both directions are collected — the backward link (``hyphen_pair_*``,
-    a PART2 pointing at the PART1 that opened its unit) and the forward
-    one (``hyphen_forward_pair_*``) — because a page can hold either end
-    of a unit that straddles a page break. Partners on this same page are
-    skipped: the page's own lines are already in scope.
+    Les deux slots, dans les deux sens : une page peut porter l'un ou
+    l'autre bout d'une unité qui enjambe une coupure, et les deux lectures
+    passent par :func:`~saknussemm.core.pairing.pair_ref` et
+    :func:`~saknussemm.core.pairing.forward_ref` — les seules qui savent
+    qu'un pointeur sans ``page_id`` désigne la page de la ligne qui le
+    porte. Ce site lisait les quatre champs directement et réexprimait
+    cette qualification par un test sur la vacuité du ``page_id``.
 
-    Returns ``None`` when the page's units are all local, so the caller
-    can tell "nothing to bring in" from "an empty mapping I must still
-    thread through".
+    Les partenaires de cette page-ci sont écartés : ses propres lignes sont
+    déjà en portée.
+
+    Rend ``None`` quand toutes les unités de la page sont locales, pour que
+    l'appelant distingue « rien à emprunter » de « une carte vide qu'il faut
+    quand même faire voyager ».
     """
     partners: dict[LineRef, LineManifest] = {}
     for lm in page.lines:
-        for partner_id, partner_page in (
-            (lm.hyphen_pair_line_id, lm.hyphen_pair_page_id),
-            (lm.hyphen_forward_pair_id, lm.hyphen_forward_pair_page_id),
-        ):
-            if not partner_id or not partner_page:
+        for ref in (pair_ref(lm), forward_ref(lm)):
+            if ref is None or ref.page_id == page.page_id:
                 continue
-            if partner_page == page.page_id:
-                continue
-            ref = LineRef(page_id=partner_page, line_id=partner_id)
             partner = lines.get(ref)
             if partner is not None:
                 partners[ref] = partner

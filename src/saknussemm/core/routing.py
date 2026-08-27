@@ -12,10 +12,13 @@ policy, not about a run.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from saknussemm.core import decide
 from saknussemm.core.context import RunContext
 from saknussemm.core.identity import LineRef
 from saknussemm.core.protocols import EditProducer
+from saknussemm.core.batching import _split_for_image_cap
 from saknussemm.core.quality import (
     QEScorer,
     RoutingDecision,
@@ -42,6 +45,67 @@ def _routing_enabled(
         routing_policy.skip_at_or_below is not None
         or routing_policy.escalate_at_or_above is not None
     )
+
+
+@dataclass(frozen=True)
+class ChunkRouter:
+    """Ce qui décide, pour une page planifiée, quel producteur reçoit quoi.
+
+    Trois mécanismes vivaient sur :class:`~saknussemm.core.driver.PageDriver`
+    et se lisaient donc avant le cas nominal : le score de qualité, le
+    producteur d'escalade et le plafond d'images par appel. **Aucun des trois
+    ne s'exécute par défaut.** Le pilote n'a plus à les connaître : il
+    demande à cette couture ce que ses appels seront, et une couture inerte
+    lui rend son plan inchangé.
+
+    C'est un déplacement, pas une réécriture : la couture est au niveau du
+    PLAN, là où le routage agit réellement — il réécrit les cibles d'un chunk
+    et l'éclate en chunks frères. Un décorateur d'``EditProducer``, la forme
+    qui vient d'abord à l'esprit, ne pourrait pas faire cela : un producteur
+    reçoit une requête, pas un plan, donc un chunk entièrement SKIP serait
+    quand même construit et ``producer_calls`` cesserait de mesurer
+    l'économie que le mode existe pour prouver.
+
+    Immuable et sans état de run, comme le pilote qui la porte.
+    """
+
+    #: Le scoreur de qualité ; ``None`` éteint le routage.
+    qe_scorer: QEScorer | None
+    #: Comment un score devient une décision. Le défaut envoie tout au
+    #: producteur, donc un run par défaut est identique à un run sans
+    #: routage.
+    routing_policy: RoutingPolicy
+    #: Le producteur du palier ESCALATE (un VLM), ou ``None``.
+    escalation_producer: EditProducer | None
+
+    def route(
+        self,
+        *,
+        page: PageManifest,
+        chunks: list[ChunkRequest],
+        producer: EditProducer,
+        ctx: RunContext,
+        workspace: PageWorkspace,
+    ) -> list[tuple[ChunkRequest, EditProducer]]:
+        """Le plan d'une page, apparié au producteur qui portera chaque chunk.
+
+        Deux étapes, dans cet ordre : router, puis plafonner les images. Le
+        plafond vient APRÈS parce que seuls les chunks qui ont réellement
+        atteint un producteur vision sont concernés — celui-ci recadre chaque
+        ligne qu'on lui envoie, et les fournisseurs limitent le nombre
+        d'images par appel.
+        """
+        routed = _route_and_filter_chunks(
+            qe_scorer=self.qe_scorer,
+            routing_policy=self.routing_policy,
+            producer=producer,
+            escalation_producer=self.escalation_producer,
+            page=page,
+            chunks=chunks,
+            ctx=ctx,
+            workspace=workspace,
+        )
+        return _split_for_image_cap(routed=routed, line_by_id=workspace.line_by_id)
 
 
 def _route_and_filter_chunks(

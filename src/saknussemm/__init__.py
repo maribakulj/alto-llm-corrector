@@ -72,6 +72,7 @@ from saknussemm.core.schemas import (
     LineStatus,
     LineTrace,
     LossPolicy,
+    ReviewPolicy,
     PageImage,
     PageManifest,
     PairingPolicy,
@@ -147,7 +148,7 @@ __all__ = [
     "LoadedDocument",
     "__version__",
     # ---------------------------------------------------------------
-    # What the façade RETURNS, transitively (V5). Computed, not chosen:
+    # What the façade RETURNS, transitively. Computed, not chosen:
     # start from `load`/`correct`/`correct_sync`'s return annotations and
     # follow the types. A caller typing the value it was handed must be
     # able to import every name in it.
@@ -214,7 +215,7 @@ __all__ = [
     # ---------------------------------------------------------------
     # Injectable policies (§8.2). Frozen fields, fingerprinted.
     #
-    # The five that shape EVERY run. `RM-04` demoted the two that shape
+    # The six that shape EVERY run. `RM-04` demoted the two that shape
     # none by default — `ConfidencePolicy` (mode="drop") and
     # `RoutingPolicy` (both bounds None) belong to the research
     # programme the plan's freeze suspends, and a top-level export
@@ -227,6 +228,13 @@ __all__ = [
     "GuardConfig",
     "PairingPolicy",
     "LossPolicy",
+    # Which corrections the run declares it cannot establish. Exported
+    # rather than demoted beside `ConfidencePolicy` for the reason that
+    # demotion turns on: its default is not inert. Every default run
+    # applies its rules, so a consumer meets `review_required` in a
+    # report without having configured anything, and the type that
+    # explains it has to be sayable from the top.
+    "ReviewPolicy",
     # ---------------------------------------------------------------
     # Errors (§8.4)
     # ---------------------------------------------------------------

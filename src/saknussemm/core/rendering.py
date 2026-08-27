@@ -4,10 +4,10 @@ The last stage before a run hands anything back: the format adapter rewrites
 each source file, the projection invariant checks that the bytes carry the
 run's decisions, and the per-line traces gain what the rewrite actually did.
 
-Free function. Everything the engine used to supply is an argument now —
-the adapter, the producer's identity, the config fingerprint stamped into the
-provenance, and the observer callback. Rendering is a step over a manifest
-and a set of decisions, not a property of a run.
+Free function: the adapter, the producer's identity, the config fingerprint
+stamped into the provenance and the observer callback all arrive as
+arguments. Rendering is a step over a manifest and a set of decisions, not a
+property of a run.
 """
 
 from __future__ import annotations
@@ -74,10 +74,10 @@ async def _render_outputs(
         if not pages_for_file:
             continue
         if adapter is None:
-            # `RM-07` — the ONE place core reaches a format module, and
-            # it no longer knows which formats exist: the resolver lives
-            # beside the parser dispatch in `formats/loader.py`. Kept
-            # lazy so importing any core module never loads lxml.
+            # The ONE place core reaches a format module, and it does not
+            # know which formats exist: the resolver lives beside the
+            # parser dispatch in `formats/loader.py`. Kept lazy so
+            # importing any core module never loads lxml.
             from saknussemm.formats.loader import adapter_for_format
 
             adapter = adapter_for_format(document_manifest.source_format)

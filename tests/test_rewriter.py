@@ -112,9 +112,8 @@ def write_and_rewrite(
         lines=manifests,
     )
 
-    result_bytes, _metrics, _paths = rewrite_alto_file(
-        xml_path, [page], "openai", "gpt-4o"
-    )
+    _res = rewrite_alto_file(xml_path, [page], "openai", "gpt-4o")
+    result_bytes = _res.xml_bytes
     return etree.fromstring(result_bytes)
 
 
@@ -862,10 +861,8 @@ def test_round_trip_normal(tmp_path):
     xml_path.write_text(xml_content, encoding="utf-8")
 
     pages, _ = parse_alto_file(xml_path, "round.xml")
-    result_bytes, _metrics, _paths = rewrite_alto_file(
-        xml_path, pages, "openai", "gpt-4o"
-    )
-
+    _res = rewrite_alto_file(xml_path, pages, "openai", "gpt-4o")
+    result_bytes = _res.xml_bytes
     out_path = tmp_path / "out.xml"
     out_path.write_bytes(result_bytes)
     pages2, _ = parse_alto_file(out_path, "out.xml")
@@ -899,8 +896,9 @@ def test_rewriter_does_not_pretty_print(tmp_path):
     xml_path.write_bytes(xml_content.encode())
 
     pages, _ = parse_alto_file(xml_path, "compact.xml")
-    out_bytes, metrics, _ = rewrite_alto_file(xml_path, pages, "test", "model")
-
+    _res = rewrite_alto_file(xml_path, pages, "test", "model")
+    out_bytes = _res.xml_bytes
+    metrics = _res.metrics
     assert metrics.untouched == 1
     out = out_bytes.decode()
 
@@ -943,7 +941,8 @@ def test_nfd_source_round_trip_marked_untouched(tmp_path):
     assert pages[0].lines[0].ocr_text == "café"
 
     # No corrections — must be untouched
-    _, metrics, _ = rewrite_alto_file(xml_path, pages, "test", "model")
+    _res = rewrite_alto_file(xml_path, pages, "test", "model")
+    metrics = _res.metrics
     assert metrics.untouched == 1
     assert metrics.fast_path == 0
     assert metrics.slow_path == 0
@@ -978,10 +977,8 @@ def test_round_trip_with_hyphen(tmp_path):
     xml_path.write_text(xml_content, encoding="utf-8")
 
     pages, _ = parse_alto_file(xml_path, "hyp.xml")
-    result_bytes, _metrics, _paths = rewrite_alto_file(
-        xml_path, pages, "openai", "gpt-4o"
-    )
-
+    _res = rewrite_alto_file(xml_path, pages, "openai", "gpt-4o")
+    result_bytes = _res.xml_bytes
     root = etree.fromstring(result_bytes)
     hyp_els = root.findall(f".//{{{NS_V3}}}HYP")
     assert len(hyp_els) >= 1

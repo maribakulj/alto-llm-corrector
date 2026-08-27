@@ -165,7 +165,11 @@ def test_strict_ignores_lines_without_word_markup(tmp_path: Path):
     # ln2 has no Word children: any word count projects losslessly.
     result = _run(p, {"ln2": "sansmots"}, loss_policy=LossPolicy(strict=True))
     d = result.decisions.by_ref[LineRef(page_id="p.png", line_id="ln2")]
-    assert d.status is LineStatus.CORRECTED
+    # « La garde stricte n'a pas repris cette ligne », pas « la ligne
+    # porte CORRECTED » : la correction retire le mot `sans`, que la
+    # passe de renvoi lit comme une négation en moins. C'est un renvoi,
+    # donc la correction est livrée — ce que ce test vérifie.
+    assert d.carries_a_correction
     assert d.final_text == "sansmots"
 
 

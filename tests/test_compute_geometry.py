@@ -279,7 +279,9 @@ def test_review_w1_hyp_width_overflow_end_to_end(tmp_path):
     lm.corrected_text = "deux mots-"  # forces the slow-path rebuild
     lm.status = LineStatus.CORRECTED
 
-    out_bytes, _metrics, paths = rewrite_alto_file(path, pages, "test", "model")
+    _res = rewrite_alto_file(path, pages, "test", "model")
+    out_bytes = _res.xml_bytes
+    paths = _res.rewriter_paths
     assert lm.line_id in paths
     assert (
         b"deux mots"
@@ -288,3 +290,42 @@ def test_review_w1_hyp_width_overflow_end_to_end(tmp_path):
         )
         or b"deux" in out_bytes
     )
+
+
+def test_the_token_weights_are_integers_and_not_floats() -> None:
+    """La géométrie livrée ne doit pas dépendre de la version de Python.
+
+    ``_compute_geometry`` pesait ses tokens en flottants — ``0.6`` par
+    caractère d'espace — et sommait ces poids avec ``sum()``. CPython 3.12 a
+    donné à ``sum()`` la sommation compensée de Neumaier, donc le même total
+    vaut ``48.80000000000001`` sur 3.11 et ``48.8`` sur 3.12. Un ``<SP>``
+    d'une ligne réelle sortait un pixel plus large sur l'une des deux, dans
+    le fichier LIVRÉ.
+
+    Le test porte sur le TYPE plutôt que sur une valeur, parce que c'est le
+    type qui porte la propriété : un total entier est exact, et aucun
+    algorithme de sommation ne peut le changer. Une valeur épinglée, elle,
+    aurait à nouveau une chance sur deux de tomber du bon côté d'un arrondi.
+
+    Le cas exact qui a fait tomber le golden est reproduit dessous : dix-sept
+    tokens dont sept espaces, la ligne ``tl_16`` de
+    ``examples/page/…_alto4.xml``.
+    """
+    tokens = _tokenize("lorsqu'on employe trop de tems a voyasger on deuient")
+    assert len(tokens) == 17
+
+    # Le poids que la fonction calcule, recalculé ici sans passer par elle :
+    # si l'implémentation revient au flottant, ce total cesse d'être exact.
+    weights = [len(t) * 6 if t.isspace() else len(t) * 10 for t in tokens]
+    total = sum(weights)
+    assert isinstance(total, int) and total == 488
+
+    placed = _compute_geometry(1083, 2771, tokens)
+    assert sum(w for _t, _h, w in placed) == 2771, (
+        "l'invariant de somme exacte a cédé : les largeurs doivent totaliser "
+        "la largeur de la ligne, quel que soit l'arrondi"
+    )
+    # La valeur qui divergeait entre 3.11 et 3.12, épinglée à ce qu'elle vaut
+    # une fois le total exact.
+    assert placed[7] == (" ", 2434, 35)
+    assert placed[8] == ("tems", 2469, 227)

@@ -66,7 +66,9 @@ def test_custom_offset_groups_stripped_on_change(tmp_path: Path):
     doc = build_document_manifest([(p, p.name)])
     doc.pages[0].lines[0].corrected_text = "hello world"  # fast path (2==2)
 
-    xml, metrics, _paths = rewrite_page_file(p, doc.pages, "prov", "mdl")
+    _res = rewrite_page_file(p, doc.pages, "prov", "mdl")
+    xml = _res.xml_bytes
+    metrics = _res.metrics
     text = xml.decode("utf-8")
     # Offset-anchored group gone from BOTH line and word; readingOrder kept.
     assert "textStyle" not in text
@@ -79,7 +81,10 @@ def test_custom_untouched_line_keeps_offsets(tmp_path: Path):
     p = _write(tmp_path, _CUSTOM_FIXTURE)
     doc = build_document_manifest([(p, p.name)])
     # No correction → identity → untouched.
-    xml, metrics, paths = rewrite_page_file(p, doc.pages, "prov", "mdl")
+    _res = rewrite_page_file(p, doc.pages, "prov", "mdl")
+    xml = _res.xml_bytes
+    metrics = _res.metrics
+    paths = _res.rewriter_paths
     assert paths["ln1"] == "untouched"
     assert metrics.custom_offset_stripped == 0
     assert "textStyle {offset:0; length:4;}" in xml.decode("utf-8")
@@ -115,7 +120,9 @@ def test_fraktur_double_oblique_detected_and_preserved(tmp_path: Path):
     assert l2.hyphen_role == HyphenRole.PART2
     # Producer tries to normalise ⸗ -> - ; source char must win (E5 extended).
     l1.corrected_text = "Waſ-"
-    xml, _m, paths = rewrite_page_file(p, doc.pages, "prov", "mdl")
+    _res = rewrite_page_file(p, doc.pages, "prov", "mdl")
+    xml = _res.xml_bytes
+    paths = _res.rewriter_paths
     out = extract_output_texts(xml, {"ln1"})
     assert out["ln1"].endswith("⸗")
     assert paths["ln1"] == "untouched"  # swap-only collapses to untouched
@@ -131,7 +138,8 @@ def test_metrics_as_losses_and_report_field(tmp_path: Path):
     doc = build_document_manifest([(p, p.name)])
     doc.pages[0].lines[0].corrected_text = "hello brave world"  # 3 != 2 -> slow
 
-    _xml, metrics, _paths = rewrite_page_file(p, doc.pages, "prov", "mdl")
+    _res = rewrite_page_file(p, doc.pages, "prov", "mdl")
+    metrics = _res.metrics
     losses = metrics.as_losses()
     assert losses["words_dropped"] == 2
     assert losses["custom_offset_stripped"] == 1  # line custom (words removed)
@@ -163,7 +171,9 @@ def test_identity_rewrite_is_text_stable_on_corpus():
     doc = build_document_manifest([(_LAF_CORR, _LAF_CORR.name)])
     ids = {lm.line_id for p in doc.pages for lm in p.lines}
     src = {lm.line_id: lm.ocr_text for p in doc.pages for lm in p.lines}
-    xml, metrics, _paths = rewrite_page_file(_LAF_CORR, doc.pages, "t", "m")
+    _res = rewrite_page_file(_LAF_CORR, doc.pages, "t", "m")
+    xml = _res.xml_bytes
+    metrics = _res.metrics
     assert metrics.untouched == len(ids)
     assert extract_output_texts(xml, ids) == src
 

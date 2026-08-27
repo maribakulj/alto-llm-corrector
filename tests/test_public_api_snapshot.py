@@ -5,7 +5,11 @@ cut the surface down to (2026-08-01): **68 symbols, computed rather than
 chosen**, and `RM-04` took it to **66** (2026-08-06) by demoting the two
 knobs no default run uses. It is **67** since 2026-08-17: `A2b` gave
 ``CorrectionReport`` an ``edit_rejections`` field, so ``RefusedEdit`` became
-reachable from a returned type and the closure grew by exactly that. Growth
+reachable from a returned type and the closure grew by exactly that. And
+**68** since the ``review_required`` state landed: ``ReviewPolicy`` is a §15
+injection point whose default is not inert — every default run applies its
+rules — so a consumer meets the state without having configured anything
+and must be able to name the type that governs it. Growth
 by closure is not the accretion this file guards against — the test that
 caps the count says so in its own message, and ``HyphenSplit`` is here for
 the same reason. The computation is reproducible — start from
@@ -145,6 +149,7 @@ CURRENT_TOP_LEVEL_SURFACE = sorted(
         "ReplaceLine",
         "ReplaceSpan",
         "RetryPolicy",
+        "ReviewPolicy",
         "RunProvenance",
         "SidecarEntry",
         "Usage",

@@ -119,6 +119,9 @@ def test_f5_single_string_both_identity_line_routes_untouched(tmp_path):
     lm.corrected_text = lm.ocr_text
     lm.status = LineStatus.CORRECTED
 
-    out_bytes, metrics, paths = rewrite_alto_file(path, pages, "test", "model")
+    _res = rewrite_alto_file(path, pages, "test", "model")
+    out_bytes = _res.xml_bytes
+    metrics = _res.metrics
+    paths = _res.rewriter_paths
     assert paths[lm.line_id] == "untouched", paths
     assert metrics.untouched == 1 and metrics.subs_only == 0

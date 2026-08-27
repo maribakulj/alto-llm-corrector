@@ -428,10 +428,8 @@ def test_rewriter_writes_nfc_content_from_nfd_correction():
     line.status = LineStatus.CORRECTED
     assert line.corrected_text != "café", "test setup: corrected_text must be NFD"
 
-    out_bytes, _metrics, _paths = rewrite_alto_file(
-        src_path, pages, provider="test", model="test"
-    )
-
+    _res = rewrite_alto_file(src_path, pages, provider="test", model="test")
+    out_bytes = _res.xml_bytes
     # The CONTENT attribute on disk must be NFC, not NFD.
     assert b"caf\xc3\xa9" in out_bytes, (
         f"rewriter wrote non-NFC bytes for 'café'. Output excerpt: "

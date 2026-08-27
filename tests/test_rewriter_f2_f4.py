@@ -58,9 +58,9 @@ def test_f4_trailing_sp_line_is_untouched(tmp_path: Path):
         for lm in page.lines:
             lm.corrected_text = lm.ocr_text
 
-    _bytes, metrics, paths = rewrite_alto_file(
-        xml_path, doc.pages, provider="t", model="m"
-    )
+    _res = rewrite_alto_file(xml_path, doc.pages, provider="t", model="m")
+    metrics = _res.metrics
+    paths = _res.rewriter_paths
     assert paths["L1"] == "untouched"
     assert metrics.fast_path == 0
     assert metrics.slow_path == 0
@@ -83,9 +83,10 @@ def test_f2_fast_path_drops_wc_cc_on_changed_content(tmp_path: Path):
         for lm in page.lines:
             lm.corrected_text = "Hello world"
 
-    xml_bytes, metrics, paths = rewrite_alto_file(
-        xml_path, doc.pages, provider="t", model="m"
-    )
+    _res = rewrite_alto_file(xml_path, doc.pages, provider="t", model="m")
+    xml_bytes = _res.xml_bytes
+    metrics = _res.metrics
+    paths = _res.rewriter_paths
     assert paths["L1"] == "fast_path"
     s = _strings(xml_bytes, "L1")
     assert s[0].get("CONTENT") == "Hello"
@@ -115,9 +116,9 @@ def test_slow_path_sp_geometry_is_recomputed_not_recycled(tmp_path: Path):
         for lm in page.lines:
             lm.corrected_text = "un petit mot"  # 2 -> 3 words: slow path
 
-    xml_bytes, _metrics, paths = rewrite_alto_file(
-        xml_path, doc.pages, provider="t", model="m"
-    )
+    _res = rewrite_alto_file(xml_path, doc.pages, provider="t", model="m")
+    xml_bytes = _res.xml_bytes
+    paths = _res.rewriter_paths
     assert paths["L1"] == "slow_path"
 
     root = etree.fromstring(xml_bytes)

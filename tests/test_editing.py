@@ -341,7 +341,8 @@ def test_replace_line_reexpression_is_byte_identical(filename: str):
         for page in doc.pages:
             for lm in page.lines:
                 lm.corrected_text = text_map[lm.line_id]
-        xml_bytes, _m, _p = rewrite_alto_file(xml_path, doc.pages, "test", "mock")
+        _res = rewrite_alto_file(xml_path, doc.pages, "test", "mock")
+        xml_bytes = _res.xml_bytes
         return hashlib.sha256(xml_bytes).hexdigest()
 
     assert _bytes(direct) == _bytes(result.text_by_id)

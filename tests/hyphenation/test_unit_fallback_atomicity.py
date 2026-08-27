@@ -159,6 +159,10 @@ async def test_no_chunk_failure_still_reverts_an_incoherent_pair(tmp_path) -> No
     assert lines["L1"].corrected_text == lines["L1"].ocr_text
     assert lines["L2"].corrected_text == lines["L2"].ocr_text
     # A line outside the pair is unaffected: this is pair-scoped, not a
-    # blanket revert.
-    assert lines["L0"].status is LineStatus.CORRECTED
+    # blanket revert. « Unaffected » veut dire « a gardé sa correction »,
+    # pas « porte le statut CORRECTED » : depuis l'état `review_required`
+    # une ligne livrée peut porter l'un ou l'autre, et ce test parle de
+    # l'atomicité d'une unité de césure, pas du vocabulaire de statuts.
+    assert lines["L0"].status is not LineStatus.FALLBACK
+    assert lines["L0"].corrected_text != lines["L0"].ocr_text
     assert lines["L0"].corrected_text == "d3but"

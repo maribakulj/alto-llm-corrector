@@ -1,10 +1,9 @@
 """Deciding whether a proposal may stand, and what falls back with it.
 
-Four passes the orchestrator used to carry as methods. Each takes the
-policy it consults as an explicit argument rather than reading it off the
-engine — which is what makes them readable on their own: "given THIS guard
-config, is this line acceptable?" is a question about a line and a policy,
-not about a run.
+Five passes, each taking the policy it consults as an explicit argument
+rather than reading it off the engine: "given THIS guard config, is this
+line acceptable?" is a question about a line and a policy, not about a
+run.
 
 ``_apply_unit_reverts`` is the one they share: a member of a hyphen unit
 never falls back alone (ADR-010).
@@ -24,6 +23,7 @@ from saknussemm.core.guards import (
 from saknussemm.core.identity import LineRef, line_ref
 from saknussemm.core.pairing import ends_with_break_mark, forward_ref, pair_ref
 from saknussemm.core.reconcile import _lookup_ref
+from saknussemm.core.review import find_review_referrals
 from saknussemm.core.traces import _set_trace
 from saknussemm.core.units import derive_hyphen_groups, hyphen_group_by_line
 from saknussemm.core.schemas import (
@@ -34,6 +34,7 @@ from saknussemm.core.schemas import (
     LineStatus,
     LineTrace,
     LossPolicy,
+    ReviewPolicy,
     SidecarEntry,
 )
 
@@ -42,7 +43,7 @@ from saknussemm.core.schemas import (
 class _FinalizeOrder:
     """Proof that the document-wide passes ran in the order they must.
 
-    ``core/finalize.py`` runs three passes whose ORDER is their whole
+    ``core/finalize.py`` runs four passes whose ORDER is their whole
     content, and until now that contract lived in a docstring: calling
     them out of order was not refused, not detected, and not reported —
     it silently produced different output. Not different counters:
@@ -57,7 +58,7 @@ class _FinalizeOrder:
     become the global state ADR-011 spent a slice removing — two
     concurrent runs each carry their own.
 
-    Lives here rather than in ``finalize`` because two of the three
+    Lives here rather than in ``finalize`` because three of the four
     ordered passes are in this module and ``finalize`` already imports
     it; the reverse would be a cycle.
 
@@ -68,7 +69,7 @@ class _FinalizeOrder:
 
     ``order=None`` on every pass means unchecked. Production never does
     that — a static test asserts :func:`_finalize_document` threads a
-    token into all three — but a test that needs to DEMONSTRATE the
+    token into all of them — but a test that needs to DEMONSTRATE the
     divergence has to be able to run the wrong order on purpose.
     """
 
@@ -377,6 +378,72 @@ def _sidecar_entries(
             )
         )
     return entries
+
+
+def _review_pass(
+    *,
+    review_policy: ReviewPolicy,
+    document_manifest: DocumentManifest,
+    all_lines: dict[LineRef, LineManifest],
+    traces: dict[LineRef, LineTrace] | None,
+    order: _FinalizeOrder | None = None,
+) -> None:
+    """Name the corrections the run cannot establish, and say so.
+
+    LAST of the document-wide passes, and the order is the content here
+    as it is for the other three. Every pass before this one can still
+    TAKE a correction away; this one only qualifies what is left, so it
+    runs when "what is left" is final. Running it earlier would refer
+    lines that then fell back — a referral on a line the run reverted
+    describes a correction nobody receives.
+
+    It is also the only pass that writes no text. Nothing it does can
+    change an output byte, which is why turning referral on is not a
+    behavioural change to the artefact and is verified as one by the
+    byte-parity corpus rather than asserted here.
+
+    The whole hyphen unit is referred together (ADR-010). Not for the
+    fallback reason — no text moves, so nothing can end up mixed — but
+    because a referral is a statement about a WORD, and half of a word
+    split across two lines is not something a human can review. A member
+    pulled in this way carries ``hyphen_unit_review``, which is to
+    ``hyphen_unit_fallback`` what this pass is to a revert.
+    """
+    _entering(order, "review", requires=("adjacency", "break_chars", "loss_policy"))
+    if not review_policy.enabled:
+        return
+
+    referrals = find_review_referrals(
+        (
+            (line_ref(lm), lm.ocr_text, lm.corrected_text)
+            for page in document_manifest.pages
+            for lm in page.lines
+            if lm.status is LineStatus.CORRECTED and lm.corrected_text is not None
+        ),
+        policy=review_policy,
+    )
+    if not referrals:
+        return
+
+    by_line = hyphen_group_by_line(derive_hyphen_groups(all_lines.values()))
+    to_refer: dict[LineRef, tuple[str, ...]] = dict(referrals)
+    for ref in referrals:
+        group = by_line.get(ref)
+        if group is None:
+            continue
+        for member in group.members:
+            to_refer.setdefault(member, ("hyphen_unit_review",))
+
+    for ref, reasons in to_refer.items():
+        lm = all_lines.get(ref)
+        # A pulled unit member may have fallen back for its own reason
+        # while the flagged one stood — the pair is not mixed in TEXT
+        # (the flagged line kept a correction, this one kept its source),
+        # and referring it would claim a correction it does not carry.
+        if lm is None or lm.status is not LineStatus.CORRECTED:
+            continue
+        for reason in reasons:
+            decide.refer_for_review(lm, reason=reason, traces=traces)
 
 
 def _apply_unit_reverts(

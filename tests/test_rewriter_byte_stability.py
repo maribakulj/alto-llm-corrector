@@ -59,10 +59,9 @@ def test_identity_corrections_take_untouched_or_subs_only_paths():
         doc = build_document_manifest([(xml_path, xml_path.name)])
         _set_identity_corrections(doc)
 
-        _bytes, metrics, paths = rewrite_alto_file(
-            xml_path, doc.pages, provider="test", model="mock"
-        )
-
+        _res = rewrite_alto_file(xml_path, doc.pages, provider="test", model="mock")
+        metrics = _res.metrics
+        paths = _res.rewriter_paths
         unexpected = {
             lid: p for lid, p in paths.items() if p not in ("untouched", "subs_only")
         }
@@ -86,10 +85,9 @@ def test_untouched_lines_preserve_string_content_verbatim():
         doc = build_document_manifest([(xml_path, xml_path.name)])
         _set_identity_corrections(doc)
 
-        xml_bytes, _metrics, paths = rewrite_alto_file(
-            xml_path, doc.pages, provider="test", model="mock"
-        )
-
+        _res = rewrite_alto_file(xml_path, doc.pages, provider="test", model="mock")
+        xml_bytes = _res.xml_bytes
+        paths = _res.rewriter_paths
         orig_root = etree.parse(str(xml_path)).getroot()
         new_root = etree.fromstring(xml_bytes)
         orig_by_id = _textlines_by_id(orig_root)
@@ -124,10 +122,9 @@ def test_untouched_lines_preserve_child_geometry():
         doc = build_document_manifest([(xml_path, xml_path.name)])
         _set_identity_corrections(doc)
 
-        xml_bytes, _metrics, paths = rewrite_alto_file(
-            xml_path, doc.pages, provider="test", model="mock"
-        )
-
+        _res = rewrite_alto_file(xml_path, doc.pages, provider="test", model="mock")
+        xml_bytes = _res.xml_bytes
+        paths = _res.rewriter_paths
         orig_root = etree.parse(str(xml_path)).getroot()
         new_root = etree.fromstring(xml_bytes)
         orig_by_id = _textlines_by_id(orig_root)
@@ -163,10 +160,8 @@ def test_textline_own_attributes_never_change():
         doc = build_document_manifest([(xml_path, xml_path.name)])
         _set_identity_corrections(doc)
 
-        xml_bytes, _metrics, _paths = rewrite_alto_file(
-            xml_path, doc.pages, provider="test", model="mock"
-        )
-
+        _res = rewrite_alto_file(xml_path, doc.pages, provider="test", model="mock")
+        xml_bytes = _res.xml_bytes
         orig_root = etree.parse(str(xml_path)).getroot()
         new_root = etree.fromstring(xml_bytes)
         orig_by_id = _textlines_by_id(orig_root)

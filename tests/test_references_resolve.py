@@ -67,7 +67,7 @@ _WORK_ITEM = re.compile(
     r"(?<![\w.\-§])("
     r"F\d{1,2}"
     r"|P3\.\d+(?:-\d+)?"
-    r"|[SLR]\d{1,2}[a-z]?"
+    r"|[GLRSV]\d{1,2}[a-z]?"
     r"|(?:slice|tranche)\s+[A-Z0-9]"
     r"|Audit-[\w-]+"
     r"|(?:waves?|vagues?)\s+\d+"
@@ -199,7 +199,7 @@ def test_every_cited_spec_section_exists() -> None:
 _STILL_TAGGED: dict[str, int] = {
     "core/hyphenation.py": 2,
     "core/pairing.py": 5,
-    "formats/alto/rewriter.py": 16,
+    "formats/alto/rewriter.py": 15,
 }
 
 

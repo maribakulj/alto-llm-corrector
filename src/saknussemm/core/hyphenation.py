@@ -18,7 +18,28 @@ from saknussemm.core.schemas import (
     LineContext,
 )
 
-_SENTINEL = object()  # distinguishes "not passed" from None
+
+class _Unset:
+    """Le troisième état de ``subs_content`` : « pas fourni ».
+
+    ``None`` et « pas fourni » disent deux choses différentes à
+    :func:`reconcile_hyphen_pair` — le premier neutralise le ``SUBS_CONTENT``,
+    le second demande d'aller le lire sur le manifeste — et un défaut
+    ``None`` ne peut pas porter les deux.
+
+    Un ``object()`` nu le faisait, au prix d'un ``# type: ignore[assignment]``
+    dans un module vérifié en ``--strict`` : l'annotation disait ``str | None``
+    et la valeur par défaut n'était ni l'un ni l'autre. Une classe dédiée dit
+    la même chose en le disant au vérificateur de types.
+    """
+
+    __slots__ = ()
+
+    def __repr__(self) -> str:  # pragma: no cover - diagnostic
+        return "<unset>"
+
+
+_UNSET = _Unset()
 
 
 # ---------------------------------------------------------------------------
@@ -286,7 +307,7 @@ def reconcile_hyphen_pair(
     corrected_part1: str,
     corrected_part2: str,
     *,
-    subs_content: str | None = _SENTINEL,  # type: ignore[assignment]
+    subs_content: str | None | _Unset = _UNSET,
     source_explicit: bool | None = None,
     config: GuardConfig = DEFAULT_GUARD_CONFIG,
 ) -> tuple[str, str, str | None]:
@@ -313,7 +334,7 @@ def reconcile_hyphen_pair(
     """
     # Resolve parameters: explicit overrides take precedence over manifest fields
     effective_subs = (
-        part1.hyphen_subs_content if subs_content is _SENTINEL else subs_content
+        part1.hyphen_subs_content if isinstance(subs_content, _Unset) else subs_content
     )
     effective_explicit = (
         part1.hyphen_source_explicit if source_explicit is None else source_explicit
@@ -388,7 +409,7 @@ def reconcile_hyphen_pair(
     if _part2_boundary_word_diverged(part2.ocr_text, corrected_part2, config):
         return _fallback
 
-    preserved_subs = effective_subs if subs_content is not _SENTINEL else None
+    preserved_subs = None if isinstance(subs_content, _Unset) else effective_subs
     return corrected_part1, corrected_part2, preserved_subs
 
 

@@ -19,10 +19,35 @@ from pydantic import BaseModel, ConfigDict, Field, computed_field
 
 
 class LineStatus(str, Enum):
-    """Per-line outcome after the pipeline has visited a TextLine."""
+    """Per-line outcome after the pipeline has visited a TextLine.
+
+    ``REVIEW_REQUIRED`` is the odd one out and deliberately so. The
+    other three answer *what happened to the text*; it answers *what
+    the library is able to say about it*. A referred line carries its
+    CORRECTION — the same bytes ``CORRECTED`` would have delivered,
+    byte for byte — and declares that the library could not establish
+    the change is right.
+
+    The distinction is not decorative. The stage-C guards compare
+    characters and have no notion of meaning: on twelve counter-examples
+    put through the real ``guards.check_line``, all twelve were accepted
+    at both thresholds — a removed negation at 0.8955, a changed date at
+    0.9388, a truncated amount at 0.9643, a neighbouring line copied
+    verbatim at 0.8852. No threshold closes that family, because the
+    problem is not the threshold. Folding those lines into ``CORRECTED``
+    would have the library assert "I checked this" about precisely the
+    changes it cannot check.
+
+    A consumer that treats ``CORRECTED`` as "done" therefore no longer
+    sweeps referrals up with it, which is the point of the value
+    existing rather than a cost of it.
+    """
 
     PENDING = "pending"
     CORRECTED = "corrected"
+    #: Corrected, and the library declares it cannot establish the
+    #: change is right. The artefact carries the correction.
+    REVIEW_REQUIRED = "review_required"
     FALLBACK = "fallback"
     FAILED = "failed"
 
@@ -74,11 +99,9 @@ class PipelineEventType(str, Enum):
     they stay stable across releases and change only through the same
     door as any other public rename.
 
-    The guard that used to be named here lived in the demo application
-    and left with it on 2026-08-16. Naming a test in a repository this
-    one does not own would be a reference that rots without anyone
-    noticing — which is the failure this docstring would otherwise
-    demonstrate rather than describe.
+    No test is named here: the one that would be lives in a repository
+    this one does not own, and such a reference rots without anyone
+    noticing.
     """
 
     # Document / page / chunk lifecycle (emitted by CorrectionPipeline)
@@ -120,10 +143,10 @@ class Coords(BaseModel):
     on the PAGE side, so the source polygon is a read-only provenance field.
     """
 
-    # ADR-011 slice E, made structural — on this model, not yet on every
-    # manifest type. The engine works on
-    # a deep copy and never writes here — freezing says so in the type
-    # instead of leaving it to hold by the discipline of one call site.
+    # ADR-011, made structural — on this model, not yet on every manifest
+    # type. The engine works on a deep copy and never writes here; freezing
+    # says so in the type instead of leaving it to the discipline of one
+    # call site.
     #
     # Not yet frozen, and each for its own measured reason: `LineManifest`
     # IS the run's working state (246 assignment sites — corrected_text,
@@ -230,10 +253,10 @@ class PageManifest(BaseModel):
 class DocumentManifest(BaseModel):
     """A multi-page document: the top-level structure the pipeline consumes."""
 
-    # ADR-011 slice E, made structural — on this model, not yet on every
-    # manifest type. The engine works on
-    # a deep copy and never writes here — freezing says so in the type
-    # instead of leaving it to hold by the discipline of one call site.
+    # ADR-011, made structural — on this model, not yet on every manifest
+    # type. The engine works on a deep copy and never writes here; freezing
+    # says so in the type instead of leaving it to the discipline of one
+    # call site.
     #
     # Not yet frozen, and each for its own measured reason: `LineManifest`
     # IS the run's working state (246 assignment sites — corrected_text,
@@ -259,7 +282,7 @@ class DocumentManifest(BaseModel):
     #: declared, a UTF-8 file labelled ``ISO-8859-1`` yields ``clÃ©ricales``
     #: where the document says ``cléricales``, and a corrector handed that
     #: will repair it, delivering a text change no report could tell apart
-    #: from a correction (`V1`). The source file is never modified.
+    #: from a correction. The source file is never modified.
     #:
     #: A plain mapping rather than a named type on purpose: the public
     #: surface is at its computed closure, and a new type reachable from

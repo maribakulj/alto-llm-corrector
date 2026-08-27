@@ -233,12 +233,13 @@ class TestX0000002UnchangedRewrite:
 
     def test_all_untouched(self, tmp_path):
         pages, _ = parse_alto_file(X0000002_PATH, "X0000002.xml")
-        _xml_bytes, metrics, _paths = rewrite_alto_file(
+        _res = rewrite_alto_file(
             X0000002_PATH,
             pages,
             "test",
             "test-model",
         )
+        metrics = _res.metrics
         assert metrics.total_lines == 566
         assert metrics.untouched == 566
         assert metrics.fast_path == 0
@@ -266,9 +267,8 @@ class TestX0000002SimulatedCorrections:
         """Corrections identical to OCR → untouched."""
         pages, _ = parse_alto_file(X0000002_PATH, "X0000002.xml")
         # No corrections at all
-        _, metrics, _paths = rewrite_alto_file(
-            X0000002_PATH, pages, "test", "test-model"
-        )
+        _res = rewrite_alto_file(X0000002_PATH, pages, "test", "test-model")
+        metrics = _res.metrics
         assert metrics.untouched == 566
         assert metrics.fast_path == 0
 
@@ -279,9 +279,8 @@ class TestX0000002SimulatedCorrections:
                 "PAG_00000002_TL000011": "en cet état, presque tous les chemins RU",  # changed last word
             }
         )
-        _, metrics, _paths = rewrite_alto_file(
-            X0000002_PATH, pages, "test", "test-model"
-        )
+        _res = rewrite_alto_file(X0000002_PATH, pages, "test", "test-model")
+        metrics = _res.metrics
         assert metrics.fast_path == 1
         assert metrics.slow_path == 0
 
@@ -292,9 +291,8 @@ class TestX0000002SimulatedCorrections:
                 "PAG_00000002_TL000011": "en cet état presque tous les chemins ruraux vicinaux",  # more words
             }
         )
-        _, metrics, _paths = rewrite_alto_file(
-            X0000002_PATH, pages, "test", "test-model"
-        )
+        _res = rewrite_alto_file(X0000002_PATH, pages, "test", "test-model")
+        metrics = _res.metrics
         assert metrics.slow_path == 1
 
     def test_mixed_paths(self, tmp_path):
@@ -308,9 +306,8 @@ class TestX0000002SimulatedCorrections:
                 "PAG_00000002_TL000026": "G. Dupont.",  # 1→2 words
             }
         )
-        _, metrics, _paths = rewrite_alto_file(
-            X0000002_PATH, pages, "test", "test-model"
-        )
+        _res = rewrite_alto_file(X0000002_PATH, pages, "test", "test-model")
+        metrics = _res.metrics
         assert metrics.fast_path == 2
         assert metrics.slow_path == 1
         assert metrics.untouched == 566 - 3
@@ -446,8 +443,8 @@ def test_x0000002_diagnostic_report(tmp_path, capsys):
     rec = run_pipeline("X0000002.xml").result.reconcile_metrics
 
     # Rewriter with no corrections
-    _, rw, _paths = rewrite_alto_file(X0000002_PATH, pages, "test", "test-model")
-
+    _res = rewrite_alto_file(X0000002_PATH, pages, "test", "test-model")
+    rw = _res.metrics
     report = [
         "",
         "=" * 65,

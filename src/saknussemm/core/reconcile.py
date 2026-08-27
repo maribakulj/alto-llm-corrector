@@ -8,6 +8,10 @@ where "who is my partner?" grew five parallel answers in the first place.
 
 Every one of them reads the shared derivation (`units.derive_hyphen_groups`)
 or the directed primitives (`pairing`); none reads a pointer field directly.
+That sentence stood here while ``_build_hyphen_pairs`` replayed the role→slot
+map six lines below it, which is the whole reason the claim is now held by a
+census — ``tests/hyphenation/test_only_pairing_reads_the_pointer_fields.py``
+counts every pointer-field access in the package and refuses a seventh site.
 """
 
 from __future__ import annotations
@@ -21,7 +25,11 @@ from saknussemm.core.hyphenation import (
     reconcile_hyphen_pair,
 )
 from saknussemm.core.identity import LineRef, line_ref
-from saknussemm.core.pairing import backward_partner_ref, forward_partner_ref
+from saknussemm.core.pairing import (
+    backward_partner_ref,
+    forward_partner_id,
+    forward_partner_ref,
+)
 from saknussemm.core.schemas import (
     DEFAULT_GUARD_CONFIG,
     BlockManifest,
@@ -70,15 +78,25 @@ def _subpage_for_lines(page: PageManifest, lines: list[LineManifest]) -> PageMan
 
 
 def _build_hyphen_pairs(lines: list[LineManifest]) -> dict[str, str]:
-    """Return PART1↔PART2 mapping (bidirectional) for lines in the chunk."""
+    """La carte bidirectionnelle des paires du chunk, pour le validateur.
+
+    Le lien dirigé vient de :func:`~saknussemm.core.pairing.forward_partner_id`
+    — la carte rôle→slot est détenue là et nulle part ailleurs. Ce site la
+    rejouait à la main (``PART1`` → slot PAIR, ``BOTH`` → slot FORWARD),
+    soixante lignes sous une docstring de module qui l'interdisait.
+
+    Les clés restent des ``line_id`` NUS, et ce n'est pas un oubli : c'est la
+    forme que ``validate_llm_response`` consomme, et elle est sûre parce
+    qu'un chunk est page-scopé. La changer serait un changement du contrat du
+    validateur, pas un déplacement.
+    """
     pairs: dict[str, str] = {}
     for lm in lines:
-        if lm.hyphen_role == HyphenRole.PART1 and lm.hyphen_pair_line_id:
-            pairs[lm.line_id] = lm.hyphen_pair_line_id
-            pairs[lm.hyphen_pair_line_id] = lm.line_id
-        elif lm.hyphen_role == HyphenRole.BOTH and lm.hyphen_forward_pair_id:
-            pairs[lm.line_id] = lm.hyphen_forward_pair_id
-            pairs[lm.hyphen_forward_pair_id] = lm.line_id
+        partner = forward_partner_id(lm)
+        if partner is None:
+            continue
+        pairs[lm.line_id] = partner
+        pairs[partner] = lm.line_id
     return pairs
 
 

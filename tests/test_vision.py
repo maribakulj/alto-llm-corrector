@@ -28,7 +28,7 @@ from saknussemm.core.schemas import (  # noqa: E402
     Usage,
 )
 from saknussemm.errors import ConfigurationError  # noqa: E402
-from saknussemm.integrations.vision import (  # noqa: E402
+from saknussemm.producers.vision import (  # noqa: E402
     Crop,
     ImagePart,
     VisionEditProducer,

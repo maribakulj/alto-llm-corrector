@@ -7,11 +7,10 @@ returns values, and everything about *running* a correction service
 belongs to whoever calls it. *Saknussemm*: the printed errata leaf bound
 into books — literally what this library produces.
 
-It is developed in the [saknussemm](https://github.com/maribakulj/saknussemm)
-repository, which also carries a FastAPI + React demonstration of it. That
-demo is **not part of this package** — it is not published, and it will be
-removed once the library reaches its final form. Nothing here imports it;
-the coupling only runs the other way.
+This repository is the library, and nothing else. The web demonstration
+left it on 2026-08-16 for [`saknussemm-demo`](https://github.com/maribakulj/saknussemm-demo),
+and the benchmark for [`cinoc`](https://github.com/maribakulj/cinoc).
+Both import this library; nothing here imports either.
 
 ## The three repositories
 
@@ -34,6 +33,7 @@ CHANGELOG entry). Strict SemVer starts at `1.0.0`, which requires an
 independent external API review first; see
 [docs/versioning.md](docs/versioning.md). Docs:
 [quickstart](docs/quickstart.md) ·
+[la vie d'une ligne](docs/la-vie-d-une-ligne.md) ·
 [edit protocol](docs/edit-protocol.md) ·
 [formats](docs/formats.md) — and a runnable, test-guarded
 [examples/quickstart.py](examples/quickstart.py).
@@ -164,15 +164,57 @@ risky half is proven and its hyphenation is fixed; what it waits on is either a
 splitting mode the planner does not have, or a model that holds attention over
 a thousand lines at once.
 
+## What it does not claim to have checked
+
+The guards compare characters. They have no notion of meaning, and no
+threshold gives them one: on twelve counter-examples put through the real
+acceptance guard, all twelve were accepted at both threshold settings — a
+removed negation at similarity 0.8955, a changed date at 0.9388, a
+truncated amount at 0.9643, a neighbouring line copied verbatim at 0.8852.
+Tightening the bound far enough to catch those rejects the ordinary OCR
+fixes the library exists to make.
+
+So a run does not report those lines as `corrected`. It delivers the
+correction and says it cannot vouch for it:
+
+```python
+result.review_lines      # 11
+result.review_reasons    # {"proper_noun_changed": 8, "negation_changed": 3,
+                         #  "digits_changed": 2}
+
+d = result.decisions.by_ref[LineRef(page_id="P1", line_id="TL7")]
+d.status                 # LineStatus.REVIEW_REQUIRED
+d.final_text             # the CORRECTION — a referral takes nothing away
+d.review_reasons         # ("digits_changed: 1789 → 1780",)
+```
+
+Three properties worth stating plainly:
+
+- **the correction ships.** A referred line carries the same bytes a
+  `corrected` one would, and the same op in the `EditScript`. Referral is a
+  statement about the check, not about the correction — on the real run this
+  was measured against, most of the flagged changes were good ones.
+- **turning it off changes no output.** `ReviewPolicy.silent()` restores the
+  previous status distribution and delivers identical files. The library
+  verifies that by comparing the bytes of two runs, not by promising it.
+- **it is not a defect rate.** It is the size of what the guards were
+  already unable to check and were not saying.
+
+Some rules the design called for are **not** implemented, because the engine
+has no input for them — a lexicon it does not carry, a routing mode that asks
+two producers the same line, a confidence score that is admittedly not
+calibrated. `docs/la-vie-d-une-ligne.md` §3 bis lists all six codes and the
+three absences with their reasons.
+
 ## What's not
 
 - No LLM HTTP calls (you supply a `BaseProvider` implementation, or use
   an adapter like XerLLM).
 - No filesystem writes, ever — reading source ALTO files is the only
   I/O; outputs travel on `CorrectionResult` (ADR-011).
-- No FastAPI, no SSE, no job store. Those belong to the consumer: the
-  repository's demo backend implements them for itself, and a future
-  extraction of them would be its own distribution, not this one.
+- No FastAPI, no SSE, no job store. Those belong to the consumer:
+  `saknussemm-demo` implements them for itself, in its own repository and
+  its own distribution.
 
 ## What it costs, and what it does not scale to
 
@@ -184,6 +226,11 @@ Measured on the three pinned Gallica pages — 1215 lines, 1.99 MB of ALTO,
 | CPU per line | 0.21 ms | 0.38 ms |
 | peak memory | ×7.3 the source XML | ×11.9 |
 | per line | 11.6 kB | 19.1 kB |
+
+Referral costs **+8 %** of wall clock in the worst case measured — the same
+three pages with a rule that changes every line, 0.895 → 0.964 ms per line,
+235 lines referred. It is one extra character-level diff per CHANGED line, so
+a run that corrects little pays nothing. `ReviewPolicy.silent()` removes it.
 
 **The unit of work is one document, and the corpus belongs to you.** The
 whole run lives in memory until it returns: the manifest, every line's
