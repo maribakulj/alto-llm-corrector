@@ -214,6 +214,40 @@ les scénarios `probe` et `drift` du nouveau golden exercent PAGE comme ALTO,
 ce qui réduit l'écart — mais aucune des six promesses « partielles pour cause
 de PAGE » n'est reprise une par une. Le motif tient.
 
+## Relevé complémentaire du 2026-08-27 — l'état `review_required`
+
+**Une promesse s'ajoute, et elle est d'une autre nature que les autres :
+elle porte sur ce que la bibliothèque NE promet pas.**
+
+> Un statut `corrected` ne dit pas « cette correction est juste ». Il dit
+> « aucune garde n'y a rien trouvé à redire ». Depuis `review_required`,
+> les cas où la différence compte sont nommés au lieu d'être fondus dans le
+> premier.
+
+Ce qui la garde : `tests/test_review_pass.py`, huit assertions sur un run
+réel, dont les deux qui portent tout le reste — la correction est **livrée**
+(texte et opération d'`EditScript` intacts), et activer les règles ne change
+**aucun octet** du fichier, vérifié en comparant les deux runs plutôt qu'en
+l'écrivant ici.
+
+**Le vocabulaire des renvois est clos dès l'écriture**, ce que celui des
+replis n'a pas été : `core.decide.REVIEW_REASON_CODES`, six codes, gardés
+dans les deux sens par `tests/test_the_review_reasons_are_a_closed_set.py`
+— et gardés en **exerçant** les règles plutôt qu'en scannant des littéraux,
+donc « ce code est déclaré » y veut dire « une règle l'a rendu sur une
+entrée ».
+
+**Ce qui reste explicitement non promis, et c'est le point.** Trois règles du
+programme d'origine n'existent pas, chacune parce que le moteur n'a pas de
+quoi l'alimenter : la ligne propre modifiée (mesurée, puis retirée — sans
+lexique elle renvoyait 30 des 47 lignes modifiées du corpus de vérité
+terrain, en attrapant de simples corrections `f` → `ſ`), le désaccord entre
+producteur texte et producteur vision (aucun run n'interroge les deux), et
+la confiance non calibrée sous seuil. Elles sont écrites dans
+`src/saknussemm/core/review.py` et dans `docs/la-vie-d-une-ligne.md` §3 bis
+plutôt que déclarées et inertes — un code de renvoi qu'aucun run ne rend est
+une promesse qu'aucun consommateur ne collecte.
+
 ## Le motif dominant
 
 **PAGE est le format sous-gardé.** Six promesses passent de gardée à

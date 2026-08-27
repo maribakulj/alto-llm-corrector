@@ -164,6 +164,48 @@ risky half is proven and its hyphenation is fixed; what it waits on is either a
 splitting mode the planner does not have, or a model that holds attention over
 a thousand lines at once.
 
+## What it does not claim to have checked
+
+The guards compare characters. They have no notion of meaning, and no
+threshold gives them one: on twelve counter-examples put through the real
+acceptance guard, all twelve were accepted at both threshold settings — a
+removed negation at similarity 0.8955, a changed date at 0.9388, a
+truncated amount at 0.9643, a neighbouring line copied verbatim at 0.8852.
+Tightening the bound far enough to catch those rejects the ordinary OCR
+fixes the library exists to make.
+
+So a run does not report those lines as `corrected`. It delivers the
+correction and says it cannot vouch for it:
+
+```python
+result.review_lines      # 11
+result.review_reasons    # {"proper_noun_changed": 8, "negation_changed": 3,
+                         #  "digits_changed": 2}
+
+d = result.decisions.by_ref[LineRef(page_id="P1", line_id="TL7")]
+d.status                 # LineStatus.REVIEW_REQUIRED
+d.final_text             # the CORRECTION — a referral takes nothing away
+d.review_reasons         # ("digits_changed: 1789 → 1780",)
+```
+
+Three properties worth stating plainly:
+
+- **the correction ships.** A referred line carries the same bytes a
+  `corrected` one would, and the same op in the `EditScript`. Referral is a
+  statement about the check, not about the correction — on the real run this
+  was measured against, most of the flagged changes were good ones.
+- **turning it off changes no output.** `ReviewPolicy.silent()` restores the
+  previous status distribution and delivers identical files. The library
+  verifies that by comparing the bytes of two runs, not by promising it.
+- **it is not a defect rate.** It is the size of what the guards were
+  already unable to check and were not saying.
+
+Some rules the design called for are **not** implemented, because the engine
+has no input for them — a lexicon it does not carry, a routing mode that asks
+two producers the same line, a confidence score that is admittedly not
+calibrated. `docs/la-vie-d-une-ligne.md` §3 bis lists all six codes and the
+three absences with their reasons.
+
 ## What's not
 
 - No LLM HTTP calls (you supply a `BaseProvider` implementation, or use

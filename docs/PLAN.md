@@ -59,7 +59,7 @@ propriétés tenables. Critères de sortie, à ne pas négocier à la baisse :
 | V1 | Aucune altération du texte livré qui ne soit **déclarée et comptée** | `L*` fermés, échelle de fidélité au rapport |
 | V2 | La comptabilité des pertes ne produit **ni fantôme ni angle mort** | `R*` fermés, matrice versionnée |
 | V3 | Une **seule** définition de l'unité de césure dans tout le code — **atteint** : une famille de primitives dirigées (`core/pairing.py`, seul lecteur des champs pointeurs) + une dérivation d'unité (`core/units.py`), et la cohérence des pointeurs est tenue par l'invariant de symétrie | fait |
-| V4 | Ce que le système **ne peut pas** établir est signalé, pas décidé | `review_required` livré (`G*`) |
+| V4 | Ce que le système **ne peut pas** établir est signalé, pas décidé | **tenu (2026-08-27)** — `review_required` livré, `G1`-`G3` clos ; les trois règles que le moteur ne peut pas alimenter sont écrites plutôt que déclarées |
 | V5 | La surface publique est la clôture de ce que la façade retourne | `S3b` fermé (`S3a`, son statut provisoire écrit, est fait) |
 | V6 | Toute revendication chiffrée est un **intervalle**, sur ≥2 familles de modèles, dont le chemin inter-pages | `M*` fermés |
 | V7 | Un corpus externe versionné **bloque** un merge | **tenu (2026-08-16)** — `tests/external_corpus/pinned/` porte trois pages Gallica réelles, dans la suite par défaut, sans marqueur ni saut |
@@ -2306,11 +2306,12 @@ ni saut. Deux affirmations fausses dans un paragraphe de synthèse, pendant
 que la table normative disait juste : exactement le motif que la vague `RS`
 traitait ailleurs.
 
-Il en reste **trois**, et aucun n'est de la dette — ce sont des travaux :
+Il en restait **trois** le 2026-08-25 ; `V4` est tenu depuis le 2026-08-27,
+il en reste **deux**, et ni l'un ni l'autre n'est de la dette :
 
-- **`V4`** (`G1`-`G3`) — l'état `review_required`. Une vraie fonctionnalité,
-  et le plan démontre plus bas qu'aucun réglage de seuil ne ferme la famille
-  des gardes sémantiquement aveugles.
+- ~~**`V4`**~~ — **tenu le 2026-08-27.** `G1`-`G3` sont clos : l'état
+  `review_required`, cinq règles de renvoi rendues sur six codes clos, et
+  trois règles écrites comme non implémentables en l'état avec leur raison.
 - **`V6`** (`M1`, `M2`, `M7`) — `M3` est fait depuis le 2026-08-21 (trois
   familles de modèles, le système ne varie pas, le modèle varie d'un facteur
   trois). Restent la campagne de variance post-correctif, le chemin
@@ -3170,9 +3171,17 @@ qu'avec la vérité terrain. En production il n'y en a pas.
 
 | id | item |
 |---|---|
-| G1 | État `review_required`, distinct de `CORRECTED` / `FALLBACK` / `FAILED` |
-| G2 | Règles conservatrices d'envoi en revue : chiffres, dates et montants modifiés ; négation modifiée ; nom propre probable ; **substitution systématique au niveau du run** (le cas `⸗` 34/34 et `’` 69/69 — invisible ligne à ligne, évident au run) ; signe typographique supprimé sur toutes ses occurrences ; ligne propre modifiée ; désaccord producteur texte / producteur vision ; confiance non calibrée sous seuil |
-| G3 | Le système ne prétend pas décider si le changement est correct — seulement reconnaître qu'il n'a pas les moyens de l'établir. À documenter comme tel (`D6`) |
+| ~~G1~~ | **fait (2026-08-27).** `LineStatus.REVIEW_REQUIRED`, quatrième statut terminal. La correction est **livrée** — mêmes octets, même opération dans l'`EditScript` — et le run déclare ne pas pouvoir l'établir. Un quatrième verbe dans `core/decide.py`, `refer_for_review`, qui n'écrit **que** le statut : c'est le miroir exact de `renormalise`, qui n'écrit que le texte. Le seul site du paquet qui demandait `status is CORRECTED` pour savoir « cette ligne porte-t-elle une correction ? » était `_build_final_edit_script` ; il demande maintenant `LineDecision.carries_a_correction`, sans quoi rejouer le script aurait cessé de reproduire le fichier livré |
+| ~~G2~~ | **fait pour ce que le moteur peut alimenter, et les absences sont écrites.** Cinq règles rendues, six codes clos dès l'écriture (`REVIEW_REASON_CODES`) : `digits_changed` (couvre dates et montants — aucune grammaire, le constat suffit), `negation_changed`, `proper_noun_changed`, `systematic_substitution` / `systematic_removal` (la règle au niveau du RUN, le cas `⸗` 34/34 et `’` 69/69), plus `hyphen_unit_review`, conséquence et non décision (ADR-010). **Trois n'existent pas, chacune parce que le moteur n'a pas d'entrée pour elle** : « ligne propre modifiée » — écrite, mesurée, retirée : sans lexique elle renvoyait **30 des 47 lignes modifiées** du corpus de vérité terrain, 23 sur son seul indice, et ce qu'elle attrapait était de simples corrections `f` → `ſ` ; le désaccord texte/vision — aucun run n'interroge deux producteurs sur la même ligne, l'escalade *remplace* ; la confiance sous seuil — l'agrégat est construit après que le `DecisionSet` est immuable, et `core/confidence.py` dit lui-même que ses valeurs ne sont pas calibrées. Taux mesuré sur le corpus de vérité terrain : **11 des 47 lignes modifiées** renvoyées, 23 % |
+| ~~G3~~ | **fait.** `docs/la-vie-d-une-ligne.md` §3 bis (le tableau repli/renvoi, les six codes, les trois absences), `docs/reading-a-report.md` (`review_lines` n'est pas un taux de défaut), `README.md` (« What it does not claim to have checked »), `docs/promises.md` (relevé du 2026-08-27), `docs/versioning.md` (ajouter un membre à `LineStatus` est une rupture, et celle-ci est assumée) |
+
+**Ce que la vague `G` n'a pas fait, et où c'est suivi.** Les trois règles
+absentes ci-dessus ne sont pas de la dette : deux demandent une entrée que le
+moteur ne produit pas (un lexique injecté, un mode de routage qui interroge
+deux producteurs et garde les deux réponses) et la troisième demande le
+harnais de calibration. Chacune est écrite à l'endroit où quelqu'un ira la
+chercher — le module qui aurait dû les porter — plutôt qu'ici comme un item
+qui attend.
 
 ---
 

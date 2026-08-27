@@ -20,6 +20,33 @@ To ask "what changed?", read the per-line outcomes: `decision.final_text`
 against the source, or `projection.rewriter_path` (`untouched` is the only
 value that means the line's markup was not rewritten at all).
 
+## `review_lines`
+
+**Means:** the run delivered this many corrections it has no means of
+verifying. The lines are `review_required`, their text is the correction,
+and the artefact carries it.
+
+**Does not mean:** this many lines are wrong. The opposite is closer to the
+truth. On the run that motivated the state, an empirical detector raised 56
+lines with changed digits and nearly all of them were **good** corrections —
+which could only be established against ground truth, and in production
+there is none. What the number sizes is the library's own blind spot, not
+the model's error rate.
+
+**Also does not mean:** the remaining corrections are verified. `corrected`
+means the guards found nothing objectionable, which is a much weaker claim
+than "checked". A line can change a word into another perfectly ordinary
+word at similarity 0.99 and no rule here sees it.
+
+Read `review_reasons` for triage: the codes are ranked by nothing, but they
+are not equally urgent. A changed digit in a price table and a respelled
+surname are both unverifiable and only one of them will be read as fact.
+One line can carry several codes, so the counts sum to at least
+`review_lines`, never to it.
+
+`ReviewPolicy.silent()` turns the whole thing off. It changes no delivered
+byte — it removes the report, not the uncertainty.
+
 ## `format_losses is None`
 
 **Means:** no markup was dropped — no element or attribute left the tree.
