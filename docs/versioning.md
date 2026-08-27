@@ -72,10 +72,10 @@ mechanism — both resolve to the same objects.
   `EditProducer`, `FormatAdapter` — is what a consumer should type
   against.
 - The `CorrectionReport` JSON schema (see below).
-- The seven frozen policies' **field names** (§8.2) —
+- The eight frozen policies' **field names** (§8.2) —
   `ChunkPlannerConfig`, `RetryPolicy`, `GuardConfig`, `PairingPolicy`,
-  `LossPolicy`, `ConfidencePolicy`, `RoutingPolicy`. Renaming or removing
-  one is a breaking change.
+  `LossPolicy`, `ReviewPolicy`, `ConfidencePolicy`, `RoutingPolicy`.
+  Renaming or removing one is a breaking change.
 
   Their **default VALUES are not**, and `GuardConfig`'s 21 thresholds are
   why. The library says of them, in its own plan, that "les gardes ne sont
@@ -91,9 +91,13 @@ mechanism — both resolve to the same objects.
   `config_fingerprint()`, stamped into every corrected file, is what tells
   it the configuration moved.
 
-  Five of the seven feed that composite fingerprint; the two that cannot
-  yet change output bytes (`ConfidencePolicy`, `RoutingPolicy`) stay out of
-  it deliberately.
+  Five of the eight feed that composite fingerprint. Three stay out, and
+  for two different reasons that are worth keeping apart:
+  `ConfidencePolicy` and `RoutingPolicy` cannot yet change output bytes;
+  `ReviewPolicy` **never will**, because referral writes no text at all.
+  The first two join the fingerprint on the release that lets them move a
+  byte; the third joins nothing, and a run's referrals are read off the
+  report rather than off the file.
 
   **Prefer the named profiles** to the individual thresholds:
   `GuardConfig()` for a text producer, `GuardConfig.vision()` for a VLM.
@@ -101,6 +105,22 @@ mechanism — both resolve to the same objects.
   says why, and tightening one alone can open a migration path between two
   — so a profile is a coherent point in that space and a single field is
   not.
+
+### `LineStatus` — adding a member is a break, and this one was taken
+
+`LineStatus.REVIEW_REQUIRED` was added after `0.9.0`. A consumer matching
+exhaustively on the enum, or filtering on `status == "corrected"`, sees a
+value it did not have and misses lines it used to catch — that is the
+definition of a break, and it is why it is listed in the CHANGELOG's
+breaking index rather than under "Added" alone.
+
+It was taken because the alternative is worse: reporting a change the
+library cannot verify as `corrected` is the library asserting something
+false. `ReviewPolicy.silent()` restores the previous distribution of
+statuses exactly, for a consumer that needs the old shape while it
+migrates. The delivered bytes are identical either way.
+
+After `1.0`, adding a `LineStatus` member is a MAJOR bump.
 
 Anything prefixed with `_` (modules, functions, attributes) is private,
 whatever module it lives in.

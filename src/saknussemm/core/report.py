@@ -33,7 +33,6 @@ from saknussemm.core.schemas import (
     CorrectionReport,
     DocumentManifest,
     LineManifest,
-    LineStatus,
     LineTrace,
     RunProvenance,
     SidecarEntry,
@@ -57,13 +56,20 @@ def _build_final_edit_script(
     consumer replaying it would otherwise diverge from the
     pipeline's own corrected XML):
 
-    - line not ``CORRECTED`` (fallback / failed) → no op;
-    - ``CORRECTED`` and the producer's op output survived unchanged →
+    - line carrying no correction (fallback / failed) → no op;
+    - carrying one, and the producer's op output survived unchanged →
       the producer's original op, preserving its TYPE (e.g. a rules
       producer's ``replace_span``);
-    - ``CORRECTED`` but the final text differs from the op output
+    - carrying one whose final text differs from the op output
       (a reconciled hyphen member) → a ``replace_line`` carrying the
       final text, since the original span no longer describes it.
+
+    "Carrying a correction" is :attr:`LineDecision.carries_a_correction`
+    and not ``status is CORRECTED``, which stopped being the same
+    question once referral existed: a ``REVIEW_REQUIRED`` line kept its
+    correction and
+    only declares it unverified, so its op belongs here exactly as
+    before.
 
     The script is stamped with its protocol version, the
     run's source-file digests, and one :class:`LinePrecondition`
@@ -74,7 +80,7 @@ def _build_final_edit_script(
     ops: list[EditOp] = []
     preconditions: list[LinePrecondition] = []
     for decision in decisions.decisions:
-        if decision.status is not LineStatus.CORRECTED:
+        if not decision.carries_a_correction:
             continue
         captured = ctx.producer_ops.get(decision.ref)
         if captured is None:

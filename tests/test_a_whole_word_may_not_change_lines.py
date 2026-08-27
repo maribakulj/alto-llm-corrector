@@ -140,7 +140,11 @@ def test_a_legitimate_repetition_across_the_seam_is_left_alone() -> None:
         "le peuple et les soldats du roi",
         [SubstitutionRule("avec 1e", "avec le")],
     )
-    assert outcomes["TL1"].startswith("corrected"), (
+    # `1e` → `le` change un mot en majuscule initiale ? Non — mais la
+    # ligne suivante commence par le même mot, et ce qui est vérifié ici
+    # est qu'aucune passe n'a REPRIS la correction. Un renvoi la garde ;
+    # seul un repli la retire, et c'est lui qu'on cherche.
+    assert not outcomes["TL1"].startswith("fallback"), (
         f"a correction that happens to produce the word the next line "
         f"starts with was reverted — {outcomes}. Nothing left line 2: it "
         "still begins with its own word, so no word changed line."

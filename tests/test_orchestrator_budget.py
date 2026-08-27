@@ -223,19 +223,6 @@ _OVERPARAMETERISED: dict[str, tuple[int, str]] = {
         "l'aiguillage entre descente et repli ; il lui faut ce que les deux "
         "branches consomment",
     ),
-    "core/pipeline.py::CorrectionPipeline.__init__": (
-        14,
-        "surface de CONFIGURATION, pas du threading : chaque paramètre est "
-        "une couture d'injection publique. Cinq d'entre eux pilotent des "
-        "chemins qu'aucun run par défaut n'emprunte, et `RS-5` doit les "
-        "sortir — c'est la seule entrée de cette table qu'un travail "
-        "planifié vise",
-    ),
-    "core/pipeline.py::CorrectionPipeline.for_provider": (
-        9,
-        "les paramètres que ce constructeur POSSÈDE — l'appel vendeur et le "
-        "contrat de prompt — le reste passant par **pipeline_kwargs",
-    ),
     "core/report.py::_build_correction_report": (
         11,
         "assemble le rapport depuis six sources indépendantes ; leur faire "
@@ -258,6 +245,41 @@ _OVERPARAMETERISED: dict[str, tuple[int, str]] = {
 
 #: Toutes les entrées de longueur, dettes et mesures confondues — ce que la
 #: porte « aucune fonction non nommée » consulte.
+#: Mesuré, et délibérément pas une dette — la moitié arité de
+#: `_MEASURED_NOT_A_DEBT`, et pour la même raison.
+#:
+#: `RS-5.1` a mesuré l'entrée `CorrectionPipeline.__init__` et **retiré sa
+#: cible** : les paramètres restants sont des coutures d'injection
+#: publiques, et les retirer serait un changement de surface, pas une
+#: réduction. La raison inscrite dans la table des dettes disait pourtant
+#: encore « `RS-5` doit les sortir » — elle décrivait un travail que le
+#: plan avait déjà déclaré ne pas être un travail, et une table qui garde
+#: une entrée dont la raison est périmée cesse de dire ce qui reste.
+#:
+#: Ce que le plafond continue de faire ici, et ce n'est pas rien : ajouter
+#: une couture reste un acte visible en revue, chiffré, avec sa raison.
+#: Ce qu'il cesse de faire, c'est de se lire comme une file d'attente.
+_ARITY_NOT_A_DEBT: dict[str, tuple[int, str]] = {
+    "core/pipeline.py::CorrectionPipeline.__init__": (
+        15,
+        "surface de CONFIGURATION, pas du threading : chaque paramètre est "
+        "une couture d'injection publique (§15), et les retirer serait un "
+        "changement de surface publique — mesuré par `RS-5.1`, qui a retiré "
+        "la cible « ≤ 9 » pour cette raison. Le quinzième est "
+        "`review_policy`, dont le défaut n'est pas inerte",
+    ),
+    "core/pipeline.py::CorrectionPipeline.for_provider": (
+        9,
+        "les paramètres que ce constructeur POSSÈDE — l'appel vendeur et le "
+        "contrat de prompt — le reste passant par **pipeline_kwargs",
+    ),
+}
+
+_ALL_OVERPARAMETERISED: dict[str, tuple[int, str]] = {
+    **_OVERPARAMETERISED,
+    **_ARITY_NOT_A_DEBT,
+}
+
 _ALL_OVERSIZED: dict[str, tuple[int, str]] = {**_OVERSIZED, **_MEASURED_NOT_A_DEBT}
 
 
@@ -361,7 +383,7 @@ def test_no_unnamed_function_exceeds_the_parameter_target() -> None:
     over = {
         key: count
         for key, count in _function_arities().items()
-        if count > _PARAMETER_TARGET and key not in _OVERPARAMETERISED
+        if count > _PARAMETER_TARGET and key not in _ALL_OVERPARAMETERISED
     }
     assert not over, (
         f"{over} take more than {_PARAMETER_TARGET} arguments and are not on "
@@ -385,14 +407,14 @@ def test_known_oversized_functions_only_shrink(key: str) -> None:
     )
 
 
-@pytest.mark.parametrize("key", sorted(_OVERPARAMETERISED))
+@pytest.mark.parametrize("key", sorted(_ALL_OVERPARAMETERISED))
 def test_known_overparameterised_functions_only_shrink(key: str) -> None:
     arities = _function_arities()
     assert key in arities, (
-        f"{key} no longer exists — drop it from _OVERPARAMETERISED, the entry "
+        f"{key} no longer exists — drop it from its table, the entry "
         "is the debt, not the function."
     )
-    ceiling, _reason = _OVERPARAMETERISED[key]
+    ceiling, _reason = _ALL_OVERPARAMETERISED[key]
     assert arities[key] <= ceiling, (
         f"{key} grew to {arities[key]} arguments, over its pinned "
         f"{ceiling}. Known-overparameterised functions may only shrink."
@@ -415,7 +437,12 @@ def test_every_inscribed_entry_carries_a_reason() -> None:
     la règle sans rien dire.
     """
     thin: dict[str, str] = {}
-    for table in (_OVERSIZED, _MEASURED_NOT_A_DEBT, _OVERPARAMETERISED):
+    for table in (
+        _OVERSIZED,
+        _MEASURED_NOT_A_DEBT,
+        _OVERPARAMETERISED,
+        _ARITY_NOT_A_DEBT,
+    ):
         for key, (_ceiling, reason) in table.items():
             if len(reason.strip()) < 40:
                 thin[key] = reason
@@ -433,12 +460,16 @@ def test_the_two_length_tables_do_not_overlap() -> None:
     silencieusement de la liste des dettes tout en la gardant plafonnée
     deux fois — et la table cesserait de dire ce qui reste à faire.
     """
-    both = sorted(set(_OVERSIZED) & set(_MEASURED_NOT_A_DEBT))
-    assert not both, (
-        f"{both} figurent dans les deux tables. `_OVERSIZED` est ce qu'on "
-        f"prévoit de réduire, `_MEASURED_NOT_A_DEBT` ce qu'on a mesuré et "
-        f"décidé de garder — une entrée est l'un ou l'autre."
-    )
+    for debts, measured, names in (
+        (_OVERSIZED, _MEASURED_NOT_A_DEBT, "longueur"),
+        (_OVERPARAMETERISED, _ARITY_NOT_A_DEBT, "arité"),
+    ):
+        both = sorted(set(debts) & set(measured))
+        assert not both, (
+            f"{both} figurent dans les deux tables d'{names}. La première "
+            f"est ce qu'on prévoit de réduire, la seconde ce qu'on a mesuré "
+            f"et décidé de garder — une entrée est l'un ou l'autre."
+        )
 
 
 def test_finished_functions_are_not_still_listed() -> None:

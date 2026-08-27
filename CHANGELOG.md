@@ -29,6 +29,7 @@ not because a migration is owed.
 
 | change | what it broke |
 |---|---|
+| **`LineStatus` gains `review_required`** | a consumer filtering on `status == "corrected"`, or matching exhaustively on the enum, no longer sees the lines the library corrected without being able to verify them. Deliberate — that is what the value is for — and reversible per run with `ReviewPolicy.silent()`. The delivered bytes are identical either way |
 | **A divergent file is withheld, not fatal to the run** | `run()` no longer raises `ProjectionError` when an artefact does not carry its decisions. The file is absent from `corrected_files` and named on the new `CorrectionResult.undeliverable_files`; `write()` refuses the incomplete set unless passed `allow_partial=True`. Callers with `except ProjectionError` around `run()` now see a returned result instead |
 | **The `[qe]` extra is gone** | `pip install saknussemm[qe]` and `saknussemm.integrations.qe`. The scorer moved to the bench repository on 2026-08-16: it needed onnxruntime and a 545 MB model no CI could fetch, so its suite skipped everywhere and the module sat outside the coverage gate. The `QEScorer` protocol stays — the injection point is public, the implementation is not |
 | **The library is renamed `corrigenda` → `saknussemm`** | everything a caller writes: the distribution name, the import name, the extras (`saknussemm[qe]`, `saknussemm[vision]`), the error root `SaknussemmError`, the release tag prefix, and the `<softwareName>` the rewriter stamps into corrected files. The largest break in this list, and the cheapest: nothing has ever been published, so it is owed to nobody. Doing it after a release would have cost a major version and every consumer an edit |
@@ -79,6 +80,40 @@ The **top-level import surface** is provisional until `1.0.0`. It went from
 
 ### Added
 
+- **`LineStatus.REVIEW_REQUIRED` — la bibliothèque dit ce qu'elle ne peut pas
+  établir** (critère `V4` du plan). Une quatrième valeur de statut terminal,
+  distincte de `corrected` / `fallback` / `failed` : la correction est
+  **livrée** — mêmes octets, même opération dans le script d'édition — et le
+  run déclare n'avoir aucun moyen de vérifier qu'elle est juste.
+
+  Pourquoi : les gardes de l'étage C comparent des caractères. Sur douze
+  contre-exemples passés dans la vraie `check_line`, les douze sont acceptés
+  aux deux seuils — négation supprimée 0,8955, date changée 0,9388, montant
+  tronqué 0,9643, ligne voisine recopiée mot pour mot 0,8852. Aucun réglage
+  ne ferme cette famille ; ranger ces lignes sous `corrected` faisait
+  affirmer « j'ai vérifié » là où c'est faux.
+
+  Ce qui arrive avec : `ReviewPolicy` (exporté au niveau supérieur, §15),
+  `saknussemm.core.decide.REVIEW_REASON_CODES` (six codes, vocabulaire clos
+  dès l'écriture), `DecisionSet.review_lines` / `review_reason_counts()`,
+  `CorrectionResult.review_lines` / `review_reasons`,
+  `DecisionStage.review_reasons` sur le rapport (additif — pas de bump de
+  `report_version`), `LineTrace.review_reasons`,
+  `LineDecision.carries_a_correction`.
+
+  **Aucun octet livré ne change** : la passe de renvoi n'écrit pas de texte,
+  ce que `tests/test_review_pass.py` vérifie en comparant les fichiers de
+  deux runs, l'un avec les règles et l'autre sans.
+
+  Les règles sont conservatrices et mesurées : sur le corpus de vérité
+  terrain, **11 des 47 lignes modifiées** sont renvoyées (23 %) —
+  8 `proper_noun_changed`, 3 `negation_changed`, 2 `digits_changed`.
+  Trois règles du programme d'origine ne sont **pas** implémentées et
+  `src/saknussemm/core/review.py` dit pourquoi chacune : « ligne propre
+  modifiée » (écrite, mesurée à 30 des 47 lignes et retirée — sans lexique
+  elle attrapait de simples corrections `f` → `ſ`), le désaccord entre deux
+  producteurs (aucun run n'en interroge deux sur la même ligne), et la
+  confiance non calibrée sous seuil.
 - `GuardConfig.text()` — le profil d'un producteur de texte, nommé face à
   `GuardConfig.vision()`. Mêmes valeurs que `GuardConfig()`.
 - `saknussemm.core.decide.FALLBACK_REASON_CODES` — le vocabulaire clos des
@@ -86,6 +121,14 @@ The **top-level import surface** is provisional until `1.0.0`. It went from
 
 ### Changed
 
+- **Une ligne corrigée peut désormais rapporter `review_required` plutôt que
+  `corrected`.** C'est la seule rupture que `LineStatus.REVIEW_REQUIRED`
+  introduit, et elle est délibérée : un consommateur qui filtre sur
+  `status == "corrected"` cesse de balayer avec lui les lignes que la
+  bibliothèque n'a pas pu vérifier — ce qui est la raison d'être de la
+  valeur, pas son coût. `ReviewPolicy.silent()` rend l'ancien comportement
+  exactement. La surface publique passe de 67 à **68 symboles**
+  (`ReviewPolicy`).
 - **`docs/versioning.md` sort les VALEURS des seuils de politique du contrat
   SemVer** ; leurs NOMS y restent. Les gardes ne sont pas calibrées — le plan
   et `GuardConfig.vision()` le disent tous deux — et figer des nombres

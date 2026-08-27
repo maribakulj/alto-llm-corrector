@@ -53,7 +53,11 @@ async def test_decision_set_mirrors_a_real_run(tmp_path) -> None:
         for lm in page.lines:
             d = decisions.by_ref[LineRef(page_id=lm.page_id, line_id=lm.line_id)]
             assert d.source_text == lm.ocr_text
-            assert d.status in (LineStatus.CORRECTED, LineStatus.FALLBACK)
+            assert d.status in (
+                LineStatus.CORRECTED,
+                LineStatus.REVIEW_REQUIRED,
+                LineStatus.FALLBACK,
+            )
             trace = result.traces[d.ref]
             assert d.final_text == trace.projected_text
     # The caller's manifest carries none of it (slice E).

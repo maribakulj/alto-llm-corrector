@@ -56,6 +56,13 @@ _NOT_PROJECTED: dict[str, str] = {
         "le DecisionSet. La trace porte le statut provisoire du chunk, qui "
         "peut encore changer aux passes document-wide"
     ),
+    "review_reasons": (
+        "atteint le rapport, mais par la DÉCISION "
+        "(`d.review_reasons` → `DecisionStage.review_reasons`), pour la "
+        "même raison que `fallback_reason` juste en dessous : ce qui "
+        "qualifie une décision est porté par le DecisionSet, qui est "
+        "l'autorité, et pas par la trace, qui en garde une copie"
+    ),
     "fallback_reason": (
         "atteint le rapport, mais par la DÉCISION (`d.fallback_reason` → "
         "`_structured_reason`), parce que la précédence d'attribution est "

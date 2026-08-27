@@ -77,6 +77,8 @@ _DELIBERATE: dict[str, str] = {
     "ChunkPlannerConfig": "§15 injection point",
     "PairingPolicy": "§15 injection point",
     "LossPolicy": "§15 injection point",
+    "ReviewPolicy": "§15 injection point — and unlike the demoted two, its "
+    "default is not inert: every run applies its rules",
     "ProducerMetadata": "what a producer declares about itself (§11 provenance)",
     "ImageRef": "`I4` — the pure core CARRIES it for a producer that asks for "
     "pixels, and never opens it",

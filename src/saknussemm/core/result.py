@@ -47,6 +47,22 @@ class CorrectionResult:
     #: fallen lines (e.g. ``{"all_attempts_exhausted": 20}``), so a
     #: consumer can say WHY without parsing messages.
     fallback_reasons: dict[str, int]
+    #: Number of LINES whose terminal status is ``REVIEW_REQUIRED`` —
+    #: they kept their CORRECTION, and the run declares it has no means
+    #: of establishing the change is right. Disjoint from
+    #: ``fallback_lines``: a referred line was not taken away.
+    #:
+    #: Reading it as a failure count is the one mistake to avoid. It
+    #: counts what the library refuses to VOUCH for, not what it got
+    #: wrong — on the run this feature was measured against, the great
+    #: majority of the flagged changes were good ones, which is exactly
+    #: why they are delivered rather than reverted.
+    review_lines: int
+    #: Aggregated review-reason prefixes → line counts (e.g.
+    #: ``{"digits_changed": 31, "proper_noun_changed": 12}``). One line
+    #: can appear under several codes, so these sum to at least
+    #: ``review_lines`` rather than to it.
+    review_reasons: dict[str, int]
     traces: dict[LineRef, LineTrace]
     reconcile_metrics: ReconcileMetrics
     #: Aggregate token consumption across every producer call in the
@@ -243,6 +259,8 @@ def _build_correction_result(
         fallback_chunks=ctx.fallback_chunks,
         fallback_lines=decisions.fallback_lines,
         fallback_reasons=decisions.fallback_reason_counts(),
+        review_lines=decisions.review_lines,
+        review_reasons=decisions.review_reason_counts(),
         traces=traces,
         reconcile_metrics=ctx.reconcile_metrics,
         usage=ctx.usage,

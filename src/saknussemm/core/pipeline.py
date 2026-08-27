@@ -72,6 +72,7 @@ from saknussemm.core.schemas import (
     DEFAULT_GUARD_CONFIG,
     DEFAULT_CONFIDENCE_POLICY,
     DEFAULT_LOSS_POLICY,
+    DEFAULT_REVIEW_POLICY,
     DEFAULT_PAIRING_POLICY,
     DEFAULT_RETRY_POLICY,
     ChunkPlannerConfig,
@@ -80,6 +81,7 @@ from saknussemm.core.schemas import (
     PageImage,
     ConfidencePolicy,
     LossPolicy,
+    ReviewPolicy,
     PairingPolicy,
     RetryPolicy,
 )
@@ -114,6 +116,7 @@ class CorrectionPipeline:
         format_adapter: FormatAdapter | None = None,
         *,
         loss_policy: LossPolicy | None = None,
+        review_policy: ReviewPolicy | None = None,
         producer_metadata: ProducerMetadata | None = None,
         confidence_policy: ConfidencePolicy | None = None,
         confidence_scorers: tuple[ConfidenceScorer, ...] | None = None,
@@ -139,12 +142,14 @@ class CorrectionPipeline:
         # lose format granularity: REPORT (default, historical) counts
         # and attributes; STRICT rejects the unit pre-projection.
         self.loss_policy = loss_policy or DEFAULT_LOSS_POLICY
-        # line confidences on the report. DROP
-        # (default) computes nothing; REPORT_ONLY fills
-        # LineOutcome.confidence via the injected scorers (default: the
-        # zero-dependency HeuristicScorer). Deliberately outside the
-        # §8.2 composite fingerprint until write_wc unlocks (report-only
-        # never affects the corrected XML).
+        # Which corrections the run declares it cannot establish. ON by
+        # default; writes no text, so it changes what a run REPORTS only.
+        self.review_policy = review_policy or DEFAULT_REVIEW_POLICY
+        # Line confidences on the report. DROP (default) computes
+        # nothing; REPORT_ONLY fills LineOutcome.confidence via the
+        # injected scorers (default: the zero-dependency HeuristicScorer).
+        # Outside the §8.2 composite fingerprint until write_wc unlocks —
+        # report-only never affects the corrected XML.
         self.confidence_policy = confidence_policy or DEFAULT_CONFIDENCE_POLICY
         self.confidence_scorers: tuple[ConfidenceScorer, ...] = (
             confidence_scorers
@@ -432,6 +437,7 @@ class CorrectionPipeline:
         decisions, sidecar_entries = _finalize_document(
             guard_config=self.guard_config,
             loss_policy=self.loss_policy,
+            review_policy=self.review_policy,
             document_manifest=document_manifest,
             all_lines=index.lines,
             traces=index.traces,

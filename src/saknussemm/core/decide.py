@@ -1,16 +1,21 @@
 """The one place a line's decision is written (ADR-013).
 
 A line's decision is two manifest fields — ``corrected_text`` and
-``status`` — plus the trace's ``fallback_reason``. Every write of them goes
-through here; ``tests/decision/test_decision_write_exclusivity.py`` refuses
+``status`` — plus the trace's ``fallback_reason`` and ``review_reasons``.
+Every write of them goes through here; ``tests/decision/test_decision_write_exclusivity.py`` refuses
 the first statement anywhere else in the package.
 
-Three verbs, because there are three genuinely different things to say
+Four verbs, because there are four genuinely different things to say
 about a line, and collapsing them would make the module lie about what
 happened:
 
 :func:`accept`
     A correction stands. Text and status both change.
+
+:func:`refer_for_review`
+    A correction that already stands is declared unverifiable. **No
+    text is written** — the artefact carries exactly what ``accept``
+    put there — only the status changes, and a reason is appended.
 
 :func:`fall_back`
     A correction is taken away and the line returns to its source. Text
@@ -21,6 +26,11 @@ happened:
     A decision already made keeps standing, and only its spelling
     changes. Text changes; status does not, because nothing was decided
     here.
+
+The two middle verbs are exact mirrors, and that symmetry is the reason
+they are separate: ``renormalise`` writes text and no status,
+``refer_for_review`` writes status and no text. Merging either into
+``accept`` would make a call site claim something it did not do.
 
 **Why ``fall_back`` defers, and why that is not merely cautious**
 (ADR-013). It rests on an invariant, verified over the corpora rather
@@ -50,9 +60,9 @@ and a source, it respells a choice already made, and it never runs on a
 line that fell back (a reverted line has ``corrected_text ==
 ocr_text``, which it skips). Routing it through ``accept`` would make it
 assert ``CORRECTED`` on lines whose status it has no business setting —
-a behaviour change bought for the tidiness of two verbs instead of
-three. A reader must be able to tell what happened to a line from the call
-alone, and "text only, decision untouched" is a third thing to say.
+a behaviour change bought for the tidiness of one verb fewer. A reader
+must be able to tell what happened to a line from the call alone, and
+"text only, decision untouched" is its own thing to say.
 """
 
 from __future__ import annotations
@@ -111,6 +121,39 @@ FALLBACK_REASON_CODES: frozenset[str] = frozenset(
 )
 
 
+#: Le vocabulaire CLOS des raisons de RENVOI EN REVUE.
+#:
+#: Même contrat que ``FALLBACK_REASON_CODES``, sur l'autre moitié de ce
+#: qu'un rapport dit d'une ligne : ``review_reason_counts`` coupe sur le
+#: ``:`` et agrège le préfixe, donc un tableau de bord affiche ces codes-là
+#: et un code inconnu y est un défaut de la bibliothèque.
+#:
+#: Fermé dès l'écriture, et pas après coup comme l'autre : les raisons de
+#: repli ont vécu ouvertes assez longtemps pour qu'il faille un ``grep``
+#: d'audit pour les recenser. ``tests/test_the_review_reasons_are_a_closed_set.py``
+#: refuse un code que ``core/review.py`` émettrait sans qu'il figure ici,
+#: et un code déclaré ici qu'aucune règle ne produit.
+#:
+#: Ce que l'ensemble NE contient pas est écrit dans ``core/review.py`` :
+#: trois règles du programme d'origine n'ont pas de code parce que le
+#: moteur n'a pas de quoi les alimenter, et déclarer leur code ferait
+#: promettre au vocabulaire une raison qu'aucun run ne rendra.
+REVIEW_REASON_CODES: frozenset[str] = frozenset(
+    {
+        # -- par ligne : l'indice est dans le couple (source, correction) --
+        "digits_changed",
+        "negation_changed",
+        "proper_noun_changed",
+        # -- au niveau du run : l'indice n'existe que dans l'agrégat ------
+        "systematic_substitution",
+        "systematic_removal",
+        # -- conséquence, pas décision : l'unité de césure part entière ---
+        # (ADR-010). Le pendant de `hyphen_unit_fallback` côté renvoi.
+        "hyphen_unit_review",
+    }
+)
+
+
 def accept(
     line: LineManifest,
     text: str,
@@ -165,6 +208,61 @@ def fall_back(
         trace.fallback_reason = reason
 
 
+def refer_for_review(
+    line: LineManifest,
+    *,
+    reason: str,
+    traces: dict[LineRef, LineTrace] | None = None,
+) -> None:
+    """Declare a standing correction unverifiable — status only.
+
+    The correction is NOT taken away: ``corrected_text`` is untouched,
+    the artefact carries the same bytes, and the edit script still
+    carries the line's op. What changes is what the run *claims*: from
+    "this was corrected" to "this was corrected and I have no means of
+    establishing it is right".
+
+    That this function writes no text is the property the whole feature
+    rests on. Referral is an annotation, so turning the referral rules
+    on cannot change a single delivered byte — a claim the byte-parity
+    corpus verifies rather than a claim this docstring makes.
+
+    Reasons ACCUMULATE, and unlike ``fall_back`` this is
+    last-writer-friendly on purpose: several rules may see the same
+    line for genuinely different causes (a changed amount *and* a
+    changed proper noun), and a reviewer needs all of them. Duplicates
+    are dropped; order of arrival is kept, which is the order the rules
+    run in.
+
+    Refuses a line that has not been corrected. A referral says
+    something about a CORRECTION; there is none on a line still
+    ``PENDING``, and on a line that fell back the correction was taken
+    away — referring it would resurrect a decision the engine already
+    unmade. Either is an engine bug, not bad input, so it raises
+    ``RuntimeError`` like ``_FinalizeOrder`` does, and deliberately not
+    a ``SaknussemmError``, which the chunk loop is allowed to absorb
+    (ADR-008).
+    """
+    if line.status not in (LineStatus.CORRECTED, LineStatus.REVIEW_REQUIRED):
+        raise RuntimeError(
+            f"refer_for_review on a line whose status is "
+            f"{line.status.value!r}: a referral qualifies a correction, "
+            f"and this line carries none. Refer before the correction is "
+            f"taken away, or not at all."
+        )
+    line.status = LineStatus.REVIEW_REQUIRED
+    _set_trace(
+        traces,
+        line,
+        validation_status=LineStatus.REVIEW_REQUIRED.value,
+    )
+    if traces is None:
+        return
+    trace = traces.get(line_ref(line))
+    if trace is not None and reason not in trace.review_reasons:
+        trace.review_reasons = (*trace.review_reasons, reason)
+
+
 def renormalise(line: LineManifest, text: str) -> None:
     """Respell a decision that already stands — no status, no reason.
 
@@ -177,4 +275,11 @@ def renormalise(line: LineManifest, text: str) -> None:
     line.corrected_text = text
 
 
-__all__ = ["FALLBACK_REASON_CODES", "accept", "fall_back", "renormalise"]
+__all__ = [
+    "FALLBACK_REASON_CODES",
+    "REVIEW_REASON_CODES",
+    "accept",
+    "fall_back",
+    "refer_for_review",
+    "renormalise",
+]

@@ -532,5 +532,68 @@ class RetryPolicy(FrozenPolicy):
         return self.temperatures[idx]
 
 
+class ReviewPolicy(FrozenPolicy):
+    """Which corrections the run declares it cannot verify.
+
+    A referral moves a line to ``LineStatus.REVIEW_REQUIRED``. It
+    **changes no delivered byte**: the correction stays, the artefact is
+    identical, and only what the run CLAIMS about the line changes. The
+    rules live in ``core/review.py``, which also records what each one
+    can and cannot see.
+
+    **On by default**, and that is the whole point rather than an
+    aggressive default. A library that can signal what it cannot
+    establish, and does so only when asked, has not signalled it. A host
+    that wants the previous behaviour asks for it: :meth:`silent`.
+
+    Expect referrals on a substantial share of the corrected lines —
+    the proper-noun rule alone fires on every respelled name, which in
+    heritage print is a lot of them. That number is not a defect rate.
+    It is the size of what the guards were already unable to check and
+    were not saying.
+
+    Each rule has its own switch because their noise is not comparable:
+    a host with clean modern print may want the digit and negation
+    rules and not the proper-noun one. Turning a rule off removes its
+    code from the run's vocabulary; it never turns a referral into a
+    ``CORRECTED``-with-an-asterisk.
+    """
+
+    #: Master switch. ``False`` reproduces the behaviour that predates
+    #: referral exactly: no line is ever ``REVIEW_REQUIRED``.
+    enabled: bool = True
+    #: The digits are not the same ones (covers dates and amounts —
+    #: neither is parsed; see ``core/review.py``).
+    digits_changed: bool = True
+    #: A negation particle appeared, vanished, or changed in number.
+    negation_changed: bool = True
+    #: A probable proper noun was respelled, added or dropped.
+    proper_noun_changed: bool = True
+    #: A character the run edited on EVERY one of its occurrences —
+    #: the run-level rule, invisible line by line.
+    systematic_substitution: bool = True
+    #: How many occurrences a character needs before "every one of them"
+    #: means anything. Three is the smallest number for which the word
+    #: "systematic" is not an overstatement; the measured cases were 34
+    #: and 69.
+    min_systematic_occurrences: int = 3
+
+    @classmethod
+    def silent(cls) -> "ReviewPolicy":
+        """No referrals at all — every corrected line reads ``corrected``.
+
+        Named rather than spelled ``ReviewPolicy(enabled=False)`` at each
+        call site, and named ``silent`` rather than ``disabled`` because
+        that is what it does: the corrections the rules would have
+        flagged still ship, unflagged. It suppresses the report, not the
+        uncertainty.
+        """
+        return cls(enabled=False)
+
+
+#: Module-level default reused wherever a caller passes no ReviewPolicy.
+DEFAULT_REVIEW_POLICY = ReviewPolicy()
+
+
 #: Module-level default reused wherever a caller passes no RetryPolicy.
 DEFAULT_RETRY_POLICY = RetryPolicy()

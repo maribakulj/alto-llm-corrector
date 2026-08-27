@@ -93,8 +93,18 @@ class LineTrace(BaseModel):
     #: The rewriter's token alignment suspected a word reorder on this
     #: line. Flagged, never acted on.
     word_order_suspected: bool | None = None
-    validation_status: str | None = None  # corrected / fallback / failed
+    validation_status: str | None = (
+        None  # corrected / review_required / fallback / failed
+    )
     fallback_reason: str | None = None
+    #: Why this line was referred for review — the codes of
+    #: :data:`~saknussemm.core.decide.REVIEW_REASON_CODES`, each
+    #: optionally followed by ``": detail"``. Empty on every line the
+    #: run could decide, which is most of them. Unlike
+    #: ``fallback_reason`` this ACCUMULATES: a line may be unverifiable
+    #: for several independent causes at once, and a reviewer needs all
+    #: of them rather than the first.
+    review_reasons: tuple[str, ...] = ()
 
 
 # ---------------------------------------------------------------------------
@@ -141,11 +151,23 @@ class ProposalFeatures(BaseModel):
 
 class DecisionStage(BaseModel):
     """The line's terminal decision (always present — every line ends
-    ``corrected`` or ``fallback``, enforced by the DecisionSet)."""
+    ``corrected``, ``review_required`` or ``fallback``, enforced by the
+    DecisionSet).
 
-    status: str  # corrected / fallback
+    ``review_required`` is ``corrected`` plus an admission: the text
+    below is the correction, and the run has no means of establishing it
+    is right. A consumer filtering on ``status == "corrected"`` will not
+    see those lines, which is what the value is for."""
+
+    status: str  # corrected / review_required / fallback
     final_text: str  # the text the artefact carries
     reason: DecisionReason | None = None  # why a fallen line fell
+    #: Why the run could not establish this correction is right —
+    #: empty unless ``status`` is ``review_required``. A referred line
+    #: DID keep its correction: ``final_text`` carries it, and the
+    #: artefact carries ``final_text``. Additive and optional, so this
+    #: does NOT bump ``report_version``.
+    review_reasons: list[DecisionReason] = Field(default_factory=list)
     #: The guard's once-computed metrics for the proposal this decision
     #: judged; ``None`` for lines that never reached per-line acceptance
     #: (chunk-level fallbacks, hyphen-unit extensions, …).

@@ -75,7 +75,8 @@ def build_document_manifest(
 
     # A file read as something other than what it declared is an override,
     # and an override that nobody can see is exactly the undeclared
-    # alteration `V1` forbids. `read_source_tree` already applied it —
+    # alteration the contract forbids. `read_source_tree` already
+    # applied it —
     # here it is *named*, once, where the caller receives the document.
     # Same rule, one definition (``mislabelled_utf8``), two callers.
     overrides = {

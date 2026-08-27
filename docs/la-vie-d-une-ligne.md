@@ -12,7 +12,10 @@ Trois choses à savoir d'abord :
 - **les lignes ne fusionnent jamais** et **aucun texte ne migre** d'une ligne à
   l'autre : c'est l'invariant que tout le reste protège ;
 - au moindre doute, la ligne **retombe sur son texte source**. Un repli n'est
-  pas un échec du système : c'est le système qui refuse de deviner.
+  pas un échec du système : c'est le système qui refuse de deviner ;
+- et quand il ne peut ni deviner ni douter — quand la correction tient
+  debout et qu'il n'a aucun moyen de l'établir — il la **livre en le
+  disant** : `review_required`. C'est le §3 bis.
 
 ---
 
@@ -46,10 +49,11 @@ CorrectionPipeline.run
 │     │
 │     └─ échec → descente d'un cran de granularité, ou repli sur la source
 │
-├─ finalize._finalize_document    trois passes, dans CET ordre
+├─ finalize._finalize_document    quatre passes, dans CET ordre
 │  ├─ 1. doublons adjacents + migration de frontière (document entier)
 │  ├─ 2. préservation du caractère de coupure
-│  └─ 3. politique de perte (strict / token_realign)
+│  ├─ 3. politique de perte (strict / token_realign)
+│  └─ 4. renvoi en revue — n'écrit aucun texte, voir §3 bis
 │
 ├─ decisions.derive_decision_set  la décision devient immuable
 ├─ rendering._render_outputs      réécriture + invariant de projection
@@ -60,9 +64,12 @@ Où lire la réponse, côté appelant :
 
 ```python
 d = result.decisions.by_ref[LineRef(page_id="P1", line_id="TL7")]
-d.status          # CORRECTED ou FALLBACK
-d.fallback_reason # le code ci-dessous, suivi éventuellement de ": détail"
+d.status          # CORRECTED, REVIEW_REQUIRED ou FALLBACK
+d.fallback_reason # le code du §3, suivi éventuellement de ": détail"
+d.review_reasons  # les codes du §3 bis — un tuple, pas un code
 result.fallback_reasons           # agrégat par code, pour tout le run
+result.review_lines               # combien de lignes sont à relire
+result.review_reasons             # agrégat par code, pour tout le run
 result.report.edit_rejections     # les ops refusées par le protocole d'édition
 ```
 
@@ -150,7 +157,88 @@ réseau) et que réessayer plus tard marcherait ; **`producer_output`** veut dir
 qu'il a répondu sans tenir le contrat. Confondre les deux fait changer de
 modèle quand il fallait arrêter de saturer son propre quota.
 
-### Ce qui n'est pas un repli — les éditions refusées
+---
+
+## 3 bis. Toutes les raisons de renvoi en revue
+
+Un renvoi n'est **pas** un repli, et confondre les deux est la seule
+erreur de lecture qui compte ici :
+
+| | repli | renvoi |
+|---|---|---|
+| le texte livré | la source | **la correction** |
+| ce que le run dit | « j'ai refusé cette correction » | « je l'ai livrée et je ne peux pas l'établir » |
+| l'octet dans le fichier | change | **ne change pas** |
+| où c'est écrit | `fallback_reason`, un code | `review_reasons`, plusieurs |
+
+Pourquoi l'état existe : les gardes de l'étage C **comparent des
+caractères et n'ont aucune notion de sens**. Sur douze contre-exemples
+passés dans la vraie `check_line`, les douze sont acceptés aux deux
+seuils — négation supprimée 0,8955, date changée 0,9388, montant tronqué
+0,9643, ligne voisine recopiée mot pour mot 0,8852. Aucun réglage ne
+ferme cette famille. Ranger ces lignes sous `CORRECTED` ferait affirmer à
+la bibliothèque « j'ai vérifié » précisément là où elle ne peut pas.
+
+La liste est close, comme celle du §3 :
+`saknussemm.core.decide.REVIEW_REASON_CODES` la porte et
+`tests/test_the_review_reasons_are_a_closed_set.py` la tient dans les
+deux sens.
+
+### Par ligne — l'indice est dans le couple (source, correction)
+
+| code | ce qu'il veut dire |
+|---|---|
+| `digits_changed` | les chiffres ne sont plus les mêmes — couvre l'année, le prix, le numéro de page. Ni les dates ni les montants ne sont analysés : il n'y a pas de grammaire, seulement le constat |
+| `negation_changed` | une particule de négation est apparue, a disparu, ou a changé de nombre |
+| `proper_noun_changed` | un mot en majuscule initiale, hors premier mot de la ligne, a été réécrit, ajouté ou retiré |
+
+### Au niveau du run — l'indice n'existe que dans l'agrégat
+
+| code | ce qu'il veut dire |
+|---|---|
+| `systematic_substitution` | un caractère a été remplacé par le même autre sur **toutes** ses occurrences du run |
+| `systematic_removal` | idem, mais il a été supprimé |
+
+C'est la seule famille qu'une lecture ligne à ligne ne peut pas voir. Le
+cas mesuré : `⸗` retiré 34 fois sur 34, `’` normalisé 69 fois sur 69.
+Ligne par ligne, chacune est une édition d'un caractère sans intérêt ;
+sur le run, c'est la typographie du document qui a été réécrite.
+
+### Conséquence, pas décision
+
+| code | ce qu'il veut dire |
+|---|---|
+| `hyphen_unit_review` | l'autre moitié d'un mot coupé est renvoyée, celle-ci suit (ADR-010) |
+
+Aucun texte ne bouge dans un renvoi, donc l'unité ne risque pas de
+devenir mixte — ce n'est pas la raison. La raison est qu'un renvoi parle
+d'un **mot**, et qu'une moitié de mot n'est pas relisable.
+
+### Trois règles absentes, et pourquoi
+
+Le programme d'origine en prévoyait trois de plus. Elles ne sont pas
+« pas encore faites » : le moteur n'a pas de quoi les alimenter, et
+déclarer leur code ferait promettre une raison qu'aucun run ne rendrait.
+`src/saknussemm/core/review.py` porte le détail.
+
+- **une ligne déjà correcte modifiée quand même** — écrite, mesurée,
+  retirée. Sans lexique, « la source n'a rien d'anormal » se réduit à des
+  signaux structurels que la dégradation d'OCR patrimonial ne laisse pas
+  (`fciences` pour `ſciences`, ce sont des lettres). Sur le corpus de
+  vérité terrain elle renvoyait 30 des 47 lignes modifiées, 23 sur son
+  seul indice, et ce qu'elle attrapait était de simples corrections
+  `f` → `ſ`.
+- **désaccord producteur texte / producteur vision** — aucun run
+  n'interroge deux producteurs sur la même ligne : l'escalade *remplace*
+  le producteur, elle ne le double pas.
+- **confiance non calibrée sous seuil** — l'agrégat de confiance est
+  construit après que le `DecisionSet` est devenu immuable, et
+  `core/confidence.py` dit lui-même que ses valeurs ne sont pas des
+  probabilités calibrées.
+
+---
+
+## 3 ter. Ce qui n'est pas un repli — les éditions refusées
 
 Le protocole d'édition (`core/editing.py`) refuse des **opérations**, pas des
 lignes : la ligne garde sa source et la refus apparaît sur

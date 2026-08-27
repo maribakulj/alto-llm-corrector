@@ -1,7 +1,7 @@
 """Turning a corrected document into the run's terminal decisions.
 
 Between "every page has been through the producer" and "the outputs exist"
-sit four document-wide passes, and their ORDER is the whole content of this
+sit five document-wide passes, and their ORDER is the whole content of this
 module — each one depends on running against what the previous left behind:
 
   1. the adjacent-duplicate consistency pass, which needs every
@@ -16,7 +16,12 @@ module — each one depends on running against what the previous left behind:
      correction that cannot project without losing word granularity —
      before the decisions materialise and before any output exists, so the
      unit falls back to source and the markup keeps its Word geometry;
-  4. deriving the immutable :class:`DecisionSet`, which refuses a line
+  4. the review pass, which qualifies the corrections that survived all
+     three — LAST, because every pass above can still take a correction
+     away and a referral on a reverted line describes something nobody
+     receives. It is also the only pass that writes no text, so it can
+     move no output byte;
+  5. deriving the immutable :class:`DecisionSet`, which refuses a line
      still PENDING: outputs exist only for a document where every line
      carries a terminal decision.
 
@@ -37,6 +42,7 @@ from saknussemm.core.acceptance import (
     _FinalizeOrder,
     _global_adjacency_pass,
     _loss_policy_pass,
+    _review_pass,
 )
 from saknussemm.core.decisions import DecisionSet, derive_decision_set
 from saknussemm.core.identity import LineRef
@@ -47,6 +53,7 @@ from saknussemm.core.schemas import (
     LineManifest,
     LineTrace,
     LossPolicy,
+    ReviewPolicy,
     SidecarEntry,
 )
 
@@ -87,6 +94,7 @@ def _finalize_document(
     *,
     guard_config: GuardConfig,
     loss_policy: LossPolicy,
+    review_policy: ReviewPolicy,
     document_manifest: DocumentManifest,
     all_lines: dict[LineRef, LineManifest],
     traces: dict[LineRef, LineTrace],
@@ -108,6 +116,13 @@ def _finalize_document(
     _preserve_break_chars(document_manifest, order)
     sidecar_entries = _loss_policy_pass(
         loss_policy=loss_policy,
+        document_manifest=document_manifest,
+        all_lines=all_lines,
+        traces=traces,
+        order=order,
+    )
+    _review_pass(
+        review_policy=review_policy,
         document_manifest=document_manifest,
         all_lines=all_lines,
         traces=traces,
