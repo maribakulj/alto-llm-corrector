@@ -227,6 +227,11 @@ Measured on the three pinned Gallica pages — 1215 lines, 1.99 MB of ALTO,
 | peak memory | ×7.3 the source XML | ×11.9 |
 | per line | 11.6 kB | 19.1 kB |
 
+Referral costs **+8 %** of wall clock in the worst case measured — the same
+three pages with a rule that changes every line, 0.895 → 0.964 ms per line,
+235 lines referred. It is one extra character-level diff per CHANGED line, so
+a run that corrects little pays nothing. `ReviewPolicy.silent()` removes it.
+
 **The unit of work is one document, and the corpus belongs to you.** The
 whole run lives in memory until it returns: the manifest, every line's
 trace, the decisions and the corrected bytes. So 100 000 lines is roughly

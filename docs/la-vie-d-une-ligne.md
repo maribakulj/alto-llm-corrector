@@ -90,6 +90,11 @@ Les jumeaux entre A et B (`pair_drift_part1_word_growth` = 2 contre
 `part1_max_word_growth` = 1) ne sont pas une duplication : A est plus permissif
 parce qu'un retry est moins cher qu'un repli.
 
+**Le renvoi en revue du §3 bis n'est pas un quatrième étage**, et le confondre
+avec un étage est l'erreur à éviter. Un étage RETIRE une correction ; le
+renvoi la garde et se contente de dire que la bibliothèque ne peut pas
+l'établir. Aucun octet livré n'en dépend.
+
 ---
 
 ## 3. Toutes les raisons de repli
@@ -266,6 +271,14 @@ compte, pas la qualité du modèle.
 correction peut aboutir à un texte identique à la source. L'autorité est le
 `DecisionSet`, pas une comparaison d'octets — c'est écrit dans
 `docs/promises.md`.
+
+**« Cette ligne est `review_required` et la correction me semble juste. »**
+Très probablement. Un renvoi ne dit rien de la correction : il dit que le run
+n'a aucun moyen d'établir qu'elle l'est. Sur le run qui a motivé l'état, un
+détecteur de chiffres modifiés a levé 56 lignes dont la quasi-totalité étaient
+de **bonnes** corrections — ce qui n'a pu être établi qu'avec la vérité
+terrain, dont la production n'en a pas. Le texte est livré ; `review_reasons`
+dit ce qui a changé et pourquoi personne ici ne peut le confirmer.
 
 **« `format_loss` sur toutes mes lignes PAGE. »** Vous tournez en
 `LossPolicy(strict=True)` sur un fichier dont les lignes portent des `Word` :
