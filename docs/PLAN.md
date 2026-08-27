@@ -41,7 +41,7 @@ externe du 2026-08-16. Ce qui reste :
 1. Les gardes ne sont pas calibrées ; le code le dit lui-même
    (`GuardConfig.vision()`, seuil « safe default, not a calibrated one »).
 2. Un seul modèle, un seul profil de gardes, deux runs mesurés.
-3. La surface publique **est** close, à 66 symboles (`S3b`, fait le
+3. La surface publique **est** close, à 67 symboles (`S3b`, fait le
    2026-08-01, affiné par `RM-04` le 2026-08-06 — voir `V5`). Elle n'est
    donc plus un travail à faire, mais elle n'a jamais été relue par
    quelqu'un d'extérieur à sa construction, ce qu'exige `V10`. Publier
@@ -2127,7 +2127,7 @@ une formulation de `V5` qui ne parlait que de la façade.
 et l'erreur mérite d'être gardée parce qu'elle est reproductible.
 
 `S3b` **est déjà fait** — exécuté le 2026-08-01, et `RM-04` l'a affiné le
-2026-08-06. Les 66 symboles actuels ne sont pas une accumulation : c'est la
+2026-08-06. Les 67 symboles actuels ne sont pas une accumulation : c'est la
 clôture calculée, et `tests/test_public_api_snapshot.py` porte le raisonnement
 complet, que la mesure d'hier n'avait pas lu.
 
@@ -2289,21 +2289,34 @@ pas un constat, et il commande une séquence :
   gèlerait sous SemVer — c'est la raison n°1 pour laquelle ce plan refuse de
   publier `1.0` en premier.
 
-Deux ordres sont donc défendables, et le choix appartient au mainteneur :
-publier `0.10.0` avec la surface actuelle (68 symboles) puis couper en
-`0.11.0` ; ou couper d'abord et publier une seule fois. Le premier livre plus
-tôt et dépense une rupture de plus ; le second retarde la première publication
-d'un item structurel entier.
+**Périmé le 2026-08-25 : le dilemme n'existe plus.** `S3b` a coupé le
+2026-08-01 et `RM-04` a affiné la surface le 2026-08-06 — elle est à **67
+symboles**, close et recalculée à chaque run par
+`test_public_surface_is_the_closure`. Il n'y a donc plus de « couper avant ou
+après » à arbitrer : c'est coupé.
 
 ### Et `1.0.0` reste loin, pour des raisons de fond
 
-`V4` (`G1`-`G3`, l'état `review_required` — une vraie fonctionnalité, et le
-plan démontre qu'aucun réglage de seuil ne ferme la famille des gardes
-sémantiquement aveugles), `V5` (`S3b`), `V6` (`M1`-`M3`, `M7` — le chemin
-inter-pages n'est mesuré par **aucun** run aujourd'hui), `V7` (`M5` —
-`tests/external_corpus/pinned/` est vide et le tier téléchargé est
-`continue-on-error`, donc **aucune page externe ne bloque un merge**), `V10`
-(`P3`). Aucun de ces cinq n'est de la dette : ce sont des travaux.
+**Corrigé le 2026-08-25.** Ce paragraphe listait cinq critères restants et se
+contredisait avec le tableau vingt lignes plus haut : il donnait `V5` pour à
+faire alors que `S3b` a coupé le 2026-08-01, et `V7` pour non tenu en
+affirmant que `tests/external_corpus/pinned/` est **vide** — il porte trois
+pages Gallica depuis le 2026-08-16, dans la suite par défaut, sans marqueur
+ni saut. Deux affirmations fausses dans un paragraphe de synthèse, pendant
+que la table normative disait juste : exactement le motif que la vague `RS`
+traitait ailleurs.
+
+Il en reste **trois**, et aucun n'est de la dette — ce sont des travaux :
+
+- **`V4`** (`G1`-`G3`) — l'état `review_required`. Une vraie fonctionnalité,
+  et le plan démontre plus bas qu'aucun réglage de seuil ne ferme la famille
+  des gardes sémantiquement aveugles.
+- **`V6`** (`M1`, `M2`, `M7`) — `M3` est fait depuis le 2026-08-21 (trois
+  familles de modèles, le système ne varie pas, le modèle varie d'un facteur
+  trois). Restent la campagne de variance post-correctif, le chemin
+  inter-pages qu'**aucun** run ne mesure encore, et deux ventilations de
+  métriques. Tout cela s'exécute sur `cinoc`, pas ici.
+- **`V10`** (`P3`) — la revue humaine externe de l'API publique.
 
 ---
 
@@ -3222,7 +3235,7 @@ mesurer avant de corriger.
 
 | id | item |
 |---|---|
-| P1 | Répétition sur TestPyPI (le workflow n'a jamais été exercé, 0 tag git) | **répétée en local (2026-08-01), upload non fait** — il demande l'OIDC de GitHub Actions. Toute la chaîne du workflow rejouée : `python -m build`, `twine check` (PASSED sur les deux artefacts), smoke-install de la wheel (`_smoke_imports.py` : 68 symboles publics), SBOM CycloneDX + l'assertion anti-pollution, cohérence `__version__` ↔ CHANGELOG, forme du tag attendu (`saknussemm-v0.9.0`). **Deux constats, corrigés** : (a) le sdist livré ne correspondait pas à son allowlist — hatchling traite les entrées comme des MOTIFS, donc `README.md` attrapait `tests/corpus_gt/README.md` et `tests/external_corpus/pinned/README.md` ; aucune donnée de corpus n'est jamais partie, mais le test de packaging vérifiait la *déclaration* et non l'artefact. Entrées ancrées (`/README.md`), test réécrit pour lire le sdist et la wheel CONSTRUITS. (b) la CI sautait `twine check` sur une raison périmée (twine < 7 rejetait `License-File` de Metadata 2.4) : twine 7 l'accepte, vérifié sur cette wheel, la porte est rétablie | reste : dispatcher le workflow sur `testpypi` depuis GitHub, ce qui exige le tag donc `P2` |
+| P1 | Répétition sur TestPyPI (le workflow n'a jamais été exercé, 0 tag git) | **répétée en local (2026-08-01), upload non fait** — il demande l'OIDC de GitHub Actions. Toute la chaîne du workflow rejouée : `python -m build`, `twine check` (PASSED sur les deux artefacts), smoke-install de la wheel (`_smoke_imports.py` : 67 symboles publics), SBOM CycloneDX + l'assertion anti-pollution, cohérence `__version__` ↔ CHANGELOG, forme du tag attendu (`saknussemm-v0.9.0`). **Deux constats, corrigés** : (a) le sdist livré ne correspondait pas à son allowlist — hatchling traite les entrées comme des MOTIFS, donc `README.md` attrapait `tests/corpus_gt/README.md` et `tests/external_corpus/pinned/README.md` ; aucune donnée de corpus n'est jamais partie, mais le test de packaging vérifiait la *déclaration* et non l'artefact. Entrées ancrées (`/README.md`), test réécrit pour lire le sdist et la wheel CONSTRUITS. (b) la CI sautait `twine check` sur une raison périmée (twine < 7 rejetait `License-File` de Metadata 2.4) : twine 7 l'accepte, vérifié sur cette wheel, la porte est rétablie | reste : dispatcher le workflow sur `testpypi` depuis GitHub, ce qui exige le tag donc `P2` |
 | P2 | Premier tag `0.10.0`, SBOM, publier l'artefact testé |
 | P3 | `1.0.0` uniquement : revue humaine externe indépendante de l'API publique, après `V1`-`V9` |
 
